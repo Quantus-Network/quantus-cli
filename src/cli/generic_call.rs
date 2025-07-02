@@ -92,6 +92,35 @@ pub async fn execute_generic_call(
                 .await?
         }
 
+        // Sudo pallet calls
+        ("Sudo", "sudo") => {
+            submit_sudo_extrinsic(chain_client, &api_with_signer, &keypair, &args).await?
+        }
+
+        // TechCollective pallet calls
+        ("TechCollective", "add_member") => {
+            submit_tech_collective_add_member_extrinsic(
+                chain_client,
+                &api_with_signer,
+                &keypair,
+                &args,
+            )
+            .await?
+        }
+        ("TechCollective", "remove_member") => {
+            submit_tech_collective_remove_member_extrinsic(
+                chain_client,
+                &api_with_signer,
+                &keypair,
+                &args,
+            )
+            .await?
+        }
+        ("TechCollective", "vote") => {
+            submit_tech_collective_vote_extrinsic(chain_client, &api_with_signer, &keypair, &args)
+                .await?
+        }
+
         // Unsupported combinations
         ("Balances", _) => {
             log_error!("❌ Balances call '{}' is not supported yet", call);
@@ -111,6 +140,15 @@ pub async fn execute_generic_call(
             ))
             .into());
         }
+        ("Sudo", _) => {
+            log_error!("❌ Sudo call '{}' is not supported yet", call);
+            log_print!("💡 Supported Sudo calls: sudo");
+            return Err(crate::error::QuantusError::Generic(format!(
+                "Unsupported Sudo call: {}",
+                call
+            ))
+            .into());
+        }
         ("ReversibleTransfers", _) => {
             log_error!(
                 "❌ ReversibleTransfers call '{}' is not supported yet",
@@ -123,11 +161,22 @@ pub async fn execute_generic_call(
             ))
             .into());
         }
+        ("TechCollective", _) => {
+            log_error!("❌ TechCollective call '{}' is not supported yet", call);
+            log_print!("💡 Supported TechCollective calls: add_member, remove_member, vote");
+            return Err(crate::error::QuantusError::Generic(format!(
+                "Unsupported TechCollective call: {}",
+                call
+            ))
+            .into());
+        }
         (_, _) => {
             log_error!("❌ Pallet '{}' is not supported yet", pallet);
-            log_print!("💡 Supported pallets: Balances, System, ReversibleTransfers");
+            log_print!(
+                "💡 Supported pallets: Balances, System, Sudo, ReversibleTransfers, TechCollective"
+            );
             return Err(crate::error::QuantusError::Generic(format!(
-                "Unsupported pallet: {}. Only Balances, System, and ReversibleTransfers are currently supported.",
+                "Unsupported pallet: {}. Only Balances, System, Sudo, ReversibleTransfers, and TechCollective are currently supported.",
                 pallet
             )).into());
         }
@@ -341,6 +390,308 @@ fn parse_bytes_argument(value: &Value) -> Result<Vec<u8>> {
     }
 }
 
+/// Create and submit sudo extrinsic
+async fn submit_sudo_extrinsic(
+    chain_client: &ChainClient,
+    api: &substrate_api_client::Api<
+        crate::chain::quantus_runtime_config::QuantusRuntimeConfig,
+        substrate_api_client::rpc::JsonrpseeClient,
+    >,
+    keypair: &crate::wallet::QuantumKeyPair,
+    args: &[Value],
+) -> Result<substrate_api_client::api::ExtrinsicReport<sp_core::H256>> {
+    if args.len() != 1 {
+        return Err(crate::error::QuantusError::Generic(
+            "sudo requires 1 argument: inner_call (nested call object)".to_string(),
+        )
+        .into());
+    }
+
+    // Parse the inner call - this should be a JSON object representing the call
+    let inner_call_value = &args[0];
+
+    // Handle different formats of inner call specification
+    match inner_call_value {
+        // Format: {"TechCollective": {"add_member": {"who": "address"}}}
+        Value::Object(outer_map) => {
+            for (pallet_name, call_data) in outer_map {
+                if let Value::Object(call_map) = call_data {
+                    for (call_name, call_args) in call_map {
+                        log_verbose!("✅ Parsed sudo inner call: {}.{}", pallet_name, call_name);
+
+                        // Handle different pallet/call combinations
+                        match (pallet_name.as_str(), call_name.as_str()) {
+                            ("TechCollective", "add_member") => {
+                                // Extract 'who' address from call_args
+                                let who_str = if let Value::Object(args_map) = call_args {
+                                    args_map.get("who")
+                                        .and_then(|v| v.as_str())
+                                        .ok_or_else(|| crate::error::QuantusError::Generic(
+                                            "TechCollective.add_member requires 'who' field with address".to_string()
+                                        ))?
+                                } else {
+                                    return Err(crate::error::QuantusError::Generic(
+                                        "Invalid call arguments format".to_string(),
+                                    )
+                                    .into());
+                                };
+
+                                let who_account =
+                                    AccountId32::from_ss58check(who_str).map_err(|e| {
+                                        crate::error::QuantusError::Generic(format!(
+                                            "Invalid member address: {:?}",
+                                            e
+                                        ))
+                                    })?;
+                                let who: MultiAddress<AccountId32, u32> =
+                                    MultiAddress::Id(who_account);
+
+                                // Create the inner call first
+                                let inner_call =
+                                    compose_extrinsic!(api, "TechCollective", "add_member", who)
+                                        .ok_or_else(|| {
+                                            crate::error::QuantusError::Generic(
+                                        "Failed to create inner TechCollective.add_member call"
+                                            .to_string(),
+                                    )
+                                        })?;
+
+                                // Now wrap it with sudo
+                                let extrinsic =
+                                    compose_extrinsic!(api, "Sudo", "sudo", inner_call.function)
+                                        .ok_or_else(|| {
+                                            crate::error::QuantusError::Generic(
+                                                "Failed to create sudo extrinsic".to_string(),
+                                            )
+                                        })?;
+
+                                log_print!(
+                                    "📡 Submitting sudo(TechCollective.add_member) extrinsic..."
+                                );
+                                return crate::submit_extrinsic_with_spinner!(
+                                    chain_client,
+                                    keypair,
+                                    extrinsic
+                                );
+                            }
+                            ("TechCollective", "remove_member") => {
+                                // Similar logic for remove_member
+                                let who_str = if let Value::Object(args_map) = call_args {
+                                    args_map.get("who")
+                                        .and_then(|v| v.as_str())
+                                        .ok_or_else(|| crate::error::QuantusError::Generic(
+                                            "TechCollective.remove_member requires 'who' field with address".to_string()
+                                        ))?
+                                } else {
+                                    return Err(crate::error::QuantusError::Generic(
+                                        "Invalid call arguments format".to_string(),
+                                    )
+                                    .into());
+                                };
+
+                                let rank = if let Value::Object(args_map) = call_args {
+                                    args_map.get("rank").and_then(|v| v.as_u64()).unwrap_or(0)
+                                        as u16
+                                } else {
+                                    0u16
+                                };
+
+                                let who_account =
+                                    AccountId32::from_ss58check(who_str).map_err(|e| {
+                                        crate::error::QuantusError::Generic(format!(
+                                            "Invalid member address: {:?}",
+                                            e
+                                        ))
+                                    })?;
+                                let who: MultiAddress<AccountId32, u32> =
+                                    MultiAddress::Id(who_account);
+
+                                // Create the inner call first
+                                let inner_call = compose_extrinsic!(
+                                    api,
+                                    "TechCollective",
+                                    "remove_member",
+                                    who,
+                                    rank
+                                )
+                                .ok_or_else(|| {
+                                    crate::error::QuantusError::Generic(
+                                        "Failed to create inner TechCollective.remove_member call"
+                                            .to_string(),
+                                    )
+                                })?;
+
+                                // Now wrap it with sudo
+                                let extrinsic =
+                                    compose_extrinsic!(api, "Sudo", "sudo", inner_call.function)
+                                        .ok_or_else(|| {
+                                            crate::error::QuantusError::Generic(
+                                                "Failed to create sudo extrinsic".to_string(),
+                                            )
+                                        })?;
+
+                                log_print!(
+                                    "📡 Submitting sudo(TechCollective.remove_member) extrinsic..."
+                                );
+                                return crate::submit_extrinsic_with_spinner!(
+                                    chain_client,
+                                    keypair,
+                                    extrinsic
+                                );
+                            }
+                            _ => {
+                                return Err(crate::error::QuantusError::Generic(format!(
+                                    "Sudo wrapper for {}.{} is not supported yet",
+                                    pallet_name, call_name
+                                ))
+                                .into());
+                            }
+                        }
+                    }
+                }
+            }
+
+            Err(crate::error::QuantusError::Generic(
+                "Invalid sudo call format - expected nested pallet/call structure".to_string(),
+            )
+            .into())
+        }
+        _ => Err(crate::error::QuantusError::Generic(
+            "sudo argument must be a JSON object with nested call structure".to_string(),
+        )
+        .into()),
+    }
+}
+
+/// Create and submit tech collective add_member extrinsic
+async fn submit_tech_collective_add_member_extrinsic(
+    chain_client: &ChainClient,
+    api: &substrate_api_client::Api<
+        crate::chain::quantus_runtime_config::QuantusRuntimeConfig,
+        substrate_api_client::rpc::JsonrpseeClient,
+    >,
+    keypair: &crate::wallet::QuantumKeyPair,
+    args: &[Value],
+) -> Result<substrate_api_client::api::ExtrinsicReport<sp_core::H256>> {
+    if args.len() != 1 {
+        return Err(crate::error::QuantusError::Generic(
+            "add_member requires 1 argument: who (address)".to_string(),
+        )
+        .into());
+    }
+
+    // Parse member address
+    let who_str = args[0].as_str().ok_or_else(|| {
+        crate::error::QuantusError::Generic("First argument must be a string address".to_string())
+    })?;
+    let who_account = AccountId32::from_ss58check(who_str).map_err(|e| {
+        crate::error::QuantusError::Generic(format!("Invalid member address: {:?}", e))
+    })?;
+    let who: MultiAddress<AccountId32, u32> = MultiAddress::Id(who_account);
+
+    log_verbose!("✅ Parsed add_member: who={:?}", who);
+
+    // Create extrinsic
+    let extrinsic =
+        compose_extrinsic!(api, "TechCollective", "add_member", who).ok_or_else(|| {
+            crate::error::QuantusError::Generic("Failed to create add_member extrinsic".to_string())
+        })?;
+
+    // Use the central submit_extrinsic! macro
+    log_print!("📡 Submitting extrinsic to chain...");
+    crate::submit_extrinsic_with_spinner!(chain_client, keypair, extrinsic)
+}
+
+/// Create and submit tech collective remove_member extrinsic
+async fn submit_tech_collective_remove_member_extrinsic(
+    chain_client: &ChainClient,
+    api: &substrate_api_client::Api<
+        crate::chain::quantus_runtime_config::QuantusRuntimeConfig,
+        substrate_api_client::rpc::JsonrpseeClient,
+    >,
+    keypair: &crate::wallet::QuantumKeyPair,
+    args: &[Value],
+) -> Result<substrate_api_client::api::ExtrinsicReport<sp_core::H256>> {
+    if args.len() < 1 || args.len() > 2 {
+        return Err(crate::error::QuantusError::Generic(
+            "remove_member requires 1-2 arguments: who (address), [rank (u16)]".to_string(),
+        )
+        .into());
+    }
+
+    // Parse member address
+    let who_str = args[0].as_str().ok_or_else(|| {
+        crate::error::QuantusError::Generic("First argument must be a string address".to_string())
+    })?;
+    let who_account = AccountId32::from_ss58check(who_str).map_err(|e| {
+        crate::error::QuantusError::Generic(format!("Invalid member address: {:?}", e))
+    })?;
+    let who: MultiAddress<AccountId32, u32> = MultiAddress::Id(who_account);
+
+    // Parse rank (optional, default to 0)
+    let rank = if args.len() > 1 {
+        args[1].as_u64().unwrap_or(0) as u16
+    } else {
+        0u16
+    };
+
+    log_verbose!("✅ Parsed remove_member: who={:?}, rank={}", who, rank);
+
+    // Create extrinsic
+    let extrinsic = compose_extrinsic!(api, "TechCollective", "remove_member", who, rank)
+        .ok_or_else(|| {
+            crate::error::QuantusError::Generic(
+                "Failed to create remove_member extrinsic".to_string(),
+            )
+        })?;
+
+    // Use the central submit_extrinsic! macro
+    log_print!("📡 Submitting extrinsic to chain...");
+    crate::submit_extrinsic_with_spinner!(chain_client, keypair, extrinsic)
+}
+
+/// Create and submit tech collective vote extrinsic
+async fn submit_tech_collective_vote_extrinsic(
+    chain_client: &ChainClient,
+    api: &substrate_api_client::Api<
+        crate::chain::quantus_runtime_config::QuantusRuntimeConfig,
+        substrate_api_client::rpc::JsonrpseeClient,
+    >,
+    keypair: &crate::wallet::QuantumKeyPair,
+    args: &[Value],
+) -> Result<substrate_api_client::api::ExtrinsicReport<sp_core::H256>> {
+    if args.len() != 2 {
+        return Err(crate::error::QuantusError::Generic(
+            "vote requires 2 arguments: poll_index (u32), aye (bool)".to_string(),
+        )
+        .into());
+    }
+
+    // Parse poll index
+    let poll_index = args[0].as_u64().ok_or_else(|| {
+        crate::error::QuantusError::Generic(
+            "First argument must be a number (poll index)".to_string(),
+        )
+    })? as u32;
+
+    // Parse vote (aye/nay)
+    let aye = args[1].as_bool().ok_or_else(|| {
+        crate::error::QuantusError::Generic("Second argument must be a boolean (aye)".to_string())
+    })?;
+
+    log_verbose!("✅ Parsed vote: poll_index={}, aye={}", poll_index, aye);
+
+    // Create extrinsic
+    let extrinsic =
+        compose_extrinsic!(api, "TechCollective", "vote", poll_index, aye).ok_or_else(|| {
+            crate::error::QuantusError::Generic("Failed to create vote extrinsic".to_string())
+        })?;
+
+    // Use the central submit_extrinsic! macro
+    log_print!("📡 Submitting extrinsic to chain...");
+    crate::submit_extrinsic_with_spinner!(chain_client, keypair, extrinsic)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -550,6 +901,60 @@ mod tests {
             assert_eq!(pallet, "ReversibleTransfers");
             assert_eq!(call, "schedule_transfer");
             assert!(args.contains("100"));
+        }
+
+        /// Example usage for TechCollective::add_member
+        ///
+        /// ```bash
+        /// quantus call --pallet "TechCollective" --call "add_member" \
+        ///   --args '["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"]' \
+        ///   --from crystal_alice
+        /// ```
+        #[test]
+        fn example_tech_collective_add_member() {
+            let pallet = "TechCollective";
+            let call = "add_member";
+            let args = r#"["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"]"#;
+
+            assert_eq!(pallet, "TechCollective");
+            assert_eq!(call, "add_member");
+            assert!(args.contains("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"));
+        }
+
+        /// Example usage for TechCollective::remove_member
+        ///
+        /// ```bash
+        /// quantus call --pallet "TechCollective" --call "remove_member" \
+        ///   --args '["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", 0]' \
+        ///   --from crystal_alice
+        /// ```
+        #[test]
+        fn example_tech_collective_remove_member() {
+            let pallet = "TechCollective";
+            let call = "remove_member";
+            let args = r#"["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", 0]"#;
+
+            assert_eq!(pallet, "TechCollective");
+            assert_eq!(call, "remove_member");
+            assert!(args.contains("5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY"));
+        }
+
+        /// Example usage for TechCollective::vote
+        ///
+        /// ```bash
+        /// quantus call --pallet "TechCollective" --call "vote" \
+        ///   --args '[0, true]' \
+        ///   --from crystal_alice
+        /// ```
+        #[test]
+        fn example_tech_collective_vote() {
+            let pallet = "TechCollective";
+            let call = "vote";
+            let args = r#"[0, true]"#;
+
+            assert_eq!(pallet, "TechCollective");
+            assert_eq!(call, "vote");
+            assert!(args.contains("true"));
         }
     }
 }

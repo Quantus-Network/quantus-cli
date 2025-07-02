@@ -17,7 +17,7 @@ use sp_core::crypto::Ss58Codec;
 use sp_runtime::MultiAddress;
 use substrate_api_client::ac_compose_macros::compose_extrinsic;
 use substrate_api_client::ac_primitives::ExtrinsicSigner;
-use substrate_api_client::{GetStorage, SubmitAndWatch, XtStatus};
+use substrate_api_client::{SubmitAndWatch, XtStatus};
 
 /// Reversible transfer commands
 #[derive(Subcommand, Debug)]

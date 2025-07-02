@@ -46,6 +46,10 @@ quantus balance --address 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
 # Send tokens
 quantus send --from crystal_alice --to 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP --amount 10.5
 
+# Manage Tech Collective governance
+quantus tech-collective list-members
+quantus tech-collective vote --referendum-index 0 --aye true --from crystal_alice
+
 # Call any blockchain function generically
 quantus call --pallet Balances --call transfer_allow_death --args '["5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP", "5"]' --from crystal_alice
 
@@ -59,6 +63,25 @@ quantus metadata --no-docs
 Available for all commands:
 - `--verbose` / `-v`: Enable debug logging with detailed output
 - `--node-url <URL>`: Specify node endpoint (default: `ws://127.0.0.1:9944`)
+
+### Tech Collective Management
+Governance through ranked collective system:
+
+```bash
+# Member management (requires sudo)
+quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>
+quantus tech-collective remove-member --who <ADDRESS> --rank <RANK> --from <WALLET>
+
+# Voting on referenda
+quantus tech-collective vote --referendum-index <INDEX> --aye <BOOL> --from <MEMBER>
+
+# Query collective state
+quantus tech-collective list-members
+quantus tech-collective is-member --address <ADDRESS>
+quantus tech-collective get-rank --address <ADDRESS>
+quantus tech-collective list-referenda
+quantus tech-collective get-referendum --index <INDEX>
+```
 
 ## 💼 Wallet Management
 
@@ -451,5 +474,81 @@ The Quantus CLI is a **production-ready** tool that:
 - Use strong passwords for production wallets
 - Test with small amounts first
 - Keep your private keys secure
+
+## 🏛️ Tech Collective Management
+
+The Quantus CLI includes comprehensive management for the Tech Collective - a ranked collective governance system for technical proposals.
+
+### Available Commands
+
+```bash
+# List all tech collective commands
+quantus tech-collective --help
+
+# Add a member (requires sudo permissions)
+quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>
+
+# Remove a member (requires appropriate permissions)
+quantus tech-collective remove-member --who <ADDRESS> --rank <RANK> --from <WALLET>
+
+# Vote on tech referenda
+quantus tech-collective vote --referendum-index <INDEX> --aye <true/false> --from <MEMBER_WALLET>
+
+# Query collective state
+quantus tech-collective list-members
+quantus tech-collective is-member --address <ADDRESS>
+quantus tech-collective get-rank --address <ADDRESS>
+
+# List and view referenda
+quantus tech-collective list-referenda
+quantus tech-collective get-referendum --index <INDEX>
+```
+
+### ⚠️ Important: Sudo Requirements
+
+Many Tech Collective operations (like `add_member`) require **sudo permissions**. In development mode, `crystal_alice` has sudo access.
+
+**If you get `BadOrigin` error when adding members:**
+
+The `add_member` call requires sudo permissions. Currently, this must be done through a manual sudo wrapper call. Here's the workflow:
+
+```bash
+# ❌ This will fail with BadOrigin (insufficient permissions)
+quantus tech-collective add-member --who 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY --from crystal_alice
+
+# ✅ Instead, you need to implement a sudo wrapper call
+# This is a complex operation that requires encoding the inner call
+# Future CLI versions will include a dedicated sudo wrapper command
+```
+
+**Alternative approaches:**
+1. **Check Genesis Config**: The chain may already have initial tech collective members
+2. **Direct Storage Queries**: Use storage queries to check current members
+3. **Manual Encoding**: Create the sudo call manually (advanced users)
+
+### Example Usage
+
+```bash
+# Create test wallets first
+quantus developer create-test-wallets
+
+# Try to vote (this works if you're already a member)
+quantus tech-collective vote --referendum-index 0 --aye true --from crystal_alice
+
+# Check membership status
+quantus tech-collective is-member --address 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+
+# List current members (requires implementation enhancement)
+quantus tech-collective list-members
+```
+
+### Tech Collective Architecture
+
+The Tech Collective in Quantus is based on `pallet_ranked_collective` with these features:
+
+- **Hierarchical Membership**: Members have different ranks (0, 1, 2, etc.)
+- **Graduated Voting**: Higher ranks may have different voting weights
+- **Technical Governance**: Focus on technical proposals and referenda  
+- **Integration**: Works with Tech Referenda for proposal lifecycle
 
 ---
