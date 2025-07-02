@@ -65,12 +65,12 @@ Available for all commands:
 - `--node-url <URL>`: Specify node endpoint (default: `ws://127.0.0.1:9944`)
 
 ### Tech Collective Management
-Governance through ranked collective system:
+Simple governance system for technical proposals:
 
 ```bash
 # Member management (requires sudo)
 quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>
-quantus tech-collective remove-member --who <ADDRESS> --rank <RANK> --from <WALLET>
+quantus tech-collective remove-member --who <ADDRESS> --from <SUDO_WALLET>
 
 # Voting on referenda
 quantus tech-collective vote --referendum-index <INDEX> --aye <BOOL> --from <MEMBER>
@@ -78,7 +78,7 @@ quantus tech-collective vote --referendum-index <INDEX> --aye <BOOL> --from <MEM
 # Query collective state
 quantus tech-collective list-members
 quantus tech-collective is-member --address <ADDRESS>
-quantus tech-collective get-rank --address <ADDRESS>
+quantus tech-collective check-sudo
 quantus tech-collective list-referenda
 quantus tech-collective get-referendum --index <INDEX>
 ```
@@ -477,7 +477,7 @@ The Quantus CLI is a **production-ready** tool that:
 
 ## 🏛️ Tech Collective Management
 
-The Quantus CLI includes comprehensive management for the Tech Collective - a ranked collective governance system for technical proposals.
+The Quantus CLI includes comprehensive management for the Tech Collective - a simple governance system for technical proposals.
 
 ### Available Commands
 
@@ -488,8 +488,8 @@ quantus tech-collective --help
 # Add a member (requires sudo permissions)
 quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>
 
-# Remove a member (requires appropriate permissions)
-quantus tech-collective remove-member --who <ADDRESS> --rank <RANK> --from <WALLET>
+# Remove a member (requires sudo permissions)
+quantus tech-collective remove-member --who <ADDRESS> --from <SUDO_WALLET>
 
 # Vote on tech referenda
 quantus tech-collective vote --referendum-index <INDEX> --aye <true/false> --from <MEMBER_WALLET>
@@ -497,7 +497,7 @@ quantus tech-collective vote --referendum-index <INDEX> --aye <true/false> --fro
 # Query collective state
 quantus tech-collective list-members
 quantus tech-collective is-member --address <ADDRESS>
-quantus tech-collective get-rank --address <ADDRESS>
+quantus tech-collective check-sudo
 
 # List and view referenda
 quantus tech-collective list-referenda
@@ -544,10 +544,10 @@ quantus tech-collective list-members
 
 ### Tech Collective Architecture
 
-The Tech Collective in Quantus is based on `pallet_ranked_collective` with these features:
+The Tech Collective in Quantus is based on `pallet_ranked_collective` configured for simplicity:
 
-- **Hierarchical Membership**: Members have different ranks (0, 1, 2, etc.)
-- **Graduated Voting**: Higher ranks may have different voting weights
+- **Simple Membership**: All members have equal standing (rank 0)
+- **Equal Voting**: All members have the same voting weight
 - **Technical Governance**: Focus on technical proposals and referenda  
 - **Integration**: Works with Tech Referenda for proposal lifecycle
 

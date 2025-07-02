@@ -39,11 +39,7 @@ pub enum TechCollectiveCommands {
         #[arg(short, long)]
         who: String,
 
-        /// Rank of the member to remove
-        #[arg(short, long)]
-        rank: Option<u16>,
-
-        /// Wallet name to sign with (must have root or higher rank)
+        /// Wallet name to sign with (must have root permissions)
         #[arg(short, long)]
         from: String,
 
@@ -92,13 +88,6 @@ pub enum TechCollectiveCommands {
     /// Check who has sudo permissions in the network
     CheckSudo,
 
-    /// Get member rank in the Tech Collective
-    GetRank {
-        /// Address to check rank for
-        #[arg(short, long)]
-        address: String,
-    },
-
     /// List active Tech Referenda
     ListReferenda,
 
@@ -125,11 +114,10 @@ pub async fn handle_tech_collective_command(
 
         TechCollectiveCommands::RemoveMember {
             who,
-            rank,
             from,
             password,
             password_file,
-        } => remove_member(&who, rank, &from, password, password_file, node_url).await,
+        } => remove_member(&who, &from, password, password_file, node_url).await,
 
         TechCollectiveCommands::Vote {
             referendum_index,
@@ -154,8 +142,6 @@ pub async fn handle_tech_collective_command(
         TechCollectiveCommands::IsMember { address } => is_member(&address, node_url).await,
 
         TechCollectiveCommands::CheckSudo => check_sudo(node_url).await,
-
-        TechCollectiveCommands::GetRank { address } => get_member_rank(&address, node_url).await,
 
         TechCollectiveCommands::ListReferenda => list_referenda(node_url).await,
 
@@ -246,7 +232,6 @@ async fn add_member(
 /// Remove a member from the Tech Collective
 async fn remove_member(
     who: &str,
-    rank: Option<u16>,
     from: &str,
     password: Option<String>,
     password_file: Option<String>,
@@ -254,9 +239,6 @@ async fn remove_member(
 ) -> Result<()> {
     log_print!("🏛️  Removing member from Tech Collective");
     log_print!("   👤 Member: {}", who.bright_cyan());
-    if let Some(r) = rank {
-        log_print!("   🏆 Rank: {}", r.to_string().bright_magenta());
-    }
     log_print!("   🔑 Signed by: {}", from.bright_yellow());
 
     let chain_client = ChainClient::new(node_url).await?;
@@ -272,24 +254,13 @@ async fn remove_member(
     let api_with_signer = chain_client.create_api_with_signer(&keypair)?;
 
     // Create extrinsic with sudo wrapper - if rank is provided, use it; otherwise let the runtime determine
-    let inner_call = if let Some(member_rank) = rank {
-        compose_extrinsic!(
-            &api_with_signer,
-            "TechCollective",
-            "remove_member",
-            member,
-            member_rank
-        )
-    } else {
-        // Use default rank 0 if not specified
-        compose_extrinsic!(
-            &api_with_signer,
-            "TechCollective",
-            "remove_member",
-            member,
-            0u16
-        )
-    }
+    let inner_call = compose_extrinsic!(
+        &api_with_signer,
+        "TechCollective",
+        "remove_member",
+        member,
+        0u16
+    )
     .ok_or_else(|| {
         crate::error::QuantusError::Generic("Failed to create inner remove_member call".to_string())
     })?;
@@ -387,11 +358,6 @@ async fn list_members(node_url: &str) -> Result<()> {
             let total_members: u32 = count_data.iter().sum();
             if total_members > 0 {
                 log_print!("👥 Total members: {}", total_members);
-                for (rank, count) in count_data.iter().enumerate() {
-                    if *count > 0 {
-                        log_print!("   🏆 Rank {}: {} members", rank, count);
-                    }
-                }
             } else {
                 log_print!("📭 No members in Tech Collective");
             }
@@ -437,8 +403,8 @@ async fn list_members(node_url: &str) -> Result<()> {
     log_print!("");
     log_print!("💡 To check specific membership:");
     log_print!("   quantus tech-collective is-member --address <ADDRESS>");
-    log_print!("💡 To add the first member (requires sudo):");
-    log_print!("   # This currently requires sudo wrapper implementation");
+    log_print!("💡 To add a member (requires sudo):");
+    log_print!("   quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>");
 
     Ok(())
 }
@@ -534,23 +500,6 @@ async fn check_sudo(node_url: &str) -> Result<()> {
             log_print!("💡 Check if the node is accessible and the network has sudo configured");
         }
     }
-
-    Ok(())
-}
-
-/// Get member rank
-async fn get_member_rank(address: &str, node_url: &str) -> Result<()> {
-    log_print!("🏆 Checking Tech Collective member rank");
-    log_print!("   👤 Address: {}", address.bright_cyan());
-
-    let _chain_client = ChainClient::new(node_url).await?;
-
-    // Parse the address
-    let _account = AccountId32::from_ss58check(address)
-        .map_err(|e| crate::error::QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
-
-    log_print!("💡 Rank query requires direct storage access implementation");
-    log_print!("💡 Use storage queries to access Members storage map");
 
     Ok(())
 }
