@@ -82,13 +82,15 @@ macro_rules! submit_extrinsic {
                     log_print!("      🆔 Tx id: {:?}", scheduled_event.tx_id);
                     log_print!("      👤 Who: {:?}", scheduled_event.who);
                 }
-                // Try TransactionCancelled
-                else if let Ok(cancelled_event) =
-                    TransactionCancelled::decode(&mut event_bytes.clone())
+                                // Try TransactionCancelled - only for ReversibleTransfers pallet
+                else if event.pallet_name() == "ReversibleTransfers"
+                    && event.variant_name() == "TransactionCancelled"
                 {
-                    log_print!("      ❌ This is a TransactionCancelled event!");
-                    log_print!("      🆔 Tx id: {:?}", cancelled_event.tx_id);
-                    log_print!("      👤 Who: {:?}", cancelled_event.who);
+                    if let Ok(cancelled_event) = TransactionCancelled::decode(&mut event_bytes.clone()) {
+                        log_print!("      ❌ This is a TransactionCancelled event!");
+                        log_print!("      🆔 Tx id: {:?}", cancelled_event.tx_id);
+                        log_print!("      👤 Who: {:?}", cancelled_event.who);
+                    }
                 }
                 // Handle known pallet/variant combinations that don't need decoding
                 else {
@@ -107,6 +109,18 @@ macro_rules! submit_extrinsic {
                         }
                         ("Scheduler", "Scheduled") => {
                             log_print!("      ⏰ Task scheduled!");
+                        }
+                        ("TransactionPayment", "TransactionFeePaid") => {
+                            log_print!("      💳 Transaction fee paid!");
+                        }
+                        ("TechCollective", "MemberAdded") => {
+                            log_print!("      👥 Tech Collective member added!");
+                        }
+                        ("TechCollective", "MemberRemoved") => {
+                            log_print!("      👥 Tech Collective member removed!");
+                        }
+                        ("Sudo", "Sudid") => {
+                            log_print!("      🔐 Sudo operation executed!");
                         }
                         _ => {
                             log_print!("      ℹ️  Unknown event type");
