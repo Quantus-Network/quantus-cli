@@ -221,7 +221,7 @@ impl ChainClient {
         Ok(version)
     }
 
-    /// Get the runtime version
+    /// Get the runtime version as a formatted string
     pub async fn get_runtime_version(&self) -> Result<String> {
         let runtime_version = self.api.runtime_version();
 
@@ -232,6 +232,16 @@ impl ChainClient {
         );
 
         Ok(formatted_version)
+    }
+
+    /// Get the raw runtime version object
+    pub fn get_runtime_version_raw(&self) -> &substrate_api_client::ac_primitives::RuntimeVersion {
+        self.api.runtime_version()
+    }
+
+    /// Get the chain metadata
+    pub fn get_metadata(&self) -> &substrate_api_client::ac_node_api::Metadata {
+        self.api.metadata()
     }
 
     /// Get the balance of an account using substrate-api-client
