@@ -11,7 +11,7 @@ pub mod send;
 pub mod storage;
 pub mod tech_collective;
 pub mod wallet;
-
+pub mod wormhole;
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
@@ -46,6 +46,10 @@ pub enum Commands {
     /// Reversible transfer commands
     #[command(subcommand)]
     Reversible(reversible::ReversibleCommands),
+
+    /// Wormhole commands for generating addresses and spending
+    #[command(subcommand)]
+    Wormhole(wormhole::WormholeCommands),
 
     /// Scheduler commands
     #[command(subcommand)]
@@ -147,6 +151,9 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         } => send::handle_send_command(from, to, &amount, node_url, password, password_file).await,
         Commands::Reversible(reversible_cmd) => {
             reversible::handle_reversible_command(reversible_cmd, node_url).await
+        }
+        Commands::Wormhole(wormhole_cmd) => {
+            wormhole::handle_wormhole_command(wormhole_cmd, node_url).await
         }
         Commands::Scheduler(scheduler_cmd) => {
             scheduler::handle_scheduler_command(scheduler_cmd, node_url).await

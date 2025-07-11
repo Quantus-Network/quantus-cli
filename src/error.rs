@@ -30,6 +30,12 @@ pub enum QuantusError {
     #[error("Network error: {0}")]
     NetworkError(String),
 
+    #[error("The provided secret key is not valid hex")]
+    InvalidHexSecret,
+
+    #[error("Invalid secret length: expected 32 bytes, got {0}")]
+    InvalidSecretLength(usize),
+
     #[error("Insufficient balance: available {available}, required {required}")]
     InsufficientBalance { available: u128, required: u128 },
 }
