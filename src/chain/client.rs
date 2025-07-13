@@ -145,6 +145,76 @@ macro_rules! submit_extrinsic {
     }};
 }
 
+/// Macro to submit unsigned extrinsics
+/// Similar to submit_extrinsic! but without signing
+#[macro_export]
+macro_rules! submit_unsigned_extrinsic {
+    ($self:expr, $extrinsic:expr) => {{
+        use crate::{log_print, log_verbose};
+        use substrate_api_client::api::ExtrinsicReport;
+        use substrate_api_client::{SubmitAndWatch, XtStatus};
+
+        log_verbose!("📡 Submitting unsigned extrinsic...");
+
+        // Submit and watch the extrinsic until it's included in a block
+        let result: ExtrinsicReport<_> = $self
+            .api
+            .submit_and_watch_extrinsic_until($extrinsic, XtStatus::InBlock)
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to submit unsigned extrinsic: {:?}",
+                    e
+                ))
+            })?;
+
+        let extrinsic_hash = &result.extrinsic_hash;
+        let block_hash = &result.block_hash.unwrap_or_default();
+
+        log_verbose!(
+            "📋 Transaction hash: {}",
+            format!("{:?}", extrinsic_hash).bright_blue()
+        );
+        log_verbose!(
+            "🔗 Included in block: {}",
+            format!("{:?}", block_hash).bright_blue()
+        );
+
+        // Log events if available
+        if let Some(ref events) = result.events {
+            log_print!("📊 Transaction events:");
+            for (i, event) in events.iter().enumerate() {
+                log_print!(
+                    "   {} Event: Pallet: {}, Variant: {}",
+                    i,
+                    event.pallet_name().bright_cyan(),
+                    event.variant_name().bright_green()
+                );
+
+                match (event.pallet_name(), event.variant_name()) {
+                    ("Wormhole", "ProofVerified") => {
+                        log_print!("      ✅ Wormhole proof verified successfully!");
+                    }
+                    ("Wormhole", "ProofVerificationFailed") => {
+                        log_print!("      ❌ Wormhole proof verification failed!");
+                    }
+                    ("System", "ExtrinsicSuccess") => {
+                        log_print!("      ✅ Extrinsic executed successfully!");
+                    }
+                    ("System", "ExtrinsicFailed") => {
+                        log_print!("      ❌ Extrinsic failed!");
+                    }
+                    _ => {
+                        log_print!("      ℹ️  Unknown event type");
+                    }
+                }
+            }
+        }
+
+        Ok::<ExtrinsicReport<sp_core::H256>, crate::error::QuantusError>(result)
+    }};
+}
+
 /// Submit extrinsic with spinner - wrapper around submit_extrinsic! that shows a spinner
 #[macro_export]
 macro_rules! submit_extrinsic_with_spinner {

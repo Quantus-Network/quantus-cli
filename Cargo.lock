@@ -3753,6 +3753,8 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "toml",
+ "wormhole-circuit",
+ "wormhole-prover",
  "zeroize",
 ]
 
@@ -6575,6 +6577,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "wormhole-circuit"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "plonky2",
+ "zk-circuits-common",
+]
+
+[[package]]
+name = "wormhole-prover"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "plonky2",
+ "wormhole-circuit",
+ "zk-circuits-common",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6723,4 +6745,12 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "zk-circuits-common"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "plonky2",
 ]

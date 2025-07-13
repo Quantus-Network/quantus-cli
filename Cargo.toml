@@ -54,6 +54,10 @@ dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package =
 qp-scheduler = { git = "https://github.com/Quantus-Network/chain", package = "qp-scheduler" }
 pallet-reversible-transfers = { git = "https://github.com/Quantus-Network/chain", package = "pallet-reversible-transfers" }
 
+# Wormhole circuit dependencies (with proper feature configuration)
+wormhole-prover = { path = "../wormhole-circuit/wormhole/prover", default-features = false, features = ["std"] }
+wormhole-circuit = { path = "../wormhole-circuit/wormhole/circuit", default-features = false, features = ["std"] }
+
 # Blockchain and RPC client
 # Note: We use our own modified version of substrate-api-client to support Dilithium crypto
 substrate-api-client = { git = "https://github.com/Quantus-Network/resonance-api-client", package = "substrate-api-client" }
