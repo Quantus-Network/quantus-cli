@@ -8,10 +8,10 @@ pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
 pub mod send;
+pub mod send_subxt;
 pub mod storage;
 pub mod tech_collective;
 pub mod wallet;
-
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
@@ -22,6 +22,29 @@ pub enum Commands {
 
     /// Send tokens to another account
     Send {
+        /// The recipient's account address
+        #[arg(short, long)]
+        to: String,
+
+        /// Amount to send (e.g., "10", "10.5", "0.0001")
+        #[arg(short, long)]
+        amount: String,
+
+        /// Wallet name to send from
+        #[arg(short, long)]
+        from: String,
+
+        /// Password for the wallet (or use environment variables)
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// Read password from file (for scripting)
+        #[arg(long)]
+        password_file: Option<String>,
+    },
+
+    /// Send tokens using subxt (POC) - alternative implementation using pure subxt
+    SendSubxt {
         /// The recipient's account address
         #[arg(short, long)]
         to: String,
@@ -145,6 +168,23 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             password,
             password_file,
         } => send::handle_send_command(from, to, &amount, node_url, password, password_file).await,
+        Commands::SendSubxt {
+            from,
+            to,
+            amount,
+            password,
+            password_file,
+        } => {
+            send_subxt::handle_send_subxt_command(
+                from,
+                to,
+                &amount,
+                node_url,
+                password,
+                password_file,
+            )
+            .await
+        }
         Commands::Reversible(reversible_cmd) => {
             reversible::handle_reversible_command(reversible_cmd, node_url).await
         }

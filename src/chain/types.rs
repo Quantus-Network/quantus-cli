@@ -3,24 +3,42 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
-use super::*;
 use dilithium_crypto::ResonanceSignatureScheme;
 use poseidon_resonance::PoseidonHasher;
-use substrate_api_client::ac_primitives::{
-    AccountData, AccountId32, Block, ExtrinsicSigner, GenericExtrinsicParams, Header, MultiAddress,
-    OpaqueExtrinsic, PlainTip, H256,
-};
-use subxt::config::transaction_extensions;
-use subxt::OnlineClient;
+use sp_core::H256;
+use substrate_api_client::ac_primitives::{AccountId32, MultiAddress};
+
+use subxt::config::substrate::SubstrateHeader;
+use subxt::config::DefaultExtrinsicParams;
 use subxt::{
-    config::substrate::{BlakeTwo256, SubstrateHeader},
-    Config, PolkadotConfig,
+    client::ClientState,
+    config::{Config, ExtrinsicParams, ExtrinsicParamsEncoder},
 };
+use subxt_metadata::Metadata as SubxtMetadata;
 
-#[subxt::subxt(runtime_metadata_path = "./src/quantus_metadata.scale")]
+// use super::quantus_extrinsic_params;
 
-mod src_chain {}
-pub use src_chain::*;
+/// Wrapper around the `PoseidonHasher` that implements the `subxt::config::Hasher` trait
+/// required by the SubXT runtime `Config`.
+#[derive(Debug, Clone, Copy)]
+pub struct SubxtPoseidonHasher;
+
+impl subxt::config::Hasher for SubxtPoseidonHasher {
+    type Output = sp_core::H256;
+
+    fn new(_metadata: &SubxtMetadata) -> Self {
+        SubxtPoseidonHasher
+    }
+
+    fn hash(&self, bytes: &[u8]) -> Self::Output {
+        <PoseidonHasher as sp_runtime::traits::Hash>::hash(bytes)
+    }
+}
+
+// #[subxt::subxt(runtime_metadata_path = "./src/quantus_metadata.scale")]
+
+// mod src_chain {}
+// pub use src_chain::*;
 
 /// Configuration of the chain
 pub enum ChainConfig {}
@@ -28,20 +46,8 @@ impl Config for ChainConfig {
     type AccountId = AccountId32;
     type Address = MultiAddress<Self::AccountId, u32>;
     type Signature = ResonanceSignatureScheme;
-    type Hasher = BlakeTwo256; // TODO: replace with PoseidonHasher
-    type Header = SubstrateHeader<u32, BlakeTwo256>;
+    type Hasher = SubxtPoseidonHasher;
+    type Header = SubstrateHeader<u32, SubxtPoseidonHasher>;
     type AssetId = u32;
-    type ExtrinsicParams = transaction_extensions::AnyOf<
-        Self,
-        (
-            transaction_extensions::VerifySignature<Self>,
-            transaction_extensions::CheckSpecVersion,
-            transaction_extensions::CheckTxVersion,
-            transaction_extensions::CheckNonce,
-            transaction_extensions::CheckMortality<Self>,
-            transaction_extensions::ChargeAssetTxPayment<Self>,
-            transaction_extensions::ChargeTransactionPayment,
-            transaction_extensions::CheckMetadataHash,
-        ),
-    >;
+    type ExtrinsicParams = DefaultExtrinsicParams<Self>;
 }

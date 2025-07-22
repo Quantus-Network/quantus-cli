@@ -10,6 +10,8 @@ use colored::Colorize;
 
 use sp_core::crypto::AccountId32;
 use sp_core::crypto::Ss58Codec;
+use sp_core::ByteArray;
+use sp_runtime::traits::IdentifyAccount;
 use substrate_api_client::{
     ac_primitives::ExtrinsicSigner, extrinsic::BalancesExtrinsics, rpc::JsonrpseeClient, Api,
     GetAccountInformation, GetStorage, SubmitAndWatch, SystemApi,
@@ -21,10 +23,10 @@ use substrate_api_client::{
 #[macro_export]
 macro_rules! submit_extrinsic {
     ($self:expr, $keypair:expr, $extrinsic:expr) => {{
-        use crate::chain::types::reversible_transfers::events::TransactionCancelled;
-        use crate::chain::types::reversible_transfers::events::TransactionScheduled; // this comes from subxt
-        use codec::Decode;
-        use sp_core::crypto::Ss58Codec;
+        // Temporarily disabled event decoding due to subxt 0.43.0 compatibility issues
+        // use crate::chain::types::reversible_transfers::events::TransactionCancelled;
+        // use crate::chain::types::reversible_transfers::events::TransactionScheduled; // this comes from subxt
+        // use codec::Decode;
         use substrate_api_client::api::ExtrinsicReport;
         use substrate_api_client::ac_primitives::ExtrinsicSigner;
         use crate::chain::quantus_runtime_config::QuantusRuntimeConfig;
@@ -95,34 +97,36 @@ macro_rules! submit_extrinsic {
                         log_print!("      💰 Transaction fee paid event!");
                     }
                     ("ReversibleTransfers", "TransactionScheduled") => {
-                        // log_print!("      ⏰ Transaction scheduled!");
-                        let event_bytes = event.field_bytes().clone();
-                        if let Ok(scheduled_event) = TransactionScheduled::decode(&mut event_bytes.clone())
-                        {
-                            log_print!("      🎯 This is a TransactionScheduled event!");
-                            log_print!("      📅 Scheduled at: {:?}", scheduled_event.execute_at);
-                            log_print!("      🆔 Tx id: {:?}", scheduled_event.tx_id);
-                            let from_ss58 =
-                                sp_core::crypto::AccountId32::from(scheduled_event.from.0).to_ss58check();
-                            let to_ss58 =
-                                sp_core::crypto::AccountId32::from(scheduled_event.to.0).to_ss58check();
-                            log_print!("      👤 From: {}", from_ss58);
-                            log_print!("      👤 To: {}", to_ss58);
-                            log_print!("      💰 Amount: {:?}", scheduled_event.amount);
-                        }
+                        log_print!("      ⏰ Transaction scheduled!");
+                        // Temporarily disabled decoding due to subxt 0.43.0 compatibility issues
+                        // let event_bytes = event.field_bytes().clone();
+                        // if let Ok(scheduled_event) = TransactionScheduled::decode(&mut event_bytes.clone())
+                        // {
+                        //     log_print!("      🎯 This is a TransactionScheduled event!");
+                        //     log_print!("      📅 Scheduled at: {:?}", scheduled_event.execute_at);
+                        //     log_print!("      🆔 Tx id: {:?}", scheduled_event.tx_id);
+                        //     let from_ss58 =
+                        //         sp_core::crypto::AccountId32::from(scheduled_event.from.0).to_ss58check();
+                        //     let to_ss58 =
+                        //         sp_core::crypto::AccountId32::from(scheduled_event.to.0).to_ss58check();
+                        //     log_print!("      👤 From: {}", from_ss58);
+                        //     log_print!("      👤 To: {}", to_ss58);
+                        //     log_print!("      💰 Amount: {:?}", scheduled_event.amount);
+                        // }
                     }
                     ("ReversibleTransfers", "TransactionCancelled") => {
-                        // log_print!("      ❌ Transaction cancelled!");
-                        let event_bytes = event.field_bytes().clone();
-                        if let Ok(cancelled_event) =
-                            TransactionCancelled::decode(&mut event_bytes.clone())
-                        {
-                            log_print!("      ❌ This is a TransactionCancelled event!");
-                            log_print!("      🆔 Tx id: {:?}", cancelled_event.tx_id);
-                            let who_ss58 = sp_core::crypto::AccountId32::from(cancelled_event.who.0)
-                                .to_ss58check();
-                            log_print!("      👤 Who: {}", who_ss58);
-                        }
+                        log_print!("      ❌ Transaction cancelled!");
+                        // Temporarily disabled decoding due to subxt 0.43.0 compatibility issues
+                        // let event_bytes = event.field_bytes().clone();
+                        // if let Ok(cancelled_event) =
+                        //     TransactionCancelled::decode(&mut event_bytes.clone())
+                        // {
+                        //     log_print!("      ❌ This is a TransactionCancelled event!");
+                        //     log_print!("      🆔 Tx id: {:?}", cancelled_event.tx_id);
+                        //     let who_ss58 = sp_core::crypto::AccountId32::from(cancelled_event.who.0)
+                        //         .to_ss58check();
+                        //     log_print!("      👤 Who: {}", who_ss58);
+                        // }
                     }
                     ("TechCollective", "MemberAdded") => {
                         log_print!("      👥 Tech Collective member added!");
@@ -672,6 +676,34 @@ impl ChainClient {
             .get_opaque_storage_by_key(storage_key, None)
             .await
             .map_err(|e| QuantusError::NetworkError(format!("Failed to get storage: {:?}", e)))
+    }
+}
+
+// Implement subxt::tx::Signer for ResonancePair
+impl subxt::tx::Signer<crate::chain::types::ChainConfig>
+    for dilithium_crypto::types::ResonancePair
+{
+    fn account_id(&self) -> <crate::chain::types::ChainConfig as subxt::Config>::AccountId {
+        // Convert ResonancePair to AccountId using the same logic as QuantumKeyPair
+        let resonance_public =
+            dilithium_crypto::types::ResonancePublic::from_slice(&self.public.as_slice())
+                .expect("Invalid public key");
+        let account_id =
+            <dilithium_crypto::types::ResonancePublic as IdentifyAccount>::into_account(
+                resonance_public,
+            );
+        account_id
+    }
+
+    fn sign(
+        &self,
+        signer_payload: &[u8],
+    ) -> <crate::chain::types::ChainConfig as subxt::Config>::Signature {
+        // Use the sign method from the trait implemented for ResonancePair
+        // sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in ResonanceSignatureScheme
+        let signature_with_public =
+            <dilithium_crypto::types::ResonancePair as sp_core::Pair>::sign(self, signer_payload);
+        dilithium_crypto::ResonanceSignatureScheme::Resonance(signature_with_public)
     }
 }
 

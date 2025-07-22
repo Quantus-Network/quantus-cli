@@ -80,6 +80,14 @@ impl QuantumKeyPair {
         account.to_ss58check()
     }
 
+    /// Convert to subxt Signer for use with subxt
+    pub fn to_subxt_signer(&self) -> Result<dilithium_crypto::types::ResonancePair> {
+        // Convert to ResonancePair first - now it implements subxt::tx::Signer<ChainConfig>
+        let resonance_pair = self.to_resonance_pair()?;
+
+        Ok(resonance_pair)
+    }
+
     #[allow(dead_code)]
     pub fn ss58_to_account_id(s: &str) -> Vec<u8> {
         // from_ss58check returns a Result, we unwrap it to panic on invalid input.

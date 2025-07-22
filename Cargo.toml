@@ -77,7 +77,11 @@ frame-metadata = { version = "18.0", default-features = false, features = [
 	"serde_full",
 ] }
 scale-value = "0.18"
-subxt = "0.42.1"
+subxt = "0.43.0"
+subxt-signer = "0.43.0"
+
+# Needed for implementing custom Subxt hasher
+subxt-metadata = "0.43.0"
 
 [dev-dependencies]
 tempfile = "3.8"
