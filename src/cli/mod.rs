@@ -132,6 +132,13 @@ pub enum Commands {
         address: String,
     },
 
+    /// Query account balance using subxt (POC) - alternative implementation using pure subxt
+    BalanceSubxt {
+        /// Account address to query (SS58 format)
+        #[arg(short, long)]
+        address: String,
+    },
+
     /// Developer utilities and testing tools
     #[command(subcommand)]
     Developer(DeveloperCommands),
@@ -229,6 +236,13 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             let chain_client = crate::chain::client::ChainClient::new(node_url).await?;
             let balance = chain_client.get_balance(&address).await?;
             let formatted_balance = chain_client.format_balance_with_symbol(balance).await?;
+            log_print!("💰 Balance: {}", formatted_balance);
+            Ok(())
+        }
+        Commands::BalanceSubxt { address } => {
+            let subxt_client = send_subxt::SubxtChainClient::new(node_url).await?;
+            let balance = subxt_client.get_balance(&address).await?;
+            let formatted_balance = subxt_client.format_balance_with_symbol(balance).await?;
             log_print!("💰 Balance: {}", formatted_balance);
             Ok(())
         }

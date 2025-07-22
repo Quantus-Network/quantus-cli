@@ -4,6 +4,7 @@ use crate::{
 };
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+
 use subxt::OnlineClient;
 
 /// SubXT-based chain client for sending transactions
@@ -64,9 +65,27 @@ impl SubxtChainClient {
 
     /// Get chain properties for formatting
     pub async fn get_chain_properties(&self) -> Result<(String, u8)> {
-        // For POC, return default values
-        // In a full implementation, you would query these from the chain
-        Ok(("QUAN".to_string(), 12))
+        log_verbose!("🔍 Querying chain properties...");
+
+        // Query system properties using SubXT runtime APIs
+        // For now, use the same hardcoded values as ChainClient to match formatting
+        // TODO: Implement proper system properties query when SubXT API is available
+        let token_symbol = "DEV".to_string();
+        let token_decimals = 9u8;
+
+        log_verbose!(
+            "📊 Chain properties: token={}, decimals={}",
+            token_symbol,
+            token_decimals
+        );
+
+        log_verbose!(
+            "💰 Token: {} with {} decimals",
+            token_symbol,
+            token_decimals
+        );
+
+        Ok((token_symbol, token_decimals))
     }
 
     /// Format balance with token symbol
@@ -220,11 +239,15 @@ impl SubxtChainClient {
 
         log_verbose!("🔢 Using nonce: {}", nonce);
 
+        // Create custom params with fresh nonce
+        use subxt::config::DefaultExtrinsicParamsBuilder;
+        let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+
         // Submit the transaction with fresh nonce
         let tx_hash = self
             .client
             .tx()
-            .sign_and_submit_default(&transfer_call, &signer)
+            .sign_and_submit(&transfer_call, &signer, params)
             .await
             .map_err(|e| {
                 crate::error::QuantusError::NetworkError(format!(
@@ -240,8 +263,13 @@ impl SubxtChainClient {
 
     /// Wait for transaction finalization using subxt
     pub async fn wait_for_finalization(&self, _tx_hash: subxt::utils::H256) -> Result<bool> {
-        // TODO: Poll for finalization using events or block status
-        // For POC, just return Ok(true)
+        log_verbose!("⏳ Waiting for transaction finalization...");
+
+        // For now, we use a simple delay approach similar to substrate-api-client
+        // TODO: Implement proper finalization watching using SubXT events
+        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+
+        log_verbose!("✅ Transaction likely finalized (after 6s delay)");
         Ok(true)
     }
 }
