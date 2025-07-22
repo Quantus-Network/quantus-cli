@@ -7,6 +7,7 @@ pub mod progress_spinner;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
+pub mod scheduler_subxt;
 pub mod send;
 pub mod send_subxt;
 pub mod storage;
@@ -73,6 +74,10 @@ pub enum Commands {
     /// Scheduler commands
     #[command(subcommand)]
     Scheduler(scheduler::SchedulerCommands),
+
+    /// Scheduler commands using subxt (POC) - alternative implementation using pure subxt
+    #[command(subcommand)]
+    SchedulerSubxt(scheduler_subxt::SchedulerSubxtCommands),
 
     /// Direct interaction with chain storage (Sudo required for set)
     #[command(subcommand)]
@@ -197,6 +202,9 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         }
         Commands::Scheduler(scheduler_cmd) => {
             scheduler::handle_scheduler_command(scheduler_cmd, node_url).await
+        }
+        Commands::SchedulerSubxt(scheduler_subxt_cmd) => {
+            scheduler_subxt::handle_scheduler_subxt_command(scheduler_subxt_cmd, node_url).await
         }
         Commands::Storage(storage_cmd) => {
             storage::handle_storage_command(storage_cmd, node_url).await
