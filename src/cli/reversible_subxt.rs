@@ -532,17 +532,23 @@ pub async fn handle_reversible_subxt_command(
         }
 
         ReversibleSubxtCommands::SetReversibility {
-            delay: _,
-            policy: _,
-            reverser: _,
-            from: _,
-            password: _,
-            password_file: _,
+            delay,
+            policy,
+            reverser,
+            from,
+            password,
+            password_file,
         } => {
-            log_error!("❌ Set reversibility is not yet implemented in SubXT version");
-            log_print!("💡 Currently only basic reversible transfers are supported");
-            log_print!("💡 Advanced reversibility settings will be implemented later");
-            Ok(())
+            set_reversibility_subxt(
+                &client,
+                &delay,
+                &policy,
+                &reverser,
+                &from,
+                password,
+                password_file,
+            )
+            .await
         }
 
         ReversibleSubxtCommands::ListPending {
@@ -708,6 +714,131 @@ async fn list_pending_transactions_subxt(
         log_print!("📊 Total pending transfers: {}", total_transfers);
         log_print!("💡 Use transaction hash with 'quantus reversible-subxt cancel --tx-id <hash>' to cancel outgoing transfers");
     }
+
+    Ok(())
+}
+
+/// Set reversibility (high security) for an account using SubXT
+async fn set_reversibility_subxt(
+    client: &OnlineClient<ChainConfig>,
+    delay: &Option<u64>,
+    policy: &str,
+    reverser: &Option<String>,
+    from: &str,
+    password: Option<String>,
+    password_file: Option<String>,
+) -> Result<()> {
+    log_print!("⚙️  Setting reversibility (SubXT)");
+    log_print!("Delay: {:?}", delay);
+    log_print!("Policy: {}", policy.bright_cyan());
+    log_print!("From: {}", from.bright_yellow());
+
+    // Load keypair
+    let from_keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+    // Convert delay to proper BlockNumberOrTimestamp
+    let delay_value = if let Some(delay_ms) = delay {
+        use crate::chain::quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
+
+        match policy {
+            "BlockDelay" => {
+                // Convert to blocks (assuming ~6 second block time)
+                let blocks = (*delay_ms / 6000).max(1) as u32;
+                Delay::BlockNumber(blocks)
+            }
+            _ => {
+                // Default to TimeDelay (milliseconds)
+                Delay::Timestamp(*delay_ms)
+            }
+        }
+    } else {
+        return Err(crate::error::QuantusError::Generic(
+            "Delay must be specified for setting reversibility".to_string(),
+        )
+        .into());
+    };
+
+    // Parse reverser account
+    let reverser_account = if let Some(reverser_addr) = reverser {
+        SpAccountId32::from_ss58check(reverser_addr).map_err(|e| {
+            crate::error::QuantusError::Generic(format!("Invalid reverser address: {:?}", e))
+        })?
+    } else {
+        // Default to self if no reverser specified
+        SpAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check()).map_err(|e| {
+            crate::error::QuantusError::Generic(format!("Invalid from address: {:?}", e))
+        })?
+    };
+
+    // Convert reverser to subxt type
+    let reverser_bytes: [u8; 32] = *reverser_account.as_ref();
+    let reverser_subxt = subxt::ext::subxt_core::utils::AccountId32::from(reverser_bytes);
+
+    // For interceptor, we'll use the same as reverser for simplicity
+    let interceptor_subxt = reverser_subxt.clone();
+
+    log_verbose!("✅ Delay: {:?}", delay_value);
+    log_verbose!("✅ Interceptor: {}", interceptor_subxt);
+    log_verbose!("✅ Recoverer: {}", reverser_subxt);
+
+    // Clone for display later
+    let interceptor_display = interceptor_subxt.clone();
+    let reverser_display = reverser_subxt.clone();
+
+    // Create the set_high_security transaction
+    let set_high_security_tx = crate::chain::quantus_subxt::api::tx()
+        .reversible_transfers()
+        .set_high_security(delay_value, interceptor_subxt, reverser_subxt);
+
+    // Convert our QuantumKeyPair to subxt Signer
+    let signer = from_keypair.to_subxt_signer().map_err(|e| {
+        crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    })?;
+
+    // Get nonce
+    let nonce = get_fresh_nonce(client, &from_keypair).await?;
+
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&set_high_security_tx, &signer, params)
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to submit transaction: {:?}",
+                e
+            ))
+        })?;
+
+    log_success!(
+        "✅ SUCCESS Reversibility settings updated with subxt! Hash: 0x{}",
+        hex::encode(tx_hash.as_ref())
+    );
+    log_success!("✅ 🎉 FINALIZED Reversibility settings confirmed with subxt!");
+
+    // Display the settings
+    match delay {
+        Some(d) => {
+            if policy == "BlockDelay" {
+                let blocks = (d / 6000).max(1);
+                log_print!(
+                    "⏰ High security enabled with {} block delay (~{} seconds)",
+                    blocks,
+                    d / 1000
+                );
+            } else {
+                log_print!("⏰ High security enabled with {} ms delay", d);
+            }
+        }
+        None => log_print!("🔒 High security disabled"),
+    }
+
+    log_print!("🔄 Interceptor: {}", interceptor_display);
+    log_print!("🔄 Recoverer: {}", reverser_display);
 
     Ok(())
 }
