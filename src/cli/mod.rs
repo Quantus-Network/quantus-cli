@@ -7,6 +7,7 @@ pub mod progress_spinner;
 pub mod reversible;
 pub mod reversible_subxt;
 pub mod runtime;
+pub mod runtime_subxt;
 pub mod scheduler;
 pub mod scheduler_subxt;
 pub mod send;
@@ -105,6 +106,10 @@ pub enum Commands {
     /// Runtime management commands (requires root/sudo permissions)
     #[command(subcommand)]
     Runtime(runtime::RuntimeCommands),
+
+    /// Runtime management commands using subxt (POC) - alternative implementation using pure subxt
+    #[command(subcommand)]
+    RuntimeSubxt(runtime_subxt::RuntimeSubxtCommands),
 
     /// Generic extrinsic call - call ANY pallet function!
     Call {
@@ -242,6 +247,9 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         }
         Commands::Runtime(runtime_cmd) => {
             runtime::handle_runtime_command(runtime_cmd, node_url).await
+        }
+        Commands::RuntimeSubxt(runtime_subxt_cmd) => {
+            runtime_subxt::handle_runtime_subxt_command(runtime_subxt_cmd, node_url).await
         }
         Commands::Call {
             pallet,
