@@ -1,25 +1,22 @@
-use crate::{
-    chain::client, chain::quantus_subxt, error::Result, log_print,
-    log_success,
-};
+use crate::chain::client::ChainConfig;
+use crate::{chain::client, chain::quantus_subxt, error::Result, log_print, log_success};
 use clap::Subcommand;
 use subxt::OnlineClient;
-use crate::chain::client::ChainConfig;
 
-/// Scheduler-related commands using SubXT
+/// Scheduler-related commands
 #[derive(Subcommand, Debug)]
 pub enum SchedulerSubxtCommands {
-    /// Get the last processed timestamp from the scheduler using subxt
+    /// Get the last processed timestamp from the scheduler
     GetLastProcessedTimestamp,
 }
 
-/// Get the last processed timestamp from the scheduler using SubXT
+/// Get the last processed timestamp from the scheduler
 pub async fn get_last_processed_timestamp(
     client: &OnlineClient<ChainConfig>,
 ) -> Result<Option<u64>> {
     use quantus_subxt::api;
 
-    log_print!("🕒 Getting last processed timestamp from the scheduler (subxt)");
+    log_print!("🕒 Getting last processed timestamp from the scheduler");
 
     // Build the storage key for Scheduler::LastProcessedTimestamp
     let storage_addr = api::storage().scheduler().last_processed_timestamp();
@@ -38,12 +35,12 @@ pub async fn get_last_processed_timestamp(
     Ok(timestamp)
 }
 
-/// Handle scheduler subxt commands
+/// Handle scheduler commands
 pub async fn handle_scheduler_subxt_command(
     command: SchedulerSubxtCommands,
     node_url: &str,
 ) -> Result<()> {
-    log_print!("🗓️  Scheduler (SubXT)");
+    log_print!("🗓️  Scheduler");
 
     let client = client::create_subxt_client(node_url).await?;
 

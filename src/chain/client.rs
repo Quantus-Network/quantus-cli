@@ -1,19 +1,18 @@
-//! Common SubXT client utilities to eliminate code duplication
+//! Common client utilities to eliminate code duplication
 //!
-//! This module provides shared functionality for creating and managing SubXT clients
-//! across all CLI SubXT modules.
+//! This module provides shared functionality for creating and managing clients
+//! across all CLI modules.
 
+use crate::{error::QuantusError, log_verbose};
 use dilithium_crypto::ResonanceSignatureScheme;
 use poseidon_resonance::PoseidonHasher;
-use crate::{error::QuantusError, log_verbose};
-use sp_core::ByteArray;
 use sp_core::crypto::AccountId32;
-use sp_runtime::MultiAddress;
+use sp_core::ByteArray;
 use sp_runtime::traits::IdentifyAccount;
-use subxt::{Config, OnlineClient};
-use subxt::config::DefaultExtrinsicParams;
+use sp_runtime::MultiAddress;
 use subxt::config::substrate::SubstrateHeader;
-
+use subxt::config::DefaultExtrinsicParams;
+use subxt::{Config, OnlineClient};
 use subxt_metadata::Metadata as SubxtMetadata;
 
 #[derive(Debug, Clone, Copy)]
@@ -30,6 +29,7 @@ impl subxt::config::Hasher for SubxtPoseidonHasher {
         <PoseidonHasher as sp_runtime::traits::Hash>::hash(bytes)
     }
 }
+
 /// Configuration of the chain
 pub enum ChainConfig {}
 impl Config for ChainConfig {
@@ -42,30 +42,26 @@ impl Config for ChainConfig {
     type ExtrinsicParams = DefaultExtrinsicParams<Self>;
 }
 
-/// Common SubXT client creation function
+/// Common client creation function
 ///
-/// This function is used by all SubXT CLI modules to create a connection to the Quantus node.
-/// It provides consistent error handling and logging across all SubXT implementations.
+/// This function is used by all CLI modules to create a connection to the Quantus node.
+/// It provides consistent error handling and logging across all implementations.
 pub async fn create_subxt_client(
     node_url: &str,
 ) -> crate::error::Result<OnlineClient<ChainConfig>> {
-    log_verbose!("🔗 Connecting to Quantus node with subxt: {}", node_url);
+    log_verbose!("🔗 Connecting to Quantus node: {}", node_url);
 
     let client = OnlineClient::<ChainConfig>::from_url(node_url)
         .await
-        .map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to connect with subxt: {:?}", e))
-        })?;
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
 
-    log_verbose!("✅ Connected to Quantus node successfully with subxt!");
+    log_verbose!("✅ Connected to Quantus node successfully!");
 
     Ok(client)
 }
 
 // Implement subxt::tx::Signer for ResonancePair
-impl subxt::tx::Signer<ChainConfig>
-    for dilithium_crypto::types::ResonancePair
-{
+impl subxt::tx::Signer<ChainConfig> for dilithium_crypto::types::ResonancePair {
     fn account_id(&self) -> <ChainConfig as Config>::AccountId {
         let resonance_public =
             dilithium_crypto::types::ResonancePublic::from_slice(&self.public.as_slice())
@@ -77,10 +73,7 @@ impl subxt::tx::Signer<ChainConfig>
         account_id
     }
 
-    fn sign(
-        &self,
-        signer_payload: &[u8],
-    ) -> <ChainConfig as Config>::Signature {
+    fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
         // Use the sign method from the trait implemented for ResonancePair
         // sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in ResonanceSignatureScheme
         let signature_with_public =

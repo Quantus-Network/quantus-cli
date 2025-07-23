@@ -1,10 +1,10 @@
-//! `quantus storage-subxt` subcommand - SubXT implementation
+//! `quantus storage` subcommand - storage operations
 use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print,
-    log_success, log_verbose,
+    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
+    log_verbose,
 };
 use clap::Subcommand;
 use codec::{Decode, Encode};
@@ -13,10 +13,10 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_core::twox_128;
 use subxt::OnlineClient;
 
-/// Direct interaction with chain storage using SubXT (Sudo required for set)
+/// Direct interaction with chain storage (Sudo required for set)
 #[derive(Subcommand, Debug)]
 pub enum StorageSubxtCommands {
-    /// Get a storage value from a pallet using subxt.
+    /// Get a storage value from a pallet.
     ///
     /// This command constructs a storage key from the pallet and item names,
     /// fetches the raw value from the chain state, and prints it as a hex string.
@@ -33,7 +33,7 @@ pub enum StorageSubxtCommands {
         #[arg(long)]
         decode_as: Option<String>,
     },
-    /// Set a storage value on the chain using subxt.
+    /// Set a storage value on the chain.
     ///
     /// This requires sudo privileges. It constructs a `system.set_storage` call
     /// and wraps it in a `sudo.sudo` extrinsic. The provided value should be
@@ -94,7 +94,7 @@ pub async fn set_storage_value(
     storage_key: Vec<u8>,
     value_bytes: Vec<u8>,
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_verbose!("✍️  Creating set_storage transaction with subxt...");
+    log_verbose!("✍️  Creating set_storage transaction...");
 
     // Convert our QuantumKeyPair to subxt Signer
     let signer = from_keypair
@@ -127,7 +127,7 @@ pub async fn set_storage_value(
         })?;
 
     log_verbose!(
-        "📋 Set storage transaction submitted with subxt: {:?}",
+        "📋 Set storage transaction submitted: {:?}",
         tx_hash
     );
 
@@ -139,7 +139,7 @@ pub async fn handle_storage_subxt_command(
     command: StorageSubxtCommands,
     node_url: &str,
 ) -> crate::error::Result<()> {
-    log_print!("🗄️  Storage (SubXT)");
+    log_print!("🗄️  Storage");
 
     let client = client::create_subxt_client(node_url).await?;
 
@@ -150,7 +150,7 @@ pub async fn handle_storage_subxt_command(
             decode_as,
         } => {
             log_print!(
-                "🔎 Getting storage for {}::{} (using subxt)",
+                "🔎 Getting storage for {}::{}",
                 pallet.bright_green(),
                 name.bright_cyan()
             );
@@ -216,7 +216,7 @@ pub async fn handle_storage_subxt_command(
             r#type,
         } => {
             log_print!(
-                "✍️  Setting storage for {}::{} (using subxt)",
+                "✍️  Setting storage for {}::{}",
                 pallet.bright_green(),
                 name.bright_cyan()
             );
@@ -268,11 +268,11 @@ pub async fn handle_storage_subxt_command(
                 key
             };
 
-            // 4. Submit the set storage transaction using subxt
+            // 4. Submit the set storage transaction
             let tx_hash = set_storage_value(&client, &keypair, storage_key, value_bytes).await?;
 
             log_print!(
-                "✅ {} Set storage transaction submitted with subxt! Hash: {:?}",
+                "✅ {} Set storage transaction submitted! Hash: {:?}",
                 "SUCCESS".bright_green().bold(),
                 tx_hash
             );
@@ -281,7 +281,7 @@ pub async fn handle_storage_subxt_command(
 
             if success {
                 log_success!(
-                    "🎉 {} Set storage transaction confirmed with subxt!",
+                    "🎉 {} Set storage transaction confirmed!",
                     "FINALIZED".bright_green().bold()
                 );
             } else {

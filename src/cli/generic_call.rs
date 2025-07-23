@@ -1,16 +1,16 @@
-//! `quantus call-subxt` subcommand - SubXT implementation for generic pallet calls
+//! `quantus call` subcommand - generic pallet calls
 use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::{
-    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print,
-    log_success, log_verbose, wallet::QuantumKeyPair,
+    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
+    log_verbose, wallet::QuantumKeyPair,
 };
 use colored::Colorize;
 use serde_json::Value;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::OnlineClient;
 
-/// Execute a generic call to any pallet using SubXT
+/// Execute a generic call to any pallet
 pub async fn execute_generic_call(
     client: &OnlineClient<ChainConfig>,
     pallet: &str,
@@ -19,7 +19,7 @@ pub async fn execute_generic_call(
     from_keypair: &QuantumKeyPair,
     tip: Option<String>,
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_print!("🚀 Executing generic call (using subxt)");
+    log_print!("🚀 Executing generic call");
     log_print!("Pallet: {}", pallet.bright_green());
     log_print!("Call: {}", call.bright_cyan());
     log_print!(
@@ -59,7 +59,7 @@ pub async fn execute_generic_call(
     );
 
     // Create and submit extrinsic based on pallet and call
-    log_print!("🔧 Creating extrinsic for {}.{} with subxt", pallet, call);
+    log_print!("🔧 Creating extrinsic for {}.{}", pallet, call);
 
     let tx_hash = match (pallet, call) {
         // Balances pallet calls
@@ -127,7 +127,7 @@ pub async fn execute_generic_call(
     Ok(tx_hash)
 }
 
-/// Submit balance transfer using SubXT
+/// Submit balance transfer
 async fn submit_balance_transfer(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &QuantumKeyPair,
@@ -172,7 +172,7 @@ async fn submit_balance_transfer(
     }
 }
 
-/// Submit system remark using SubXT
+/// Submit system remark
 async fn submit_system_remark(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &QuantumKeyPair,
@@ -195,21 +195,21 @@ async fn submit_system_remark(
     submit_transaction(client, from_keypair, remark_call).await
 }
 
-/// Submit sudo call using SubXT
+/// Submit sudo call
 async fn submit_sudo_call(
     _client: &OnlineClient<ChainConfig>,
     _from_keypair: &QuantumKeyPair,
     _args: &[Value],
 ) -> crate::error::Result<subxt::utils::H256> {
     // For now, this is a placeholder - sudo calls need the inner call to be constructed
-    log_error!("❌ Sudo calls through generic call-subxt are complex - use specific sudo wrappers");
+    log_error!("❌ Sudo calls through generic call are complex - use specific sudo wrappers");
     log_print!("💡 Use dedicated subxt commands that already wrap calls in sudo");
     Err(QuantusError::Generic(
-        "Sudo calls not supported in generic call-subxt - use specific commands".to_string(),
+        "Sudo calls not supported in generic call - use specific commands".to_string(),
     ))
 }
 
-/// Submit tech collective add member using SubXT
+/// Submit tech collective add member
 async fn submit_tech_collective_add_member(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &QuantumKeyPair,
@@ -245,7 +245,7 @@ async fn submit_tech_collective_add_member(
     submit_transaction(client, from_keypair, sudo_call).await
 }
 
-/// Submit tech collective remove member using SubXT
+/// Submit tech collective remove member
 async fn submit_tech_collective_remove_member(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &QuantumKeyPair,
@@ -282,7 +282,7 @@ async fn submit_tech_collective_remove_member(
     submit_transaction(client, from_keypair, sudo_call).await
 }
 
-/// Submit tech collective vote using SubXT
+/// Submit tech collective vote
 async fn submit_tech_collective_vote(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &QuantumKeyPair,
@@ -304,7 +304,7 @@ async fn submit_tech_collective_vote(
     submit_transaction(client, from_keypair, vote_call).await
 }
 
-/// Submit reversible transfer using SubXT
+/// Submit reversible transfer
 async fn submit_reversible_transfer(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &QuantumKeyPair,
@@ -342,31 +342,29 @@ async fn submit_reversible_transfer(
     submit_transaction(client, from_keypair, schedule_call).await
 }
 
-/// Submit scheduler schedule using SubXT
+/// Submit scheduler schedule
 async fn submit_scheduler_schedule(
     _client: &OnlineClient<ChainConfig>,
     _from_keypair: &QuantumKeyPair,
     _args: &[Value],
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_error!("❌ Scheduler calls through generic call-subxt are complex");
-    log_print!("💡 Use dedicated scheduler-subxt commands for complex scheduling");
+    log_error!("❌ Scheduler calls through generic call are complex");
+    log_print!("💡 Use dedicated scheduler commands for complex scheduling");
     Err(QuantusError::Generic(
-        "Scheduler calls not supported in generic call-subxt - use scheduler-subxt commands"
-            .to_string(),
+        "Scheduler calls not supported in generic call - use scheduler commands".to_string(),
     ))
 }
 
-/// Submit scheduler cancel using SubXT
+/// Submit scheduler cancel
 async fn submit_scheduler_cancel(
     _client: &OnlineClient<ChainConfig>,
     _from_keypair: &QuantumKeyPair,
     _args: &[Value],
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_error!("❌ Scheduler calls through generic call-subxt are complex");
-    log_print!("💡 Use dedicated scheduler-subxt commands for scheduling operations");
+    log_error!("❌ Scheduler calls through generic call are complex");
+    log_print!("💡 Use dedicated scheduler commands for scheduling operations");
     Err(QuantusError::Generic(
-        "Scheduler calls not supported in generic call-subxt - use scheduler-subxt commands"
-            .to_string(),
+        "Scheduler calls not supported in generic call - use scheduler commands".to_string(),
     ))
 }
 
@@ -399,12 +397,12 @@ where
             QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-    log_verbose!("📋 Transaction submitted with subxt: {:?}", tx_hash);
+    log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
 
-/// Execute a generic call using SubXT
+/// Execute a generic call
 pub async fn execute_generic_call_subxt(
     pallet: &str,
     call: &str,
@@ -413,7 +411,7 @@ pub async fn execute_generic_call_subxt(
     tip: Option<String>,
     node_url: &str,
 ) -> crate::error::Result<()> {
-    log_print!("🚀 Generic Call (SubXT)");
+    log_print!("🚀 Generic Call");
 
     let client = client::create_subxt_client(node_url).await?;
     let keypair = crate::wallet::load_keypair_from_wallet(from, None, None)?;

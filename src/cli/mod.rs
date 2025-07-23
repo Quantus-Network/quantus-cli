@@ -260,7 +260,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
     }
 }
 
-/// Handle generic extrinsic call command using SubXT
+/// Handle generic extrinsic call command
 async fn handle_generic_call_subxt_command(
     pallet: String,
     call: String,

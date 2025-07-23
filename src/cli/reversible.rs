@@ -9,10 +9,10 @@ use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 use subxt::OnlineClient;
 
-/// Reversible transfer commands using SubXT
+/// Reversible transfer commands
 #[derive(Subcommand, Debug)]
 pub enum ReversibleSubxtCommands {
-    /// Schedule a transfer with default delay using subxt
+    /// Schedule a transfer with default delay
     ScheduleTransfer {
         /// The recipient's account address
         #[arg(short, long)]
@@ -35,7 +35,7 @@ pub enum ReversibleSubxtCommands {
         password_file: Option<String>,
     },
 
-    /// Schedule a transfer with custom delay using subxt
+    /// Schedule a transfer with custom delay
     ScheduleTransferWithDelay {
         /// The recipient's account address
         #[arg(short, long)]
@@ -66,7 +66,7 @@ pub enum ReversibleSubxtCommands {
         password_file: Option<String>,
     },
 
-    /// Cancel a pending reversible transaction using subxt
+    /// Cancel a pending reversible transaction
     Cancel {
         /// Transaction ID to cancel (hex hash)
         #[arg(long)]
@@ -85,7 +85,7 @@ pub enum ReversibleSubxtCommands {
         password_file: Option<String>,
     },
 
-    /// Set reversibility for your account using subxt
+    /// Set reversibility for your account
     SetReversibility {
         /// Delay in blocks or milliseconds (None to disable)
         #[arg(short, long)]
@@ -112,7 +112,7 @@ pub enum ReversibleSubxtCommands {
         password_file: Option<String>,
     },
 
-    /// List all pending reversible transactions for an account using subxt
+    /// List all pending reversible transactions for an account
     ListPending {
         /// Account address to query (optional, uses wallet address if not provided)
         #[arg(short, long)]
@@ -158,14 +158,14 @@ async fn get_fresh_nonce(
     Ok(nonce)
 }
 
-/// Schedule a transfer with default delay using SubXT
+/// Schedule a transfer with default delay 
 pub async fn schedule_transfer(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
     to_address: &str,
     amount: u128,
 ) -> Result<subxt::utils::H256> {
-    log_verbose!("🔄 Creating reversible transfer with subxt...");
+    log_verbose!("🔄 Creating reversible transfer...");
     log_verbose!(
         "   From: {}",
         from_keypair.to_account_id_ss58check().bright_cyan()
@@ -187,7 +187,7 @@ pub async fn schedule_transfer(
         crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
     })?;
 
-    log_verbose!("✍️  Creating reversible transfer extrinsic with subxt...");
+    log_verbose!("✍️  Creating reversible transfer extrinsic...");
 
     // Create the reversible transfer call using static API from quantus_subxt
     let transfer_call = quantus_subxt::api::tx()
@@ -216,18 +216,18 @@ pub async fn schedule_transfer(
             ))
         })?;
 
-    log_verbose!("📋 Reversible transfer submitted with subxt: {:?}", tx_hash);
+    log_verbose!("📋 Reversible transfer submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
 
-/// Cancel a pending reversible transaction using SubXT
+/// Cancel a pending reversible transaction 
 pub async fn cancel_transaction(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
     tx_id: &str,
 ) -> Result<subxt::utils::H256> {
-    log_verbose!("❌ Cancelling reversible transfer with subxt...");
+    log_verbose!("❌ Cancelling reversible transfer...");
     log_verbose!("   Transaction ID: {}", tx_id.bright_yellow());
 
     // Parse transaction ID
@@ -241,7 +241,7 @@ pub async fn cancel_transaction(
         crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
     })?;
 
-    log_verbose!("✍️  Creating cancel transaction extrinsic with subxt...");
+    log_verbose!("✍️  Creating cancel transaction extrinsic...");
 
     // Create the cancel transaction call using static API from quantus_subxt
     let cancel_call = quantus_subxt::api::tx()
@@ -267,12 +267,12 @@ pub async fn cancel_transaction(
             ))
         })?;
 
-    log_verbose!("📋 Cancel transaction submitted with subxt: {:?}", tx_hash);
+    log_verbose!("📋 Cancel transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
 
-/// Schedule a transfer with custom delay using SubXT
+/// Schedule a transfer with custom delay 
 pub async fn schedule_transfer_with_delay(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
@@ -282,7 +282,7 @@ pub async fn schedule_transfer_with_delay(
     unit_blocks: bool,
 ) -> Result<subxt::utils::H256> {
     let unit_str = if unit_blocks { "blocks" } else { "seconds" };
-    log_verbose!("🔄 Creating reversible transfer with custom delay using subxt...");
+    log_verbose!("🔄 Creating reversible transfer with custom delay ...");
     log_verbose!(
         "   From: {}",
         from_keypair.to_account_id_ss58check().bright_cyan()
@@ -311,7 +311,7 @@ pub async fn schedule_transfer_with_delay(
         crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
     })?;
 
-    log_verbose!("✍️  Creating schedule_transfer_with_delay extrinsic with subxt...");
+    log_verbose!("✍️  Creating schedule_transfer_with_delay extrinsic...");
 
     // Create the schedule transfer with delay call using static API from quantus_subxt
     let transfer_call = quantus_subxt::api::tx()
@@ -342,7 +342,7 @@ pub async fn schedule_transfer_with_delay(
         })?;
 
     log_verbose!(
-        "📋 Reversible transfer with custom delay submitted with subxt: {:?}",
+        "📋 Reversible transfer with custom delay submitted: {:?}",
         tx_hash
     );
 
@@ -354,7 +354,7 @@ pub async fn handle_reversible_subxt_command(
     command: ReversibleSubxtCommands,
     node_url: &str,
 ) -> Result<()> {
-    log_print!("🔄 Reversible Transfers (SubXT)");
+    log_print!("🔄 Reversible Transfers");
 
     let client = client::create_subxt_client(node_url).await?;
 
@@ -377,7 +377,7 @@ pub async fn handle_reversible_subxt_command(
                 to
             );
             log_verbose!(
-                "🚀 {} Scheduling reversible transfer {} to {} (using subxt)",
+                "🚀 {} Scheduling reversible transfer {} to {} ()",
                 "REVERSIBLE_SUBXT".bright_cyan().bold(),
                 formatted_amount.bright_yellow().bold(),
                 to.bright_green()
@@ -387,11 +387,11 @@ pub async fn handle_reversible_subxt_command(
             log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit transaction using subxt
+            // Submit transaction 
             let tx_hash = schedule_transfer(&client, &keypair, &to, raw_amount).await?;
 
             log_print!(
-                "✅ {} Reversible transfer scheduled with subxt! Hash: {:?}",
+                "✅ {} Reversible transfer scheduled! Hash: {:?}",
                 "SUCCESS".bright_green().bold(),
                 tx_hash
             );
@@ -401,7 +401,7 @@ pub async fn handle_reversible_subxt_command(
             if success {
                 log_info!("✅ Reversible transfer scheduled and confirmed on chain");
                 log_success!(
-                    "🎉 {} Reversible transfer confirmed with subxt!",
+                    "🎉 {} Reversible transfer confirmed!",
                     "FINALIZED".bright_green().bold()
                 );
             } else {
@@ -417,7 +417,7 @@ pub async fn handle_reversible_subxt_command(
             password_file,
         } => {
             log_verbose!(
-                "❌ {} Cancelling reversible transfer {} (using subxt)",
+                "❌ {} Cancelling reversible transfer {} ()",
                 "CANCEL_SUBXT".bright_red().bold(),
                 tx_id.bright_yellow().bold()
             );
@@ -426,11 +426,11 @@ pub async fn handle_reversible_subxt_command(
             log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit cancel transaction using subxt
+            // Submit cancel transaction 
             let tx_hash = cancel_transaction(&client, &keypair, &tx_id).await?;
 
             log_print!(
-                "✅ {} Cancel transaction submitted with subxt! Hash: {:?}",
+                "✅ {} Cancel transaction submitted! Hash: {:?}",
                 "SUCCESS".bright_green().bold(),
                 tx_hash
             );
@@ -439,7 +439,7 @@ pub async fn handle_reversible_subxt_command(
 
             if success {
                 log_success!(
-                    "🎉 {} Cancel transaction confirmed with subxt!",
+                    "🎉 {} Cancel transaction confirmed!",
                     "FINALIZED".bright_green().bold()
                 );
             } else {
@@ -465,7 +465,7 @@ pub async fn handle_reversible_subxt_command(
 
             let unit_str = if unit_blocks { "blocks" } else { "seconds" };
             log_verbose!(
-                "🚀 {} Scheduling reversible transfer {} to {} with {} {} delay (using subxt)",
+                "🚀 {} Scheduling reversible transfer {} to {} with {} {} delay ()",
                 "REVERSIBLE_SUBXT".bright_cyan().bold(),
                 formatted_amount.bright_yellow().bold(),
                 to.bright_green(),
@@ -477,7 +477,7 @@ pub async fn handle_reversible_subxt_command(
             log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit transaction using subxt
+            // Submit transaction 
             let tx_hash = schedule_transfer_with_delay(
                 &client,
                 &keypair,
@@ -489,7 +489,7 @@ pub async fn handle_reversible_subxt_command(
             .await?;
 
             log_print!(
-                "✅ {} Reversible transfer with custom delay scheduled with subxt! Hash: {:?}",
+                "✅ {} Reversible transfer with custom delay scheduled! Hash: {:?}",
                 "SUCCESS".bright_green().bold(),
                 tx_hash
             );
@@ -498,7 +498,7 @@ pub async fn handle_reversible_subxt_command(
 
             if success {
                 log_success!(
-                    "🎉 {} Reversible transfer with custom delay confirmed with subxt!",
+                    "🎉 {} Reversible transfer with custom delay confirmed!",
                     "FINALIZED".bright_green().bold()
                 );
 
@@ -553,7 +553,7 @@ pub async fn handle_reversible_subxt_command(
     }
 }
 
-/// List all pending reversible transactions for an account using SubXT
+/// List all pending reversible transactions for an account 
 async fn list_pending_transactions_subxt(
     client: &OnlineClient<ChainConfig>,
     address: Option<String>,
@@ -561,7 +561,7 @@ async fn list_pending_transactions_subxt(
     password: Option<String>,
     password_file: Option<String>,
 ) -> Result<()> {
-    log_print!("📋 Listing pending reversible transactions (SubXT)");
+    log_print!("📋 Listing pending reversible transactions");
 
     // Determine which address to query
     let target_address = match (address, wallet_name) {
@@ -705,13 +705,13 @@ async fn list_pending_transactions_subxt(
     } else {
         log_print!("");
         log_print!("📊 Total pending transfers: {}", total_transfers);
-        log_print!("💡 Use transaction hash with 'quantus reversible-subxt cancel --tx-id <hash>' to cancel outgoing transfers");
+        log_print!("💡 Use transaction hash with 'quantus reversible cancel --tx-id <hash>' to cancel outgoing transfers");
     }
 
     Ok(())
 }
 
-/// Set reversibility (high security) for an account using SubXT
+/// Set reversibility (high security) for an account 
 async fn set_reversibility_subxt(
     client: &OnlineClient<ChainConfig>,
     delay: &Option<u64>,
@@ -721,7 +721,7 @@ async fn set_reversibility_subxt(
     password: Option<String>,
     password_file: Option<String>,
 ) -> Result<()> {
-    log_print!("⚙️  Setting reversibility (SubXT)");
+    log_print!("⚙️  Setting reversibility");
     log_print!("Delay: {:?}", delay);
     log_print!("Policy: {}", policy.bright_cyan());
     log_print!("From: {}", from.bright_yellow());
@@ -808,10 +808,10 @@ async fn set_reversibility_subxt(
         })?;
 
     log_success!(
-        "✅ SUCCESS Reversibility settings updated with subxt! Hash: 0x{}",
+        "✅ SUCCESS Reversibility settings updated! Hash: 0x{}",
         hex::encode(tx_hash.as_ref())
     );
-    log_success!("✅ 🎉 FINALIZED Reversibility settings confirmed with subxt!");
+    log_success!("✅ 🎉 FINALIZED Reversibility settings confirmed!");
 
     // Display the settings
     match delay {

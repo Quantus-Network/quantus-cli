@@ -1,4 +1,5 @@
-//! `quantus wallet-subxt` subcommand - SubXT implementation for wallet operations
+//! `quantus wallet` subcommand - wallet operations
+use crate::chain::client::ChainConfig;
 use crate::{
     chain::client,
     chain::quantus_subxt,
@@ -11,9 +12,8 @@ use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::io::{self, Write};
 use subxt::OnlineClient;
-use crate::chain::client::ChainConfig;
 
-/// Wallet management commands using SubXT
+/// Wallet management commands
 #[derive(Subcommand, Debug)]
 pub enum WalletSubxtCommands {
     /// Create a new wallet with quantum-safe keys
@@ -78,7 +78,7 @@ pub enum WalletSubxtCommands {
         force: bool,
     },
 
-    /// Get the nonce (transaction count) of an account using subxt
+    /// Get the nonce (transaction count) of an account
     Nonce {
         /// Account address to query (optional, uses wallet address if not provided)
         #[arg(short, long)]
@@ -94,13 +94,13 @@ pub enum WalletSubxtCommands {
     },
 }
 
-/// Get the nonce (transaction count) of an account using SubXT
+/// Get the nonce (transaction count) of an account
 pub async fn get_account_nonce(
     client: &OnlineClient<ChainConfig>,
     account_address: &str,
 ) -> crate::error::Result<u32> {
     log_verbose!(
-        "#️⃣ Querying nonce for account with subxt: {}",
+        "#️⃣ Querying nonce for account: {}",
         account_address.bright_green()
     );
 
@@ -132,13 +132,13 @@ pub async fn get_account_nonce(
             QuantusError::NetworkError(format!("Failed to fetch account info: {:?}", e))
         })?;
 
-    log_verbose!("✅ Account info retrieved with subxt storage query!");
+    log_verbose!("✅ Account info retrieved with storage query!");
     log_verbose!("🔢 Nonce: {}", account_info.nonce);
 
     Ok(account_info.nonce)
 }
 
-/// Handle wallet-subxt commands
+/// Handle wallet commands
 pub async fn handle_wallet_subxt_command(
     command: WalletSubxtCommands,
     node_url: &str,
@@ -457,7 +457,7 @@ pub async fn handle_wallet_subxt_command(
             wallet,
             password,
         } => {
-            log_print!("🔢 Querying account nonce (using subxt)...");
+            log_print!("🔢 Querying account nonce...");
 
             let client = client::create_subxt_client(node_url).await?;
 

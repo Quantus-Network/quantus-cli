@@ -1,22 +1,22 @@
-//! `quantus metadata-subxt` subcommand - SubXT implementation for metadata exploration
+//! `quantus metadata` subcommand - metadata exploration
+use crate::chain::client::ChainConfig;
 use crate::{chain::client, log_print, log_verbose};
 use colored::Colorize;
 use subxt::OnlineClient;
-use crate::chain::client::ChainConfig;
 
-/// Explore chain metadata and display all available pallets and calls using SubXT
+/// Explore chain metadata and display all available pallets and calls
 pub async fn explore_chain_metadata(
     client: &OnlineClient<ChainConfig>,
     no_docs: bool,
 ) -> crate::error::Result<()> {
-    log_verbose!("🔍 Exploring chain metadata with subxt...");
+    log_verbose!("🔍 Exploring chain metadata...");
 
     let metadata = client.metadata();
     let pallets: Vec<_> = metadata.pallets().collect();
 
     log_print!(
         "{}",
-        "🏛️  Available Pallets & Calls (SubXT)".bold().underline()
+        "🏛️  Available Pallets & Calls".bold().underline()
     );
     log_print!("");
 
@@ -68,20 +68,20 @@ pub async fn explore_chain_metadata(
     }
 
     // Add a summary at the end
-    log_print!("{}", "🔍 Exploration Complete (SubXT)".bold());
+    log_print!("{}", "🔍 Exploration Complete".bold());
     log_print!("Found {} pallets.", pallets.len());
 
     Ok(())
 }
 
-/// Get basic metadata statistics using SubXT
+/// Get basic metadata statistics
 pub async fn get_metadata_stats(client: &OnlineClient<ChainConfig>) -> crate::error::Result<()> {
-    log_verbose!("🔍 Getting metadata statistics with subxt...");
+    log_verbose!("🔍 Getting metadata statistics...");
 
     let metadata = client.metadata();
     let pallets: Vec<_> = metadata.pallets().collect();
 
-    log_print!("📊 Metadata Statistics (SubXT):");
+    log_print!("📊 Metadata Statistics:");
     log_print!("   📦 Total pallets: {}", pallets.len());
     log_print!("   🔗 API: Type-safe SubXT");
 
@@ -104,7 +104,7 @@ pub async fn get_metadata_stats(client: &OnlineClient<ChainConfig>) -> crate::er
     Ok(())
 }
 
-/// Handle metadata-subxt command execution
+/// Handle metadata command execution
 pub async fn handle_metadata_subxt_command(
     node_url: &str,
     no_docs: bool,

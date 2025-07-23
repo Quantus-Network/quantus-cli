@@ -57,7 +57,7 @@ pub async fn get_balance(
 pub async fn get_chain_properties(_client: &OnlineClient<ChainConfig>) -> Result<(String, u8)> {
     log_verbose!("🔍 Querying chain properties...");
 
-    // Query system properties using SubXT runtime APIs
+    // Query system properties using runtime APIs
     // For now, use the same hardcoded values as ChainClient to match formatting
     // TODO: Implement proper system properties query when SubXT API is available
     let token_symbol = "DEV".to_string();
@@ -172,14 +172,14 @@ pub async fn validate_and_format_amount(
     Ok((raw_amount, formatted))
 }
 
-/// Transfer tokens using subxt
+/// Transfer tokens
 pub async fn transfer(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
     to_address: &str,
     amount: u128,
 ) -> Result<subxt::utils::H256> {
-    log_verbose!("🚀 Creating transfer transaction with subxt...");
+    log_verbose!("🚀 Creating transfer transaction...");
     log_verbose!(
         "   From: {}",
         from_keypair.to_account_id_ss58check().bright_cyan()
@@ -201,7 +201,7 @@ pub async fn transfer(
         crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
     })?;
 
-    log_verbose!("✍️  Creating balance transfer extrinsic with subxt...");
+    log_verbose!("✍️  Creating balance transfer extrinsic...");
 
     // Create the transfer call using static API from quantus_subxt
     let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
@@ -228,7 +228,7 @@ pub async fn transfer(
             ))
         })?;
 
-    log_verbose!("📋 Transaction submitted with subxt: {:?}", tx_hash);
+    log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
@@ -255,7 +255,7 @@ pub async fn handle_send_subxt_command(
         to_address
     );
     log_verbose!(
-        "🚀 {} Sending {} to {} (using subxt)",
+        "🚀 {} Sending {} to {}",
         "SEND_SUBXT".bright_cyan().bold(),
         formatted_amount.bright_yellow().bold(),
         to_address.bright_green()
@@ -280,17 +280,17 @@ pub async fn handle_send_subxt_command(
         });
     }
 
-    // Create and submit transaction using subxt
+    // Create and submit transaction
     log_verbose!(
-        "✍️  {} Signing transaction with subxt...",
+        "✍️  {} Signing transaction...",
         "SIGN".bright_magenta().bold()
     );
 
-    // Submit transaction using subxt
+    // Submit transaction
     let tx_hash = transfer(&client, &keypair, &to_address, amount).await?;
 
     log_print!(
-        "✅ {} Transaction submitted with subxt! Hash: {:?}",
+        "✅ {} Transaction submitted! Hash: {:?}",
         "SUCCESS".bright_green().bold(),
         tx_hash
     );
@@ -300,7 +300,7 @@ pub async fn handle_send_subxt_command(
     if success {
         log_info!("✅ Transaction confirmed and finalized on chain");
         log_success!(
-            "🎉 {} Transaction confirmed with subxt!",
+            "🎉 {} Transaction confirmed!",
             "FINALIZED".bright_green().bold()
         );
 

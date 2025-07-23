@@ -1,10 +1,10 @@
-//! `quantus runtime-subxt` subcommand - SubXT implementation for runtime management
+//! `quantus runtime` subcommand - runtime management
 use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::QuantusError, log_print, log_success,
-    log_verbose, wallet::QuantumKeyPair,
+    chain::client, chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
+    wallet::QuantumKeyPair,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -13,10 +13,9 @@ use std::fs;
 use std::path::PathBuf;
 use subxt::OnlineClient;
 
-/// Runtime management commands using subxt (POC) - alternative implementation using pure subxt
 #[derive(Subcommand, Debug)]
 pub enum RuntimeSubxtCommands {
-    /// Update the runtime using a WASM file using subxt (requires root permissions)
+    /// Update the runtime using a WASM file (requires root permissions)
     Update {
         /// Path to the runtime WASM file
         #[arg(short, long)]
@@ -39,19 +38,19 @@ pub enum RuntimeSubxtCommands {
         force: bool,
     },
 
-    /// Check the current runtime version using subxt
+    /// Check the current runtime version
     CheckVersion,
 
-    /// Get the current spec version using subxt
+    /// Get the current spec version
     GetSpecVersion,
 
-    /// Get the current implementation version using subxt
+    /// Get the current implementation version
     GetImplVersion,
 
-    /// Get the runtime metadata version using subxt
+    /// Get the runtime metadata version
     GetMetadataVersion,
 
-    /// Compare local WASM file with current runtime using subxt
+    /// Compare local WASM file with current runtime
     Compare {
         /// Path to the runtime WASM file to compare
         #[arg(short, long)]
@@ -59,14 +58,14 @@ pub enum RuntimeSubxtCommands {
     },
 }
 
-/// Update runtime using SubXT with sudo wrapper
+/// Update runtime with sudo wrapper
 pub async fn update_runtime(
     client: &OnlineClient<ChainConfig>,
     wasm_code: Vec<u8>,
     from_keypair: &QuantumKeyPair,
     force: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_verbose!("🔄 Updating runtime with subxt...");
+    log_verbose!("🔄 Updating runtime...");
 
     // Get current runtime version before update
     log_verbose!("🔍 Checking current runtime version...");
@@ -114,7 +113,7 @@ pub async fn update_runtime(
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_code_call);
 
     // Submit transaction
-    log_print!("📡 Submitting runtime update transaction with subxt...");
+    log_print!("📡 Submitting runtime update transaction...");
     log_print!("⏳ This may take longer than usual due to WASM size...");
 
     let signer = from_keypair
@@ -137,13 +136,13 @@ pub async fn update_runtime(
             QuantusError::NetworkError(format!("Failed to submit runtime update: {:?}", e))
         })?;
     log_success!(
-        "✅ SUCCESS Runtime update transaction submitted with subxt! Hash: 0x{}",
+        "✅ SUCCESS Runtime update transaction submitted! Hash: 0x{}",
         hex::encode(tx_hash)
     );
 
     // Wait for finalization
     wait_for_finalization(client, tx_hash).await?;
-    log_success!("✅ 🎉 FINALIZED Runtime update completed with subxt!");
+    log_success!("✅ 🎉 FINALIZED Runtime update completed!");
 
     Ok(tx_hash)
 }
@@ -152,7 +151,7 @@ pub async fn update_runtime(
 pub async fn get_runtime_version(
     client: &OnlineClient<ChainConfig>,
 ) -> crate::error::Result<RuntimeVersionInfo> {
-    log_verbose!("🔍 Getting runtime version with subxt...");
+    log_verbose!("🔍 Getting runtime version...");
 
     let runtime_version = client.runtime_version();
 
@@ -172,7 +171,7 @@ pub async fn get_runtime_version(
 pub async fn get_metadata_info(
     client: &OnlineClient<ChainConfig>,
 ) -> crate::error::Result<MetadataInfo> {
-    log_verbose!("🔍 Getting metadata info with subxt...");
+    log_verbose!("🔍 Getting metadata info...");
 
     let metadata = client.metadata();
     let pallets: Vec<_> = metadata.pallets().collect();
@@ -228,8 +227,8 @@ pub async fn handle_runtime_subxt_command(
             password_file,
             force,
         } => {
-            log_print!("🚀 Runtime Management (SubXT)");
-            log_print!("🔄 Runtime Update (using subxt)");
+            log_print!("🚀 Runtime Management");
+            log_print!("🔄 Runtime Update");
             log_print!(
                 "   📂 WASM file: {}",
                 wasm_file.display().to_string().bright_cyan()
@@ -268,14 +267,14 @@ pub async fn handle_runtime_subxt_command(
             log_print!(
                 "💡 Note: It may take a few moments for the new runtime version to be reflected."
             );
-            log_print!("💡 Use 'quantus runtime-subxt check-version' to verify the new version.");
+            log_print!("💡 Use 'quantus runtime check-version' to verify the new version.");
 
             Ok(())
         }
 
         RuntimeSubxtCommands::CheckVersion => {
-            log_print!("🚀 Runtime Management (SubXT)");
-            log_print!("🔍 Checking runtime version (using subxt)...");
+            log_print!("🚀 Runtime Management");
+            log_print!("🔍 Checking runtime version...");
 
             let version = get_runtime_version(&client).await?;
 
@@ -300,7 +299,7 @@ pub async fn handle_runtime_subxt_command(
         }
 
         RuntimeSubxtCommands::GetSpecVersion => {
-            log_print!("🚀 Runtime Management (SubXT)");
+            log_print!("🚀 Runtime Management");
             let version = get_runtime_version(&client).await?;
 
             log_print!(
@@ -311,7 +310,7 @@ pub async fn handle_runtime_subxt_command(
         }
 
         RuntimeSubxtCommands::GetImplVersion => {
-            log_print!("🚀 Runtime Management (SubXT)");
+            log_print!("🚀 Runtime Management");
             let version = get_runtime_version(&client).await?;
 
             log_print!(
@@ -322,8 +321,8 @@ pub async fn handle_runtime_subxt_command(
         }
 
         RuntimeSubxtCommands::GetMetadataVersion => {
-            log_print!("🚀 Runtime Management (SubXT)");
-            log_print!("🔍 Getting metadata version (using subxt)...");
+            log_print!("🚀 Runtime Management");
+            log_print!("🔍 Getting metadata version...");
 
             let metadata_info = get_metadata_info(&client).await?;
 
@@ -337,8 +336,8 @@ pub async fn handle_runtime_subxt_command(
         }
 
         RuntimeSubxtCommands::Compare { wasm_file } => {
-            log_print!("🚀 Runtime Management (SubXT)");
-            log_print!("🔍 Comparing WASM file with current runtime (using subxt)...");
+            log_print!("🚀 Runtime Management");
+            log_print!("🔍 Comparing WASM file with current runtime...");
             log_print!(
                 "   📂 Local file: {}",
                 wasm_file.display().to_string().bright_cyan()

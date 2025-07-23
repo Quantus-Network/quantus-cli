@@ -1,10 +1,10 @@
-//! `quantus tech-collective-subxt` subcommand - SubXT implementation
+//! `quantus tech-collective` subcommand - tech collective management
 use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print,
-    log_success, log_verbose,
+    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
+    log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -12,10 +12,10 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
 use subxt::OnlineClient;
 
-/// Tech Collective management commands using SubXT
+/// Tech Collective management commands
 #[derive(Subcommand, Debug)]
 pub enum TechCollectiveSubxtCommands {
-    /// Add a member to the Tech Collective using subxt
+    /// Add a member to the Tech Collective
     AddMember {
         /// Address of the member to add
         #[arg(short, long)]
@@ -34,7 +34,7 @@ pub enum TechCollectiveSubxtCommands {
         password_file: Option<String>,
     },
 
-    /// Remove a member from the Tech Collective using subxt
+    /// Remove a member from the Tech Collective
     RemoveMember {
         /// Address of the member to remove
         #[arg(short, long)]
@@ -53,7 +53,7 @@ pub enum TechCollectiveSubxtCommands {
         password_file: Option<String>,
     },
 
-    /// Vote on a Tech Referenda proposal using subxt
+    /// Vote on a Tech Referenda proposal
     Vote {
         /// Referendum index to vote on
         #[arg(short, long)]
@@ -76,23 +76,23 @@ pub enum TechCollectiveSubxtCommands {
         password_file: Option<String>,
     },
 
-    /// List all Tech Collective members using subxt
+    /// List all Tech Collective members
     ListMembers,
 
-    /// Check if an address is a member of the Tech Collective using subxt
+    /// Check if an address is a member of the Tech Collective
     IsMember {
         /// Address to check
         #[arg(short, long)]
         address: String,
     },
 
-    /// Check who has sudo permissions in the network using subxt
+    /// Check who has sudo permissions in the network
     CheckSudo,
 
-    /// List active Tech Referenda using subxt
+    /// List active Tech Referenda
     ListReferenda,
 
-    /// Get details of a specific Tech Referendum using subxt
+    /// Get details of a specific Tech Referendum
     GetReferendum {
         /// Referendum index
         #[arg(short, long)]
@@ -106,7 +106,7 @@ pub async fn add_member(
     from_keypair: &crate::wallet::QuantumKeyPair,
     who_address: &str,
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_verbose!("🏛️  Adding member to Tech Collective with subxt...");
+    log_verbose!("🏛️  Adding member to Tech Collective...");
     log_verbose!("   Member: {}", who_address.bright_cyan());
 
     // Parse the member address
@@ -122,7 +122,7 @@ pub async fn add_member(
         .to_subxt_signer()
         .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
 
-    log_verbose!("✍️  Creating add_member transaction with subxt...");
+    log_verbose!("✍️  Creating add_member transaction...");
 
     // Create the TechCollective::add_member call as RuntimeCall enum
     let add_member_call = quantus_subxt::api::Call::TechCollective(
@@ -151,7 +151,7 @@ pub async fn add_member(
         })?;
 
     log_verbose!(
-        "📋 Add member transaction submitted with subxt: {:?}",
+        "📋 Add member transaction submitted: {:?}",
         tx_hash
     );
 
@@ -164,7 +164,7 @@ pub async fn remove_member(
     from_keypair: &crate::wallet::QuantumKeyPair,
     who_address: &str,
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_verbose!("🏛️  Removing member from Tech Collective with subxt...");
+    log_verbose!("🏛️  Removing member from Tech Collective...");
     log_verbose!("   Member: {}", who_address.bright_cyan());
 
     // Parse the member address
@@ -180,7 +180,7 @@ pub async fn remove_member(
         .to_subxt_signer()
         .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
 
-    log_verbose!("✍️  Creating remove_member transaction with subxt...");
+    log_verbose!("✍️  Creating remove_member transaction...");
 
     // Create the TechCollective::remove_member call as RuntimeCall enum
     let remove_member_call = quantus_subxt::api::Call::TechCollective(
@@ -210,7 +210,7 @@ pub async fn remove_member(
         })?;
 
     log_verbose!(
-        "📋 Remove member transaction submitted with subxt: {:?}",
+        "📋 Remove member transaction submitted: {:?}",
         tx_hash
     );
 
@@ -224,7 +224,7 @@ pub async fn vote_on_referendum(
     referendum_index: u32,
     aye: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
-    log_verbose!("🗳️  Voting on referendum with subxt...");
+    log_verbose!("🗳️  Voting on referendum...");
     log_verbose!("   Referendum: {}", referendum_index);
     log_verbose!("   Vote: {}", if aye { "AYE" } else { "NAY" });
 
@@ -233,7 +233,7 @@ pub async fn vote_on_referendum(
         .to_subxt_signer()
         .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
 
-    log_verbose!("✍️  Creating vote transaction with subxt...");
+    log_verbose!("✍️  Creating vote transaction...");
 
     // Create the TechCollective::vote call
     let vote_call = quantus_subxt::api::tx()
@@ -256,7 +256,7 @@ pub async fn vote_on_referendum(
             QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-    log_verbose!("📋 Vote transaction submitted with subxt: {:?}", tx_hash);
+    log_verbose!("📋 Vote transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
@@ -266,7 +266,7 @@ pub async fn is_member(
     client: &OnlineClient<ChainConfig>,
     address: &str,
 ) -> crate::error::Result<bool> {
-    log_verbose!("🔍 Checking membership with subxt...");
+    log_verbose!("🔍 Checking membership...");
     log_verbose!("   Address: {}", address.bright_cyan());
 
     // Parse the address
@@ -299,7 +299,7 @@ pub async fn is_member(
 pub async fn get_member_count(
     client: &OnlineClient<ChainConfig>,
 ) -> crate::error::Result<Option<u32>> {
-    log_verbose!("🔍 Getting member count with subxt...");
+    log_verbose!("🔍 Getting member count...");
 
     // Query MemberCount storage - use rank 0 as default
     let storage_addr = quantus_subxt::api::storage()
@@ -322,7 +322,7 @@ pub async fn get_member_count(
 pub async fn get_member_list(
     client: &OnlineClient<ChainConfig>,
 ) -> crate::error::Result<Vec<AccountId32>> {
-    log_verbose!("🔍 Getting member list with subxt...");
+    log_verbose!("🔍 Getting member list...");
 
     let storage_at =
         client.storage().at_latest().await.map_err(|e| {
@@ -368,7 +368,7 @@ pub async fn get_member_list(
 pub async fn get_sudo_account(
     client: &OnlineClient<ChainConfig>,
 ) -> crate::error::Result<Option<AccountId32>> {
-    log_verbose!("🔍 Getting sudo account with subxt...");
+    log_verbose!("🔍 Getting sudo account...");
 
     // Query Sudo::Key storage
     let storage_addr = quantus_subxt::api::storage().sudo().key();
@@ -397,7 +397,7 @@ pub async fn handle_tech_collective_subxt_command(
     command: TechCollectiveSubxtCommands,
     node_url: &str,
 ) -> crate::error::Result<()> {
-    log_print!("🏛️  Tech Collective (SubXT)");
+    log_print!("🏛️  Tech Collective");
 
     let client = client::create_subxt_client(node_url).await?;
 
@@ -408,18 +408,18 @@ pub async fn handle_tech_collective_subxt_command(
             password,
             password_file,
         } => {
-            log_print!("🏛️  Adding member to Tech Collective (using subxt)");
+            log_print!("🏛️  Adding member to Tech Collective");
             log_print!("   👤 Member: {}", who.bright_cyan());
             log_print!("   🔑 Signed by: {}", from.bright_yellow());
 
             // Load wallet
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit transaction using subxt
+            // Submit transaction
             let tx_hash = add_member(&client, &keypair, &who).await?;
 
             log_print!(
-                "✅ {} Add member transaction submitted with subxt! Hash: {:?}",
+                "✅ {} Add member transaction submitted! Hash: {:?}",
                 "SUCCESS".bright_green().bold(),
                 tx_hash
             );
@@ -428,7 +428,7 @@ pub async fn handle_tech_collective_subxt_command(
 
             if success {
                 log_success!(
-                    "🎉 {} Member added to Tech Collective with subxt!",
+                    "🎉 {} Member added to Tech Collective!",
                     "FINALIZED".bright_green().bold()
                 );
             } else {
@@ -444,18 +444,18 @@ pub async fn handle_tech_collective_subxt_command(
             password,
             password_file,
         } => {
-            log_print!("🏛️  Removing member from Tech Collective (using subxt)");
+            log_print!("🏛️  Removing member from Tech Collective ");
             log_print!("   👤 Member: {}", who.bright_cyan());
             log_print!("   🔑 Signed by: {}", from.bright_yellow());
 
             // Load wallet
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit transaction using subxt
+            // Submit transaction
             let tx_hash = remove_member(&client, &keypair, &who).await?;
 
             log_print!(
-                "✅ {} Remove member transaction submitted with subxt! Hash: {:?}",
+                "✅ {} Remove member transaction submitted! Hash: {:?}",
                 "SUCCESS".bright_green().bold(),
                 tx_hash
             );
@@ -464,7 +464,7 @@ pub async fn handle_tech_collective_subxt_command(
 
             if success {
                 log_success!(
-                    "🎉 {} Member removed from Tech Collective with subxt!",
+                    "🎉 {} Member removed from Tech Collective!",
                     "FINALIZED".bright_green().bold()
                 );
             } else {
@@ -482,7 +482,7 @@ pub async fn handle_tech_collective_subxt_command(
             password_file,
         } => {
             log_print!(
-                "🗳️  Voting on Tech Referendum #{} (using subxt)",
+                "🗳️  Voting on Tech Referendum #{} ",
                 referendum_index
             );
             log_print!(
@@ -498,11 +498,11 @@ pub async fn handle_tech_collective_subxt_command(
             // Load wallet
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit transaction using subxt
+            // Submit transaction
             let tx_hash = vote_on_referendum(&client, &keypair, referendum_index, aye).await?;
 
             log_print!(
-                "✅ {} Vote transaction submitted with subxt! Hash: {:?}",
+                "✅ {} Vote transaction submitted! Hash: {:?}",
                 "SUCCESS".bright_green().bold(),
                 tx_hash
             );
@@ -511,7 +511,7 @@ pub async fn handle_tech_collective_subxt_command(
 
             if success {
                 log_success!(
-                    "🎉 {} Vote submitted with subxt!",
+                    "🎉 {} Vote submitted!",
                     "FINALIZED".bright_green().bold()
                 );
             } else {
@@ -522,7 +522,7 @@ pub async fn handle_tech_collective_subxt_command(
         }
 
         TechCollectiveSubxtCommands::ListMembers => {
-            log_print!("🏛️  Tech Collective Members (using subxt)");
+            log_print!("🏛️  Tech Collective Members ");
             log_print!("");
 
             // Get actual member list
@@ -567,17 +567,17 @@ pub async fn handle_tech_collective_subxt_command(
 
             log_print!("");
             log_print!("💡 To check specific membership:");
-            log_print!("   quantus tech-collective-subxt is-member --address <ADDRESS>");
+            log_print!("   quantus tech-collective is-member --address <ADDRESS>");
             log_print!("💡 To add a member (requires sudo):");
             log_print!(
-                "   quantus tech-collective-subxt add-member --who <ADDRESS> --from <SUDO_WALLET>"
+                "   quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>"
             );
 
             Ok(())
         }
 
         TechCollectiveSubxtCommands::IsMember { address } => {
-            log_print!("🔍 Checking Tech Collective membership (using subxt)");
+            log_print!("🔍 Checking Tech Collective membership ");
             log_print!("   👤 Address: {}", address.bright_cyan());
 
             if is_member(&client, &address).await? {
@@ -592,7 +592,7 @@ pub async fn handle_tech_collective_subxt_command(
         }
 
         TechCollectiveSubxtCommands::CheckSudo => {
-            log_print!("🏛️  Checking sudo permissions (using subxt)");
+            log_print!("🏛️  Checking sudo permissions ");
 
             match get_sudo_account(&client).await? {
                 Some(sudo_account) => {
@@ -631,7 +631,7 @@ pub async fn handle_tech_collective_subxt_command(
         }
 
         TechCollectiveSubxtCommands::ListReferenda => {
-            log_print!("📜 Active Tech Referenda (using subxt)");
+            log_print!("📜 Active Tech Referenda ");
             log_print!("");
 
             log_print!("💡 Referenda listing requires TechReferenda pallet storage queries");
@@ -643,7 +643,7 @@ pub async fn handle_tech_collective_subxt_command(
         }
 
         TechCollectiveSubxtCommands::GetReferendum { index } => {
-            log_print!("📄 Tech Referendum #{} Details (using subxt)", index);
+            log_print!("📄 Tech Referendum #{} Details ", index);
             log_print!("");
 
             log_print!("💡 Referendum details require TechReferenda storage access");
