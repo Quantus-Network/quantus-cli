@@ -1,73 +1,55 @@
 //! `quantus wallet-subxt` subcommand - SubXT implementation for wallet operations
 use crate::{
-    chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError, log_print, log_success,
-    log_verbose,
+    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError,
+    log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::OnlineClient;
 
-/// SubXT-based wallet operations client
-pub struct SubxtWalletClient {
-    client: OnlineClient<ChainConfig>,
-}
+/// Get the nonce (transaction count) of an account using SubXT
+pub async fn get_account_nonce(
+    client: &OnlineClient<ChainConfig>,
+    account_address: &str,
+) -> crate::error::Result<u32> {
+    log_verbose!(
+        "#️⃣ Querying nonce for account with subxt: {}",
+        account_address.bright_green()
+    );
 
-impl SubxtWalletClient {
-    /// Create a new SubXT wallet client
-    pub async fn new(node_url: &str) -> crate::error::Result<Self> {
-        log_verbose!("🔗 Connecting to Quantus node with subxt: {}", node_url);
+    // Parse the SS58 address to AccountId32 (sp-core)
+    let account_id_sp = AccountId32::from_ss58check(account_address)
+        .map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {:?}", e)))?;
 
-        let client = OnlineClient::<ChainConfig>::from_url(node_url)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to connect with subxt: {:?}", e))
-            })?;
+    log_verbose!("🔍 SP Account ID: {:?}", account_id_sp);
 
-        log_verbose!("✅ Connected to Quantus node successfully with subxt!");
+    // Convert to subxt_core AccountId32 for storage query
+    let account_bytes: [u8; 32] = *account_id_sp.as_ref();
+    let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
 
-        Ok(Self { client })
-    }
+    log_verbose!("🔍 SubXT Account ID: {:?}", account_id);
 
-    /// Get the nonce (transaction count) of an account using SubXT
-    pub async fn get_account_nonce(&self, account_address: &str) -> crate::error::Result<u32> {
-        log_verbose!(
-            "#️⃣ Querying nonce for account with subxt: {}",
-            account_address.bright_green()
-        );
+    // Use SubXT to query System::Account storage directly (like send_subxt.rs)
+    use quantus_subxt::api;
+    let storage_addr = api::storage().system().account(account_id);
 
-        // Parse the SS58 address to AccountId32 (sp-core)
-        let account_id_sp = AccountId32::from_ss58check(account_address)
-            .map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {:?}", e)))?;
-
-        log_verbose!("🔍 SP Account ID: {:?}", account_id_sp);
-
-        // Convert to subxt_core AccountId32 for storage query
-        let account_bytes: [u8; 32] = *account_id_sp.as_ref();
-        let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
-
-        log_verbose!("🔍 SubXT Account ID: {:?}", account_id);
-
-        // Use SubXT to query System::Account storage directly (like send_subxt.rs)
-        use quantus_subxt::api;
-        let storage_addr = api::storage().system().account(account_id);
-
-        let storage_at = self.client.storage().at_latest().await.map_err(|e| {
+    let storage_at =
+        client.storage().at_latest().await.map_err(|e| {
             QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
         })?;
 
-        let account_info = storage_at
-            .fetch_or_default(&storage_addr)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to fetch account info: {:?}", e))
-            })?;
+    let account_info = storage_at
+        .fetch_or_default(&storage_addr)
+        .await
+        .map_err(|e| {
+            QuantusError::NetworkError(format!("Failed to fetch account info: {:?}", e))
+        })?;
 
-        log_verbose!("✅ Account info retrieved with subxt storage query!");
-        log_verbose!("🔢 Nonce: {}", account_info.nonce);
+    log_verbose!("✅ Account info retrieved with subxt storage query!");
+    log_verbose!("🔢 Nonce: {}", account_info.nonce);
 
-        Ok(account_info.nonce)
-    }
+    Ok(account_info.nonce)
 }
 
 /// Wallet management commands using SubXT
@@ -102,7 +84,7 @@ pub async fn handle_wallet_subxt_command(
         } => {
             log_print!("🔢 Querying account nonce (using subxt)...");
 
-            let wallet_client = SubxtWalletClient::new(node_url).await?;
+            let client = client_subxt::create_subxt_client(node_url).await?;
 
             // Determine which address to query
             let target_address = match (address, wallet) {
@@ -126,7 +108,7 @@ pub async fn handle_wallet_subxt_command(
 
             log_print!("Account: {}", target_address.bright_cyan());
 
-            match wallet_client.get_account_nonce(&target_address).await {
+            match get_account_nonce(&client, &target_address).await {
                 Ok(nonce) => {
                     log_success!("Nonce: {}", nonce.to_string().bright_green());
                 }
