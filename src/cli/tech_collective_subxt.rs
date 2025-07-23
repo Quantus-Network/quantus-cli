@@ -6,6 +6,7 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
+use sp_runtime::traits::IdentifyAccount;
 use subxt::OnlineClient;
 
 /// SubXT-based tech collective client for governance operations
@@ -673,8 +674,11 @@ pub async fn handle_tech_collective_subxt_command(
                     );
                     log_print!("🔑 This account has root/sudo permissions");
 
-                    // Check if crystal_alice is the sudo account
-                    let crystal_alice_addr = "qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ";
+                    // Check if crystal_alice is the sudo account (get address dynamically)
+                    let crystal_alice_addr = dilithium_crypto::crystal_alice()
+                        .public()
+                        .into_account()
+                        .to_ss58check();
                     if sudo_account.to_ss58check() == crystal_alice_addr {
                         log_success!("✅ crystal_alice IS the sudo account!");
                     } else {

@@ -5,6 +5,7 @@ use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::AccountId32;
 use sp_core::crypto::Ss58Codec;
+use sp_runtime::traits::IdentifyAccount;
 use sp_runtime::MultiAddress;
 use substrate_api_client::ac_compose_macros::compose_extrinsic;
 use substrate_api_client::{GetStorage, SubmitAndWatch};
@@ -473,8 +474,11 @@ async fn check_sudo(node_url: &str) -> Result<()> {
             );
             log_print!("🔑 This account has root/sudo permissions");
 
-            // Check if crystal_alice is the sudo account
-            let crystal_alice_addr = "qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ";
+            // Check if crystal_alice is the sudo account (get address dynamically)
+            let crystal_alice_addr = dilithium_crypto::crystal_alice()
+                .public()
+                .into_account()
+                .to_ss58check();
             if sudo_account.to_ss58check() == crystal_alice_addr {
                 log_success!("✅ crystal_alice IS the sudo account!");
             } else {
