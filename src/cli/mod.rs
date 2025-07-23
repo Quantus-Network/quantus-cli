@@ -187,6 +187,14 @@ pub enum Commands {
         /// Optional tip amount to prioritize the transaction
         #[arg(long)]
         tip: Option<String>,
+
+        /// Create offline extrinsic without submitting
+        #[arg(long)]
+        offline: bool,
+
+        /// Output the call as hex-encoded data only
+        #[arg(long)]
+        call_data_only: bool,
     },
 
     /// Query account balance
@@ -348,6 +356,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             password,
             password_file,
             tip,
+            offline,
+            call_data_only,
         } => {
             handle_generic_call_subxt_command(
                 pallet,
@@ -357,6 +367,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
                 password,
                 password_file,
                 tip,
+                offline,
+                call_data_only,
                 node_url,
             )
             .await
@@ -475,8 +487,23 @@ async fn handle_generic_call_subxt_command(
     _password: Option<String>,
     _password_file: Option<String>,
     tip: Option<String>,
+    offline: bool,
+    call_data_only: bool,
     node_url: &str,
 ) -> crate::error::Result<()> {
+    // For now, we only support live submission (not offline or call-data-only)
+    if offline {
+        log_error!("❌ Offline mode is not yet implemented in SubXT version");
+        log_print!("💡 Currently only live submission is supported");
+        return Ok(());
+    }
+
+    if call_data_only {
+        log_error!("❌ Call-data-only mode is not yet implemented in SubXT version");
+        log_print!("💡 Currently only live submission is supported");
+        return Ok(());
+    }
+
     let args_vec = if let Some(args_str) = args {
         serde_json::from_str(&args_str).map_err(|e| {
             crate::error::QuantusError::Generic(format!("Invalid JSON for arguments: {}", e))
