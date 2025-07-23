@@ -193,11 +193,8 @@ pub async fn get_metadata_info(
     })
 }
 
-/// Compare WASM file hash
-pub async fn compare_wasm_hash(
-    client: &OnlineClient<ChainConfig>,
-    wasm_code: &[u8],
-) -> crate::error::Result<String> {
+/// Calculate WASM file hash
+pub async fn calculate_wasm_hash(wasm_code: &[u8]) -> crate::error::Result<String> {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(wasm_code);
@@ -391,7 +388,7 @@ pub async fn handle_runtime_subxt_command(
             log_print!("   • Impl version: {}", current_version.impl_version);
 
             // Calculate hash of local file
-            let local_hash = compare_wasm_hash(&client, &local_wasm).await?;
+            let local_hash = calculate_wasm_hash(&local_wasm).await?;
             log_print!("🔐 Local WASM SHA256: {}", local_hash.bright_blue());
 
             log_print!("💡 To see if versions match, use update with --force false to see current vs new version comparison");
