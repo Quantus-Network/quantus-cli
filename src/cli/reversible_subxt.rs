@@ -244,11 +244,9 @@ pub async fn handle_reversible_subxt_command(
             password_file,
         } => {
             // Parse and validate the amount
-            let subxt_chain_client =
-                crate::cli::send_subxt::SubxtChainClient::new(node_url).await?;
-            let (raw_amount, formatted_amount) = subxt_chain_client
-                .validate_and_format_amount(&amount)
-                .await?;
+            let client = crate::chain::client_subxt::create_subxt_client(node_url).await?;
+            let (raw_amount, formatted_amount) =
+                crate::cli::send_subxt::validate_and_format_amount(&client, &amount).await?;
 
             log_verbose!(
                 "🚀 {} Scheduling reversible transfer {} to {} (using subxt)",

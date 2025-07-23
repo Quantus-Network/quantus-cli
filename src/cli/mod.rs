@@ -369,9 +369,10 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             Ok(())
         }
         Commands::BalanceSubxt { address } => {
-            let subxt_client = send_subxt::SubxtChainClient::new(node_url).await?;
-            let balance = subxt_client.get_balance(&address).await?;
-            let formatted_balance = subxt_client.format_balance_with_symbol(balance).await?;
+            let client = crate::chain::client_subxt::create_subxt_client(node_url).await?;
+            let balance = send_subxt::get_balance(&client, &address).await?;
+            let formatted_balance =
+                send_subxt::format_balance_with_symbol(&client, balance).await?;
             log_print!("💰 Balance: {}", formatted_balance);
             Ok(())
         }
