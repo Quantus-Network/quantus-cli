@@ -474,7 +474,7 @@ async fn check_sudo(node_url: &str) -> Result<()> {
             log_print!("🔑 This account has root/sudo permissions");
 
             // Check if crystal_alice is the sudo account
-            let crystal_alice_addr = "5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP";
+            let crystal_alice_addr = "qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ";
             if sudo_account.to_ss58check() == crystal_alice_addr {
                 log_success!("✅ crystal_alice IS the sudo account!");
             } else {

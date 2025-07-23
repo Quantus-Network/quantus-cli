@@ -14,6 +14,7 @@ pub mod send_subxt;
 pub mod storage;
 pub mod storage_subxt;
 pub mod tech_collective;
+pub mod tech_collective_subxt;
 pub mod wallet;
 
 /// Main CLI commands
@@ -96,6 +97,10 @@ pub enum Commands {
     /// Tech Collective management commands
     #[command(subcommand)]
     TechCollective(tech_collective::TechCollectiveCommands),
+
+    /// Tech Collective management commands using subxt (POC) - alternative implementation using pure subxt
+    #[command(subcommand)]
+    TechCollectiveSubxt(tech_collective_subxt::TechCollectiveSubxtCommands),
 
     /// Runtime management commands (requires root/sudo permissions)
     #[command(subcommand)]
@@ -227,6 +232,13 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         }
         Commands::TechCollective(tech_collective_cmd) => {
             tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await
+        }
+        Commands::TechCollectiveSubxt(tech_collective_subxt_cmd) => {
+            tech_collective_subxt::handle_tech_collective_subxt_command(
+                tech_collective_subxt_cmd,
+                node_url,
+            )
+            .await
         }
         Commands::Runtime(runtime_cmd) => {
             runtime::handle_runtime_command(runtime_cmd, node_url).await
