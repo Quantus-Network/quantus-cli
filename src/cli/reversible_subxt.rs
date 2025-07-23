@@ -1,183 +1,165 @@
 use crate::{
-    chain::quantus_subxt, chain::types::ChainConfig, error::Result, log_error, log_print,
-    log_success, log_verbose,
+    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::Result, log_error,
+    log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 use subxt::OnlineClient;
 
-/// SubXT-based reversible transfers client
-pub struct SubxtReversibleClient {
-    client: OnlineClient<ChainConfig>,
-}
+/// Get fresh nonce for account using direct storage query to avoid cache
+async fn get_fresh_nonce(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+) -> Result<u64> {
+    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
+    let from_account_id =
+        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check()).map_err(
+            |e| crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e)),
+        )?;
 
-impl SubxtReversibleClient {
-    /// Create a new SubXT reversible client
-    pub async fn new(node_url: &str) -> Result<Self> {
-        let client = OnlineClient::from_url(node_url).await.map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!("Failed to connect: {:?}", e))
-        })?;
-
-        Ok(Self { client })
-    }
-
-    /// Get fresh nonce for account using direct storage query to avoid cache
-    async fn get_fresh_nonce(&self, from_keypair: &crate::wallet::QuantumKeyPair) -> Result<u64> {
-        use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-        let from_account_id = SubstrateAccountId32::from_ss58check(
-            &from_keypair.to_account_id_ss58check(),
-        )
+    let nonce = client
+        .tx()
+        .account_nonce(&from_account_id)
+        .await
         .map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e))
-        })?;
-
-        let nonce = self
-            .client
-            .tx()
-            .account_nonce(&from_account_id)
-            .await
-            .map_err(|e| {
-                crate::error::QuantusError::NetworkError(format!(
-                    "Failed to get account nonce: {:?}",
-                    e
-                ))
-            })?;
-
-        log_verbose!("🔢 Using fresh nonce from tx API: {}", nonce);
-        Ok(nonce)
-    }
-
-    /// Schedule a transfer with default delay using SubXT
-    pub async fn schedule_transfer(
-        &self,
-        from_keypair: &crate::wallet::QuantumKeyPair,
-        to_address: &str,
-        amount: u128,
-    ) -> Result<subxt::utils::H256> {
-        log_verbose!("🔄 Creating reversible transfer with subxt...");
-        log_verbose!(
-            "   From: {}",
-            from_keypair.to_account_id_ss58check().bright_cyan()
-        );
-        log_verbose!("   To: {}", to_address.bright_green());
-        log_verbose!("   Amount: {}", amount);
-
-        // Parse the destination address
-        let to_account_id_sp = SpAccountId32::from_ss58check(to_address).map_err(|e| {
             crate::error::QuantusError::NetworkError(format!(
-                "Invalid destination address: {:?}",
+                "Failed to get account nonce: {:?}",
                 e
             ))
         })?;
 
-        // Convert to subxt_core AccountId32
-        let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
-        let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
+    log_verbose!("🔢 Using fresh nonce from tx API: {}", nonce);
+    Ok(nonce)
+}
 
-        // Convert our QuantumKeyPair to subxt Signer
-        let signer = from_keypair.to_subxt_signer().map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+/// Schedule a transfer with default delay using SubXT
+pub async fn schedule_transfer(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+    to_address: &str,
+    amount: u128,
+) -> Result<subxt::utils::H256> {
+    log_verbose!("🔄 Creating reversible transfer with subxt...");
+    log_verbose!(
+        "   From: {}",
+        from_keypair.to_account_id_ss58check().bright_cyan()
+    );
+    log_verbose!("   To: {}", to_address.bright_green());
+    log_verbose!("   Amount: {}", amount);
+
+    // Parse the destination address
+    let to_account_id_sp = SpAccountId32::from_ss58check(to_address).map_err(|e| {
+        crate::error::QuantusError::NetworkError(format!("Invalid destination address: {:?}", e))
+    })?;
+
+    // Convert to subxt_core AccountId32
+    let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
+    let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
+
+    // Convert our QuantumKeyPair to subxt Signer
+    let signer = from_keypair.to_subxt_signer().map_err(|e| {
+        crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    })?;
+
+    log_verbose!("✍️  Creating reversible transfer extrinsic with subxt...");
+
+    // Create the reversible transfer call using static API from quantus_subxt
+    let transfer_call = quantus_subxt::api::tx()
+        .reversible_transfers()
+        .schedule_transfer(
+            subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
+            amount,
+        );
+
+    // Get fresh nonce for the sender
+    let nonce = get_fresh_nonce(client, from_keypair).await?;
+
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&transfer_call, &signer, params)
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to submit transaction: {:?}",
+                e
+            ))
         })?;
 
-        log_verbose!("✍️  Creating reversible transfer extrinsic with subxt...");
+    log_verbose!("📋 Reversible transfer submitted with subxt: {:?}", tx_hash);
 
-        // Create the reversible transfer call using static API from quantus_subxt
-        let transfer_call = quantus_subxt::api::tx()
-            .reversible_transfers()
-            .schedule_transfer(
-                subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
-                amount,
-            );
+    Ok(tx_hash)
+}
 
-        // Get fresh nonce for the sender
-        let nonce = self.get_fresh_nonce(from_keypair).await?;
+/// Cancel a pending reversible transaction using SubXT
+pub async fn cancel_transaction(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+    tx_id: &str,
+) -> Result<subxt::utils::H256> {
+    log_verbose!("❌ Cancelling reversible transfer with subxt...");
+    log_verbose!("   Transaction ID: {}", tx_id.bright_yellow());
 
-        // Create custom params with fresh nonce
-        use subxt::config::DefaultExtrinsicParamsBuilder;
-        let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+    // Parse transaction ID
+    let tx_hash =
+        sp_core::H256::from_slice(&hex::decode(tx_id.trim_start_matches("0x")).map_err(|e| {
+            crate::error::QuantusError::Generic(format!("Invalid transaction ID: {:?}", e))
+        })?);
 
-        // Submit the transaction with fresh nonce
-        let tx_hash = self
-            .client
-            .tx()
-            .sign_and_submit(&transfer_call, &signer, params)
-            .await
-            .map_err(|e| {
-                crate::error::QuantusError::NetworkError(format!(
-                    "Failed to submit transaction: {:?}",
-                    e
-                ))
-            })?;
+    // Convert our QuantumKeyPair to subxt Signer
+    let signer = from_keypair.to_subxt_signer().map_err(|e| {
+        crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    })?;
 
-        log_verbose!("📋 Reversible transfer submitted with subxt: {:?}", tx_hash);
+    log_verbose!("✍️  Creating cancel transaction extrinsic with subxt...");
 
-        Ok(tx_hash)
-    }
+    // Create the cancel transaction call using static API from quantus_subxt
+    let cancel_call = quantus_subxt::api::tx()
+        .reversible_transfers()
+        .cancel(tx_hash);
 
-    /// Cancel a pending reversible transaction using SubXT
-    pub async fn cancel_transaction(
-        &self,
-        from_keypair: &crate::wallet::QuantumKeyPair,
-        tx_id: &str,
-    ) -> Result<subxt::utils::H256> {
-        log_verbose!("❌ Cancelling reversible transfer with subxt...");
-        log_verbose!("   Transaction ID: {}", tx_id.bright_yellow());
+    // Get fresh nonce for the sender
+    let nonce = get_fresh_nonce(client, from_keypair).await?;
 
-        // Parse transaction ID
-        let tx_hash =
-            sp_core::H256::from_slice(&hex::decode(tx_id.trim_start_matches("0x")).map_err(
-                |e| crate::error::QuantusError::Generic(format!("Invalid transaction ID: {:?}", e)),
-            )?);
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
 
-        // Convert our QuantumKeyPair to subxt Signer
-        let signer = from_keypair.to_subxt_signer().map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&cancel_call, &signer, params)
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to submit transaction: {:?}",
+                e
+            ))
         })?;
 
-        log_verbose!("✍️  Creating cancel transaction extrinsic with subxt...");
+    log_verbose!("📋 Cancel transaction submitted with subxt: {:?}", tx_hash);
 
-        // Create the cancel transaction call using static API from quantus_subxt
-        let cancel_call = quantus_subxt::api::tx()
-            .reversible_transfers()
-            .cancel(tx_hash);
+    Ok(tx_hash)
+}
 
-        // Get fresh nonce for the sender
-        let nonce = self.get_fresh_nonce(from_keypair).await?;
+/// Wait for transaction finalization using subxt
+pub async fn wait_for_finalization(
+    _client: &OnlineClient<ChainConfig>,
+    _tx_hash: subxt::utils::H256,
+) -> Result<bool> {
+    log_verbose!("⏳ Waiting for transaction finalization...");
 
-        // Create custom params with fresh nonce
-        use subxt::config::DefaultExtrinsicParamsBuilder;
-        let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+    // For now, we use a simple delay approach similar to substrate-api-client
+    // TODO: Implement proper finalization watching using SubXT events
+    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 
-        // Submit the transaction with fresh nonce
-        let tx_hash = self
-            .client
-            .tx()
-            .sign_and_submit(&cancel_call, &signer, params)
-            .await
-            .map_err(|e| {
-                crate::error::QuantusError::NetworkError(format!(
-                    "Failed to submit transaction: {:?}",
-                    e
-                ))
-            })?;
-
-        log_verbose!("📋 Cancel transaction submitted with subxt: {:?}", tx_hash);
-
-        Ok(tx_hash)
-    }
-
-    /// Wait for transaction finalization using subxt
-    pub async fn wait_for_finalization(&self, _tx_hash: subxt::utils::H256) -> Result<bool> {
-        log_verbose!("⏳ Waiting for transaction finalization...");
-
-        // For now, we use a simple delay approach similar to substrate-api-client
-        // TODO: Implement proper finalization watching using SubXT events
-        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
-
-        log_verbose!("✅ Transaction likely finalized (after 6s delay)");
-        Ok(true)
-    }
+    log_verbose!("✅ Transaction likely finalized (after 6s delay)");
+    Ok(true)
 }
 
 /// Reversible transfer commands using SubXT
@@ -233,7 +215,7 @@ pub async fn handle_reversible_subxt_command(
 ) -> Result<()> {
     log_print!("🔄 Reversible Transfers (SubXT)");
 
-    let reversible_client = SubxtReversibleClient::new(node_url).await?;
+    let client = client_subxt::create_subxt_client(node_url).await?;
 
     match command {
         ReversibleSubxtCommands::ScheduleTransfer {
@@ -260,9 +242,7 @@ pub async fn handle_reversible_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction using subxt
-            let tx_hash = reversible_client
-                .schedule_transfer(&keypair, &to, raw_amount)
-                .await?;
+            let tx_hash = schedule_transfer(&client, &keypair, &to, raw_amount).await?;
 
             log_print!(
                 "✅ {} Reversible transfer scheduled with subxt! Hash: {:?}",
@@ -270,7 +250,7 @@ pub async fn handle_reversible_subxt_command(
                 tx_hash
             );
 
-            let success = reversible_client.wait_for_finalization(tx_hash).await?;
+            let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
                 log_success!(
@@ -300,9 +280,7 @@ pub async fn handle_reversible_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit cancel transaction using subxt
-            let tx_hash = reversible_client
-                .cancel_transaction(&keypair, &tx_id)
-                .await?;
+            let tx_hash = cancel_transaction(&client, &keypair, &tx_id).await?;
 
             log_print!(
                 "✅ {} Cancel transaction submitted with subxt! Hash: {:?}",
@@ -310,7 +288,7 @@ pub async fn handle_reversible_subxt_command(
                 tx_hash
             );
 
-            let success = reversible_client.wait_for_finalization(tx_hash).await?;
+            let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
                 log_success!(

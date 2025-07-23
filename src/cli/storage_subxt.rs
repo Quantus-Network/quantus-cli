@@ -1,7 +1,7 @@
 //! `quantus storage-subxt` subcommand - SubXT implementation
 use crate::{
-    chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError, log_error, log_print,
-    log_success, log_verbose,
+    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError,
+    log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use codec::{Decode, Encode};
@@ -10,112 +10,95 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_core::twox_128;
 use subxt::OnlineClient;
 
-/// SubXT-based storage client for chain storage operations
-pub struct SubxtStorageClient {
-    client: OnlineClient<ChainConfig>,
-}
-
-impl SubxtStorageClient {
-    /// Create a new SubXT storage client
-    pub async fn new(node_url: &str) -> crate::error::Result<Self> {
-        let client = OnlineClient::from_url(node_url)
-            .await
-            .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
-
-        Ok(Self { client })
-    }
-
-    /// Get raw storage value by key
-    pub async fn get_storage_raw(&self, key: Vec<u8>) -> crate::error::Result<Option<Vec<u8>>> {
-        let storage_at = self.client.storage().at_latest().await.map_err(|e| {
+/// Get raw storage value by key
+pub async fn get_storage_raw(
+    client: &OnlineClient<ChainConfig>,
+    key: Vec<u8>,
+) -> crate::error::Result<Option<Vec<u8>>> {
+    let storage_at =
+        client.storage().at_latest().await.map_err(|e| {
             QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
         })?;
 
-        let result = storage_at
-            .fetch_raw(key)
-            .await
-            .map_err(|e| QuantusError::NetworkError(format!("Failed to fetch storage: {:?}", e)))?;
+    let result = storage_at
+        .fetch_raw(key)
+        .await
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to fetch storage: {:?}", e)))?;
 
-        Ok(result)
-    }
+    Ok(result)
+}
 
-    /// Set storage value using sudo (requires sudo privileges)
-    pub async fn set_storage_value(
-        &self,
-        from_keypair: &crate::wallet::QuantumKeyPair,
-        storage_key: Vec<u8>,
-        value_bytes: Vec<u8>,
-    ) -> crate::error::Result<subxt::utils::H256> {
-        log_verbose!("✍️  Creating set_storage transaction with subxt...");
+/// Set storage value using sudo (requires sudo privileges)
+pub async fn set_storage_value(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+    storage_key: Vec<u8>,
+    value_bytes: Vec<u8>,
+) -> crate::error::Result<subxt::utils::H256> {
+    log_verbose!("✍️  Creating set_storage transaction with subxt...");
 
-        // Convert our QuantumKeyPair to subxt Signer
-        let signer = from_keypair.to_subxt_signer().map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    // Convert our QuantumKeyPair to subxt Signer
+    let signer = from_keypair
+        .to_subxt_signer()
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
+
+    // Create the System::set_storage call using RuntimeCall type alias
+    let set_storage_call =
+        quantus_subxt::api::Call::System(quantus_subxt::api::system::Call::set_storage {
+            items: vec![(storage_key, value_bytes)],
+        });
+
+    // Wrap in Sudo::sudo call
+    let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
+
+    // Get fresh nonce for the sender - use substrate_api_client AccountId32 type
+    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
+    let from_account_id =
+        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
+            .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
+
+    let nonce = client
+        .tx()
+        .account_nonce(&from_account_id)
+        .await
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e)))?;
+
+    log_verbose!("🔢 Using nonce: {}", nonce);
+
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&sudo_call, &signer, params)
+        .await
+        .map_err(|e| {
+            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-        // Create the System::set_storage call using RuntimeCall type alias
-        let set_storage_call =
-            quantus_subxt::api::Call::System(quantus_subxt::api::system::Call::set_storage {
-                items: vec![(storage_key, value_bytes)],
-            });
+    log_verbose!(
+        "📋 Set storage transaction submitted with subxt: {:?}",
+        tx_hash
+    );
 
-        // Wrap in Sudo::sudo call
-        let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
+    Ok(tx_hash)
+}
 
-        // Get fresh nonce for the sender - use substrate_api_client AccountId32 type
-        use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-        let from_account_id = SubstrateAccountId32::from_ss58check(
-            &from_keypair.to_account_id_ss58check(),
-        )
-        .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
+/// Wait for transaction finalization using subxt
+pub async fn wait_for_finalization(
+    _client: &OnlineClient<ChainConfig>,
+    _tx_hash: subxt::utils::H256,
+) -> crate::error::Result<bool> {
+    log_verbose!("⏳ Waiting for transaction finalization...");
 
-        let nonce = self
-            .client
-            .tx()
-            .account_nonce(&from_account_id)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e))
-            })?;
+    // For now, we use a simple delay approach similar to other SubXT implementations
+    // TODO: Implement proper finalization watching using SubXT events
+    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 
-        log_verbose!("🔢 Using nonce: {}", nonce);
-
-        // Create custom params with fresh nonce
-        use subxt::config::DefaultExtrinsicParamsBuilder;
-        let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-        // Submit the transaction with fresh nonce
-        let tx_hash = self
-            .client
-            .tx()
-            .sign_and_submit(&sudo_call, &signer, params)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-            })?;
-
-        log_verbose!(
-            "📋 Set storage transaction submitted with subxt: {:?}",
-            tx_hash
-        );
-
-        Ok(tx_hash)
-    }
-
-    /// Wait for transaction finalization using subxt
-    pub async fn wait_for_finalization(
-        &self,
-        _tx_hash: subxt::utils::H256,
-    ) -> crate::error::Result<bool> {
-        log_verbose!("⏳ Waiting for transaction finalization...");
-
-        // For now, we use a simple delay approach similar to other SubXT implementations
-        // TODO: Implement proper finalization watching using SubXT events
-        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
-
-        log_verbose!("✅ Transaction likely finalized (after 6s delay)");
-        Ok(true)
-    }
+    log_verbose!("✅ Transaction likely finalized (after 6s delay)");
+    Ok(true)
 }
 
 /// Direct interaction with chain storage using SubXT (Sudo required for set)
@@ -182,7 +165,7 @@ pub async fn handle_storage_subxt_command(
 ) -> crate::error::Result<()> {
     log_print!("🗄️  Storage (SubXT)");
 
-    let storage_client = SubxtStorageClient::new(node_url).await?;
+    let client = client_subxt::create_subxt_client(node_url).await?;
 
     match command {
         StorageSubxtCommands::Get {
@@ -200,7 +183,7 @@ pub async fn handle_storage_subxt_command(
             let mut key = twox_128(pallet.as_bytes()).to_vec();
             key.extend(&twox_128(name.as_bytes()));
 
-            let result = storage_client.get_storage_raw(key).await?;
+            let result = get_storage_raw(&client, key).await?;
 
             if let Some(value_bytes) = result {
                 log_success!("Raw Value: 0x{}", hex::encode(&value_bytes).bright_yellow());
@@ -310,9 +293,7 @@ pub async fn handle_storage_subxt_command(
             };
 
             // 4. Submit the set storage transaction using subxt
-            let tx_hash = storage_client
-                .set_storage_value(&keypair, storage_key, value_bytes)
-                .await?;
+            let tx_hash = set_storage_value(&client, &keypair, storage_key, value_bytes).await?;
 
             log_print!(
                 "✅ {} Set storage transaction submitted with subxt! Hash: {:?}",
@@ -320,7 +301,7 @@ pub async fn handle_storage_subxt_command(
                 tx_hash
             );
 
-            let success = storage_client.wait_for_finalization(tx_hash).await?;
+            let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
                 log_success!(

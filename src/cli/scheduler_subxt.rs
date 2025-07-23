@@ -1,46 +1,33 @@
 use crate::{
-    chain::quantus_subxt, chain::types::ChainConfig, error::Result, log_print, log_success,
+    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::Result, log_print,
+    log_success,
 };
 use clap::Subcommand;
 use subxt::OnlineClient;
 
-/// SubXT-based scheduler client for querying scheduler data
-pub struct SubxtSchedulerClient {
-    client: OnlineClient<ChainConfig>,
-}
+/// Get the last processed timestamp from the scheduler using SubXT
+pub async fn get_last_processed_timestamp(
+    client: &OnlineClient<ChainConfig>,
+) -> Result<Option<u64>> {
+    use quantus_subxt::api;
 
-impl SubxtSchedulerClient {
-    /// Create a new SubXT scheduler client
-    pub async fn new(node_url: &str) -> Result<Self> {
-        let client = OnlineClient::from_url(node_url).await.map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!("Failed to connect: {:?}", e))
-        })?;
+    log_print!("🕒 Getting last processed timestamp from the scheduler (subxt)");
 
-        Ok(Self { client })
-    }
+    // Build the storage key for Scheduler::LastProcessedTimestamp
+    let storage_addr = api::storage().scheduler().last_processed_timestamp();
 
-    /// Get the last processed timestamp from the scheduler using SubXT
-    pub async fn get_last_processed_timestamp(&self) -> Result<Option<u64>> {
-        use quantus_subxt::api;
+    let storage_at = client.storage().at_latest().await.map_err(|e| {
+        crate::error::QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
+    })?;
 
-        log_print!("🕒 Getting last processed timestamp from the scheduler (subxt)");
+    let timestamp = storage_at.fetch(&storage_addr).await.map_err(|e| {
+        crate::error::QuantusError::NetworkError(format!(
+            "Failed to fetch last processed timestamp: {:?}",
+            e
+        ))
+    })?;
 
-        // Build the storage key for Scheduler::LastProcessedTimestamp
-        let storage_addr = api::storage().scheduler().last_processed_timestamp();
-
-        let storage_at = self.client.storage().at_latest().await.map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-        })?;
-
-        let timestamp = storage_at.fetch(&storage_addr).await.map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!(
-                "Failed to fetch last processed timestamp: {:?}",
-                e
-            ))
-        })?;
-
-        Ok(timestamp)
-    }
+    Ok(timestamp)
 }
 
 /// Scheduler-related commands using SubXT
@@ -57,11 +44,11 @@ pub async fn handle_scheduler_subxt_command(
 ) -> Result<()> {
     log_print!("🗓️  Scheduler (SubXT)");
 
-    let scheduler_client = SubxtSchedulerClient::new(node_url).await?;
+    let client = client_subxt::create_subxt_client(node_url).await?;
 
     match command {
         SchedulerSubxtCommands::GetLastProcessedTimestamp => {
-            match scheduler_client.get_last_processed_timestamp().await? {
+            match get_last_processed_timestamp(&client).await? {
                 Some(timestamp) => {
                     log_success!("🎉 Last processed timestamp: {}", timestamp);
                 }
