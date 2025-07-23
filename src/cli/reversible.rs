@@ -104,21 +104,6 @@ pub enum ReversibleCommands {
         password: Option<String>,
     },
 
-    /// Execute a pending transfer (called by scheduler)
-    ExecuteTransfer {
-        /// Transaction ID to execute (hex hash)
-        #[arg(long)]
-        tx_id: String,
-
-        /// Wallet name to sign with
-        #[arg(short, long)]
-        from: String,
-
-        /// Password for the wallet
-        #[arg(short, long)]
-        password: Option<String>,
-    },
-
     /// List all pending reversible transactions for an account
     ListPending {
         /// Account address to query (optional, uses wallet address if not provided)
@@ -179,11 +164,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
             from,
             password,
         } => set_reversibility(&chain_client, delay, &policy, reverser, &from, password).await,
-        ReversibleCommands::ExecuteTransfer {
-            tx_id,
-            from,
-            password,
-        } => execute_transfer(&chain_client, &tx_id, &from, password).await,
+
         ReversibleCommands::ListPending {
             address,
             from,
@@ -440,68 +421,6 @@ async fn set_reversibility(
     log_print!(
         "📋 Transaction hash: {}",
         tx_report.extrinsic_hash.to_string().bright_yellow()
-    );
-
-    Ok(())
-}
-
-/// Execute a pending transfer (usually called by scheduler)
-async fn execute_transfer(
-    chain_client: &ChainClient,
-    tx_id: &str,
-    from: &str,
-    password: Option<String>,
-) -> Result<()> {
-    log_print!("▶️  Executing transfer");
-    log_print!("Transaction ID: {}", tx_id.bright_green());
-    log_print!("From: {}", from.bright_yellow());
-
-    let keypair = crate::wallet::load_keypair_from_wallet(&from, password, None)?;
-
-    // Parse transaction ID (hex hash)
-    let tx_hash = if tx_id.starts_with("0x") {
-        hex::decode(&tx_id[2..]).map_err(|e| {
-            crate::error::QuantusError::Generic(format!("Invalid hex transaction ID: {:?}", e))
-        })?
-    } else {
-        hex::decode(tx_id).map_err(|e| {
-            crate::error::QuantusError::Generic(format!("Invalid hex transaction ID: {:?}", e))
-        })?
-    };
-
-    if tx_hash.len() != 32 {
-        return Err(crate::error::QuantusError::Generic(
-            "Transaction ID must be 32 bytes (64 hex characters)".to_string(),
-        )
-        .into());
-    }
-
-    let mut hash_array = [0u8; 32];
-    hash_array.copy_from_slice(&tx_hash);
-
-    // Create API with signer
-    let api_with_signer = chain_client.create_api_with_signer(&keypair)?;
-
-    // Create extrinsic
-    let extrinsic = compose_extrinsic!(
-        &api_with_signer,
-        "ReversibleTransfers",
-        "execute_transfer",
-        hash_array
-    )
-    .ok_or_else(|| {
-        crate::error::QuantusError::Generic(
-            "Failed to create execute_transfer extrinsic".to_string(),
-        )
-    })?;
-
-    // Submit extrinsic with spinner
-    let result_hash = crate::submit_extrinsic_with_spinner!(chain_client, keypair, extrinsic)?;
-
-    log_success!("🎉 Transfer executed successfully!");
-    log_print!(
-        "📋 Execution hash: {}",
-        result_hash.extrinsic_hash.to_string().bright_yellow()
     );
 
     Ok(())
