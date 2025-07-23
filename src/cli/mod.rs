@@ -4,6 +4,7 @@ use colored::Colorize;
 
 pub mod generic_call;
 pub mod generic_call_subxt;
+pub mod metadata_subxt;
 pub mod progress_spinner;
 pub mod reversible;
 pub mod reversible_subxt;
@@ -222,6 +223,17 @@ pub enum Commands {
         no_docs: bool,
     },
 
+    /// Explore chain metadata using subxt (POC) - alternative implementation using pure subxt
+    MetadataSubxt {
+        /// Skip displaying documentation for calls
+        #[arg(long)]
+        no_docs: bool,
+
+        /// Show only metadata statistics
+        #[arg(long)]
+        stats_only: bool,
+    },
+
     /// Show version information
     Version,
 }
@@ -381,6 +393,10 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             let chain_client = crate::chain::client::ChainClient::new(node_url).await?;
             chain_client.explore_chain_metadata(no_docs).await
         }
+        Commands::MetadataSubxt {
+            no_docs,
+            stats_only,
+        } => metadata_subxt::handle_metadata_subxt_command(node_url, no_docs, stats_only).await,
         Commands::Version => {
             log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 
