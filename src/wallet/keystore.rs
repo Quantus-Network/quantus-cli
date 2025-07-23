@@ -12,11 +12,11 @@ use sp_core::ByteArray;
 
 // Quantum-safe encryption imports
 use aes_gcm::{
-    aead::{Aead, AeadCore, KeyInit, OsRng},
+    aead::{Aead, AeadCore, KeyInit, OsRng as AesOsRng},
     Aes256Gcm, Key, Nonce,
 };
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use rand::RngCore;
+use rand::{rng, RngCore};
 
 use std::path::Path;
 
@@ -197,7 +197,7 @@ impl Keystore {
     ) -> Result<EncryptedWallet> {
         // 1. Generate salt for Argon2
         let mut argon2_salt = [0u8; 16];
-        OsRng.fill_bytes(&mut argon2_salt);
+        rng().fill_bytes(&mut argon2_salt);
 
         // 2. Derive encryption key from password using Argon2 (quantum-safe)
         let argon2 = Argon2::default();
@@ -213,7 +213,7 @@ impl Keystore {
         let cipher = Aes256Gcm::new(aes_key);
 
         // 4. Generate nonce and encrypt the wallet data
-        let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+        let nonce = Aes256Gcm::generate_nonce(&mut AesOsRng);
         let serialized_data = serde_json::to_vec(data)?;
         let encrypted_data = cipher
             .encrypt(&nonce, serialized_data.as_ref())

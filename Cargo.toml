@@ -13,36 +13,31 @@ path = "src/main.rs"
 
 [dependencies]
 # CLI and async runtime
-clap = { version = "4.0", features = ["derive"] }
-tokio = { version = "1.0", features = ["full"] }
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.46", features = ["full"] }
 
 # Serialization and configuration
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-toml = "0.8"
+toml = "0.9"
 
-# Logging and error handling
-anyhow = "1.0"
-env_logger = "0.11"
-log = "0.4"
-thiserror = "1.0"
-rpassword = "7.3"
+# Error handling
+thiserror = "2.0"
 
 # Terminal UI
-colored = "2.0"
-console = "0.15"
+colored = "3.0"
 
 # Additional utilities
-chrono = { version = "0.4", features = ["serde"] }
-dirs = "5.0"
-hex = "0.4"
 sha2 = "0.10"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6.0"
+rpassword = "7.4"
 
 # Quantum-Safe Encryption
-aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 argon2 = "0.5"   # Password-based key derivation (quantum-safe)
-rand = "0.8"
-zeroize = "1.7"  # Secure memory clearing
+rand = "0.9"
+aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 
 # Quantus crypto dependencies
 rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/rusty-crystals.git", package = "rusty-crystals-dilithium" }
@@ -51,31 +46,14 @@ poseidon-resonance = { git = "https://github.com/Quantus-Network/poseidon-resona
 	"serde",
 ] }
 dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package = "dilithium-crypto" }
-qp-scheduler = { git = "https://github.com/Quantus-Network/chain", package = "qp-scheduler" }
-pallet-reversible-transfers = { git = "https://github.com/Quantus-Network/chain", package = "pallet-reversible-transfers" }
 
-jsonrpsee = { version = "0.24", features = [
-	"async-client",
-	"client-ws-transport-tls",
-	"http-client",
-	"ws-client",
-] }
-sp-core = { version = "35.0" }
-sp-runtime = { version = "40.1" }
-sp-crypto-hashing = { version = "0.1.0" }
+# Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
 	"derive",
 ] }
-scale-info = { version = "2.1", features = ["derive"] }
-primitive-types = { version = "0.13", features = ["scale-info", "serde"] }
-frame-metadata = { version = "18.0", default-features = false, features = [
-	"current",
-	"decode",
-	"serde_full",
-] }
-scale-value = "0.18"
+sp-core = { version = "35.0" }
+sp-runtime = { version = "40.1" }
 subxt = "0.43.0"
-subxt-signer = "0.43.0"
 
 # Needed for implementing custom Subxt hasher
 subxt-metadata = "0.43.0"
