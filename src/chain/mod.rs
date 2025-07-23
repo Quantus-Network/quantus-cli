@@ -5,7 +5,6 @@
 /// - Submitting transactions and extrinsics
 /// - Querying chain state
 /// - Managing RPC connections
-pub mod client;
 pub mod client_subxt;
 // pub mod quantus_extrinsic_params;
 pub mod quantus_runtime_config;
