@@ -13,71 +13,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "ac-compose-macros"
-version = "1.17.0"
-source = "git+https://github.com/Quantus-Network/resonance-api-client#509ecdbd935c4189c0d4398041d478b25cb3b471"
-dependencies = [
- "ac-primitives",
- "log",
- "maybe-async",
- "sp-core",
-]
-
-[[package]]
-name = "ac-node-api"
-version = "1.17.0"
-source = "git+https://github.com/Quantus-Network/resonance-api-client#509ecdbd935c4189c0d4398041d478b25cb3b471"
-dependencies = [
- "ac-primitives",
- "bitvec",
- "derive_more 2.0.1",
- "either",
- "frame-metadata 18.0.0",
- "hex",
- "log",
- "parity-scale-codec",
- "scale-bits",
- "scale-decode",
- "scale-encode",
- "scale-info",
- "scale-value",
- "serde",
- "serde_json",
- "sp-application-crypto",
- "sp-core",
- "sp-crypto-hashing",
- "sp-runtime",
- "sp-runtime-interface",
- "sp-storage",
-]
-
-[[package]]
-name = "ac-primitives"
-version = "1.17.0"
-source = "git+https://github.com/Quantus-Network/resonance-api-client#509ecdbd935c4189c0d4398041d478b25cb3b471"
-dependencies = [
- "dilithium-crypto",
- "frame-system",
- "impl-serde",
- "pallet-assets",
- "pallet-balances 40.1.0",
- "parity-scale-codec",
- "poseidon-resonance",
- "primitive-types 0.13.1",
- "scale-info",
- "serde",
- "serde_json",
- "sp-application-crypto",
- "sp-core",
- "sp-crypto-hashing",
- "sp-runtime",
- "sp-runtime-interface",
- "sp-staking",
- "sp-version",
- "sp-weights",
-]
-
-[[package]]
 name = "addr2line"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2940,17 +2875,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "maybe-async"
-version = "0.2.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5cf92c10c7e361d6b99666ec1c6f9805b0bea2c3bd8c78dc6fe98ac5bd78db11"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.104",
-]
-
-[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3196,23 +3120,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
-name = "pallet-assets"
-version = "41.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2e7b9ed5bbcd0c66e4a1915fcdc0df9fbc75447a216a405db687398d5d8769b"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "impl-trait-for-tuples",
- "log",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-runtime",
-]
-
-[[package]]
 name = "pallet-balances"
 version = "40.0.1"
 source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
@@ -3229,22 +3136,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-balances"
-version = "40.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3fbabdd4c43723e94a6f806853d19a2db5cac45152bc67ab1ae7327eedca0971"
-dependencies = [
- "docify",
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log",
- "parity-scale-codec",
- "scale-info",
- "sp-runtime",
-]
-
-[[package]]
 name = "pallet-reversible-transfers"
 version = "40.0.1"
 source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
@@ -3253,7 +3144,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
- "pallet-balances 40.0.1",
+ "pallet-balances",
  "parity-scale-codec",
  "qp-scheduler",
  "scale-info",
@@ -3791,7 +3682,6 @@ dependencies = [
  "sp-core",
  "sp-crypto-hashing",
  "sp-runtime",
- "substrate-api-client",
  "subxt",
  "subxt-metadata",
  "subxt-signer",
@@ -5337,38 +5227,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "substrate-api-client"
-version = "1.17.0"
-source = "git+https://github.com/Quantus-Network/resonance-api-client#509ecdbd935c4189c0d4398041d478b25cb3b471"
-dependencies = [
- "ac-compose-macros",
- "ac-node-api",
- "ac-primitives",
- "async-trait",
- "derive_more 2.0.1",
- "dilithium-crypto",
- "frame-metadata 18.0.0",
- "frame-support",
- "frame-system",
- "futures-util",
- "hex",
- "jsonrpsee",
- "log",
- "maybe-async",
- "parity-scale-codec",
- "serde",
- "serde_json",
- "sp-core",
- "sp-crypto-hashing",
- "sp-inherents",
- "sp-runtime",
- "sp-runtime-interface",
- "sp-storage",
- "sp-version",
- "url",
-]
 
 [[package]]
 name = "substrate-bip39"

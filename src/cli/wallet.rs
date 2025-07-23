@@ -1,6 +1,6 @@
 //! `quantus wallet-subxt` subcommand - SubXT implementation for wallet operations
 use crate::{
-    chain::client_subxt,
+    chain::client,
     chain::quantus_subxt,
     error::QuantusError,
     log_error, log_print, log_success, log_verbose,
@@ -11,7 +11,7 @@ use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::io::{self, Write};
 use subxt::OnlineClient;
-use crate::chain::client_subxt::ChainConfig;
+use crate::chain::client::ChainConfig;
 
 /// Wallet management commands using SubXT
 #[derive(Subcommand, Debug)]
@@ -459,7 +459,7 @@ pub async fn handle_wallet_subxt_command(
         } => {
             log_print!("🔢 Querying account nonce (using subxt)...");
 
-            let client = client_subxt::create_subxt_client(node_url).await?;
+            let client = client::create_subxt_client(node_url).await?;
 
             // Determine which address to query
             let target_address = match (address, wallet) {

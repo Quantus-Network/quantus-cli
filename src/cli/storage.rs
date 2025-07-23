@@ -1,9 +1,9 @@
 //! `quantus storage-subxt` subcommand - SubXT implementation
-use crate::chain::client_subxt::ChainConfig;
-use crate::cli::common_subxt::get_fresh_nonce;
+use crate::chain::client::ChainConfig;
+use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, error::QuantusError, log_error, log_print,
+    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print,
     log_success, log_verbose,
 };
 use clap::Subcommand;
@@ -141,7 +141,7 @@ pub async fn handle_storage_subxt_command(
 ) -> crate::error::Result<()> {
     log_print!("🗄️  Storage (SubXT)");
 
-    let client = client_subxt::create_subxt_client(node_url).await?;
+    let client = client::create_subxt_client(node_url).await?;
 
     match command {
         StorageSubxtCommands::Get {

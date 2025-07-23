@@ -2,25 +2,25 @@ use crate::{log_error, log_print, log_success, log_verbose};
 use clap::Subcommand;
 use colored::Colorize;
 
-pub mod common_subxt;
-pub mod generic_call_subxt;
-pub mod metadata_subxt;
+pub mod common;
+pub mod generic_call;
+pub mod metadata;
 pub mod progress_spinner;
-pub mod reversible_subxt;
-pub mod runtime_subxt;
-pub mod scheduler_subxt;
-pub mod send_subxt;
-pub mod storage_subxt;
-pub mod system_subxt;
-pub mod tech_collective_subxt;
-pub mod wallet_subxt;
+pub mod reversible;
+pub mod runtime;
+pub mod scheduler;
+pub mod send;
+pub mod storage;
+pub mod system;
+pub mod tech_collective;
+pub mod wallet;
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Wallet management commands
     #[command(subcommand)]
-    Wallet(wallet_subxt::WalletSubxtCommands),
+    Wallet(wallet::WalletSubxtCommands),
 
     /// Send tokens to another account
     Send {
@@ -47,23 +47,23 @@ pub enum Commands {
 
     /// Reversible transfer commands
     #[command(subcommand)]
-    Reversible(reversible_subxt::ReversibleSubxtCommands),
+    Reversible(reversible::ReversibleSubxtCommands),
 
     /// Scheduler commands
     #[command(subcommand)]
-    Scheduler(scheduler_subxt::SchedulerSubxtCommands),
+    Scheduler(scheduler::SchedulerSubxtCommands),
 
     /// Direct interaction with chain storage (Sudo required for set)
     #[command(subcommand)]
-    Storage(storage_subxt::StorageSubxtCommands),
+    Storage(storage::StorageSubxtCommands),
 
     /// Tech Collective management commands
     #[command(subcommand)]
-    TechCollective(tech_collective_subxt::TechCollectiveSubxtCommands),
+    TechCollective(tech_collective::TechCollectiveSubxtCommands),
 
     /// Runtime management commands (requires root/sudo permissions)
     #[command(subcommand)]
-    Runtime(runtime_subxt::RuntimeSubxtCommands),
+    Runtime(runtime::RuntimeSubxtCommands),
 
     /// Generic extrinsic call - call ANY pallet function!
     Call {
@@ -152,7 +152,7 @@ pub enum DeveloperCommands {
 pub async fn execute_command(command: Commands, node_url: &str) -> crate::error::Result<()> {
     match command {
         Commands::Wallet(wallet_cmd) => {
-            wallet_subxt::handle_wallet_subxt_command(wallet_cmd, node_url).await
+            wallet::handle_wallet_subxt_command(wallet_cmd, node_url).await
         }
         Commands::Send {
             from,
@@ -161,7 +161,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             password,
             password_file,
         } => {
-            send_subxt::handle_send_subxt_command(
+            send::handle_send_subxt_command(
                 from,
                 to,
                 &amount,
@@ -172,23 +172,23 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             .await
         }
         Commands::Reversible(reversible_cmd) => {
-            reversible_subxt::handle_reversible_subxt_command(reversible_cmd, node_url).await
+            reversible::handle_reversible_subxt_command(reversible_cmd, node_url).await
         }
         Commands::Scheduler(scheduler_cmd) => {
-            scheduler_subxt::handle_scheduler_subxt_command(scheduler_cmd, node_url).await
+            scheduler::handle_scheduler_subxt_command(scheduler_cmd, node_url).await
         }
         Commands::Storage(storage_cmd) => {
-            storage_subxt::handle_storage_subxt_command(storage_cmd, node_url).await
+            storage::handle_storage_subxt_command(storage_cmd, node_url).await
         }
         Commands::TechCollective(tech_collective_cmd) => {
-            tech_collective_subxt::handle_tech_collective_subxt_command(
+            tech_collective::handle_tech_collective_subxt_command(
                 tech_collective_cmd,
                 node_url,
             )
             .await
         }
         Commands::Runtime(runtime_cmd) => {
-            runtime_subxt::handle_runtime_subxt_command(runtime_cmd, node_url).await
+            runtime::handle_runtime_subxt_command(runtime_cmd, node_url).await
         }
         Commands::Call {
             pallet,
@@ -216,10 +216,10 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             .await
         }
         Commands::Balance { address } => {
-            let client = crate::chain::client_subxt::create_subxt_client(node_url).await?;
-            let balance = send_subxt::get_balance(&client, &address).await?;
+            let client = crate::chain::client::create_subxt_client(node_url).await?;
+            let balance = send::get_balance(&client, &address).await?;
             let formatted_balance =
-                send_subxt::format_balance_with_symbol(&client, balance).await?;
+                send::format_balance_with_symbol(&client, balance).await?;
             log_print!("💰 Balance: {}", formatted_balance);
             Ok(())
         }
@@ -235,21 +235,21 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         },
         Commands::System { runtime, metadata } => {
             if runtime || metadata {
-                system_subxt::handle_system_subxt_extended_command(node_url, runtime, metadata)
+                system::handle_system_subxt_extended_command(node_url, runtime, metadata)
                     .await
             } else {
-                system_subxt::handle_system_subxt_command(node_url).await
+                system::handle_system_subxt_command(node_url).await
             }
         }
         Commands::Metadata {
             no_docs,
             stats_only,
-        } => metadata_subxt::handle_metadata_subxt_command(node_url, no_docs, stats_only).await,
+        } => metadata::handle_metadata_subxt_command(node_url, no_docs, stats_only).await,
         Commands::Version => {
             log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 
-            let client = crate::chain::client_subxt::create_subxt_client(node_url).await?;
-            let runtime_version = runtime_subxt::get_runtime_version(&client).await?;
+            let client = crate::chain::client::create_subxt_client(node_url).await?;
+            let runtime_version = runtime::get_runtime_version(&client).await?;
             log_print!(
                 "Runtime Version: spec_version: {}, impl_version: {}",
                 runtime_version.spec_version,
@@ -294,7 +294,7 @@ async fn handle_generic_call_subxt_command(
         vec![]
     };
 
-    generic_call_subxt::execute_generic_call_subxt(&pallet, &call, args_vec, &from, tip, node_url)
+    generic_call::execute_generic_call_subxt(&pallet, &call, args_vec, &from, tip, node_url)
         .await
 }
 

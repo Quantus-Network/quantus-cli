@@ -1,8 +1,8 @@
-use crate::chain::client_subxt::ChainConfig;
-use crate::cli::common_subxt::get_fresh_nonce;
+use crate::chain::client::ChainConfig;
+use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
+    chain::client, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
     log_success, log_verbose,
 };
 use colored::Colorize;
@@ -245,7 +245,7 @@ pub async fn handle_send_subxt_command(
     password_file: Option<String>,
 ) -> Result<()> {
     // Create subxt chain client
-    let client = client_subxt::create_subxt_client(node_url).await?;
+    let client = client::create_subxt_client(node_url).await?;
 
     // Parse and validate the amount
     let (amount, formatted_amount) = validate_and_format_amount(&client, amount_str).await?;

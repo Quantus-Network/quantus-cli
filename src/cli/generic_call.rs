@@ -1,8 +1,8 @@
 //! `quantus call-subxt` subcommand - SubXT implementation for generic pallet calls
-use crate::chain::client_subxt::ChainConfig;
-use crate::cli::common_subxt::get_fresh_nonce;
+use crate::chain::client::ChainConfig;
+use crate::cli::common::get_fresh_nonce;
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, error::QuantusError, log_error, log_print,
+    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print,
     log_success, log_verbose, wallet::QuantumKeyPair,
 };
 use colored::Colorize;
@@ -415,7 +415,7 @@ pub async fn execute_generic_call_subxt(
 ) -> crate::error::Result<()> {
     log_print!("🚀 Generic Call (SubXT)");
 
-    let client = client_subxt::create_subxt_client(node_url).await?;
+    let client = client::create_subxt_client(node_url).await?;
     let keypair = crate::wallet::load_keypair_from_wallet(from, None, None)?;
 
     execute_generic_call(&client, pallet, call, args, &keypair, tip).await?;

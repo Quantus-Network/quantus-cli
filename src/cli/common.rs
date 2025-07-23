@@ -1,5 +1,5 @@
 //! Common SubXT utilities and functions shared across CLI commands
-use crate::{chain::client_subxt::ChainConfig, error::Result, log_verbose};
+use crate::{chain::client::ChainConfig, error::Result, log_verbose};
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::OnlineClient;
 

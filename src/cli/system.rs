@@ -1,8 +1,8 @@
 //! `quantus system-subxt` subcommand - SubXT implementation for system information
-use crate::{chain::client_subxt, log_print, log_verbose};
+use crate::{chain::client, log_print, log_verbose};
 use colored::Colorize;
 use subxt::OnlineClient;
-use crate::chain::client_subxt::ChainConfig;
+use crate::chain::client::ChainConfig;
 
 /// Get system information using SubXT
 pub async fn get_system_info(client: &OnlineClient<ChainConfig>) -> crate::error::Result<()> {
@@ -114,7 +114,7 @@ pub async fn get_metadata_stats(client: &OnlineClient<ChainConfig>) -> crate::er
 pub async fn handle_system_subxt_command(node_url: &str) -> crate::error::Result<()> {
     log_print!("🚀 System Information (SubXT)");
 
-    let client = client_subxt::create_subxt_client(node_url).await?;
+    let client = client::create_subxt_client(node_url).await?;
     get_system_info(&client).await?;
 
     Ok(())
@@ -128,7 +128,7 @@ pub async fn handle_system_subxt_extended_command(
 ) -> crate::error::Result<()> {
     log_print!("🚀 Extended System Information (SubXT)");
 
-    let client = client_subxt::create_subxt_client(node_url).await?;
+    let client = client::create_subxt_client(node_url).await?;
 
     // Basic system info
     get_system_info(&client).await?;

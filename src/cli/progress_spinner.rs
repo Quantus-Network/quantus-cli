@@ -1,4 +1,4 @@
-use crate::chain::client_subxt::ChainConfig;
+use crate::chain::client::ChainConfig;
 use crate::error::Result;
 use colored::Colorize;
 use std::io::{self, Write};

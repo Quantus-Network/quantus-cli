@@ -1,7 +1,7 @@
-use crate::chain::client_subxt::ChainConfig;
+use crate::chain::client::ChainConfig;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
+    chain::client, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
     log_success, log_verbose,
 };
 use clap::Subcommand;
@@ -356,7 +356,7 @@ pub async fn handle_reversible_subxt_command(
 ) -> Result<()> {
     log_print!("🔄 Reversible Transfers (SubXT)");
 
-    let client = client_subxt::create_subxt_client(node_url).await?;
+    let client = client::create_subxt_client(node_url).await?;
 
     match command {
         ReversibleSubxtCommands::ScheduleTransfer {
@@ -367,9 +367,9 @@ pub async fn handle_reversible_subxt_command(
             password_file,
         } => {
             // Parse and validate the amount
-            let client = crate::chain::client_subxt::create_subxt_client(node_url).await?;
+            let client = crate::chain::client::create_subxt_client(node_url).await?;
             let (raw_amount, formatted_amount) =
-                crate::cli::send_subxt::validate_and_format_amount(&client, &amount).await?;
+                crate::cli::send::validate_and_format_amount(&client, &amount).await?;
 
             log_info!(
                 "🔄 Scheduling reversible transfer of {} to {}",
@@ -459,9 +459,9 @@ pub async fn handle_reversible_subxt_command(
             password_file,
         } => {
             // Parse and validate the amount
-            let client = crate::chain::client_subxt::create_subxt_client(node_url).await?;
+            let client = crate::chain::client::create_subxt_client(node_url).await?;
             let (raw_amount, formatted_amount) =
-                crate::cli::send_subxt::validate_and_format_amount(&client, &amount).await?;
+                crate::cli::send::validate_and_format_amount(&client, &amount).await?;
 
             let unit_str = if unit_blocks { "blocks" } else { "seconds" };
             log_verbose!(

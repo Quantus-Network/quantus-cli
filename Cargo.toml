@@ -56,7 +56,7 @@ pallet-reversible-transfers = { git = "https://github.com/Quantus-Network/chain"
 
 # Blockchain and RPC client
 # Note: We use our own modified version of substrate-api-client to support Dilithium crypto
-substrate-api-client = { git = "https://github.com/Quantus-Network/resonance-api-client", package = "substrate-api-client" }
+#substrate-api-client = { git = "https://github.com/Quantus-Network/resonance-api-client", package = "substrate-api-client" }
 jsonrpsee = { version = "0.24", features = [
 	"async-client",
 	"client-ws-transport-tls",
