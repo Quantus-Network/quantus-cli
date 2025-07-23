@@ -3,12 +3,44 @@
 //! This module provides shared functionality for creating and managing SubXT clients
 //! across all CLI SubXT modules.
 
-use crate::{chain::types::ChainConfig, error::QuantusError, log_verbose};
+use dilithium_crypto::ResonanceSignatureScheme;
+use poseidon_resonance::PoseidonHasher;
+use crate::{error::QuantusError, log_verbose};
 use sp_core::ByteArray;
+use sp_core::crypto::AccountId32;
+use sp_runtime::MultiAddress;
 use sp_runtime::traits::IdentifyAccount;
-use subxt::OnlineClient;
+use subxt::{Config, OnlineClient};
+use subxt::config::DefaultExtrinsicParams;
+use subxt::config::substrate::SubstrateHeader;
 
-// Removed SubxtClient struct - using OnlineClient<ChainConfig> directly
+use subxt_metadata::Metadata as SubxtMetadata;
+
+#[derive(Debug, Clone, Copy)]
+pub struct SubxtPoseidonHasher;
+
+impl subxt::config::Hasher for SubxtPoseidonHasher {
+    type Output = sp_core::H256;
+
+    fn new(_metadata: &SubxtMetadata) -> Self {
+        SubxtPoseidonHasher
+    }
+
+    fn hash(&self, bytes: &[u8]) -> Self::Output {
+        <PoseidonHasher as sp_runtime::traits::Hash>::hash(bytes)
+    }
+}
+/// Configuration of the chain
+pub enum ChainConfig {}
+impl Config for ChainConfig {
+    type AccountId = AccountId32;
+    type Address = MultiAddress<Self::AccountId, u32>;
+    type Signature = ResonanceSignatureScheme;
+    type Hasher = SubxtPoseidonHasher;
+    type Header = SubstrateHeader<u32, SubxtPoseidonHasher>;
+    type AssetId = u32;
+    type ExtrinsicParams = DefaultExtrinsicParams<Self>;
+}
 
 /// Common SubXT client creation function
 ///
@@ -31,11 +63,10 @@ pub async fn create_subxt_client(
 }
 
 // Implement subxt::tx::Signer for ResonancePair
-impl subxt::tx::Signer<crate::chain::types::ChainConfig>
+impl subxt::tx::Signer<ChainConfig>
     for dilithium_crypto::types::ResonancePair
 {
-    fn account_id(&self) -> <crate::chain::types::ChainConfig as subxt::Config>::AccountId {
-        // Convert ResonancePair to AccountId using the same logic as QuantumKeyPair
+    fn account_id(&self) -> <ChainConfig as Config>::AccountId {
         let resonance_public =
             dilithium_crypto::types::ResonancePublic::from_slice(&self.public.as_slice())
                 .expect("Invalid public key");
@@ -49,7 +80,7 @@ impl subxt::tx::Signer<crate::chain::types::ChainConfig>
     fn sign(
         &self,
         signer_payload: &[u8],
-    ) -> <crate::chain::types::ChainConfig as subxt::Config>::Signature {
+    ) -> <ChainConfig as Config>::Signature {
         // Use the sign method from the trait implemented for ResonancePair
         // sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in ResonanceSignatureScheme
         let signature_with_public =

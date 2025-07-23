@@ -2,7 +2,6 @@
 use crate::{
     chain::client_subxt,
     chain::quantus_subxt,
-    chain::types::ChainConfig,
     error::QuantusError,
     log_error, log_print, log_success, log_verbose,
     wallet::{password::get_mnemonic_from_user, WalletManager},
@@ -12,6 +11,7 @@ use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::io::{self, Write};
 use subxt::OnlineClient;
+use crate::chain::client_subxt::ChainConfig;
 
 /// Wallet management commands using SubXT
 #[derive(Subcommand, Debug)]

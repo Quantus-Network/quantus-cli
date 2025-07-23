@@ -1,11 +1,14 @@
 //! `quantus runtime-subxt` subcommand - SubXT implementation for runtime management
+use crate::chain::client_subxt::ChainConfig;
+use crate::cli::common_subxt::get_fresh_nonce;
+use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError,
-    log_print, log_success, log_verbose, wallet::QuantumKeyPair,
+    chain::client_subxt, chain::quantus_subxt, error::QuantusError, log_print, log_success,
+    log_verbose, wallet::QuantumKeyPair,
 };
 use clap::Subcommand;
 use colored::Colorize;
-use sp_core::crypto::Ss58Codec;
+
 use std::fs;
 use std::path::PathBuf;
 use subxt::OnlineClient;
@@ -119,18 +122,7 @@ pub async fn update_runtime(
         .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
 
     // Get fresh nonce for the sender
-    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-    let from_account_id =
-        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
-            .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
-
-    let nonce = client
-        .tx()
-        .account_nonce(&from_account_id)
-        .await
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e)))?;
-
-    log_verbose!("🔢 Using nonce: {}", nonce);
+    let nonce = get_fresh_nonce(client, from_keypair).await?;
 
     // Create custom params with fresh nonce
     use subxt::config::DefaultExtrinsicParamsBuilder;
@@ -201,21 +193,6 @@ pub async fn calculate_wasm_hash(wasm_code: &[u8]) -> crate::error::Result<Strin
     let local_hash = hasher.finalize();
 
     Ok(format!("0x{}", hex::encode(local_hash)))
-}
-
-/// Wait for transaction finalization using subxt
-pub async fn wait_for_finalization(
-    _client: &OnlineClient<ChainConfig>,
-    _tx_hash: subxt::utils::H256,
-) -> crate::error::Result<bool> {
-    log_verbose!("⏳ Waiting for transaction finalization...");
-
-    // For now, we use a simple delay approach similar to other SubXT implementations
-    // TODO: Implement proper finalization watching using SubXT events
-    tokio::time::sleep(std::time::Duration::from_secs(10)).await; // Longer for runtime updates
-
-    log_verbose!("✅ Transaction likely finalized (after 10s delay)");
-    Ok(true)
 }
 
 /// Runtime version information structure

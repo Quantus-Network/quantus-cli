@@ -1,7 +1,10 @@
 //! `quantus storage-subxt` subcommand - SubXT implementation
+use crate::chain::client_subxt::ChainConfig;
+use crate::cli::common_subxt::get_fresh_nonce;
+use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError,
-    log_error, log_print, log_success, log_verbose,
+    chain::client_subxt, chain::quantus_subxt, error::QuantusError, log_error, log_print,
+    log_success, log_verbose,
 };
 use clap::Subcommand;
 use codec::{Decode, Encode};
@@ -107,19 +110,8 @@ pub async fn set_storage_value(
     // Wrap in Sudo::sudo call
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
 
-    // Get fresh nonce for the sender - use substrate_api_client AccountId32 type
-    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-    let from_account_id =
-        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
-            .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
-
-    let nonce = client
-        .tx()
-        .account_nonce(&from_account_id)
-        .await
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e)))?;
-
-    log_verbose!("🔢 Using nonce: {}", nonce);
+    // Get fresh nonce for the sender
+    let nonce = get_fresh_nonce(client, from_keypair).await?;
 
     // Create custom params with fresh nonce
     use subxt::config::DefaultExtrinsicParamsBuilder;
@@ -140,21 +132,6 @@ pub async fn set_storage_value(
     );
 
     Ok(tx_hash)
-}
-
-/// Wait for transaction finalization using subxt
-pub async fn wait_for_finalization(
-    _client: &OnlineClient<ChainConfig>,
-    _tx_hash: subxt::utils::H256,
-) -> crate::error::Result<bool> {
-    log_verbose!("⏳ Waiting for transaction finalization...");
-
-    // For now, we use a simple delay approach similar to other SubXT implementations
-    // TODO: Implement proper finalization watching using SubXT events
-    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
-
-    log_verbose!("✅ Transaction likely finalized (after 6s delay)");
-    Ok(true)
 }
 
 /// Handle storage subxt commands

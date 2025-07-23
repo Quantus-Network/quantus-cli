@@ -1,7 +1,8 @@
 //! `quantus metadata-subxt` subcommand - SubXT implementation for metadata exploration
-use crate::{chain::client_subxt, chain::types::ChainConfig, log_print, log_verbose};
+use crate::{chain::client_subxt, log_print, log_verbose};
 use colored::Colorize;
 use subxt::OnlineClient;
+use crate::chain::client_subxt::ChainConfig;
 
 /// Explore chain metadata and display all available pallets and calls using SubXT
 pub async fn explore_chain_metadata(

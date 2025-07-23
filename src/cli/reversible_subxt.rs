@@ -1,6 +1,8 @@
+use crate::chain::client_subxt::ChainConfig;
+use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::Result, log_error,
-    log_print, log_success, log_verbose,
+    chain::client_subxt, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
+    log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -135,11 +137,11 @@ async fn get_fresh_nonce(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
 ) -> Result<u64> {
-    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-    let from_account_id =
-        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check()).map_err(
-            |e| crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e)),
-        )?;
+    use sp_core::crypto::AccountId32;
+    let from_account_id = AccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e))
+        })?;
 
     let nonce = client
         .tx()
@@ -347,21 +349,6 @@ pub async fn schedule_transfer_with_delay(
     Ok(tx_hash)
 }
 
-/// Wait for transaction finalization using subxt
-pub async fn wait_for_finalization(
-    _client: &OnlineClient<ChainConfig>,
-    _tx_hash: subxt::utils::H256,
-) -> Result<bool> {
-    log_verbose!("⏳ Waiting for transaction finalization...");
-
-    // For now, we use a simple delay approach similar to substrate-api-client
-    // TODO: Implement proper finalization watching using SubXT events
-    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
-
-    log_verbose!("✅ Transaction likely finalized (after 6s delay)");
-    Ok(true)
-}
-
 /// Handle reversible transfer subxt commands
 pub async fn handle_reversible_subxt_command(
     command: ReversibleSubxtCommands,
@@ -384,6 +371,11 @@ pub async fn handle_reversible_subxt_command(
             let (raw_amount, formatted_amount) =
                 crate::cli::send_subxt::validate_and_format_amount(&client, &amount).await?;
 
+            log_info!(
+                "🔄 Scheduling reversible transfer of {} to {}",
+                formatted_amount,
+                to
+            );
             log_verbose!(
                 "🚀 {} Scheduling reversible transfer {} to {} (using subxt)",
                 "REVERSIBLE_SUBXT".bright_cyan().bold(),
@@ -407,6 +399,7 @@ pub async fn handle_reversible_subxt_command(
             let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
+                log_info!("✅ Reversible transfer scheduled and confirmed on chain");
                 log_success!(
                     "🎉 {} Reversible transfer confirmed with subxt!",
                     "FINALIZED".bright_green().bold()

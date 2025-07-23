@@ -42,10 +42,10 @@ pub fn successln(args: std::fmt::Arguments) {
     println!("{} {}", "✅".green(), args);
 }
 
-/// Print formatted debug message in verbose mode
-pub fn debugln(args: std::fmt::Arguments) {
+/// Print formatted info message in verbose mode
+pub fn infoln(args: std::fmt::Arguments) {
     if is_verbose() {
-        println!("{} {}", "🔍".dimmed(), args);
+        println!("{} {}", "ℹ️ ".bright_blue(), args);
     }
 }
 
@@ -85,12 +85,5 @@ macro_rules! log_success {
 macro_rules! log_info {
     ($($arg:tt)*) => {
         $crate::log::infoln(format_args!($($arg)*))
-    };
-}
-
-#[macro_export]
-macro_rules! log_debug {
-    ($($arg:tt)*) => {
-        $crate::log::debugln(format_args!($($arg)*))
     };
 }

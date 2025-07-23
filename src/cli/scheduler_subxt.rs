@@ -1,9 +1,10 @@
 use crate::{
-    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::Result, log_print,
+    chain::client_subxt, chain::quantus_subxt, error::Result, log_print,
     log_success,
 };
 use clap::Subcommand;
 use subxt::OnlineClient;
+use crate::chain::client_subxt::ChainConfig;
 
 /// Scheduler-related commands using SubXT
 #[derive(Subcommand, Debug)]
