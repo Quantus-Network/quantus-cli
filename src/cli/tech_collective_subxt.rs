@@ -1,7 +1,7 @@
 //! `quantus tech-collective-subxt` subcommand - SubXT implementation
 use crate::{
-    chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError, log_error, log_print,
-    log_success, log_verbose,
+    chain::client_subxt, chain::quantus_subxt, chain::types::ChainConfig, error::QuantusError,
+    log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -9,363 +9,344 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
 use subxt::OnlineClient;
 
-/// SubXT-based tech collective client for governance operations
-pub struct SubxtTechCollectiveClient {
-    client: OnlineClient<ChainConfig>,
+/// Add a member to the Tech Collective using sudo
+pub async fn add_member(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+    who_address: &str,
+) -> crate::error::Result<subxt::utils::H256> {
+    log_verbose!("🏛️  Adding member to Tech Collective with subxt...");
+    log_verbose!("   Member: {}", who_address.bright_cyan());
+
+    // Parse the member address
+    let member_account_sp = AccountId32::from_ss58check(who_address)
+        .map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
+
+    // Convert to subxt_core AccountId32
+    let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
+    let member_account_id = subxt::ext::subxt_core::utils::AccountId32::from(member_account_bytes);
+
+    // Convert our QuantumKeyPair to subxt Signer
+    let signer = from_keypair
+        .to_subxt_signer()
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
+
+    log_verbose!("✍️  Creating add_member transaction with subxt...");
+
+    // Create the TechCollective::add_member call as RuntimeCall enum
+    let add_member_call = quantus_subxt::api::Call::TechCollective(
+        quantus_subxt::api::tech_collective::Call::add_member {
+            who: subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id),
+        },
+    );
+
+    // Wrap in Sudo::sudo call
+    let sudo_call = quantus_subxt::api::tx().sudo().sudo(add_member_call);
+
+    // Get fresh nonce for the sender
+    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
+    let from_account_id =
+        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
+            .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
+
+    let nonce = client
+        .tx()
+        .account_nonce(&from_account_id)
+        .await
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e)))?;
+
+    log_verbose!("🔢 Using nonce: {}", nonce);
+
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&sudo_call, &signer, params)
+        .await
+        .map_err(|e| {
+            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
+        })?;
+
+    log_verbose!(
+        "📋 Add member transaction submitted with subxt: {:?}",
+        tx_hash
+    );
+
+    Ok(tx_hash)
 }
 
-impl SubxtTechCollectiveClient {
-    /// Create a new SubXT tech collective client
-    pub async fn new(node_url: &str) -> crate::error::Result<Self> {
-        let client = OnlineClient::from_url(node_url)
-            .await
-            .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
+/// Remove a member from the Tech Collective using sudo
+pub async fn remove_member(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+    who_address: &str,
+) -> crate::error::Result<subxt::utils::H256> {
+    log_verbose!("🏛️  Removing member from Tech Collective with subxt...");
+    log_verbose!("   Member: {}", who_address.bright_cyan());
 
-        Ok(Self { client })
-    }
+    // Parse the member address
+    let member_account_sp = AccountId32::from_ss58check(who_address)
+        .map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
 
-    /// Add a member to the Tech Collective using sudo
-    pub async fn add_member(
-        &self,
-        from_keypair: &crate::wallet::QuantumKeyPair,
-        who_address: &str,
-    ) -> crate::error::Result<subxt::utils::H256> {
-        log_verbose!("🏛️  Adding member to Tech Collective with subxt...");
-        log_verbose!("   Member: {}", who_address.bright_cyan());
+    // Convert to subxt_core AccountId32
+    let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
+    let member_account_id = subxt::ext::subxt_core::utils::AccountId32::from(member_account_bytes);
 
-        // Parse the member address
-        let member_account_sp = AccountId32::from_ss58check(who_address)
-            .map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
+    // Convert our QuantumKeyPair to subxt Signer
+    let signer = from_keypair
+        .to_subxt_signer()
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
 
-        // Convert to subxt_core AccountId32
-        let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
-        let member_account_id =
-            subxt::ext::subxt_core::utils::AccountId32::from(member_account_bytes);
+    log_verbose!("✍️  Creating remove_member transaction with subxt...");
 
-        // Convert our QuantumKeyPair to subxt Signer
-        let signer = from_keypair.to_subxt_signer().map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    // Create the TechCollective::remove_member call as RuntimeCall enum
+    let remove_member_call = quantus_subxt::api::Call::TechCollective(
+        quantus_subxt::api::tech_collective::Call::remove_member {
+            who: subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id),
+            min_rank: 0u16, // Use rank 0 as default
+        },
+    );
+
+    // Wrap in Sudo::sudo call
+    let sudo_call = quantus_subxt::api::tx().sudo().sudo(remove_member_call);
+
+    // Get fresh nonce for the sender
+    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
+    let from_account_id =
+        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
+            .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
+
+    let nonce = client
+        .tx()
+        .account_nonce(&from_account_id)
+        .await
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e)))?;
+
+    log_verbose!("🔢 Using nonce: {}", nonce);
+
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&sudo_call, &signer, params)
+        .await
+        .map_err(|e| {
+            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-        log_verbose!("✍️  Creating add_member transaction with subxt...");
+    log_verbose!(
+        "📋 Remove member transaction submitted with subxt: {:?}",
+        tx_hash
+    );
 
-        // Create the TechCollective::add_member call as RuntimeCall enum
-        let add_member_call = quantus_subxt::api::Call::TechCollective(
-            quantus_subxt::api::tech_collective::Call::add_member {
-                who: subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id),
-            },
-        );
+    Ok(tx_hash)
+}
 
-        // Wrap in Sudo::sudo call
-        let sudo_call = quantus_subxt::api::tx().sudo().sudo(add_member_call);
+/// Vote on a Tech Referenda proposal
+pub async fn vote_on_referendum(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+    referendum_index: u32,
+    aye: bool,
+) -> crate::error::Result<subxt::utils::H256> {
+    log_verbose!("🗳️  Voting on referendum with subxt...");
+    log_verbose!("   Referendum: {}", referendum_index);
+    log_verbose!("   Vote: {}", if aye { "AYE" } else { "NAY" });
 
-        // Get fresh nonce for the sender
-        use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-        let from_account_id = SubstrateAccountId32::from_ss58check(
-            &from_keypair.to_account_id_ss58check(),
-        )
-        .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
+    // Convert our QuantumKeyPair to subxt Signer
+    let signer = from_keypair
+        .to_subxt_signer()
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
 
-        let nonce = self
-            .client
-            .tx()
-            .account_nonce(&from_account_id)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e))
-            })?;
+    log_verbose!("✍️  Creating vote transaction with subxt...");
 
-        log_verbose!("🔢 Using nonce: {}", nonce);
+    // Create the TechCollective::vote call
+    let vote_call = quantus_subxt::api::tx()
+        .tech_collective()
+        .vote(referendum_index, aye);
 
-        // Create custom params with fresh nonce
-        use subxt::config::DefaultExtrinsicParamsBuilder;
-        let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+    // Get fresh nonce for the sender
+    use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
+    let from_account_id =
+        SubstrateAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
+            .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
 
-        // Submit the transaction with fresh nonce
-        let tx_hash = self
-            .client
-            .tx()
-            .sign_and_submit(&sudo_call, &signer, params)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-            })?;
+    let nonce = client
+        .tx()
+        .account_nonce(&from_account_id)
+        .await
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e)))?;
 
-        log_verbose!(
-            "📋 Add member transaction submitted with subxt: {:?}",
-            tx_hash
-        );
+    log_verbose!("🔢 Using nonce: {}", nonce);
 
-        Ok(tx_hash)
-    }
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
 
-    /// Remove a member from the Tech Collective using sudo
-    pub async fn remove_member(
-        &self,
-        from_keypair: &crate::wallet::QuantumKeyPair,
-        who_address: &str,
-    ) -> crate::error::Result<subxt::utils::H256> {
-        log_verbose!("🏛️  Removing member from Tech Collective with subxt...");
-        log_verbose!("   Member: {}", who_address.bright_cyan());
-
-        // Parse the member address
-        let member_account_sp = AccountId32::from_ss58check(who_address)
-            .map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
-
-        // Convert to subxt_core AccountId32
-        let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
-        let member_account_id =
-            subxt::ext::subxt_core::utils::AccountId32::from(member_account_bytes);
-
-        // Convert our QuantumKeyPair to subxt Signer
-        let signer = from_keypair.to_subxt_signer().map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&vote_call, &signer, params)
+        .await
+        .map_err(|e| {
+            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-        log_verbose!("✍️  Creating remove_member transaction with subxt...");
+    log_verbose!("📋 Vote transaction submitted with subxt: {:?}", tx_hash);
 
-        // Create the TechCollective::remove_member call as RuntimeCall enum
-        let remove_member_call = quantus_subxt::api::Call::TechCollective(
-            quantus_subxt::api::tech_collective::Call::remove_member {
-                who: subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id),
-                min_rank: 0u16, // Use rank 0 as default
-            },
-        );
+    Ok(tx_hash)
+}
 
-        // Wrap in Sudo::sudo call
-        let sudo_call = quantus_subxt::api::tx().sudo().sudo(remove_member_call);
+/// Check if an address is a member of the Tech Collective
+pub async fn is_member(
+    client: &OnlineClient<ChainConfig>,
+    address: &str,
+) -> crate::error::Result<bool> {
+    log_verbose!("🔍 Checking membership with subxt...");
+    log_verbose!("   Address: {}", address.bright_cyan());
 
-        // Get fresh nonce for the sender
-        use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-        let from_account_id = SubstrateAccountId32::from_ss58check(
-            &from_keypair.to_account_id_ss58check(),
-        )
-        .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
+    // Parse the address
+    let account_sp = AccountId32::from_ss58check(address)
+        .map_err(|e| QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
 
-        let nonce = self
-            .client
-            .tx()
-            .account_nonce(&from_account_id)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e))
-            })?;
+    // Convert to subxt_core AccountId32
+    let account_bytes: [u8; 32] = *account_sp.as_ref();
+    let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
 
-        log_verbose!("🔢 Using nonce: {}", nonce);
+    // Query Members storage
+    let storage_addr = quantus_subxt::api::storage()
+        .tech_collective()
+        .members(account_id);
 
-        // Create custom params with fresh nonce
-        use subxt::config::DefaultExtrinsicParamsBuilder;
-        let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-        // Submit the transaction with fresh nonce
-        let tx_hash = self
-            .client
-            .tx()
-            .sign_and_submit(&sudo_call, &signer, params)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-            })?;
-
-        log_verbose!(
-            "📋 Remove member transaction submitted with subxt: {:?}",
-            tx_hash
-        );
-
-        Ok(tx_hash)
-    }
-
-    /// Vote on a Tech Referenda proposal
-    pub async fn vote_on_referendum(
-        &self,
-        from_keypair: &crate::wallet::QuantumKeyPair,
-        referendum_index: u32,
-        aye: bool,
-    ) -> crate::error::Result<subxt::utils::H256> {
-        log_verbose!("🗳️  Voting on referendum with subxt...");
-        log_verbose!("   Referendum: {}", referendum_index);
-        log_verbose!("   Vote: {}", if aye { "AYE" } else { "NAY" });
-
-        // Convert our QuantumKeyPair to subxt Signer
-        let signer = from_keypair.to_subxt_signer().map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
-        })?;
-
-        log_verbose!("✍️  Creating vote transaction with subxt...");
-
-        // Create the TechCollective::vote call
-        let vote_call = quantus_subxt::api::tx()
-            .tech_collective()
-            .vote(referendum_index, aye);
-
-        // Get fresh nonce for the sender
-        use substrate_api_client::ac_primitives::AccountId32 as SubstrateAccountId32;
-        let from_account_id = SubstrateAccountId32::from_ss58check(
-            &from_keypair.to_account_id_ss58check(),
-        )
-        .map_err(|e| QuantusError::NetworkError(format!("Invalid from address: {:?}", e)))?;
-
-        let nonce = self
-            .client
-            .tx()
-            .account_nonce(&from_account_id)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to get account nonce: {:?}", e))
-            })?;
-
-        log_verbose!("🔢 Using nonce: {}", nonce);
-
-        // Create custom params with fresh nonce
-        use subxt::config::DefaultExtrinsicParamsBuilder;
-        let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-        // Submit the transaction with fresh nonce
-        let tx_hash = self
-            .client
-            .tx()
-            .sign_and_submit(&vote_call, &signer, params)
-            .await
-            .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-            })?;
-
-        log_verbose!("📋 Vote transaction submitted with subxt: {:?}", tx_hash);
-
-        Ok(tx_hash)
-    }
-
-    /// Check if an address is a member of the Tech Collective
-    pub async fn is_member(&self, address: &str) -> crate::error::Result<bool> {
-        log_verbose!("🔍 Checking membership with subxt...");
-        log_verbose!("   Address: {}", address.bright_cyan());
-
-        // Parse the address
-        let account_sp = AccountId32::from_ss58check(address)
-            .map_err(|e| QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
-
-        // Convert to subxt_core AccountId32
-        let account_bytes: [u8; 32] = *account_sp.as_ref();
-        let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
-
-        // Query Members storage
-        let storage_addr = quantus_subxt::api::storage()
-            .tech_collective()
-            .members(account_id);
-
-        let storage_at = self.client.storage().at_latest().await.map_err(|e| {
+    let storage_at =
+        client.storage().at_latest().await.map_err(|e| {
             QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
         })?;
 
-        let member_data = storage_at.fetch(&storage_addr).await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to fetch member data: {:?}", e))
-        })?;
+    let member_data = storage_at
+        .fetch(&storage_addr)
+        .await
+        .map_err(|e| QuantusError::NetworkError(format!("Failed to fetch member data: {:?}", e)))?;
 
-        Ok(member_data.is_some())
-    }
+    Ok(member_data.is_some())
+}
 
-    /// Get member count information
-    pub async fn get_member_count(&self) -> crate::error::Result<Option<u32>> {
-        log_verbose!("🔍 Getting member count with subxt...");
+/// Get member count information
+pub async fn get_member_count(
+    client: &OnlineClient<ChainConfig>,
+) -> crate::error::Result<Option<u32>> {
+    log_verbose!("🔍 Getting member count with subxt...");
 
-        // Query MemberCount storage - use rank 0 as default
-        let storage_addr = quantus_subxt::api::storage()
-            .tech_collective()
-            .member_count(0u16);
+    // Query MemberCount storage - use rank 0 as default
+    let storage_addr = quantus_subxt::api::storage()
+        .tech_collective()
+        .member_count(0u16);
 
-        let storage_at = self.client.storage().at_latest().await.map_err(|e| {
+    let storage_at =
+        client.storage().at_latest().await.map_err(|e| {
             QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
         })?;
 
-        let count_data = storage_at.fetch(&storage_addr).await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to fetch member count: {:?}", e))
-        })?;
+    let count_data = storage_at.fetch(&storage_addr).await.map_err(|e| {
+        QuantusError::NetworkError(format!("Failed to fetch member count: {:?}", e))
+    })?;
 
-        Ok(count_data)
-    }
+    Ok(count_data)
+}
 
-    /// Get list of all members
-    pub async fn get_member_list(&self) -> crate::error::Result<Vec<AccountId32>> {
-        log_verbose!("🔍 Getting member list with subxt...");
+/// Get list of all members
+pub async fn get_member_list(
+    client: &OnlineClient<ChainConfig>,
+) -> crate::error::Result<Vec<AccountId32>> {
+    log_verbose!("🔍 Getting member list with subxt...");
 
-        let storage_at = self.client.storage().at_latest().await.map_err(|e| {
+    let storage_at =
+        client.storage().at_latest().await.map_err(|e| {
             QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
         })?;
 
-        // Query all Members storage entries
-        let members_storage = quantus_subxt::api::storage()
-            .tech_collective()
-            .members_iter();
+    // Query all Members storage entries
+    let members_storage = quantus_subxt::api::storage()
+        .tech_collective()
+        .members_iter();
 
-        let mut members = Vec::new();
-        let mut iter = storage_at.iter(members_storage).await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to create members iterator: {:?}", e))
-        })?;
+    let mut members = Vec::new();
+    let mut iter = storage_at.iter(members_storage).await.map_err(|e| {
+        QuantusError::NetworkError(format!("Failed to create members iterator: {:?}", e))
+    })?;
 
-        while let Some(result) = iter.next().await {
-            match result {
-                Ok(storage_entry) => {
-                    let key = storage_entry.key_bytes;
-                    // The key contains the AccountId32 after the storage prefix
-                    // TechCollective Members storage key format: prefix + AccountId32
-                    if key.len() >= 32 {
-                        // Extract the last 32 bytes as AccountId32
-                        let account_bytes: [u8; 32] =
-                            key[key.len() - 32..].try_into().unwrap_or([0u8; 32]);
-                        let sp_account = AccountId32::from(account_bytes);
-                        log_verbose!("Found member: {}", sp_account.to_ss58check());
-                        members.push(sp_account);
-                    }
-                }
-                Err(e) => {
-                    log_verbose!("⚠️  Error reading member entry: {:?}", e);
+    while let Some(result) = iter.next().await {
+        match result {
+            Ok(storage_entry) => {
+                let key = storage_entry.key_bytes;
+                // The key contains the AccountId32 after the storage prefix
+                // TechCollective Members storage key format: prefix + AccountId32
+                if key.len() >= 32 {
+                    // Extract the last 32 bytes as AccountId32
+                    let account_bytes: [u8; 32] =
+                        key[key.len() - 32..].try_into().unwrap_or([0u8; 32]);
+                    let sp_account = AccountId32::from(account_bytes);
+                    log_verbose!("Found member: {}", sp_account.to_ss58check());
+                    members.push(sp_account);
                 }
             }
+            Err(e) => {
+                log_verbose!("⚠️  Error reading member entry: {:?}", e);
+            }
         }
-
-        log_verbose!("Found {} total members", members.len());
-        Ok(members)
     }
 
-    /// Get sudo account information
-    pub async fn get_sudo_account(&self) -> crate::error::Result<Option<AccountId32>> {
-        log_verbose!("🔍 Getting sudo account with subxt...");
+    log_verbose!("Found {} total members", members.len());
+    Ok(members)
+}
 
-        // Query Sudo::Key storage
-        let storage_addr = quantus_subxt::api::storage().sudo().key();
+/// Get sudo account information
+pub async fn get_sudo_account(
+    client: &OnlineClient<ChainConfig>,
+) -> crate::error::Result<Option<AccountId32>> {
+    log_verbose!("🔍 Getting sudo account with subxt...");
 
-        let storage_at = self.client.storage().at_latest().await.map_err(|e| {
+    // Query Sudo::Key storage
+    let storage_addr = quantus_subxt::api::storage().sudo().key();
+
+    let storage_at =
+        client.storage().at_latest().await.map_err(|e| {
             QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
         })?;
 
-        let sudo_account = storage_at.fetch(&storage_addr).await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to fetch sudo account: {:?}", e))
-        })?;
+    let sudo_account = storage_at.fetch(&storage_addr).await.map_err(|e| {
+        QuantusError::NetworkError(format!("Failed to fetch sudo account: {:?}", e))
+    })?;
 
-        // Convert from subxt_core AccountId32 to sp_core AccountId32
-        if let Some(subxt_account) = sudo_account {
-            let account_bytes: [u8; 32] = *subxt_account.as_ref();
-            let sp_account = AccountId32::from(account_bytes);
-            Ok(Some(sp_account))
-        } else {
-            Ok(None)
-        }
+    // Convert from subxt_core AccountId32 to sp_core AccountId32
+    if let Some(subxt_account) = sudo_account {
+        let account_bytes: [u8; 32] = *subxt_account.as_ref();
+        let sp_account = AccountId32::from(account_bytes);
+        Ok(Some(sp_account))
+    } else {
+        Ok(None)
     }
+}
 
-    /// Wait for transaction finalization using subxt
-    pub async fn wait_for_finalization(
-        &self,
-        _tx_hash: subxt::utils::H256,
-    ) -> crate::error::Result<bool> {
-        log_verbose!("⏳ Waiting for transaction finalization...");
+/// Wait for transaction finalization using subxt
+pub async fn wait_for_finalization(
+    _client: &OnlineClient<ChainConfig>,
+    _tx_hash: subxt::utils::H256,
+) -> crate::error::Result<bool> {
+    log_verbose!("⏳ Waiting for transaction finalization...");
 
-        // For now, we use a simple delay approach similar to other SubXT implementations
-        // TODO: Implement proper finalization watching using SubXT events
-        tokio::time::sleep(std::time::Duration::from_secs(6)).await;
+    // For now, we use a simple delay approach similar to other SubXT implementations
+    // TODO: Implement proper finalization watching using SubXT events
+    tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 
-        log_verbose!("✅ Transaction likely finalized (after 6s delay)");
-        Ok(true)
-    }
+    log_verbose!("✅ Transaction likely finalized (after 6s delay)");
+    Ok(true)
 }
 
 /// Tech Collective management commands using SubXT
@@ -463,7 +444,7 @@ pub async fn handle_tech_collective_subxt_command(
 ) -> crate::error::Result<()> {
     log_print!("🏛️  Tech Collective (SubXT)");
 
-    let tech_collective_client = SubxtTechCollectiveClient::new(node_url).await?;
+    let client = client_subxt::create_subxt_client(node_url).await?;
 
     match command {
         TechCollectiveSubxtCommands::AddMember {
@@ -480,7 +461,7 @@ pub async fn handle_tech_collective_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction using subxt
-            let tx_hash = tech_collective_client.add_member(&keypair, &who).await?;
+            let tx_hash = add_member(&client, &keypair, &who).await?;
 
             log_print!(
                 "✅ {} Add member transaction submitted with subxt! Hash: {:?}",
@@ -488,9 +469,7 @@ pub async fn handle_tech_collective_subxt_command(
                 tx_hash
             );
 
-            let success = tech_collective_client
-                .wait_for_finalization(tx_hash)
-                .await?;
+            let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
                 log_success!(
@@ -518,7 +497,7 @@ pub async fn handle_tech_collective_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction using subxt
-            let tx_hash = tech_collective_client.remove_member(&keypair, &who).await?;
+            let tx_hash = remove_member(&client, &keypair, &who).await?;
 
             log_print!(
                 "✅ {} Remove member transaction submitted with subxt! Hash: {:?}",
@@ -526,9 +505,7 @@ pub async fn handle_tech_collective_subxt_command(
                 tx_hash
             );
 
-            let success = tech_collective_client
-                .wait_for_finalization(tx_hash)
-                .await?;
+            let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
                 log_success!(
@@ -567,9 +544,7 @@ pub async fn handle_tech_collective_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction using subxt
-            let tx_hash = tech_collective_client
-                .vote_on_referendum(&keypair, referendum_index, aye)
-                .await?;
+            let tx_hash = vote_on_referendum(&client, &keypair, referendum_index, aye).await?;
 
             log_print!(
                 "✅ {} Vote transaction submitted with subxt! Hash: {:?}",
@@ -577,9 +552,7 @@ pub async fn handle_tech_collective_subxt_command(
                 tx_hash
             );
 
-            let success = tech_collective_client
-                .wait_for_finalization(tx_hash)
-                .await?;
+            let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
                 log_success!(
@@ -598,7 +571,7 @@ pub async fn handle_tech_collective_subxt_command(
             log_print!("");
 
             // Get actual member list
-            match tech_collective_client.get_member_list().await {
+            match get_member_list(&client).await {
                 Ok(members) => {
                     if members.is_empty() {
                         log_print!("📭 No members in Tech Collective");
@@ -618,7 +591,7 @@ pub async fn handle_tech_collective_subxt_command(
                 Err(e) => {
                     log_verbose!("⚠️  Failed to get member list: {:?}", e);
                     // Fallback to member count
-                    match tech_collective_client.get_member_count().await? {
+                    match get_member_count(&client).await? {
                         Some(count_data) => {
                             log_verbose!("✅ Got member count data: {:?}", count_data);
                             if count_data > 0 {
@@ -652,7 +625,7 @@ pub async fn handle_tech_collective_subxt_command(
             log_print!("🔍 Checking Tech Collective membership (using subxt)");
             log_print!("   👤 Address: {}", address.bright_cyan());
 
-            if tech_collective_client.is_member(&address).await? {
+            if is_member(&client, &address).await? {
                 log_success!("✅ Address IS a member of Tech Collective!");
                 log_print!("👥 Member data found in storage");
             } else {
@@ -666,7 +639,7 @@ pub async fn handle_tech_collective_subxt_command(
         TechCollectiveSubxtCommands::CheckSudo => {
             log_print!("🏛️  Checking sudo permissions (using subxt)");
 
-            match tech_collective_client.get_sudo_account().await? {
+            match get_sudo_account(&client).await? {
                 Some(sudo_account) => {
                     log_success!(
                         "✅ Found sudo account: {}",
