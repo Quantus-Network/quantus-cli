@@ -88,7 +88,7 @@ pub enum ReversibleCommands {
         delay: Option<u64>,
 
         /// Policy: "BlockDelay" or "TimeDelay"
-        #[arg(short, long, default_value = "TimeDelay")]
+        #[arg(long, default_value = "TimeDelay")]
         policy: String,
 
         /// Optional reverser account (defaults to self)

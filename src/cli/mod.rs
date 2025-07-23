@@ -5,12 +5,14 @@ use colored::Colorize;
 pub mod generic_call;
 pub mod progress_spinner;
 pub mod reversible;
+pub mod reversible_subxt;
 pub mod runtime;
 pub mod scheduler;
 pub mod scheduler_subxt;
 pub mod send;
 pub mod send_subxt;
 pub mod storage;
+pub mod storage_subxt;
 pub mod tech_collective;
 pub mod wallet;
 
@@ -71,6 +73,10 @@ pub enum Commands {
     #[command(subcommand)]
     Reversible(reversible::ReversibleCommands),
 
+    /// Reversible transfer commands using subxt (POC) - alternative implementation using pure subxt
+    #[command(subcommand)]
+    ReversibleSubxt(reversible_subxt::ReversibleSubxtCommands),
+
     /// Scheduler commands
     #[command(subcommand)]
     Scheduler(scheduler::SchedulerCommands),
@@ -82,6 +88,10 @@ pub enum Commands {
     /// Direct interaction with chain storage (Sudo required for set)
     #[command(subcommand)]
     Storage(storage::StorageCommands),
+
+    /// Direct interaction with chain storage using subxt (POC) - alternative implementation using pure subxt
+    #[command(subcommand)]
+    StorageSubxt(storage_subxt::StorageSubxtCommands),
 
     /// Tech Collective management commands
     #[command(subcommand)]
@@ -200,6 +210,9 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         Commands::Reversible(reversible_cmd) => {
             reversible::handle_reversible_command(reversible_cmd, node_url).await
         }
+        Commands::ReversibleSubxt(reversible_subxt_cmd) => {
+            reversible_subxt::handle_reversible_subxt_command(reversible_subxt_cmd, node_url).await
+        }
         Commands::Scheduler(scheduler_cmd) => {
             scheduler::handle_scheduler_command(scheduler_cmd, node_url).await
         }
@@ -208,6 +221,9 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         }
         Commands::Storage(storage_cmd) => {
             storage::handle_storage_command(storage_cmd, node_url).await
+        }
+        Commands::StorageSubxt(storage_subxt_cmd) => {
+            storage_subxt::handle_storage_subxt_command(storage_subxt_cmd, node_url).await
         }
         Commands::TechCollective(tech_collective_cmd) => {
             tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await
