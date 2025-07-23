@@ -161,15 +161,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             password,
             password_file,
         } => {
-            send::handle_send_subxt_command(
-                from,
-                to,
-                &amount,
-                node_url,
-                password,
-                password_file,
-            )
-            .await
+            send::handle_send_subxt_command(from, to, &amount, node_url, password, password_file)
+                .await
         }
         Commands::Reversible(reversible_cmd) => {
             reversible::handle_reversible_subxt_command(reversible_cmd, node_url).await
@@ -181,11 +174,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             storage::handle_storage_subxt_command(storage_cmd, node_url).await
         }
         Commands::TechCollective(tech_collective_cmd) => {
-            tech_collective::handle_tech_collective_subxt_command(
-                tech_collective_cmd,
-                node_url,
-            )
-            .await
+            tech_collective::handle_tech_collective_subxt_command(tech_collective_cmd, node_url)
+                .await
         }
         Commands::Runtime(runtime_cmd) => {
             runtime::handle_runtime_subxt_command(runtime_cmd, node_url).await
@@ -218,8 +208,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         Commands::Balance { address } => {
             let client = crate::chain::client::create_subxt_client(node_url).await?;
             let balance = send::get_balance(&client, &address).await?;
-            let formatted_balance =
-                send::format_balance_with_symbol(&client, balance).await?;
+            let formatted_balance = send::format_balance_with_symbol(&client, balance).await?;
             log_print!("💰 Balance: {}", formatted_balance);
             Ok(())
         }
@@ -235,8 +224,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         },
         Commands::System { runtime, metadata } => {
             if runtime || metadata {
-                system::handle_system_subxt_extended_command(node_url, runtime, metadata)
-                    .await
+                system::handle_system_subxt_extended_command(node_url, runtime, metadata).await
             } else {
                 system::handle_system_subxt_command(node_url).await
             }
@@ -294,8 +282,7 @@ async fn handle_generic_call_subxt_command(
         vec![]
     };
 
-    generic_call::execute_generic_call_subxt(&pallet, &call, args_vec, &from, tip, node_url)
-        .await
+    generic_call::execute_generic_call_subxt(&pallet, &call, args_vec, &from, tip, node_url).await
 }
 
 /// Handle developer subcommands

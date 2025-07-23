@@ -14,10 +14,7 @@ pub async fn explore_chain_metadata(
     let metadata = client.metadata();
     let pallets: Vec<_> = metadata.pallets().collect();
 
-    log_print!(
-        "{}",
-        "🏛️  Available Pallets & Calls".bold().underline()
-    );
+    log_print!("{}", "🏛️  Available Pallets & Calls".bold().underline());
     log_print!("");
 
     for pallet in pallets.iter() {

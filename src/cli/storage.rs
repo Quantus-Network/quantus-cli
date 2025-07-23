@@ -126,10 +126,7 @@ pub async fn set_storage_value(
             QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-    log_verbose!(
-        "📋 Set storage transaction submitted: {:?}",
-        tx_hash
-    );
+    log_verbose!("📋 Set storage transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }

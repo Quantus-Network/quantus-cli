@@ -158,7 +158,7 @@ async fn get_fresh_nonce(
     Ok(nonce)
 }
 
-/// Schedule a transfer with default delay 
+/// Schedule a transfer with default delay
 pub async fn schedule_transfer(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
@@ -221,7 +221,7 @@ pub async fn schedule_transfer(
     Ok(tx_hash)
 }
 
-/// Cancel a pending reversible transaction 
+/// Cancel a pending reversible transaction
 pub async fn cancel_transaction(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
@@ -272,7 +272,7 @@ pub async fn cancel_transaction(
     Ok(tx_hash)
 }
 
-/// Schedule a transfer with custom delay 
+/// Schedule a transfer with custom delay
 pub async fn schedule_transfer_with_delay(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &crate::wallet::QuantumKeyPair,
@@ -387,7 +387,7 @@ pub async fn handle_reversible_subxt_command(
             log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit transaction 
+            // Submit transaction
             let tx_hash = schedule_transfer(&client, &keypair, &to, raw_amount).await?;
 
             log_print!(
@@ -426,7 +426,7 @@ pub async fn handle_reversible_subxt_command(
             log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit cancel transaction 
+            // Submit cancel transaction
             let tx_hash = cancel_transaction(&client, &keypair, &tx_id).await?;
 
             log_print!(
@@ -477,7 +477,7 @@ pub async fn handle_reversible_subxt_command(
             log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-            // Submit transaction 
+            // Submit transaction
             let tx_hash = schedule_transfer_with_delay(
                 &client,
                 &keypair,
@@ -553,7 +553,7 @@ pub async fn handle_reversible_subxt_command(
     }
 }
 
-/// List all pending reversible transactions for an account 
+/// List all pending reversible transactions for an account
 async fn list_pending_transactions_subxt(
     client: &OnlineClient<ChainConfig>,
     address: Option<String>,
@@ -711,7 +711,7 @@ async fn list_pending_transactions_subxt(
     Ok(())
 }
 
-/// Set reversibility (high security) for an account 
+/// Set reversibility (high security) for an account
 async fn set_reversibility_subxt(
     client: &OnlineClient<ChainConfig>,
     delay: &Option<u64>,

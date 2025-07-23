@@ -150,10 +150,7 @@ pub async fn add_member(
             QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-    log_verbose!(
-        "📋 Add member transaction submitted: {:?}",
-        tx_hash
-    );
+    log_verbose!("📋 Add member transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
@@ -209,10 +206,7 @@ pub async fn remove_member(
             QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
         })?;
 
-    log_verbose!(
-        "📋 Remove member transaction submitted: {:?}",
-        tx_hash
-    );
+    log_verbose!("📋 Remove member transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
@@ -481,10 +475,7 @@ pub async fn handle_tech_collective_subxt_command(
             password,
             password_file,
         } => {
-            log_print!(
-                "🗳️  Voting on Tech Referendum #{} ",
-                referendum_index
-            );
+            log_print!("🗳️  Voting on Tech Referendum #{} ", referendum_index);
             log_print!(
                 "   📊 Vote: {}",
                 if aye {
@@ -510,10 +501,7 @@ pub async fn handle_tech_collective_subxt_command(
             let success = wait_for_finalization(&client, tx_hash).await?;
 
             if success {
-                log_success!(
-                    "🎉 {} Vote submitted!",
-                    "FINALIZED".bright_green().bold()
-                );
+                log_success!("🎉 {} Vote submitted!", "FINALIZED".bright_green().bold());
             } else {
                 log_error!("Transaction failed!");
             }

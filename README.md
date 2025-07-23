@@ -1,10 +1,11 @@
 # Quantus CLI
 
-A modern command line interface for interacting with the Quantus Network, featuring built-in quantum-safe wallet management and real blockchain operations.
+A modern command line interface for interacting with the Quantus Network, featuring built-in quantum-safe wallet management and real blockchain operations using SubXT.
 
 ## 🌟 Features
 
 - **Quantum-Safe Wallets**: Built with Dilithium post-quantum cryptography
+- **SubXT Integration**: Modern Substrate client with type-safe API
 - **Generic Pallet Calls**: Call ANY blockchain function using metadata-driven parsing
 - **Real Chain Operations**: Send tokens, query balances, explore metadata
 - **Smart Type Detection**: Automatic parsing of addresses, balances, and data types
@@ -14,6 +15,7 @@ A modern command line interface for interacting with the Quantus Network, featur
 - **Beautiful UI**: Colorized output with emoji indicators and progress spinners
 - **Smart Balance Display**: Automatic formatting with proper decimals and token symbols
 - **Password Convenience**: Multiple authentication options including environment variables
+- **Fresh Nonce Management**: Automatic nonce handling to avoid transaction conflicts
 
 ## 🚀 Quick Start
 
@@ -38,23 +40,23 @@ quantus --help
 quantus wallet create --name my-wallet
 
 # Create test wallets for development
-quantus developer create-test-wallets --verbose
+quantus developer create-test-wallets
 
 # Check a wallet's balance
-quantus balance --address 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+quantus balance --address qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
 
 # Send tokens
-quantus send --from crystal_alice --to 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP --amount 10.5
+quantus send --from crystal_alice --to qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2 --amount 10.5
 
 # Manage Tech Collective governance
 quantus tech-collective list-members
 quantus tech-collective vote --referendum-index 0 --aye true --from crystal_alice
 
 # Call any blockchain function generically
-quantus call --pallet Balances --call transfer_allow_death --args '["5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP", "5"]' --from crystal_alice
+quantus call --pallet Balances --call transfer_allow_death --args '["qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ", "1000000000"]' --from crystal_alice
 
 # Explore the blockchain
-quantus metadata --no-docs
+quantus metadata --stats-only
 ```
 
 ## 📋 All Commands
@@ -63,6 +65,41 @@ quantus metadata --no-docs
 Available for all commands:
 - `--verbose` / `-v`: Enable debug logging with detailed output
 - `--node-url <URL>`: Specify node endpoint (default: `ws://127.0.0.1:9944`)
+
+### Wallet Management
+```bash
+# Create, list, and manage quantum-safe wallets
+quantus wallet create --name <WALLET_NAME>
+quantus wallet list
+quantus wallet view --name <WALLET_NAME>
+quantus wallet export --name <WALLET_NAME> --format mnemonic
+quantus wallet import --name <WALLET_NAME> --mnemonic "<PHRASE>"
+quantus wallet delete --name <WALLET_NAME>
+quantus wallet nonce --wallet <WALLET_NAME>
+```
+
+### Blockchain Operations
+```bash
+# Query balances and send tokens
+quantus balance --address <ADDRESS>
+quantus send --from <WALLET> --to <ADDRESS> --amount <AMOUNT>
+
+# Reversible transfers with delay
+quantus reversible schedule-transfer --from <WALLET> --to <ADDRESS> --amount <AMOUNT>
+quantus reversible schedule-transfer-with-delay --from <WALLET> --to <ADDRESS> --amount <AMOUNT> --delay <SECONDS>
+quantus reversible cancel --tx-id <HASH> --from <WALLET>
+quantus reversible list-pending --from <WALLET>
+
+# Generic calls to any pallet function
+quantus call --pallet <PALLET> --call <FUNCTION> --args <JSON_ARRAY> --from <WALLET>
+```
+
+### Storage Operations (Sudo Required)
+```bash
+# Read and write storage directly
+quantus storage get --pallet <PALLET> --name <STORAGE_ITEM> [--decode-as <TYPE>]
+quantus storage set --pallet <PALLET> --name <STORAGE_ITEM> --value <VALUE> [--type <TYPE>] --wallet <SUDO_WALLET>
+```
 
 ### Tech Collective Management
 Simple governance system for technical proposals:
@@ -81,6 +118,35 @@ quantus tech-collective is-member --address <ADDRESS>
 quantus tech-collective check-sudo
 quantus tech-collective list-referenda
 quantus tech-collective get-referendum --index <INDEX>
+```
+
+### Runtime Management (Sudo Required)
+```bash
+# Runtime version and update operations
+quantus runtime check-version
+quantus runtime update --wasm-file <PATH> --from <SUDO_WALLET>
+quantus runtime compare --wasm-file <PATH>
+```
+
+### System Information
+```bash
+# Query system and metadata information
+quantus system --runtime
+quantus system --metadata
+quantus metadata [--no-docs] [--stats-only]
+quantus version
+```
+
+### Scheduler Operations
+```bash
+# Query scheduler state
+quantus scheduler get-last-processed-timestamp
+```
+
+### Developer Tools
+```bash
+# Create test wallets for development
+quantus developer create-test-wallets
 ```
 
 ## 💼 Wallet Management
@@ -103,7 +169,7 @@ quantus wallet create --name my-wallet --verbose
 ```
 🔐 Creating new quantum wallet...
 Wallet name: my-wallet
-Address: 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+Address: qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
 Key type: ML-DSA-87 (Dilithium)
 Created: 2024-01-15 10:30:45 UTC
 ✅ Wallet created successfully!
@@ -121,17 +187,17 @@ quantus wallet list
 📁 Found 3 wallets:
 
 1. crystal_alice
-   Address: 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+   Address: qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
    Type: ML-DSA-87 (Dilithium)
    Created: 2024-01-15 09:15:30 UTC
 
 2. crystal_bob
-   Address: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
+   Address: qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2
    Type: ML-DSA-87 (Dilithium)
    Created: 2024-01-15 09:15:31 UTC
 
 3. my-wallet
-   Address: 5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy
+   Address: qzkx3FCxAA1eCtA1n6ij7xS3W9oNmuncYaPReWoYNviddvaT3
    Type: ML-DSA-87 (Dilithium)
    Created: 2024-01-15 10:30:45 UTC
 ```
@@ -186,10 +252,21 @@ quantus wallet delete --name my-wallet --force
 **Interactive confirmation:**
 ```
 ⚠️  You are about to delete wallet 'my-wallet'
-📍 Address: 5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy
+📍 Address: qzkx3FCxAA1eCtA1n6ij7xS3W9oNmuncYaPReWoYNviddvaT3
 ⚠️  This action cannot be undone!
 
 To confirm deletion, type the wallet name: my-wallet
+```
+
+### Check Nonce
+Get the current transaction nonce for an account:
+
+```bash
+# Check nonce for a wallet
+quantus wallet nonce --wallet crystal_alice
+
+# Check nonce for a specific address
+quantus wallet nonce --address qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
 ```
 
 ## 💰 Blockchain Operations
@@ -198,12 +275,12 @@ To confirm deletion, type the wallet name: my-wallet
 Check account balances with automatic formatting:
 
 ```bash
-quantus balance --address 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+quantus balance --address qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
 ```
 
 **Output:**
 ```
-✅ Balance: 1152921500.346108076 DEV
+💰 Balance: 1152921500.346108076 DEV
 ```
 
 ### Send Tokens
@@ -211,7 +288,7 @@ Transfer tokens between accounts with multiple convenience options:
 
 ```bash
 # Basic send
-quantus send --from crystal_alice --to 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty --amount 10
+quantus send --from crystal_alice --to qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2 --amount 10
 
 # Send with decimal amounts
 quantus send --from my-wallet --to crystal_bob --amount 10.5 --verbose
@@ -223,6 +300,63 @@ quantus send --from my-wallet --to crystal_bob --amount 0.0001 --password mypass
 quantus send --from my-wallet --to crystal_bob --amount 100 --password-file /path/to/password.txt
 ```
 
+**Password Convenience Options:**
+1. **Environment Variables**: Set `QUANTUS_WALLET_PASSWORD` or `QUANTUS_WALLET_PASSWORD_CRYSTAL_ALICE`
+2. **CLI Flags**: Use `--password` or `--password-file`
+3. **Empty Password**: Automatically tries empty password for development wallets
+4. **Interactive Prompt**: Falls back to secure password prompt
+
+**Verbose Output:**
+```
+🚀 Preparing to send tokens...
+   From: crystal_alice (qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ)
+   To: qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2
+   Amount: 10.5 DEV (10500000000000 raw units)
+
+✅ Empty password works for wallet 'crystal_alice'
+🔗 Connecting to Quantus node: ws://127.0.0.1:9944
+✅ Connected to Quantus node successfully!
+💰 Balance before: 1152921500.346108076 DEV
+🚀 Creating transfer transaction...
+✍️  Creating balance transfer extrinsic...
+🔢 Using fresh nonce from tx API: 1
+🔗 Waiting for confirmation... / (5s)
+📋 Transaction hash: 0x1234567890abcdef...
+✅ Transaction completed successfully!
+💰 Balance after: 1152921489.935861777 DEV
+```
+
+### Reversible Transfers
+Schedule transfers that can be cancelled before execution:
+
+```bash
+# Schedule transfer with default delay
+quantus reversible schedule-transfer --from crystal_alice --to crystal_bob --amount 10
+
+# Schedule transfer with custom delay
+quantus reversible schedule-transfer-with-delay --from crystal_alice --to crystal_bob --amount 10 --delay 3600
+
+# Cancel a pending transfer
+quantus reversible cancel --tx-id 0x1234567890abcdef --from crystal_alice
+
+# List pending transfers
+quantus reversible list-pending --from crystal_alice
+```
+
+### Generic Calls
+Call any pallet function using metadata-driven parsing:
+
+```bash
+# Transfer using generic call
+quantus call --pallet Balances --call transfer_allow_death --args '["qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2", "1000000000"]' --from crystal_alice
+
+# System remark
+quantus call --pallet System --call remark --args '["0x48656c6c6f20576f726c64"]' --from crystal_alice
+
+# With tip for priority
+quantus call --pallet Balances --call transfer_allow_death --args '["qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2", "1000000000"]' --from crystal_alice --tip 1000000000
+```
+
 ### Direct Storage Interaction (Sudo Required)
 Directly read and write raw storage values on the chain. This is a powerful and dangerous feature that requires a sudo-enabled wallet.
 
@@ -231,12 +365,12 @@ Read a raw value from storage.
 
 ```bash
 # Get the raw hex value for a storage item
-quantus storage get --pallet Scheduler --name IncompleteTimestampSince
+quantus storage get --pallet Scheduler --name LastProcessedTimestamp
 ```
 **Output:**
 ```
-🔎 Getting storage for Scheduler::IncompleteTimestampSince
-✅ Raw Value: 0xb085d27111010000
+🔎 Getting storage for Scheduler::LastProcessedTimestamp
+✅ Raw Value: 0x406f343798010000
 ```
 
 You can also decode the value into a common type.
@@ -245,15 +379,15 @@ You can also decode the value into a common type.
 # Get and decode the value as a "moment" (u64 timestamp)
 quantus storage get \
   --pallet Scheduler \
-  --name IncompleteTimestampSince \
+  --name LastProcessedTimestamp \
   --decode-as moment
 ```
 **Output:**
 ```
-🔎 Getting storage for Scheduler::IncompleteTimestampSince
-✅ Raw Value: 0xb085d27111010000
+🔎 Getting storage for Scheduler::LastProcessedTimestamp
+✅ Raw Value: 0x406f343798010000
 Attempting to decode as moment...
-✅ Decoded Value: 1174435694000
+✅ Decoded Value: 1753272858000
 ```
 
 #### Set Storage Value
@@ -263,7 +397,7 @@ Write a value directly to storage.
 # Set a storage item using a pre-encoded hex value
 quantus storage set \
   --pallet Scheduler \
-  --name IncompleteTimestampSince \
+  --name LastProcessedTimestamp \
   --value 0x107f0c0199010000 \
   --wallet my-sudo-wallet
 ```
@@ -274,14 +408,14 @@ For convenience, you can provide a plain value and specify its type for automati
 # Set the same value by providing the number and type
 quantus storage set \
   --pallet Scheduler \
-  --name IncompleteTimestampSince \
+  --name LastProcessedTimestamp \
   --value 1750834698000 \
   --type moment \
   --wallet my-sudo-wallet
 ```
 **Output:**
 ```
-✍️  Setting storage for Scheduler::IncompleteTimestampSince
+✍️  Setting storage for Scheduler::LastProcessedTimestamp
 
 🛑 This is a SUDO operation!
 📡 Submitting sudo extrinsic to the chain...
@@ -289,39 +423,15 @@ quantus storage set \
 📋 Transaction hash: 0x9876543210abcdef...
 ```
 
-
-**Password Convenience Options:**
-1. **Environment Variables**: Set `QUANTUS_WALLET_PASSWORD` or `QUANTUS_WALLET_PASSWORD_CRYSTAL_ALICE`
-2. **CLI Flags**: Use `--password` or `--password-file`
-3. **Empty Password**: Automatically tries empty password for development wallets
-4. **Interactive Prompt**: Falls back to secure password prompt
-
-**Verbose Output:**
-```
-🚀 Preparing to send tokens...
-   From: crystal_alice (5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP)
-   To: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
-   Amount: 10.5 DEV (10500000000000 raw units)
-
-✅ Empty password works for wallet 'crystal_alice'
-🔗 Connecting to Quantus node: ws://127.0.0.1:9944
-✅ Connected to Quantus node successfully!
-💰 Balance before: 1152921500.346108076 DEV
-🚀 Creating transfer transaction...
-✍️  Creating balance transfer extrinsic...
-🔗 Waiting for confirmation... / (3s)
-📋 Transaction hash: 0x1234567890abcdef...
-🔗 Included in block: 0xabcdef1234567890...
-💸 Transaction fee: 1.410246299 DEV
-✅ Transaction completed successfully!
-💰 Balance after: 1152921489.935861777 DEV
-```
-
 ### System Information
 Query blockchain system information:
 
 ```bash
-quantus system
+# Get runtime information
+quantus system --runtime
+
+# Get metadata statistics
+quantus system --metadata
 ```
 
 ### Metadata Exploration
@@ -333,46 +443,18 @@ quantus metadata
 
 # Compact view without docs
 quantus metadata --no-docs
+
+# Just statistics
+quantus metadata --stats-only
 ```
 
 **Output:**
 ```
-🏗️  Chain Metadata Information:
-📦 Found 22 pallets:
-
-1. System (Index: 0)
-   📞 Calls (6):
-      1. remark
-         📝 Make some on-chain remark
-         📥 Parameters:
-           • remark: Vec<u8>
-      2. set_heap_pages
-         📥 Parameters:
-           • pages: u64
-   💾 Storage (16):
-      1. Account
-      2. BlockHash
-   📡 Events (6):
-      1. ExtrinsicSuccess
-      2. ExtrinsicFailed
-
-2. Balances (Index: 10)
-   📞 Calls (9):
-      1. transfer_allow_death
-         📝 Transfer some liquid free balance to another account
-         📥 Parameters:
-           • dest: AccountIdLookupOf<T>
-           • value: u128
-      2. force_transfer
-         📥 Parameters:
-           • source: AccountIdLookupOf<T>
-           • dest: AccountIdLookupOf<T>
-           • value: u128
-
-...
-
-💡 Use this information to implement new extrinsic calls!
-💡 Each call can be submitted using the submit_extrinsic! macro
+📊 Metadata Statistics (SubXT):
+   📦 Total pallets: 23
+   🔗 API: Type-safe SubXT
+   🎯 Total calls: 143
+   💾 Total storage items: 98
 ```
 
 ## 🧪 Developer Tools
@@ -389,15 +471,15 @@ quantus developer create-test-wallets --verbose
 🧪 DEVELOPER Creating standard test wallets...
 
 ✅ Created crystal_alice
-   Address: 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+   Address: qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
    Description: Alice's test wallet for development
 
 ✅ Created crystal_bob  
-   Address: 5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty
+   Address: qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2
    Description: Bob's test wallet for development
 
 ✅ Created crystal_charlie
-   Address: 5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy
+   Address: qzkx3FCxAA1eCtA1n6ij7xS3W9oNmuncYaPReWoYNviddvaT3
    Description: Charlie's test wallet for development
 
 🎉 Test wallet creation complete!
@@ -418,8 +500,9 @@ quantus version
 
 **Output:**
 ```
-Quantus CLI v0.1.0
-Build: Command line interface for the Quantus Network
+🔮 Quantus CLI
+CLI Version: Quantus CLI v0.1.0
+Runtime Version: spec_version: 103, impl_version: 1
 ```
 
 ## 🔧 Environment Variables
@@ -440,7 +523,7 @@ export QUANTUS_WALLET_PASSWORD_CRYSTAL_ALICE=""
 quantus developer create-test-wallets
 
 # 2. Check initial balance
-quantus balance --address 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+quantus balance --address qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
 
 # 3. Create your own wallet
 quantus wallet create --name my-production-wallet
@@ -449,13 +532,13 @@ quantus wallet create --name my-production-wallet
 quantus send --from crystal_alice --to my-production-wallet --amount 100 --verbose
 
 # 4b. Or use the generic call interface
-quantus call --pallet Balances --call transfer_allow_death --args '["my-production-wallet", "50"]' --from crystal_alice
+quantus call --pallet Balances --call transfer_allow_death --args '["my-production-wallet", "50000000000"]' --from crystal_alice
 
 # 5. Verify the transfer
 quantus balance --address $(quantus wallet view --name my-production-wallet | grep Address | cut -d' ' -f2)
 
 # 6. Explore what else you can do
-quantus metadata --no-docs
+quantus metadata --stats-only
 
 # 7. Try other generic calls
 quantus call --pallet System --call remark --args '["0x48656c6c6f20576f726c64"]' --from crystal_alice
@@ -469,8 +552,8 @@ quantus call --pallet System --call remark --args '["0x48656c6c6f20576f726c64"]'
 export QUANTUS_WALLET_PASSWORD_CRYSTAL_ALICE=""
 
 RECIPIENTS=(
-    "5FHneW46xGXgs5mUiveU4sbTyGBzmstUspZC92UhjJM694ty"
-    "5DAAnrj7VHTznn2AWBemMuyBwZWs6FNFjdyVXUeYum3PTXFy"
+    "qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2"
+    "qzkx3FCxAA1eCtA1n6ij7xS3W9oNmuncYaPReWoYNviddvaT3"
 )
 
 for recipient in "${RECIPIENTS[@]}"; do
@@ -486,6 +569,12 @@ done
 - **Dilithium (ML-DSA-87)**: Post-quantum digital signatures
 - **Secure Storage**: AES-256-GCM + Argon2 encryption for wallet files
 - **Future-Proof**: Ready for ML-KEM key encapsulation
+
+### SubXT Integration
+- **Type-Safe API**: Compile-time type checking for all blockchain operations
+- **Metadata-Driven**: Discovers available functionality from chain metadata
+- **Fresh Nonce Management**: Automatic nonce handling to avoid transaction conflicts
+- **Progress Indicators**: Real-time transaction confirmation with spinners
 
 ### Smart Features
 - **Dynamic Balance Formatting**: Automatically fetches chain decimals and token symbol
@@ -512,7 +601,7 @@ done
 ### Core Runtime
 - `clap`: Modern CLI argument parsing
 - `tokio`: Async runtime for blockchain operations
-- `substrate-api-client`: Direct Substrate chain integration
+- `subxt`: Modern Substrate client with type-safe API
 - `serde` + `serde_json`: Data serialization
 
 ### Cryptography
@@ -535,6 +624,7 @@ The Quantus CLI is a **production-ready** tool that:
 ✅ **Developer-Friendly**: Rich tooling and clear error messages  
 ✅ **Scriptable**: Environment variables and flags for automation  
 ✅ **Extensible**: Clean architecture for adding new blockchain features  
+✅ **SubXT-Powered**: Modern, type-safe blockchain integration
 
 **⚠️ Security Note**: This tool handles real cryptocurrency. Always:
 - Back up your wallet files and mnemonic phrases
@@ -571,28 +661,6 @@ quantus tech-collective list-referenda
 quantus tech-collective get-referendum --index <INDEX>
 ```
 
-### ⚠️ Important: Sudo Requirements
-
-Many Tech Collective operations (like `add_member`) require **sudo permissions**. In development mode, `crystal_alice` has sudo access.
-
-**If you get `BadOrigin` error when adding members:**
-
-The `add_member` call requires sudo permissions. Currently, this must be done through a manual sudo wrapper call. Here's the workflow:
-
-```bash
-# ❌ This will fail with BadOrigin (insufficient permissions)
-quantus tech-collective add-member --who 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY --from crystal_alice
-
-# ✅ Instead, you need to implement a sudo wrapper call
-# This is a complex operation that requires encoding the inner call
-# Future CLI versions will include a dedicated sudo wrapper command
-```
-
-**Alternative approaches:**
-1. **Check Genesis Config**: The chain may already have initial tech collective members
-2. **Direct Storage Queries**: Use storage queries to check current members
-3. **Manual Encoding**: Create the sudo call manually (advanced users)
-
 ### Example Usage
 
 ```bash
@@ -603,9 +671,9 @@ quantus developer create-test-wallets
 quantus tech-collective vote --referendum-index 0 --aye true --from crystal_alice
 
 # Check membership status
-quantus tech-collective is-member --address 5H7DdvKue19FQZpRKc2hmBfSBGEczwvdnVYDNZC3W95UDyGP
+quantus tech-collective is-member --address qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
 
-# List current members (requires implementation enhancement)
+# List current members
 quantus tech-collective list-members
 ```
 
@@ -619,3 +687,56 @@ The Tech Collective in Quantus is based on `pallet_ranked_collective` configured
 - **Integration**: Works with Tech Referenda for proposal lifecycle
 
 ---
+
+## 🔄 Recent Updates
+
+### v0.1.0 (Current)
+- ✅ **SubXT Integration**: Complete migration from substrate-api-client to SubXT
+- ✅ **Fresh Nonce Management**: Automatic nonce handling to avoid transaction conflicts
+- ✅ **Progress Spinner**: Real-time transaction confirmation with visual feedback
+- ✅ **Code Cleanup**: Removed duplicate code and improved architecture
+- ✅ **Common Utilities**: Shared functions for consistent behavior across commands
+- ✅ **Verbose Logging**: Enhanced debug output with detailed transaction information
+
+### Key Improvements
+- **Type Safety**: All blockchain operations now use SubXT's type-safe API
+- **Error Handling**: Better error messages and recovery mechanisms
+- **Performance**: Optimized transaction submission and confirmation
+- **Developer Experience**: Improved CLI feedback and progress indicators
+
+## 🔧 Development Tools
+
+### Metadata Regeneration
+
+The project includes a script to regenerate SubXT types and metadata when the blockchain runtime changes:
+
+```bash
+# Regenerate metadata and types from the running node
+./regenerate_metadata.sh
+```
+
+**What this script does:**
+1. **Updates metadata**: Downloads the latest chain metadata to `src/quantus_metadata.scale`
+2. **Generates types**: Creates type-safe Rust code in `src/chain/quantus_subxt.rs`
+3. **Formats code**: Automatically formats the generated code with `cargo fmt`
+
+**When to use:**
+- After updating the Quantus runtime
+- When new pallets are added to the chain
+- When existing pallet APIs change
+- To ensure CLI compatibility with the latest chain version
+
+**Requirements:**
+- Quantus node must be running on `ws://127.0.0.1:9944`
+- `subxt-cli` must be installed: `cargo install subxt-cli`
+- Node must be fully synced and ready
+
+**Output:**
+```
+Updating metadata file at src/quantus_metadata.scale...
+Generating SubXT types to src/chain/quantus_subxt.rs...
+Formatting generated code...
+Done!
+```
+
+This ensures the CLI always has the latest type definitions and can interact with new chain features.
