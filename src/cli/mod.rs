@@ -3,6 +3,7 @@ use clap::Subcommand;
 use colored::Colorize;
 
 pub mod generic_call;
+pub mod generic_call_subxt;
 pub mod progress_spinner;
 pub mod reversible;
 pub mod reversible_subxt;
@@ -150,6 +151,37 @@ pub enum Commands {
         call_data_only: bool,
     },
 
+    /// Generic extrinsic call using subxt (POC) - call ANY pallet function with pure subxt!
+    CallSubxt {
+        /// Pallet name (e.g., "Balances")
+        #[arg(long)]
+        pallet: String,
+
+        /// Call/function name (e.g., "transfer_allow_death")
+        #[arg(short, long)]
+        call: String,
+
+        /// Arguments as JSON array (e.g., '["5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY", "1000000000000"]')
+        #[arg(short, long)]
+        args: Option<String>,
+
+        /// Wallet name to sign with
+        #[arg(short, long)]
+        from: String,
+
+        /// Password for the wallet
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// Read password from file
+        #[arg(long)]
+        password_file: Option<String>,
+
+        /// Optional tip amount to prioritize the transaction
+        #[arg(long)]
+        tip: Option<String>,
+    },
+
     /// Query account balance
     Balance {
         /// Account address to query (SS58 format)
@@ -276,6 +308,27 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             )
             .await
         }
+        Commands::CallSubxt {
+            pallet,
+            call,
+            args,
+            from,
+            password,
+            password_file,
+            tip,
+        } => {
+            handle_generic_call_subxt_command(
+                pallet,
+                call,
+                args,
+                from,
+                password,
+                password_file,
+                tip,
+                node_url,
+            )
+            .await
+        }
         Commands::Balance { address } => {
             let chain_client = crate::chain::client::ChainClient::new(node_url).await?;
             let balance = chain_client.get_balance(&address).await?;
@@ -366,6 +419,29 @@ async fn handle_generic_call_command(
     let chain_client = crate::chain::client::ChainClient::new(node_url).await?;
 
     generic_call::execute_generic_call(&chain_client, &pallet, &call, args_vec, &from, tip).await
+}
+
+/// Handle generic extrinsic call command using SubXT
+async fn handle_generic_call_subxt_command(
+    pallet: String,
+    call: String,
+    args: Option<String>,
+    from: String,
+    _password: Option<String>,
+    _password_file: Option<String>,
+    tip: Option<String>,
+    node_url: &str,
+) -> crate::error::Result<()> {
+    let args_vec = if let Some(args_str) = args {
+        serde_json::from_str(&args_str).map_err(|e| {
+            crate::error::QuantusError::Generic(format!("Invalid JSON for arguments: {}", e))
+        })?
+    } else {
+        vec![]
+    };
+
+    generic_call_subxt::execute_generic_call_subxt(&pallet, &call, args_vec, &from, tip, node_url)
+        .await
 }
 
 /// Handle developer subcommands
