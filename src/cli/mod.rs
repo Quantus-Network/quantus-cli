@@ -20,6 +20,7 @@ pub mod system_subxt;
 pub mod tech_collective;
 pub mod tech_collective_subxt;
 pub mod wallet;
+pub mod wallet_subxt;
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
@@ -27,6 +28,10 @@ pub enum Commands {
     /// Wallet management commands
     #[command(subcommand)]
     Wallet(wallet::WalletCommands),
+
+    /// Wallet management using subxt (POC) - alternative implementation using pure subxt
+    #[command(subcommand)]
+    WalletSubxt(wallet_subxt::WalletSubxtCommands),
 
     /// Send tokens to another account
     Send {
@@ -249,6 +254,9 @@ pub enum DeveloperCommands {
 pub async fn execute_command(command: Commands, node_url: &str) -> crate::error::Result<()> {
     match command {
         Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
+        Commands::WalletSubxt(wallet_subxt_cmd) => {
+            wallet_subxt::handle_wallet_subxt_command(wallet_subxt_cmd, node_url).await
+        }
         Commands::Send {
             from,
             to,
