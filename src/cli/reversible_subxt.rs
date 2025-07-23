@@ -7,6 +7,52 @@ use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 use subxt::OnlineClient;
 
+/// Reversible transfer commands using SubXT
+#[derive(Subcommand, Debug)]
+pub enum ReversibleSubxtCommands {
+    /// Schedule a transfer with default delay using subxt
+    ScheduleTransfer {
+        /// The recipient's account address
+        #[arg(short, long)]
+        to: String,
+
+        /// Amount to transfer (e.g., "10", "10.5", "0.0001")
+        #[arg(short, long)]
+        amount: String,
+
+        /// Wallet name to send from
+        #[arg(short, long)]
+        from: String,
+
+        /// Password for the wallet
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// Read password from file (for scripting)
+        #[arg(long)]
+        password_file: Option<String>,
+    },
+
+    /// Cancel a pending reversible transaction using subxt
+    Cancel {
+        /// Transaction ID to cancel (hex hash)
+        #[arg(long)]
+        tx_id: String,
+
+        /// Wallet name to sign with
+        #[arg(short, long)]
+        from: String,
+
+        /// Password for the wallet
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// Read password from file (for scripting)
+        #[arg(long)]
+        password_file: Option<String>,
+    },
+}
+
 /// Get fresh nonce for account using direct storage query to avoid cache
 async fn get_fresh_nonce(
     client: &OnlineClient<ChainConfig>,
@@ -160,52 +206,6 @@ pub async fn wait_for_finalization(
 
     log_verbose!("✅ Transaction likely finalized (after 6s delay)");
     Ok(true)
-}
-
-/// Reversible transfer commands using SubXT
-#[derive(Subcommand, Debug)]
-pub enum ReversibleSubxtCommands {
-    /// Schedule a transfer with default delay using subxt
-    ScheduleTransfer {
-        /// The recipient's account address
-        #[arg(short, long)]
-        to: String,
-
-        /// Amount to transfer (e.g., "10", "10.5", "0.0001")
-        #[arg(short, long)]
-        amount: String,
-
-        /// Wallet name to send from
-        #[arg(short, long)]
-        from: String,
-
-        /// Password for the wallet
-        #[arg(short, long)]
-        password: Option<String>,
-
-        /// Read password from file (for scripting)
-        #[arg(long)]
-        password_file: Option<String>,
-    },
-
-    /// Cancel a pending reversible transaction using subxt
-    Cancel {
-        /// Transaction ID to cancel (hex hash)
-        #[arg(long)]
-        tx_id: String,
-
-        /// Wallet name to sign with
-        #[arg(short, long)]
-        from: String,
-
-        /// Password for the wallet
-        #[arg(short, long)]
-        password: Option<String>,
-
-        /// Read password from file (for scripting)
-        #[arg(long)]
-        password_file: Option<String>,
-    },
 }
 
 /// Handle reversible transfer subxt commands

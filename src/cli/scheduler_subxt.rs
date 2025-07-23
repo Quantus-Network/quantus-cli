@@ -5,6 +5,13 @@ use crate::{
 use clap::Subcommand;
 use subxt::OnlineClient;
 
+/// Scheduler-related commands using SubXT
+#[derive(Subcommand, Debug)]
+pub enum SchedulerSubxtCommands {
+    /// Get the last processed timestamp from the scheduler using subxt
+    GetLastProcessedTimestamp,
+}
+
 /// Get the last processed timestamp from the scheduler using SubXT
 pub async fn get_last_processed_timestamp(
     client: &OnlineClient<ChainConfig>,
@@ -28,13 +35,6 @@ pub async fn get_last_processed_timestamp(
     })?;
 
     Ok(timestamp)
-}
-
-/// Scheduler-related commands using SubXT
-#[derive(Subcommand, Debug)]
-pub enum SchedulerSubxtCommands {
-    /// Get the last processed timestamp from the scheduler using subxt
-    GetLastProcessedTimestamp,
 }
 
 /// Handle scheduler subxt commands

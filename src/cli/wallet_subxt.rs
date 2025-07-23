@@ -8,6 +8,25 @@ use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::OnlineClient;
 
+/// Wallet management commands using SubXT
+#[derive(Subcommand, Debug)]
+pub enum WalletSubxtCommands {
+    /// Get the nonce (transaction count) of an account using subxt
+    Nonce {
+        /// Account address to query (optional, uses wallet address if not provided)
+        #[arg(short, long)]
+        address: Option<String>,
+
+        /// Wallet name (used for address if --address not provided)
+        #[arg(short, long, required_unless_present("address"))]
+        wallet: Option<String>,
+
+        /// Password for the wallet
+        #[arg(short, long)]
+        password: Option<String>,
+    },
+}
+
 /// Get the nonce (transaction count) of an account using SubXT
 pub async fn get_account_nonce(
     client: &OnlineClient<ChainConfig>,
@@ -50,25 +69,6 @@ pub async fn get_account_nonce(
     log_verbose!("🔢 Nonce: {}", account_info.nonce);
 
     Ok(account_info.nonce)
-}
-
-/// Wallet management commands using SubXT
-#[derive(Subcommand, Debug)]
-pub enum WalletSubxtCommands {
-    /// Get the nonce (transaction count) of an account using subxt
-    Nonce {
-        /// Account address to query (optional, uses wallet address if not provided)
-        #[arg(short, long)]
-        address: Option<String>,
-
-        /// Wallet name (used for address if --address not provided)
-        #[arg(short, long, required_unless_present("address"))]
-        wallet: Option<String>,
-
-        /// Password for the wallet
-        #[arg(short, long)]
-        password: Option<String>,
-    },
 }
 
 /// Handle wallet-subxt commands

@@ -9,6 +9,94 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_runtime::traits::IdentifyAccount;
 use subxt::OnlineClient;
 
+/// Tech Collective management commands using SubXT
+#[derive(Subcommand, Debug)]
+pub enum TechCollectiveSubxtCommands {
+    /// Add a member to the Tech Collective using subxt
+    AddMember {
+        /// Address of the member to add
+        #[arg(short, long)]
+        who: String,
+
+        /// Wallet name to sign with (must have root or collective permissions)
+        #[arg(short, long)]
+        from: String,
+
+        /// Password for the wallet
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// Read password from file
+        #[arg(long)]
+        password_file: Option<String>,
+    },
+
+    /// Remove a member from the Tech Collective using subxt
+    RemoveMember {
+        /// Address of the member to remove
+        #[arg(short, long)]
+        who: String,
+
+        /// Wallet name to sign with (must have root permissions)
+        #[arg(short, long)]
+        from: String,
+
+        /// Password for the wallet
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// Read password from file
+        #[arg(long)]
+        password_file: Option<String>,
+    },
+
+    /// Vote on a Tech Referenda proposal using subxt
+    Vote {
+        /// Referendum index to vote on
+        #[arg(short, long)]
+        referendum_index: u32,
+
+        /// Vote (true for aye, false for nay)
+        #[arg(short, long)]
+        aye: bool,
+
+        /// Wallet name to sign with (must be a collective member)
+        #[arg(short, long)]
+        from: String,
+
+        /// Password for the wallet
+        #[arg(short, long)]
+        password: Option<String>,
+
+        /// Read password from file
+        #[arg(long)]
+        password_file: Option<String>,
+    },
+
+    /// List all Tech Collective members using subxt
+    ListMembers,
+
+    /// Check if an address is a member of the Tech Collective using subxt
+    IsMember {
+        /// Address to check
+        #[arg(short, long)]
+        address: String,
+    },
+
+    /// Check who has sudo permissions in the network using subxt
+    CheckSudo,
+
+    /// List active Tech Referenda using subxt
+    ListReferenda,
+
+    /// Get details of a specific Tech Referendum using subxt
+    GetReferendum {
+        /// Referendum index
+        #[arg(short, long)]
+        index: u32,
+    },
+}
+
 /// Add a member to the Tech Collective using sudo
 pub async fn add_member(
     client: &OnlineClient<ChainConfig>,
@@ -347,94 +435,6 @@ pub async fn wait_for_finalization(
 
     log_verbose!("✅ Transaction likely finalized (after 6s delay)");
     Ok(true)
-}
-
-/// Tech Collective management commands using SubXT
-#[derive(Subcommand, Debug)]
-pub enum TechCollectiveSubxtCommands {
-    /// Add a member to the Tech Collective using subxt
-    AddMember {
-        /// Address of the member to add
-        #[arg(short, long)]
-        who: String,
-
-        /// Wallet name to sign with (must have root or collective permissions)
-        #[arg(short, long)]
-        from: String,
-
-        /// Password for the wallet
-        #[arg(short, long)]
-        password: Option<String>,
-
-        /// Read password from file
-        #[arg(long)]
-        password_file: Option<String>,
-    },
-
-    /// Remove a member from the Tech Collective using subxt
-    RemoveMember {
-        /// Address of the member to remove
-        #[arg(short, long)]
-        who: String,
-
-        /// Wallet name to sign with (must have root permissions)
-        #[arg(short, long)]
-        from: String,
-
-        /// Password for the wallet
-        #[arg(short, long)]
-        password: Option<String>,
-
-        /// Read password from file
-        #[arg(long)]
-        password_file: Option<String>,
-    },
-
-    /// Vote on a Tech Referenda proposal using subxt
-    Vote {
-        /// Referendum index to vote on
-        #[arg(short, long)]
-        referendum_index: u32,
-
-        /// Vote (true for aye, false for nay)
-        #[arg(short, long)]
-        aye: bool,
-
-        /// Wallet name to sign with (must be a collective member)
-        #[arg(short, long)]
-        from: String,
-
-        /// Password for the wallet
-        #[arg(short, long)]
-        password: Option<String>,
-
-        /// Read password from file
-        #[arg(long)]
-        password_file: Option<String>,
-    },
-
-    /// List all Tech Collective members using subxt
-    ListMembers,
-
-    /// Check if an address is a member of the Tech Collective using subxt
-    IsMember {
-        /// Address to check
-        #[arg(short, long)]
-        address: String,
-    },
-
-    /// Check who has sudo permissions in the network using subxt
-    CheckSudo,
-
-    /// List active Tech Referenda using subxt
-    ListReferenda,
-
-    /// Get details of a specific Tech Referendum using subxt
-    GetReferendum {
-        /// Referendum index
-        #[arg(short, long)]
-        index: u32,
-    },
 }
 
 /// Handle tech collective subxt commands

@@ -10,6 +10,62 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_core::twox_128;
 use subxt::OnlineClient;
 
+/// Direct interaction with chain storage using SubXT (Sudo required for set)
+#[derive(Subcommand, Debug)]
+pub enum StorageSubxtCommands {
+    /// Get a storage value from a pallet using subxt.
+    ///
+    /// This command constructs a storage key from the pallet and item names,
+    /// fetches the raw value from the chain state, and prints it as a hex string.
+    Get {
+        /// The name of the pallet (e.g., "Scheduler")
+        #[arg(long)]
+        pallet: String,
+
+        /// The name of the storage item (e.g., "LastProcessedTimestamp")
+        #[arg(long)]
+        name: String,
+
+        /// Attempt to decode the value as a specific type (e.g., "u64", "AccountId")
+        #[arg(long)]
+        decode_as: Option<String>,
+    },
+    /// Set a storage value on the chain using subxt.
+    ///
+    /// This requires sudo privileges. It constructs a `system.set_storage` call
+    /// and wraps it in a `sudo.sudo` extrinsic. The provided value should be
+    /// a hex-encoded SCALE representation of the value.
+    Set {
+        /// The name of the pallet (e.g., "Scheduler")
+        #[arg(long)]
+        pallet: String,
+
+        /// The name of the storage item (e.g., "LastProcessedTimestamp")
+        #[arg(long)]
+        name: String,
+
+        /// The new value. Can be a plain string if --type is used, otherwise a hex string.
+        #[arg(long)]
+        value: String,
+
+        /// The type of the value to be encoded (e.g., "u64", "moment", "accountid")
+        #[arg(long)]
+        r#type: Option<String>,
+
+        /// The name of the wallet to sign the transaction with (must have sudo rights)
+        #[arg(long)]
+        wallet: String,
+
+        /// The password for the wallet
+        #[arg(long)]
+        password: Option<String>,
+
+        /// Read password from file (for scripting)
+        #[arg(long)]
+        password_file: Option<String>,
+    },
+}
+
 /// Get raw storage value by key
 pub async fn get_storage_raw(
     client: &OnlineClient<ChainConfig>,
@@ -99,63 +155,6 @@ pub async fn wait_for_finalization(
 
     log_verbose!("✅ Transaction likely finalized (after 6s delay)");
     Ok(true)
-}
-
-/// Direct interaction with chain storage using SubXT (Sudo required for set)
-#[derive(Subcommand, Debug)]
-pub enum StorageSubxtCommands {
-    /// Get a storage value from a pallet using subxt.
-    ///
-    /// This command constructs a storage key from the pallet and item names,
-    /// fetches the raw value from the chain state, and prints it as a hex string.
-    Get {
-        /// The name of the pallet (e.g., "Scheduler")
-        #[arg(long)]
-        pallet: String,
-
-        /// The name of the storage item (e.g., "LastProcessedTimestamp")
-        #[arg(long)]
-        name: String,
-
-        /// Attempt to decode the value as a specific type (e.g., "u64", "AccountId")
-        #[arg(long)]
-        decode_as: Option<String>,
-    },
-
-    /// Set a storage value on the chain using subxt.
-    ///
-    /// This requires sudo privileges. It constructs a `system.set_storage` call
-    /// and wraps it in a `sudo.sudo` extrinsic. The provided value should be
-    /// a hex-encoded SCALE representation of the value.
-    Set {
-        /// The name of the pallet (e.g., "Scheduler")
-        #[arg(long)]
-        pallet: String,
-
-        /// The name of the storage item (e.g., "LastProcessedTimestamp")
-        #[arg(long)]
-        name: String,
-
-        /// The new value. Can be a plain string if --type is used, otherwise a hex string.
-        #[arg(long)]
-        value: String,
-
-        /// The type of the value to be encoded (e.g., "u64", "moment", "accountid")
-        #[arg(long)]
-        r#type: Option<String>,
-
-        /// The name of the wallet to sign the transaction with (must have sudo rights)
-        #[arg(long)]
-        wallet: String,
-
-        /// The password for the wallet
-        #[arg(long)]
-        password: Option<String>,
-
-        /// Read password from file (for scripting)
-        #[arg(long)]
-        password_file: Option<String>,
-    },
 }
 
 /// Handle storage subxt commands
