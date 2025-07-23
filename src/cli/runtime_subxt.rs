@@ -207,8 +207,10 @@ impl SubxtRuntimeClient {
         let metadata = self.client.metadata();
         let pallets: Vec<_> = metadata.pallets().collect();
 
+        log_verbose!("🔍 SubXT metadata: {} pallets detected", pallets.len());
+
         Ok(MetadataInfo {
-            version: "V15".to_string(), // SubXT uses V15 metadata
+            version: "SubXT".to_string(), // SubXT metadata (version determined by SubXT)
             pallet_count: pallets.len(),
         })
     }

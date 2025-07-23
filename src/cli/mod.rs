@@ -15,6 +15,7 @@ pub mod send;
 pub mod send_subxt;
 pub mod storage;
 pub mod storage_subxt;
+pub mod system_subxt;
 pub mod tech_collective;
 pub mod tech_collective_subxt;
 pub mod wallet;
@@ -203,6 +204,17 @@ pub enum Commands {
     /// Query system information
     System,
 
+    /// Query system information using subxt (POC) - alternative implementation using pure subxt
+    SystemSubxt {
+        /// Show runtime version information
+        #[arg(long)]
+        runtime: bool,
+
+        /// Show metadata statistics
+        #[arg(long)]
+        metadata: bool,
+    },
+
     /// Explore chain metadata and available pallets/calls
     Metadata {
         /// Skip displaying documentation for calls
@@ -356,6 +368,14 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         Commands::System => {
             let chain_client = crate::chain::client::ChainClient::new(node_url).await?;
             chain_client.get_system_info().await
+        }
+        Commands::SystemSubxt { runtime, metadata } => {
+            if runtime || metadata {
+                system_subxt::handle_system_subxt_extended_command(node_url, runtime, metadata)
+                    .await
+            } else {
+                system_subxt::handle_system_subxt_command(node_url).await
+            }
         }
         Commands::Metadata { no_docs } => {
             let chain_client = crate::chain::client::ChainClient::new(node_url).await?;

@@ -50,7 +50,7 @@ impl SubxtGenericCallClient {
         }
 
         // Convert our QuantumKeyPair to subxt Signer
-        let signer = from_keypair.to_subxt_signer().map_err(|e| {
+        let _signer = from_keypair.to_subxt_signer().map_err(|e| {
             QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
         })?;
 
