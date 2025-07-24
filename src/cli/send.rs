@@ -53,37 +53,44 @@ pub async fn get_balance(
     Ok(account_info.data.free)
 }
 
-/// Get chain properties for formatting
-pub async fn get_chain_properties(_client: &OnlineClient<ChainConfig>) -> Result<(String, u8)> {
-    log_verbose!("🔍 Querying chain properties...");
+/// Get chain properties for formatting (uses system.rs ChainHead API)
+pub async fn get_chain_properties(
+    _client: &OnlineClient<ChainConfig>,
+    node_url: &str,
+) -> Result<(String, u8)> {
+    log_verbose!("🔍 Querying chain properties using ChainHead API...");
 
-    // Query system properties using runtime APIs
-    // For now, use the same hardcoded values as ChainClient to match formatting
-    // TODO: Implement proper system properties query when SubXT API is available
-    let token_symbol = "DEV".to_string();
-    let token_decimals = 9u8;
+    // Use the shared ChainHead API from system.rs to avoid duplication
+    match crate::cli::system::get_complete_chain_info(node_url).await {
+        Ok(chain_info) => {
+            log_verbose!(
+                "📊 Chain properties from ChainHead: token={}, decimals={}",
+                chain_info.token.symbol,
+                chain_info.token.decimals
+            );
 
-    log_verbose!(
-        "📊 Chain properties: token={}, decimals={}",
-        token_symbol,
-        token_decimals
-    );
+            log_verbose!(
+                "💰 Token: {} with {} decimals",
+                chain_info.token.symbol,
+                chain_info.token.decimals
+            );
 
-    log_verbose!(
-        "💰 Token: {} with {} decimals",
-        token_symbol,
-        token_decimals
-    );
-
-    Ok((token_symbol, token_decimals))
+            Ok((chain_info.token.symbol, chain_info.token.decimals))
+        }
+        Err(e) => {
+            log_verbose!("❌ ChainHead API failed: {:?}", e);
+            Err(e.into())
+        }
+    }
 }
 
 /// Format balance with token symbol
 pub async fn format_balance_with_symbol(
     client: &OnlineClient<ChainConfig>,
     amount: u128,
+    node_url: &str,
 ) -> Result<String> {
-    let (symbol, decimals) = get_chain_properties(client).await?;
+    let (symbol, decimals) = get_chain_properties(client, node_url).await?;
     let formatted_amount = format_balance(amount, decimals);
     Ok(format!("{} {}", formatted_amount, symbol))
 }
@@ -113,8 +120,12 @@ pub fn format_balance(amount: u128, decimals: u8) -> String {
 }
 
 /// Parse human-readable amount string to raw chain units
-pub async fn parse_amount(client: &OnlineClient<ChainConfig>, amount_str: &str) -> Result<u128> {
-    let (_, decimals) = get_chain_properties(client).await?;
+pub async fn parse_amount(
+    client: &OnlineClient<ChainConfig>,
+    amount_str: &str,
+    node_url: &str,
+) -> Result<u128> {
+    let (_, decimals) = get_chain_properties(client, node_url).await?;
     parse_amount_with_decimals(amount_str, decimals)
 }
 
@@ -166,9 +177,10 @@ pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128
 pub async fn validate_and_format_amount(
     client: &OnlineClient<ChainConfig>,
     amount_str: &str,
+    node_url: &str,
 ) -> Result<(u128, String)> {
-    let raw_amount = parse_amount(client, amount_str).await?;
-    let formatted = format_balance_with_symbol(client, raw_amount).await?;
+    let raw_amount = parse_amount(client, amount_str, node_url).await?;
+    let formatted = format_balance_with_symbol(client, raw_amount, node_url).await?;
     Ok((raw_amount, formatted))
 }
 
@@ -252,7 +264,8 @@ pub async fn handle_send_subxt_command(
     let client = client::create_subxt_client(node_url).await?;
 
     // Parse and validate the amount
-    let (amount, formatted_amount) = validate_and_format_amount(&client, amount_str).await?;
+    let (amount, formatted_amount) =
+        validate_and_format_amount(&client, amount_str, node_url).await?;
 
     // Resolve the destination address (could be wallet name or SS58 address)
     let resolved_address = resolve_address(&to_address)?;
@@ -287,7 +300,7 @@ pub async fn handle_send_subxt_command(
     let balance = get_balance(&client, &from_account_id).await?;
 
     // Get formatted balance with proper decimals
-    let formatted_balance = format_balance_with_symbol(&client, balance).await?;
+    let formatted_balance = format_balance_with_symbol(&client, balance, node_url).await?;
     log_verbose!("💰 Current balance: {}", formatted_balance.bright_yellow());
 
     if balance < amount {
@@ -323,12 +336,13 @@ pub async fn handle_send_subxt_command(
 
         // Show updated balance with proper formatting
         let new_balance = get_balance(&client, &from_account_id).await?;
-        let formatted_new_balance = format_balance_with_symbol(&client, new_balance).await?;
+        let formatted_new_balance =
+            format_balance_with_symbol(&client, new_balance, node_url).await?;
 
         // Calculate and display transaction fee in verbose mode
         let fee_paid = balance.saturating_sub(new_balance).saturating_sub(amount);
         if fee_paid > 0 {
-            let formatted_fee = format_balance_with_symbol(&client, fee_paid).await?;
+            let formatted_fee = format_balance_with_symbol(&client, fee_paid, node_url).await?;
             log_verbose!("💸 Transaction fee: {}", formatted_fee.bright_cyan());
         }
 

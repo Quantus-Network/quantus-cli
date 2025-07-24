@@ -221,7 +221,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             }
 
             let balance = send::get_balance(&client, &resolved_address).await?;
-            let formatted_balance = send::format_balance_with_symbol(&client, balance).await?;
+            let formatted_balance =
+                send::format_balance_with_symbol(&client, balance, node_url).await?;
             log_print!("💰 Balance: {}", formatted_balance);
             Ok(())
         }

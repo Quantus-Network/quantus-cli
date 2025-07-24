@@ -369,7 +369,7 @@ pub async fn handle_reversible_subxt_command(
             // Parse and validate the amount
             let client = crate::chain::client::create_subxt_client(node_url).await?;
             let (raw_amount, formatted_amount) =
-                crate::cli::send::validate_and_format_amount(&client, &amount).await?;
+                crate::cli::send::validate_and_format_amount(&client, &amount, node_url).await?;
 
             log_info!(
                 "🔄 Scheduling reversible transfer of {} to {}",
@@ -461,7 +461,7 @@ pub async fn handle_reversible_subxt_command(
             // Parse and validate the amount
             let client = crate::chain::client::create_subxt_client(node_url).await?;
             let (raw_amount, formatted_amount) =
-                crate::cli::send::validate_and_format_amount(&client, &amount).await?;
+                crate::cli::send::validate_and_format_amount(&client, &amount, node_url).await?;
 
             let unit_str = if unit_blocks { "blocks" } else { "seconds" };
             log_verbose!(
