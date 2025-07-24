@@ -74,6 +74,7 @@ impl subxt::tx::Signer<ChainConfig> for dilithium_crypto::types::ResonancePair {
     }
 
     fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
+        println!("signing with DILITHIUM!");
         // Use the sign method from the trait implemented for ResonancePair
         // sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in ResonanceSignatureScheme
         let signature_with_public =

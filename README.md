@@ -728,7 +728,7 @@ The project includes a script to regenerate SubXT types and metadata when the bl
 
 **Requirements:**
 - Quantus node must be running on `ws://127.0.0.1:9944`
-- `subxt-cli` must be installed: `cargo install subxt-cli`
+- `subxt-cli` version 0.43.0 must be installed: `cargo install subxt-cli --version 0.43.0`
 - Node must be fully synced and ready
 
 **Output:**

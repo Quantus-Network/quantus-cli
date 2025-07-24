@@ -60,8 +60,8 @@ pub async fn get_chain_properties(_client: &OnlineClient<ChainConfig>) -> Result
     // Query system properties using runtime APIs
     // For now, use the same hardcoded values as ChainClient to match formatting
     // TODO: Implement proper system properties query when SubXT API is available
-    let token_symbol = "DEV".to_string();
-    let token_decimals = 9u8;
+    let token_symbol = "RES".to_string();
+    let token_decimals = 12u8;
 
     log_verbose!(
         "📊 Chain properties: token={}, decimals={}",
