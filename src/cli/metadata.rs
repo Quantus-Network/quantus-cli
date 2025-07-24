@@ -1,6 +1,6 @@
 //! `quantus metadata` subcommand - metadata exploration
 use crate::chain::client::ChainConfig;
-use crate::{chain::client, log_print, log_verbose};
+use crate::{log_print, log_verbose};
 use colored::Colorize;
 use subxt::OnlineClient;
 
@@ -107,11 +107,11 @@ pub async fn handle_metadata_subxt_command(
     no_docs: bool,
     stats_only: bool,
 ) -> crate::error::Result<()> {
-    let client = client::create_subxt_client(node_url).await?;
+    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     if stats_only {
-        get_metadata_stats(&client).await
+        get_metadata_stats(quantus_client.client()).await
     } else {
-        explore_chain_metadata(&client, no_docs).await
+        explore_chain_metadata(quantus_client.client(), no_docs).await
     }
 }

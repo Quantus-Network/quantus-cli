@@ -1,7 +1,6 @@
 //! `quantus wallet` subcommand - wallet operations
 use crate::chain::client::ChainConfig;
 use crate::{
-    chain::client,
     chain::quantus_subxt,
     error::QuantusError,
     log_error, log_print, log_success, log_verbose,
@@ -459,7 +458,7 @@ pub async fn handle_wallet_subxt_command(
         } => {
             log_print!("🔢 Querying account nonce...");
 
-            let client = client::create_subxt_client(node_url).await?;
+            let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
             // Determine which address to query
             let target_address = match (address, wallet) {
@@ -483,7 +482,7 @@ pub async fn handle_wallet_subxt_command(
 
             log_print!("Account: {}", target_address.bright_cyan());
 
-            match get_account_nonce(&client, &target_address).await {
+            match get_account_nonce(quantus_client.client(), &target_address).await {
                 Ok(nonce) => {
                     log_success!("Nonce: {}", nonce.to_string().bright_green());
                 }

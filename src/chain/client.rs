@@ -42,22 +42,39 @@ impl Config for ChainConfig {
     type ExtrinsicParams = DefaultExtrinsicParams<Self>;
 }
 
-/// Common client creation function
-///
-/// This function is used by all CLI modules to create a connection to the Quantus node.
-/// It provides consistent error handling and logging across all implementations.
-pub async fn create_subxt_client(
-    node_url: &str,
-) -> crate::error::Result<OnlineClient<ChainConfig>> {
-    log_verbose!("🔗 Connecting to Quantus node: {}", node_url);
+/// Wrapper around OnlineClient that also stores the node URL
+#[derive(Clone)]
+pub struct QuantusClient {
+    client: OnlineClient<ChainConfig>,
+    node_url: String,
+}
 
-    let client = OnlineClient::<ChainConfig>::from_url(node_url)
-        .await
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
+impl QuantusClient {
+    /// Create a new QuantusClient by connecting to the specified node URL
+    pub async fn new(node_url: &str) -> crate::error::Result<Self> {
+        log_verbose!("🔗 Connecting to Quantus node: {}", node_url);
 
-    log_verbose!("✅ Connected to Quantus node successfully!");
+        let client = OnlineClient::<ChainConfig>::from_url(node_url)
+            .await
+            .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
 
-    Ok(client)
+        log_verbose!("✅ Connected to Quantus node successfully!");
+
+        Ok(QuantusClient {
+            client,
+            node_url: node_url.to_string(),
+        })
+    }
+
+    /// Get reference to the underlying SubXT client
+    pub fn client(&self) -> &OnlineClient<ChainConfig> {
+        &self.client
+    }
+
+    /// Get the node URL
+    pub fn node_url(&self) -> &str {
+        &self.node_url
+    }
 }
 
 // Implement subxt::tx::Signer for ResonancePair

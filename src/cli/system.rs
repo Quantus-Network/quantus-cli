@@ -1,6 +1,6 @@
 //! `quantus system` subcommand - system information
-use crate::chain::client::ChainConfig;
-use crate::{chain::client, log_print, log_verbose};
+use crate::chain::client::{ChainConfig, QuantusClient};
+use crate::{log_print, log_verbose};
 use colored::Colorize;
 use serde_json::Value;
 use subxt::OnlineClient;
@@ -86,8 +86,6 @@ impl ChainHeadTokenClient {
 
 /// Gets complete chain information using ChainHead API
 pub async fn get_complete_chain_info(node_url: &str) -> crate::error::Result<ChainInfo> {
-    log_verbose!("🚀 Getting complete chain info using ChainHead API...");
-
     match ChainHeadTokenClient::new(node_url).await {
         Ok(client) => {
             let token_info = client.get_token_info().await.map_err(|e| {
@@ -99,12 +97,6 @@ pub async fn get_complete_chain_info(node_url: &str) -> crate::error::Result<Cha
 
             let chain_name = client.get_chain_name().await.ok();
             let genesis_hash = client.get_genesis_hash().await.ok();
-
-            log_verbose!(
-                "🎯 Complete chain info retrieved: token={:?}, chain={:?}",
-                token_info,
-                chain_name
-            );
 
             Ok(ChainInfo {
                 token: token_info,
@@ -122,27 +114,15 @@ pub async fn get_complete_chain_info(node_url: &str) -> crate::error::Result<Cha
     }
 }
 
-/// Uses ChainHead RPC API to get chain properties (internal)
-async fn get_chain_properties_with_chainhead(node_url: &str) -> crate::error::Result<TokenInfo> {
-    // Use the complete chain info and extract just the token info
-    match get_complete_chain_info(node_url).await {
-        Ok(chain_info) => Ok(chain_info.token),
-        Err(e) => Err(e),
-    }
-}
-
 /// Get system information including ChainHead data
-pub async fn get_system_info(
-    client: &OnlineClient<ChainConfig>,
-    node_url: &str,
-) -> crate::error::Result<()> {
+pub async fn get_system_info(quantus_client: &QuantusClient) -> crate::error::Result<()> {
     log_verbose!("🔍 Querying system information...");
 
     // Get complete chain information from ChainHead API using the actual node_url
-    let chain_info = get_complete_chain_info(node_url).await?;
+    let chain_info = get_complete_chain_info(quantus_client.node_url()).await?;
 
     // Get metadata information
-    let metadata = client.metadata();
+    let metadata = quantus_client.client().metadata();
     let pallets: Vec<_> = metadata.pallets().collect();
 
     log_print!("🏗️  Chain System Information:");
@@ -151,6 +131,13 @@ pub async fn get_system_info(
         chain_info.token.symbol.bright_yellow(),
         chain_info.token.decimals.to_string().bright_cyan()
     );
+
+    if let Some(ss58_format) = chain_info.token.ss58_format {
+        log_print!(
+            "   🔢 SS58 Format: {}",
+            ss58_format.to_string().bright_magenta()
+        );
+    }
 
     if let Some(name) = &chain_info.chain_name {
         log_print!("   🔗 Chain: {}", name.bright_green());
@@ -224,8 +211,8 @@ pub async fn get_metadata_stats(client: &OnlineClient<ChainConfig>) -> crate::er
 /// Handle system command
 pub async fn handle_system_subxt_command(node_url: &str) -> crate::error::Result<()> {
     log_print!("🚀 System Information");
-    let client = client::create_subxt_client(node_url).await?;
-    get_system_info(&client, node_url).await?;
+    let quantus_client = QuantusClient::new(node_url).await?;
+    get_system_info(&quantus_client).await?;
 
     Ok(())
 }
@@ -238,19 +225,19 @@ pub async fn handle_system_subxt_extended_command(
 ) -> crate::error::Result<()> {
     log_print!("🚀 Extended System Information");
 
-    let client = client::create_subxt_client(node_url).await?;
+    let quantus_client = QuantusClient::new(node_url).await?;
 
     // Basic system info
-    get_system_info(&client, node_url).await?;
+    get_system_info(&quantus_client).await?;
 
     if show_runtime {
         log_print!("");
-        get_runtime_version_info(&client).await?;
+        get_runtime_version_info(quantus_client.client()).await?;
     }
 
     if show_metadata {
         log_print!("");
-        get_metadata_stats(&client).await?;
+        get_metadata_stats(quantus_client.client()).await?;
     }
 
     Ok(())

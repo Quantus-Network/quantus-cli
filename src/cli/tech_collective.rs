@@ -3,7 +3,7 @@ use crate::chain::client::ChainConfig;
 use crate::cli::common::{get_fresh_nonce, resolve_address};
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
+    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
     log_verbose,
 };
 use clap::Subcommand;
@@ -393,7 +393,7 @@ pub async fn handle_tech_collective_subxt_command(
 ) -> crate::error::Result<()> {
     log_print!("🏛️  Tech Collective");
 
-    let client = client::create_subxt_client(node_url).await?;
+    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
         TechCollectiveSubxtCommands::AddMember {
@@ -410,7 +410,7 @@ pub async fn handle_tech_collective_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = add_member(&client, &keypair, &who).await?;
+            let tx_hash = add_member(quantus_client.client(), &keypair, &who).await?;
 
             log_print!(
                 "✅ {} Add member transaction submitted! Hash: {:?}",
@@ -418,7 +418,7 @@ pub async fn handle_tech_collective_subxt_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(&client, tx_hash).await?;
+            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_success!(
@@ -446,7 +446,7 @@ pub async fn handle_tech_collective_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = remove_member(&client, &keypair, &who).await?;
+            let tx_hash = remove_member(quantus_client.client(), &keypair, &who).await?;
 
             log_print!(
                 "✅ {} Remove member transaction submitted! Hash: {:?}",
@@ -454,7 +454,7 @@ pub async fn handle_tech_collective_subxt_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(&client, tx_hash).await?;
+            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_success!(
@@ -490,7 +490,7 @@ pub async fn handle_tech_collective_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = vote_on_referendum(&client, &keypair, referendum_index, aye).await?;
+            let tx_hash = vote_on_referendum(quantus_client.client(), &keypair, referendum_index, aye).await?;
 
             log_print!(
                 "✅ {} Vote transaction submitted! Hash: {:?}",
@@ -498,7 +498,7 @@ pub async fn handle_tech_collective_subxt_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(&client, tx_hash).await?;
+            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_success!("🎉 {} Vote submitted!", "FINALIZED".bright_green().bold());
@@ -514,7 +514,7 @@ pub async fn handle_tech_collective_subxt_command(
             log_print!("");
 
             // Get actual member list
-            match get_member_list(&client).await {
+            match get_member_list(quantus_client.client()).await {
                 Ok(members) => {
                     if members.is_empty() {
                         log_print!("📭 No members in Tech Collective");
@@ -534,7 +534,7 @@ pub async fn handle_tech_collective_subxt_command(
                 Err(e) => {
                     log_verbose!("⚠️  Failed to get member list: {:?}", e);
                     // Fallback to member count
-                    match get_member_count(&client).await? {
+                    match get_member_count(quantus_client.client()).await? {
                         Some(count_data) => {
                             log_verbose!("✅ Got member count data: {:?}", count_data);
                             if count_data > 0 {
@@ -570,18 +570,9 @@ pub async fn handle_tech_collective_subxt_command(
             // Resolve address (could be wallet name or SS58 address)
             let resolved_address = resolve_address(&address)?;
 
-            // If the original input was a wallet name, show the resolved address
-            if address != resolved_address {
-                log_print!(
-                    "💡 Resolved wallet name '{}' to address: {}",
-                    address.bright_cyan(),
-                    resolved_address.bright_green()
-                );
-            }
-
             log_print!("   👤 Address: {}", resolved_address.bright_cyan());
 
-            if is_member(&client, &resolved_address).await? {
+            if is_member(quantus_client.client(), &resolved_address).await? {
                 log_success!("✅ Address IS a member of Tech Collective!");
                 log_print!("👥 Member data found in storage");
             } else {
@@ -595,7 +586,7 @@ pub async fn handle_tech_collective_subxt_command(
         TechCollectiveSubxtCommands::CheckSudo => {
             log_print!("🏛️  Checking sudo permissions ");
 
-            match get_sudo_account(&client).await? {
+            match get_sudo_account(quantus_client.client()).await? {
                 Some(sudo_account) => {
                     log_success!(
                         "✅ Found sudo account: {}",

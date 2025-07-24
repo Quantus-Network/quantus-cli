@@ -206,23 +206,14 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             .await
         }
         Commands::Balance { address } => {
-            let client = crate::chain::client::create_subxt_client(node_url).await?;
+            let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
             // Resolve address (could be wallet name or SS58 address)
             let resolved_address = common::resolve_address(&address)?;
 
-            // If the original input was a wallet name, show the resolved address
-            if address != resolved_address {
-                log_print!(
-                    "💡 Resolved wallet name '{}' to address: {}",
-                    address.bright_cyan(),
-                    resolved_address.bright_green()
-                );
-            }
-
-            let balance = send::get_balance(&client, &resolved_address).await?;
+            let balance = send::get_balance(quantus_client.client(), &resolved_address).await?;
             let formatted_balance =
-                send::format_balance_with_symbol(&client, balance, node_url).await?;
+                send::format_balance_with_symbol(&quantus_client, balance).await?;
             log_print!("💰 Balance: {}", formatted_balance);
             Ok(())
         }
@@ -250,8 +241,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         Commands::Version => {
             log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 
-            let client = crate::chain::client::create_subxt_client(node_url).await?;
-            let runtime_version = runtime::get_runtime_version(&client).await?;
+            let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+            let runtime_version = runtime::get_runtime_version(quantus_client.client()).await?;
             log_print!(
                 "Runtime Version: spec_version: {}, impl_version: {}",
                 runtime_version.spec_version,

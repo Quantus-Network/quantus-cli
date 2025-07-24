@@ -3,7 +3,7 @@ use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
+    chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
     wallet::QuantumKeyPair,
 };
 use clap::Subcommand;
@@ -217,7 +217,7 @@ pub async fn handle_runtime_subxt_command(
     command: RuntimeSubxtCommands,
     node_url: &str,
 ) -> crate::error::Result<()> {
-    let client = client::create_subxt_client(node_url).await?;
+    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
         RuntimeSubxtCommands::Update {
@@ -261,7 +261,7 @@ pub async fn handle_runtime_subxt_command(
             log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 
             // Update runtime
-            update_runtime(&client, wasm_code, &keypair, force).await?;
+            update_runtime(quantus_client.client(), wasm_code, &keypair, force).await?;
 
             log_success!("🎉 Runtime update completed!");
             log_print!(
@@ -276,7 +276,7 @@ pub async fn handle_runtime_subxt_command(
             log_print!("🚀 Runtime Management");
             log_print!("🔍 Checking runtime version...");
 
-            let version = get_runtime_version(&client).await?;
+            let version = get_runtime_version(quantus_client.client()).await?;
 
             log_print!("📋 Runtime Version Information:");
             log_print!("   • Spec name: {}", version.spec_name.bright_cyan());
@@ -300,7 +300,7 @@ pub async fn handle_runtime_subxt_command(
 
         RuntimeSubxtCommands::GetSpecVersion => {
             log_print!("🚀 Runtime Management");
-            let version = get_runtime_version(&client).await?;
+            let version = get_runtime_version(quantus_client.client()).await?;
 
             log_print!(
                 "📊 Spec Version: {}",
@@ -311,7 +311,7 @@ pub async fn handle_runtime_subxt_command(
 
         RuntimeSubxtCommands::GetImplVersion => {
             log_print!("🚀 Runtime Management");
-            let version = get_runtime_version(&client).await?;
+            let version = get_runtime_version(quantus_client.client()).await?;
 
             log_print!(
                 "📊 Implementation Version: {}",
@@ -324,7 +324,7 @@ pub async fn handle_runtime_subxt_command(
             log_print!("🚀 Runtime Management");
             log_print!("🔍 Getting metadata version...");
 
-            let metadata_info = get_metadata_info(&client).await?;
+            let metadata_info = get_metadata_info(quantus_client.client()).await?;
 
             log_print!(
                 "📊 Metadata Version: {}",
@@ -358,7 +358,7 @@ pub async fn handle_runtime_subxt_command(
             log_print!("📊 Local WASM size: {} bytes", local_wasm.len());
 
             // Get current runtime version
-            let current_version = get_runtime_version(&client).await?;
+            let current_version = get_runtime_version(quantus_client.client()).await?;
             log_print!("📋 Current chain runtime:");
             log_print!("   • Spec version: {}", current_version.spec_version);
             log_print!("   • Impl version: {}", current_version.impl_version);

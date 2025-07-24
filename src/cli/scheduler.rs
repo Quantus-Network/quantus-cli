@@ -1,5 +1,5 @@
 use crate::chain::client::ChainConfig;
-use crate::{chain::client, chain::quantus_subxt, error::Result, log_print, log_success};
+use crate::{chain::quantus_subxt, error::Result, log_print, log_success};
 use clap::Subcommand;
 use subxt::OnlineClient;
 
@@ -42,11 +42,11 @@ pub async fn handle_scheduler_subxt_command(
 ) -> Result<()> {
     log_print!("🗓️  Scheduler");
 
-    let client = client::create_subxt_client(node_url).await?;
+    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
         SchedulerSubxtCommands::GetLastProcessedTimestamp => {
-            match get_last_processed_timestamp(&client).await? {
+            match get_last_processed_timestamp(quantus_client.client()).await? {
                 Some(timestamp) => {
                     log_success!("🎉 Last processed timestamp: {}", timestamp);
                 }

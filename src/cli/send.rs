@@ -1,8 +1,8 @@
-use crate::chain::client::ChainConfig;
+use crate::chain::client::{ChainConfig, QuantusClient};
 use crate::cli::common::{get_fresh_nonce, resolve_address};
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
+    chain::quantus_subxt, error::Result, log_error, log_info, log_print,
     log_success, log_verbose,
 };
 use colored::Colorize;
@@ -54,20 +54,11 @@ pub async fn get_balance(
 }
 
 /// Get chain properties for formatting (uses system.rs ChainHead API)
-pub async fn get_chain_properties(
-    _client: &OnlineClient<ChainConfig>,
-    node_url: &str,
-) -> Result<(String, u8)> {
-    log_verbose!("🔍 Querying chain properties using ChainHead API...");
+pub async fn get_chain_properties(quantus_client: &QuantusClient) -> Result<(String, u8)> {
 
     // Use the shared ChainHead API from system.rs to avoid duplication
-    match crate::cli::system::get_complete_chain_info(node_url).await {
+    match crate::cli::system::get_complete_chain_info(quantus_client.node_url()).await {
         Ok(chain_info) => {
-            log_verbose!(
-                "📊 Chain properties from ChainHead: token={}, decimals={}",
-                chain_info.token.symbol,
-                chain_info.token.decimals
-            );
 
             log_verbose!(
                 "💰 Token: {} with {} decimals",
@@ -86,11 +77,10 @@ pub async fn get_chain_properties(
 
 /// Format balance with token symbol
 pub async fn format_balance_with_symbol(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &QuantusClient,
     amount: u128,
-    node_url: &str,
 ) -> Result<String> {
-    let (symbol, decimals) = get_chain_properties(client, node_url).await?;
+    let (symbol, decimals) = get_chain_properties(quantus_client).await?;
     let formatted_amount = format_balance(amount, decimals);
     Ok(format!("{} {}", formatted_amount, symbol))
 }
@@ -120,12 +110,8 @@ pub fn format_balance(amount: u128, decimals: u8) -> String {
 }
 
 /// Parse human-readable amount string to raw chain units
-pub async fn parse_amount(
-    client: &OnlineClient<ChainConfig>,
-    amount_str: &str,
-    node_url: &str,
-) -> Result<u128> {
-    let (_, decimals) = get_chain_properties(client, node_url).await?;
+pub async fn parse_amount(quantus_client: &QuantusClient, amount_str: &str) -> Result<u128> {
+    let (_, decimals) = get_chain_properties(quantus_client).await?;
     parse_amount_with_decimals(amount_str, decimals)
 }
 
@@ -175,18 +161,17 @@ pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128
 
 /// Validate and format amount for display before sending
 pub async fn validate_and_format_amount(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &QuantusClient,
     amount_str: &str,
-    node_url: &str,
 ) -> Result<(u128, String)> {
-    let raw_amount = parse_amount(client, amount_str, node_url).await?;
-    let formatted = format_balance_with_symbol(client, raw_amount, node_url).await?;
+    let raw_amount = parse_amount(quantus_client, amount_str).await?;
+    let formatted = format_balance_with_symbol(quantus_client, raw_amount).await?;
     Ok((raw_amount, formatted))
 }
 
 /// Transfer tokens
 pub async fn transfer(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     to_address: &str,
     amount: u128,
@@ -226,14 +211,15 @@ pub async fn transfer(
     );
 
     // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(client, from_keypair).await?;
+    let nonce = get_fresh_nonce(quantus_client.client(), from_keypair).await?;
 
     // Create custom params with fresh nonce
     use subxt::config::DefaultExtrinsicParamsBuilder;
     let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
 
     // Submit the transaction with fresh nonce
-    let tx_hash = client
+    let tx_hash = quantus_client
+        .client()
         .tx()
         .sign_and_submit(&transfer_call, &signer, params)
         .await
@@ -260,12 +246,12 @@ pub async fn handle_send_subxt_command(
     password: Option<String>,
     password_file: Option<String>,
 ) -> Result<()> {
-    // Create subxt chain client
-    let client = client::create_subxt_client(node_url).await?;
+    // Create quantus chain client
+    let quantus_client = QuantusClient::new(node_url).await?;
 
     // Parse and validate the amount
     let (amount, formatted_amount) =
-        validate_and_format_amount(&client, amount_str, node_url).await?;
+        validate_and_format_amount(&quantus_client, amount_str).await?;
 
     // Resolve the destination address (could be wallet name or SS58 address)
     let resolved_address = resolve_address(&to_address)?;
@@ -282,25 +268,16 @@ pub async fn handle_send_subxt_command(
         resolved_address.bright_green()
     );
 
-    // If the original input was a wallet name, show the resolved address
-    if to_address != resolved_address {
-        log_print!(
-            "💡 Resolved wallet name '{}' to address: {}",
-            to_address.bright_cyan(),
-            resolved_address.bright_green()
-        );
-    }
-
     // Get password securely for decryption
     log_verbose!("📦 Using wallet: {}", from_wallet.bright_blue().bold());
     let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
 
     // Get account information
     let from_account_id = keypair.to_account_id_ss58check();
-    let balance = get_balance(&client, &from_account_id).await?;
+    let balance = get_balance(quantus_client.client(), &from_account_id).await?;
 
     // Get formatted balance with proper decimals
-    let formatted_balance = format_balance_with_symbol(&client, balance, node_url).await?;
+    let formatted_balance = format_balance_with_symbol(&quantus_client, balance).await?;
     log_verbose!("💰 Current balance: {}", formatted_balance.bright_yellow());
 
     if balance < amount {
@@ -317,7 +294,7 @@ pub async fn handle_send_subxt_command(
     );
 
     // Submit transaction
-    let tx_hash = transfer(&client, &keypair, &resolved_address, amount).await?;
+    let tx_hash = transfer(&quantus_client, &keypair, &resolved_address, amount).await?;
 
     log_print!(
         "✅ {} Transaction submitted! Hash: {:?}",
@@ -325,7 +302,7 @@ pub async fn handle_send_subxt_command(
         tx_hash
     );
 
-    let success = wait_for_finalization(&client, tx_hash).await?;
+    let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
     if success {
         log_info!("✅ Transaction confirmed and finalized on chain");
@@ -335,14 +312,14 @@ pub async fn handle_send_subxt_command(
         );
 
         // Show updated balance with proper formatting
-        let new_balance = get_balance(&client, &from_account_id).await?;
+        let new_balance = get_balance(quantus_client.client(), &from_account_id).await?;
         let formatted_new_balance =
-            format_balance_with_symbol(&client, new_balance, node_url).await?;
+            format_balance_with_symbol(&quantus_client, new_balance).await?;
 
         // Calculate and display transaction fee in verbose mode
         let fee_paid = balance.saturating_sub(new_balance).saturating_sub(amount);
         if fee_paid > 0 {
-            let formatted_fee = format_balance_with_symbol(&client, fee_paid, node_url).await?;
+            let formatted_fee = format_balance_with_symbol(&quantus_client, fee_paid).await?;
             log_verbose!("💸 Transaction fee: {}", formatted_fee.bright_cyan());
         }
 

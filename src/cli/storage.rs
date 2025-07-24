@@ -3,7 +3,7 @@ use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
+    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
     log_verbose,
 };
 use clap::Subcommand;
@@ -154,7 +154,7 @@ pub async fn handle_storage_subxt_command(
 ) -> crate::error::Result<()> {
     log_print!("🗄️  Storage");
 
-    let client = client::create_subxt_client(node_url).await?;
+    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
         StorageSubxtCommands::Get {
@@ -169,13 +169,13 @@ pub async fn handle_storage_subxt_command(
             );
 
             // Validate pallet exists
-            validate_pallet_exists(&client, &pallet)?;
+            validate_pallet_exists(quantus_client.client(), &pallet)?;
 
             // Construct the storage key
             let mut key = twox_128(pallet.as_bytes()).to_vec();
             key.extend(&twox_128(name.as_bytes()));
 
-            let result = get_storage_raw(&client, key).await?;
+            let result = get_storage_raw(quantus_client.client(), key).await?;
 
             if let Some(value_bytes) = result {
                 log_success!("Raw Value: 0x{}", hex::encode(&value_bytes).bright_yellow());
@@ -239,7 +239,7 @@ pub async fn handle_storage_subxt_command(
             log_print!("\n{}", "🛑 This is a SUDO operation!".bright_red().bold());
 
             // Validate pallet exists
-            validate_pallet_exists(&client, &pallet)?;
+            validate_pallet_exists(quantus_client.client(), &pallet)?;
 
             // 1. Load wallet
             let keypair =
@@ -288,7 +288,9 @@ pub async fn handle_storage_subxt_command(
             };
 
             // 4. Submit the set storage transaction
-            let tx_hash = set_storage_value(&client, &keypair, storage_key, value_bytes).await?;
+            let tx_hash =
+                set_storage_value(quantus_client.client(), &keypair, storage_key, value_bytes)
+                    .await?;
 
             log_print!(
                 "✅ {} Set storage transaction submitted! Hash: {:?}",
@@ -296,7 +298,7 @@ pub async fn handle_storage_subxt_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(&client, tx_hash).await?;
+            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_success!(

@@ -1,7 +1,7 @@
 use crate::chain::client::ChainConfig;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::client, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
+    chain::quantus_subxt, error::Result, log_error, log_info, log_print,
     log_success, log_verbose,
 };
 use clap::Subcommand;
@@ -356,7 +356,7 @@ pub async fn handle_reversible_subxt_command(
 ) -> Result<()> {
     log_print!("🔄 Reversible Transfers");
 
-    let client = client::create_subxt_client(node_url).await?;
+    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
         ReversibleSubxtCommands::ScheduleTransfer {
@@ -367,9 +367,9 @@ pub async fn handle_reversible_subxt_command(
             password_file,
         } => {
             // Parse and validate the amount
-            let client = crate::chain::client::create_subxt_client(node_url).await?;
+            let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
             let (raw_amount, formatted_amount) =
-                crate::cli::send::validate_and_format_amount(&client, &amount, node_url).await?;
+                crate::cli::send::validate_and_format_amount(&quantus_client, &amount).await?;
 
             log_info!(
                 "🔄 Scheduling reversible transfer of {} to {}",
@@ -388,7 +388,8 @@ pub async fn handle_reversible_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = schedule_transfer(&client, &keypair, &to, raw_amount).await?;
+            let tx_hash =
+                schedule_transfer(quantus_client.client(), &keypair, &to, raw_amount).await?;
 
             log_print!(
                 "✅ {} Reversible transfer scheduled! Hash: {:?}",
@@ -396,7 +397,7 @@ pub async fn handle_reversible_subxt_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(&client, tx_hash).await?;
+            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_info!("✅ Reversible transfer scheduled and confirmed on chain");
@@ -427,7 +428,7 @@ pub async fn handle_reversible_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit cancel transaction
-            let tx_hash = cancel_transaction(&client, &keypair, &tx_id).await?;
+            let tx_hash = cancel_transaction(quantus_client.client(), &keypair, &tx_id).await?;
 
             log_print!(
                 "✅ {} Cancel transaction submitted! Hash: {:?}",
@@ -435,7 +436,7 @@ pub async fn handle_reversible_subxt_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(&client, tx_hash).await?;
+            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_success!(
@@ -459,9 +460,9 @@ pub async fn handle_reversible_subxt_command(
             password_file,
         } => {
             // Parse and validate the amount
-            let client = crate::chain::client::create_subxt_client(node_url).await?;
+            let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
             let (raw_amount, formatted_amount) =
-                crate::cli::send::validate_and_format_amount(&client, &amount, node_url).await?;
+                crate::cli::send::validate_and_format_amount(&quantus_client, &amount).await?;
 
             let unit_str = if unit_blocks { "blocks" } else { "seconds" };
             log_verbose!(
@@ -479,7 +480,7 @@ pub async fn handle_reversible_subxt_command(
 
             // Submit transaction
             let tx_hash = schedule_transfer_with_delay(
-                &client,
+                quantus_client.client(),
                 &keypair,
                 &to,
                 raw_amount,
@@ -494,7 +495,7 @@ pub async fn handle_reversible_subxt_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(&client, tx_hash).await?;
+            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_success!(
@@ -533,7 +534,7 @@ pub async fn handle_reversible_subxt_command(
             password_file,
         } => {
             set_reversibility_subxt(
-                &client,
+                quantus_client.client(),
                 &delay,
                 &policy,
                 &reverser,
@@ -549,7 +550,16 @@ pub async fn handle_reversible_subxt_command(
             from,
             password,
             password_file,
-        } => list_pending_transactions_subxt(&client, address, from, password, password_file).await,
+        } => {
+            list_pending_transactions_subxt(
+                quantus_client.client(),
+                address,
+                from,
+                password,
+                password_file,
+            )
+            .await
+        }
     }
 }
 
