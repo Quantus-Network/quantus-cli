@@ -1,5 +1,5 @@
 use crate::chain::client::ChainConfig;
-use crate::cli::common::get_fresh_nonce;
+use crate::cli::common::{get_fresh_nonce, resolve_address};
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
     chain::client, chain::quantus_subxt, error::Result, log_error, log_info, log_print,
@@ -187,8 +187,12 @@ pub async fn transfer(
     log_verbose!("   To: {}", to_address.bright_green());
     log_verbose!("   Amount: {}", amount);
 
+    // Resolve the destination address (could be wallet name or SS58 address)
+    let resolved_address = resolve_address(to_address)?;
+    log_verbose!("   Resolved to: {}", resolved_address.bright_green());
+
     // Parse the destination address
-    let to_account_id_sp = SpAccountId32::from_ss58check(to_address).map_err(|e| {
+    let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
         crate::error::QuantusError::NetworkError(format!("Invalid destination address: {:?}", e))
     })?;
 
@@ -249,17 +253,30 @@ pub async fn handle_send_subxt_command(
 
     // Parse and validate the amount
     let (amount, formatted_amount) = validate_and_format_amount(&client, amount_str).await?;
+
+    // Resolve the destination address (could be wallet name or SS58 address)
+    let resolved_address = resolve_address(&to_address)?;
+
     log_info!(
         "🚀 Initiating transfer of {} to {}",
         formatted_amount,
-        to_address
+        resolved_address
     );
     log_verbose!(
         "🚀 {} Sending {} to {}",
         "SEND_SUBXT".bright_cyan().bold(),
         formatted_amount.bright_yellow().bold(),
-        to_address.bright_green()
+        resolved_address.bright_green()
     );
+
+    // If the original input was a wallet name, show the resolved address
+    if to_address != resolved_address {
+        log_print!(
+            "💡 Resolved wallet name '{}' to address: {}",
+            to_address.bright_cyan(),
+            resolved_address.bright_green()
+        );
+    }
 
     // Get password securely for decryption
     log_verbose!("📦 Using wallet: {}", from_wallet.bright_blue().bold());
@@ -287,7 +304,7 @@ pub async fn handle_send_subxt_command(
     );
 
     // Submit transaction
-    let tx_hash = transfer(&client, &keypair, &to_address, amount).await?;
+    let tx_hash = transfer(&client, &keypair, &resolved_address, amount).await?;
 
     log_print!(
         "✅ {} Transaction submitted! Hash: {:?}",

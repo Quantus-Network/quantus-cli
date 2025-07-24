@@ -1,6 +1,6 @@
 //! `quantus tech-collective` subcommand - tech collective management
 use crate::chain::client::ChainConfig;
-use crate::cli::common::get_fresh_nonce;
+use crate::cli::common::{get_fresh_nonce, resolve_address};
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
     chain::client, chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
@@ -566,9 +566,22 @@ pub async fn handle_tech_collective_subxt_command(
 
         TechCollectiveSubxtCommands::IsMember { address } => {
             log_print!("🔍 Checking Tech Collective membership ");
-            log_print!("   👤 Address: {}", address.bright_cyan());
 
-            if is_member(&client, &address).await? {
+            // Resolve address (could be wallet name or SS58 address)
+            let resolved_address = resolve_address(&address)?;
+
+            // If the original input was a wallet name, show the resolved address
+            if address != resolved_address {
+                log_print!(
+                    "💡 Resolved wallet name '{}' to address: {}",
+                    address.bright_cyan(),
+                    resolved_address.bright_green()
+                );
+            }
+
+            log_print!("   👤 Address: {}", resolved_address.bright_cyan());
+
+            if is_member(&client, &resolved_address).await? {
                 log_success!("✅ Address IS a member of Tech Collective!");
                 log_print!("👥 Member data found in storage");
             } else {

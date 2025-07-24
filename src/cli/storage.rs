@@ -13,6 +13,22 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_core::twox_128;
 use subxt::OnlineClient;
 
+/// Validate that a pallet exists in the chain metadata
+fn validate_pallet_exists(
+    client: &OnlineClient<ChainConfig>,
+    pallet_name: &str,
+) -> crate::error::Result<()> {
+    let metadata = client.metadata();
+    metadata.pallet_by_name(pallet_name).ok_or_else(|| {
+        QuantusError::Generic(format!(
+            "Pallet '{}' not found in chain metadata. Available pallets: {}",
+            pallet_name,
+            quantus_subxt::api::PALLETS.join(", ")
+        ))
+    })?;
+    Ok(())
+}
+
 /// Direct interaction with chain storage (Sudo required for set)
 #[derive(Subcommand, Debug)]
 pub enum StorageSubxtCommands {
@@ -152,6 +168,9 @@ pub async fn handle_storage_subxt_command(
                 name.bright_cyan()
             );
 
+            // Validate pallet exists
+            validate_pallet_exists(&client, &pallet)?;
+
             // Construct the storage key
             let mut key = twox_128(pallet.as_bytes()).to_vec();
             key.extend(&twox_128(name.as_bytes()));
@@ -218,6 +237,9 @@ pub async fn handle_storage_subxt_command(
                 name.bright_cyan()
             );
             log_print!("\n{}", "🛑 This is a SUDO operation!".bright_red().bold());
+
+            // Validate pallet exists
+            validate_pallet_exists(&client, &pallet)?;
 
             // 1. Load wallet
             let keypair =
