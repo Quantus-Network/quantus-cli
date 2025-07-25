@@ -1,6 +1,6 @@
 //! `quantus tech-collective` subcommand - tech collective management
 use crate::chain::client::ChainConfig;
-use crate::cli::common::{get_fresh_nonce, resolve_address};
+use crate::cli::common::resolve_address;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
     chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
@@ -116,11 +116,6 @@ pub async fn add_member(
     let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
     let member_account_id = subxt::ext::subxt_core::utils::AccountId32::from(member_account_bytes);
 
-    // Convert our QuantumKeyPair to subxt Signer
-    let signer = from_keypair
-        .to_subxt_signer()
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
-
     log_verbose!("✍️  Creating add_member transaction...");
 
     // Create the TechCollective::add_member call as RuntimeCall enum
@@ -133,21 +128,7 @@ pub async fn add_member(
     // Wrap in Sudo::sudo call
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(add_member_call);
 
-    // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(client, from_keypair).await?;
-
-    // Create custom params with fresh nonce
-    use subxt::config::DefaultExtrinsicParamsBuilder;
-    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-    // Submit the transaction with fresh nonce
-    let tx_hash = client
-        .tx()
-        .sign_and_submit(&sudo_call, &signer, params)
-        .await
-        .map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-        })?;
+    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
 
     log_verbose!("📋 Add member transaction submitted: {:?}", tx_hash);
 
@@ -171,11 +152,6 @@ pub async fn remove_member(
     let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
     let member_account_id = subxt::ext::subxt_core::utils::AccountId32::from(member_account_bytes);
 
-    // Convert our QuantumKeyPair to subxt Signer
-    let signer = from_keypair
-        .to_subxt_signer()
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
-
     log_verbose!("✍️  Creating remove_member transaction...");
 
     // Create the TechCollective::remove_member call as RuntimeCall enum
@@ -189,21 +165,7 @@ pub async fn remove_member(
     // Wrap in Sudo::sudo call
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(remove_member_call);
 
-    // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(client, from_keypair).await?;
-
-    // Create custom params with fresh nonce
-    use subxt::config::DefaultExtrinsicParamsBuilder;
-    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-    // Submit the transaction with fresh nonce
-    let tx_hash = client
-        .tx()
-        .sign_and_submit(&sudo_call, &signer, params)
-        .await
-        .map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-        })?;
+    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
 
     log_verbose!("📋 Remove member transaction submitted: {:?}", tx_hash);
 
@@ -221,11 +183,6 @@ pub async fn vote_on_referendum(
     log_verbose!("   Referendum: {}", referendum_index);
     log_verbose!("   Vote: {}", if aye { "AYE" } else { "NAY" });
 
-    // Convert our QuantumKeyPair to subxt Signer
-    let signer = from_keypair
-        .to_subxt_signer()
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
-
     log_verbose!("✍️  Creating vote transaction...");
 
     // Create the TechCollective::vote call
@@ -233,21 +190,7 @@ pub async fn vote_on_referendum(
         .tech_collective()
         .vote(referendum_index, aye);
 
-    // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(client, from_keypair).await?;
-
-    // Create custom params with fresh nonce
-    use subxt::config::DefaultExtrinsicParamsBuilder;
-    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-    // Submit the transaction with fresh nonce
-    let tx_hash = client
-        .tx()
-        .sign_and_submit(&vote_call, &signer, params)
-        .await
-        .map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-        })?;
+    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, vote_call).await?;
 
     log_verbose!("📋 Vote transaction submitted: {:?}", tx_hash);
 

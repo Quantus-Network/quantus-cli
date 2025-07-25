@@ -57,3 +57,40 @@ pub async fn get_fresh_nonce(
     log_verbose!("🔢 Using fresh nonce from tx API: {}", nonce);
     Ok(nonce)
 }
+
+/// Helper function to submit transaction with nonce management
+pub async fn submit_transaction<Call>(
+    client: &OnlineClient<ChainConfig>,
+    from_keypair: &crate::wallet::QuantumKeyPair,
+    call: Call,
+) -> crate::error::Result<subxt::utils::H256>
+where
+    Call: subxt::tx::Payload,
+{
+    let signer = from_keypair.to_subxt_signer().map_err(|e| {
+        crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+    })?;
+
+    // Get fresh nonce for the sender
+    let nonce = get_fresh_nonce(client, from_keypair).await?;
+
+    // Create custom params with fresh nonce
+    use subxt::config::DefaultExtrinsicParamsBuilder;
+    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
+
+    // Submit the transaction with fresh nonce
+    let tx_hash = client
+        .tx()
+        .sign_and_submit(&call, &signer, params)
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to submit transaction: {:?}",
+                e
+            ))
+        })?;
+
+    log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
+
+    Ok(tx_hash)
+}

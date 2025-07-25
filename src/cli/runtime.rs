@@ -1,6 +1,5 @@
 //! `quantus runtime` subcommand - runtime management
 use crate::chain::client::ChainConfig;
-use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
     chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
@@ -116,25 +115,8 @@ pub async fn update_runtime(
     log_print!("📡 Submitting runtime update transaction...");
     log_print!("⏳ This may take longer than usual due to WASM size...");
 
-    let signer = from_keypair
-        .to_subxt_signer()
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
+    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
 
-    // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(client, from_keypair).await?;
-
-    // Create custom params with fresh nonce
-    use subxt::config::DefaultExtrinsicParamsBuilder;
-    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-    // Submit the transaction with fresh nonce
-    let tx_hash = client
-        .tx()
-        .sign_and_submit(&sudo_call, &signer, params)
-        .await
-        .map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to submit runtime update: {:?}", e))
-        })?;
     log_success!(
         "✅ SUCCESS Runtime update transaction submitted! Hash: 0x{}",
         hex::encode(tx_hash)

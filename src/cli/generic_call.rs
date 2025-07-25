@@ -1,6 +1,5 @@
 //! `quantus call` subcommand - generic pallet calls
 use crate::chain::client::ChainConfig;
-use crate::cli::common::get_fresh_nonce;
 use crate::{
     chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
     wallet::QuantumKeyPair,
@@ -162,13 +161,13 @@ async fn submit_balance_transfer(
             subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id_subxt),
             amount,
         );
-        submit_transaction(client, from_keypair, transfer_call).await
+        crate::cli::common::submit_transaction(client, from_keypair, transfer_call).await
     } else {
         let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
             subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id_subxt),
             amount,
         );
-        submit_transaction(client, from_keypair, transfer_call).await
+        crate::cli::common::submit_transaction(client, from_keypair, transfer_call).await
     }
 }
 
@@ -192,7 +191,7 @@ async fn submit_system_remark(
         .system()
         .remark(remark.as_bytes().to_vec());
 
-    submit_transaction(client, from_keypair, remark_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, remark_call).await
 }
 
 /// Submit sudo call
@@ -242,7 +241,7 @@ async fn submit_tech_collective_add_member(
             },
         ));
 
-    submit_transaction(client, from_keypair, sudo_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await
 }
 
 /// Submit tech collective remove member
@@ -279,7 +278,7 @@ async fn submit_tech_collective_remove_member(
             },
         ));
 
-    submit_transaction(client, from_keypair, sudo_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await
 }
 
 /// Submit tech collective vote
@@ -301,7 +300,7 @@ async fn submit_tech_collective_vote(
         .tech_collective()
         .vote(referendum_index, aye);
 
-    submit_transaction(client, from_keypair, vote_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, vote_call).await
 }
 
 /// Submit reversible transfer
@@ -339,7 +338,7 @@ async fn submit_reversible_transfer(
             amount,
         );
 
-    submit_transaction(client, from_keypair, schedule_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, schedule_call).await
 }
 
 /// Submit scheduler schedule
@@ -368,55 +367,20 @@ async fn submit_scheduler_cancel(
     ))
 }
 
-/// Helper function to submit transaction with nonce management
-async fn submit_transaction<Call>(
-    client: &OnlineClient<ChainConfig>,
-    from_keypair: &QuantumKeyPair,
-    call: Call,
-) -> crate::error::Result<subxt::utils::H256>
-where
-    Call: subxt::tx::Payload,
-{
-    let signer = from_keypair
-        .to_subxt_signer()
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
-
-    // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(client, from_keypair).await?;
-
-    // Create custom params with fresh nonce
-    use subxt::config::DefaultExtrinsicParamsBuilder;
-    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-    // Submit the transaction with fresh nonce
-    let tx_hash = client
-        .tx()
-        .sign_and_submit(&call, &signer, params)
-        .await
-        .map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-        })?;
-
-    log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
-
-    Ok(tx_hash)
-}
-
 /// Handle generic call command execution
 pub async fn handle_generic_call(
     pallet: &str,
     call: &str,
     args: Vec<Value>,
-    from: &str,
+    keypair: &QuantumKeyPair,
     tip: Option<String>,
     node_url: &str,
 ) -> crate::error::Result<()> {
     log_print!("🚀 Generic Call");
 
     let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
-    let keypair = crate::wallet::load_keypair_from_wallet(from, None, None)?;
 
-    execute_generic_call(quantus_client.client(), pallet, call, args, &keypair, tip).await?;
+    execute_generic_call(quantus_client.client(), pallet, call, args, keypair, tip).await?;
 
     Ok(())
 }

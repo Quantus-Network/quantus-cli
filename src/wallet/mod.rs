@@ -272,7 +272,7 @@ impl WalletManager {
     /// Find wallet by name and return its address
     pub fn find_wallet_address(&self, name: &str) -> Result<Option<String>> {
         let keystore = Keystore::new(&self.wallets_dir);
-        
+
         if let Some(encrypted_wallet) = keystore.load_wallet(name)? {
             // Return the stored address (it's stored unencrypted)
             Ok(Some(encrypted_wallet.address))

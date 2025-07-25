@@ -1,5 +1,5 @@
 use crate::chain::client::{ChainConfig, QuantusClient};
-use crate::cli::common::{get_fresh_nonce, resolve_address};
+use crate::cli::common::resolve_address;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
     chain::quantus_subxt, error::Result, log_error, log_info, log_print, log_success, log_verbose,
@@ -147,7 +147,7 @@ pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128
     let multiplier = 10_f64.powi(decimals as i32);
     let raw_amount = (parsed_amount * multiplier).round() as u128;
 
-    if parsed_amount > 0.0 && raw_amount == 0 {
+    if raw_amount == 0 {
         return Err(crate::error::QuantusError::Generic(
             "Amount too small to represent in chain units".to_string(),
         ));
@@ -194,11 +194,6 @@ pub async fn transfer(
     let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
     let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
 
-    // Convert our QuantumKeyPair to subxt Signer
-    let signer = from_keypair.to_subxt_signer().map_err(|e| {
-        crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
-    })?;
-
     log_verbose!("✍️  Creating balance transfer extrinsic...");
 
     // Create the transfer call using static API from quantus_subxt
@@ -207,25 +202,13 @@ pub async fn transfer(
         amount,
     );
 
-    // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(quantus_client.client(), from_keypair).await?;
-
-    // Create custom params with fresh nonce
-    use subxt::config::DefaultExtrinsicParamsBuilder;
-    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-    // Submit the transaction with fresh nonce
-    let tx_hash = quantus_client
-        .client()
-        .tx()
-        .sign_and_submit(&transfer_call, &signer, params)
-        .await
-        .map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!(
-                "Failed to submit transaction: {:?}",
-                e
-            ))
-        })?;
+    // Submit the transaction using the common helper
+    let tx_hash = crate::cli::common::submit_transaction(
+        quantus_client.client(),
+        from_keypair,
+        transfer_call,
+    )
+    .await?;
 
     log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
 

@@ -213,11 +213,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         }
         Commands::Developer(dev_cmd) => match dev_cmd {
             DeveloperCommands::CreateTestWallets => {
-                let _ = crate::cli::handle_developer_command(
-                    DeveloperCommands::CreateTestWallets,
-                    node_url,
-                )
-                .await;
+                let _ = crate::cli::handle_developer_command(DeveloperCommands::CreateTestWallets)
+                    .await;
                 Ok(())
             }
         },
@@ -238,7 +235,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
             let runtime_version = runtime::get_runtime_version(quantus_client.client()).await?;
             log_print!(
-                "Runtime Version: spec_version: {}, impl_version: {}",
+                "Connected toRuntime Version: spec_version: {}, impl_version: {}",
                 runtime_version.spec_version,
                 runtime_version.impl_version
             );
@@ -253,8 +250,8 @@ async fn handle_generic_call_command(
     call: String,
     args: Option<String>,
     from: String,
-    _password: Option<String>,
-    _password_file: Option<String>,
+    password: Option<String>,
+    password_file: Option<String>,
     tip: Option<String>,
     offline: bool,
     call_data_only: bool,
@@ -273,6 +270,8 @@ async fn handle_generic_call_command(
         return Ok(());
     }
 
+    let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+
     let args_vec = if let Some(args_str) = args {
         serde_json::from_str(&args_str).map_err(|e| {
             crate::error::QuantusError::Generic(format!("Invalid JSON for arguments: {}", e))
@@ -281,14 +280,11 @@ async fn handle_generic_call_command(
         vec![]
     };
 
-    generic_call::handle_generic_call(&pallet, &call, args_vec, &from, tip, node_url).await
+    generic_call::handle_generic_call(&pallet, &call, args_vec, &keypair, tip, node_url).await
 }
 
 /// Handle developer subcommands
-pub async fn handle_developer_command(
-    command: DeveloperCommands,
-    _node_url: &str,
-) -> crate::error::Result<()> {
+pub async fn handle_developer_command(command: DeveloperCommands) -> crate::error::Result<()> {
     match command {
         DeveloperCommands::CreateTestWallets => {
             use crate::wallet::WalletManager;

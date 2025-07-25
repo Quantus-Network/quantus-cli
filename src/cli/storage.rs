@@ -1,6 +1,5 @@
 //! `quantus storage` subcommand - storage operations
 use crate::chain::client::ChainConfig;
-use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
     chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
@@ -111,11 +110,6 @@ pub async fn set_storage_value(
 ) -> crate::error::Result<subxt::utils::H256> {
     log_verbose!("✍️  Creating set_storage transaction...");
 
-    // Convert our QuantumKeyPair to subxt Signer
-    let signer = from_keypair
-        .to_subxt_signer()
-        .map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
-
     // Create the System::set_storage call using RuntimeCall type alias
     let set_storage_call =
         quantus_subxt::api::Call::System(quantus_subxt::api::system::Call::set_storage {
@@ -125,21 +119,7 @@ pub async fn set_storage_value(
     // Wrap in Sudo::sudo call
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
 
-    // Get fresh nonce for the sender
-    let nonce = get_fresh_nonce(client, from_keypair).await?;
-
-    // Create custom params with fresh nonce
-    use subxt::config::DefaultExtrinsicParamsBuilder;
-    let params = DefaultExtrinsicParamsBuilder::new().nonce(nonce).build();
-
-    // Submit the transaction with fresh nonce
-    let tx_hash = client
-        .tx()
-        .sign_and_submit(&sudo_call, &signer, params)
-        .await
-        .map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to submit transaction: {:?}", e))
-        })?;
+    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
 
     log_verbose!("📋 Set storage transaction submitted: {:?}", tx_hash);
 
