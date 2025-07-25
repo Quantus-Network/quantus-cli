@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use subxt::OnlineClient;
 
 #[derive(Subcommand, Debug)]
-pub enum RuntimeSubxtCommands {
+pub enum RuntimeCommands {
     /// Update the runtime using a WASM file (requires root permissions)
     Update {
         /// Path to the runtime WASM file
@@ -213,14 +213,14 @@ pub struct MetadataInfo {
 }
 
 /// Handle runtime subxt command
-pub async fn handle_runtime_subxt_command(
-    command: RuntimeSubxtCommands,
+pub async fn handle_runtime_command(
+    command: RuntimeCommands,
     node_url: &str,
 ) -> crate::error::Result<()> {
     let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
-        RuntimeSubxtCommands::Update {
+        RuntimeCommands::Update {
             wasm_file,
             from,
             password,
@@ -272,7 +272,7 @@ pub async fn handle_runtime_subxt_command(
             Ok(())
         }
 
-        RuntimeSubxtCommands::CheckVersion => {
+        RuntimeCommands::CheckVersion => {
             log_print!("🚀 Runtime Management");
             log_print!("🔍 Checking runtime version...");
 
@@ -298,7 +298,7 @@ pub async fn handle_runtime_subxt_command(
             Ok(())
         }
 
-        RuntimeSubxtCommands::GetSpecVersion => {
+        RuntimeCommands::GetSpecVersion => {
             log_print!("🚀 Runtime Management");
             let version = get_runtime_version(quantus_client.client()).await?;
 
@@ -309,7 +309,7 @@ pub async fn handle_runtime_subxt_command(
             Ok(())
         }
 
-        RuntimeSubxtCommands::GetImplVersion => {
+        RuntimeCommands::GetImplVersion => {
             log_print!("🚀 Runtime Management");
             let version = get_runtime_version(quantus_client.client()).await?;
 
@@ -320,7 +320,7 @@ pub async fn handle_runtime_subxt_command(
             Ok(())
         }
 
-        RuntimeSubxtCommands::GetMetadataVersion => {
+        RuntimeCommands::GetMetadataVersion => {
             log_print!("🚀 Runtime Management");
             log_print!("🔍 Getting metadata version...");
 
@@ -335,7 +335,7 @@ pub async fn handle_runtime_subxt_command(
             Ok(())
         }
 
-        RuntimeSubxtCommands::Compare { wasm_file } => {
+        RuntimeCommands::Compare { wasm_file } => {
             log_print!("🚀 Runtime Management");
             log_print!("🔍 Comparing WASM file with current runtime...");
             log_print!(

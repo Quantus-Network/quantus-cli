@@ -5,7 +5,7 @@ use subxt::OnlineClient;
 
 /// Scheduler-related commands
 #[derive(Subcommand, Debug)]
-pub enum SchedulerSubxtCommands {
+pub enum SchedulerCommands {
     /// Get the last processed timestamp from the scheduler
     GetLastProcessedTimestamp,
 }
@@ -36,16 +36,13 @@ pub async fn get_last_processed_timestamp(
 }
 
 /// Handle scheduler commands
-pub async fn handle_scheduler_subxt_command(
-    command: SchedulerSubxtCommands,
-    node_url: &str,
-) -> Result<()> {
+pub async fn handle_scheduler_command(command: SchedulerCommands, node_url: &str) -> Result<()> {
     log_print!("🗓️  Scheduler");
 
     let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
-        SchedulerSubxtCommands::GetLastProcessedTimestamp => {
+        SchedulerCommands::GetLastProcessedTimestamp => {
             match get_last_processed_timestamp(quantus_client.client()).await? {
                 Some(timestamp) => {
                     log_success!("🎉 Last processed timestamp: {}", timestamp);

@@ -2,8 +2,7 @@ use crate::chain::client::{ChainConfig, QuantusClient};
 use crate::cli::common::{get_fresh_nonce, resolve_address};
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::quantus_subxt, error::Result, log_error, log_info, log_print,
-    log_success, log_verbose,
+    chain::quantus_subxt, error::Result, log_error, log_info, log_print, log_success, log_verbose,
 };
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
@@ -55,11 +54,9 @@ pub async fn get_balance(
 
 /// Get chain properties for formatting (uses system.rs ChainHead API)
 pub async fn get_chain_properties(quantus_client: &QuantusClient) -> Result<(String, u8)> {
-
     // Use the shared ChainHead API from system.rs to avoid duplication
     match crate::cli::system::get_complete_chain_info(quantus_client.node_url()).await {
         Ok(chain_info) => {
-
             log_verbose!(
                 "💰 Token: {} with {} decimals",
                 chain_info.token.symbol,
@@ -237,8 +234,8 @@ pub async fn transfer(
 
 // (Removed custom `AccountData` struct – we now use the runtime-generated type)
 
-/// Handle the send_subxt command
-pub async fn handle_send_subxt_command(
+/// Handle the send command
+pub async fn handle_send_command(
     from_wallet: String,
     to_address: String,
     amount_str: &str,
@@ -263,7 +260,7 @@ pub async fn handle_send_subxt_command(
     );
     log_verbose!(
         "🚀 {} Sending {} to {}",
-        "SEND_SUBXT".bright_cyan().bold(),
+        "SEND".bright_cyan().bold(),
         formatted_amount.bright_yellow().bold(),
         resolved_address.bright_green()
     );

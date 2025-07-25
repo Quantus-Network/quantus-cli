@@ -209,7 +209,7 @@ pub async fn get_metadata_stats(client: &OnlineClient<ChainConfig>) -> crate::er
 }
 
 /// Handle system command
-pub async fn handle_system_subxt_command(node_url: &str) -> crate::error::Result<()> {
+pub async fn handle_system_command(node_url: &str) -> crate::error::Result<()> {
     log_print!("🚀 System Information");
     let quantus_client = QuantusClient::new(node_url).await?;
     get_system_info(&quantus_client).await?;
@@ -218,7 +218,7 @@ pub async fn handle_system_subxt_command(node_url: &str) -> crate::error::Result
 }
 
 /// Handle extended system commands with additional info
-pub async fn handle_system_subxt_extended_command(
+pub async fn handle_system_extended_command(
     node_url: &str,
     show_runtime: bool,
     show_metadata: bool,

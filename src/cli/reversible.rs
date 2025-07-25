@@ -1,8 +1,7 @@
 use crate::chain::client::ChainConfig;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::quantus_subxt, error::Result, log_error, log_info, log_print,
-    log_success, log_verbose,
+    chain::quantus_subxt, error::Result, log_error, log_info, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -11,7 +10,7 @@ use subxt::OnlineClient;
 
 /// Reversible transfer commands
 #[derive(Subcommand, Debug)]
-pub enum ReversibleSubxtCommands {
+pub enum ReversibleCommands {
     /// Schedule a transfer with default delay
     ScheduleTransfer {
         /// The recipient's account address
@@ -350,16 +349,13 @@ pub async fn schedule_transfer_with_delay(
 }
 
 /// Handle reversible transfer subxt commands
-pub async fn handle_reversible_subxt_command(
-    command: ReversibleSubxtCommands,
-    node_url: &str,
-) -> Result<()> {
+pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &str) -> Result<()> {
     log_print!("🔄 Reversible Transfers");
 
     let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
-        ReversibleSubxtCommands::ScheduleTransfer {
+        ReversibleCommands::ScheduleTransfer {
             to,
             amount,
             from,
@@ -378,7 +374,7 @@ pub async fn handle_reversible_subxt_command(
             );
             log_verbose!(
                 "🚀 {} Scheduling reversible transfer {} to {} ()",
-                "REVERSIBLE_SUBXT".bright_cyan().bold(),
+                "REVERSIBLE".bright_cyan().bold(),
                 formatted_amount.bright_yellow().bold(),
                 to.bright_green()
             );
@@ -411,7 +407,7 @@ pub async fn handle_reversible_subxt_command(
 
             Ok(())
         }
-        ReversibleSubxtCommands::Cancel {
+        ReversibleCommands::Cancel {
             tx_id,
             from,
             password,
@@ -419,7 +415,7 @@ pub async fn handle_reversible_subxt_command(
         } => {
             log_verbose!(
                 "❌ {} Cancelling reversible transfer {} ()",
-                "CANCEL_SUBXT".bright_red().bold(),
+                "CANCEL".bright_red().bold(),
                 tx_id.bright_yellow().bold()
             );
 
@@ -450,7 +446,7 @@ pub async fn handle_reversible_subxt_command(
             Ok(())
         }
 
-        ReversibleSubxtCommands::ScheduleTransferWithDelay {
+        ReversibleCommands::ScheduleTransferWithDelay {
             to,
             amount,
             delay,
@@ -467,7 +463,7 @@ pub async fn handle_reversible_subxt_command(
             let unit_str = if unit_blocks { "blocks" } else { "seconds" };
             log_verbose!(
                 "🚀 {} Scheduling reversible transfer {} to {} with {} {} delay ()",
-                "REVERSIBLE_SUBXT".bright_cyan().bold(),
+                "REVERSIBLE".bright_cyan().bold(),
                 formatted_amount.bright_yellow().bold(),
                 to.bright_green(),
                 delay.to_string().bright_magenta(),
@@ -525,7 +521,7 @@ pub async fn handle_reversible_subxt_command(
             Ok(())
         }
 
-        ReversibleSubxtCommands::SetReversibility {
+        ReversibleCommands::SetReversibility {
             delay,
             policy,
             reverser,
@@ -533,7 +529,7 @@ pub async fn handle_reversible_subxt_command(
             password,
             password_file,
         } => {
-            set_reversibility_subxt(
+            set_reversibility(
                 quantus_client.client(),
                 &delay,
                 &policy,
@@ -545,13 +541,13 @@ pub async fn handle_reversible_subxt_command(
             .await
         }
 
-        ReversibleSubxtCommands::ListPending {
+        ReversibleCommands::ListPending {
             address,
             from,
             password,
             password_file,
         } => {
-            list_pending_transactions_subxt(
+            list_pending_transactions(
                 quantus_client.client(),
                 address,
                 from,
@@ -564,7 +560,7 @@ pub async fn handle_reversible_subxt_command(
 }
 
 /// List all pending reversible transactions for an account
-async fn list_pending_transactions_subxt(
+async fn list_pending_transactions(
     client: &OnlineClient<ChainConfig>,
     address: Option<String>,
     wallet_name: Option<String>,
@@ -722,7 +718,7 @@ async fn list_pending_transactions_subxt(
 }
 
 /// Set reversibility (high security) for an account
-async fn set_reversibility_subxt(
+async fn set_reversibility(
     client: &OnlineClient<ChainConfig>,
     delay: &Option<u64>,
     policy: &str,

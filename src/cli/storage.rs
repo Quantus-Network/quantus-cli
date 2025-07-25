@@ -3,8 +3,7 @@ use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
-    log_verbose,
+    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use codec::{Decode, Encode};
@@ -31,7 +30,7 @@ fn validate_pallet_exists(
 
 /// Direct interaction with chain storage (Sudo required for set)
 #[derive(Subcommand, Debug)]
-pub enum StorageSubxtCommands {
+pub enum StorageCommands {
     /// Get a storage value from a pallet.
     ///
     /// This command constructs a storage key from the pallet and item names,
@@ -148,8 +147,8 @@ pub async fn set_storage_value(
 }
 
 /// Handle storage subxt commands
-pub async fn handle_storage_subxt_command(
-    command: StorageSubxtCommands,
+pub async fn handle_storage_command(
+    command: StorageCommands,
     node_url: &str,
 ) -> crate::error::Result<()> {
     log_print!("🗄️  Storage");
@@ -157,7 +156,7 @@ pub async fn handle_storage_subxt_command(
     let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
-        StorageSubxtCommands::Get {
+        StorageCommands::Get {
             pallet,
             name,
             decode_as,
@@ -222,7 +221,7 @@ pub async fn handle_storage_subxt_command(
 
             Ok(())
         }
-        StorageSubxtCommands::Set {
+        StorageCommands::Set {
             pallet,
             name,
             value,

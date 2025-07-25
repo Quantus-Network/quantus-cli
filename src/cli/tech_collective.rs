@@ -3,8 +3,7 @@ use crate::chain::client::ChainConfig;
 use crate::cli::common::{get_fresh_nonce, resolve_address};
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
-    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
-    log_verbose,
+    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -14,7 +13,7 @@ use subxt::OnlineClient;
 
 /// Tech Collective management commands
 #[derive(Subcommand, Debug)]
-pub enum TechCollectiveSubxtCommands {
+pub enum TechCollectiveCommands {
     /// Add a member to the Tech Collective
     AddMember {
         /// Address of the member to add
@@ -387,8 +386,8 @@ pub async fn get_sudo_account(
 }
 
 /// Handle tech collective subxt commands
-pub async fn handle_tech_collective_subxt_command(
-    command: TechCollectiveSubxtCommands,
+pub async fn handle_tech_collective_command(
+    command: TechCollectiveCommands,
     node_url: &str,
 ) -> crate::error::Result<()> {
     log_print!("🏛️  Tech Collective");
@@ -396,7 +395,7 @@ pub async fn handle_tech_collective_subxt_command(
     let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     match command {
-        TechCollectiveSubxtCommands::AddMember {
+        TechCollectiveCommands::AddMember {
             who,
             from,
             password,
@@ -432,7 +431,7 @@ pub async fn handle_tech_collective_subxt_command(
             Ok(())
         }
 
-        TechCollectiveSubxtCommands::RemoveMember {
+        TechCollectiveCommands::RemoveMember {
             who,
             from,
             password,
@@ -468,7 +467,7 @@ pub async fn handle_tech_collective_subxt_command(
             Ok(())
         }
 
-        TechCollectiveSubxtCommands::Vote {
+        TechCollectiveCommands::Vote {
             referendum_index,
             aye,
             from,
@@ -490,7 +489,9 @@ pub async fn handle_tech_collective_subxt_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = vote_on_referendum(quantus_client.client(), &keypair, referendum_index, aye).await?;
+            let tx_hash =
+                vote_on_referendum(quantus_client.client(), &keypair, referendum_index, aye)
+                    .await?;
 
             log_print!(
                 "✅ {} Vote transaction submitted! Hash: {:?}",
@@ -509,7 +510,7 @@ pub async fn handle_tech_collective_subxt_command(
             Ok(())
         }
 
-        TechCollectiveSubxtCommands::ListMembers => {
+        TechCollectiveCommands::ListMembers => {
             log_print!("🏛️  Tech Collective Members ");
             log_print!("");
 
@@ -564,7 +565,7 @@ pub async fn handle_tech_collective_subxt_command(
             Ok(())
         }
 
-        TechCollectiveSubxtCommands::IsMember { address } => {
+        TechCollectiveCommands::IsMember { address } => {
             log_print!("🔍 Checking Tech Collective membership ");
 
             // Resolve address (could be wallet name or SS58 address)
@@ -583,7 +584,7 @@ pub async fn handle_tech_collective_subxt_command(
             Ok(())
         }
 
-        TechCollectiveSubxtCommands::CheckSudo => {
+        TechCollectiveCommands::CheckSudo => {
             log_print!("🏛️  Checking sudo permissions ");
 
             match get_sudo_account(quantus_client.client()).await? {
@@ -622,7 +623,7 @@ pub async fn handle_tech_collective_subxt_command(
             Ok(())
         }
 
-        TechCollectiveSubxtCommands::ListReferenda => {
+        TechCollectiveCommands::ListReferenda => {
             log_print!("📜 Active Tech Referenda ");
             log_print!("");
 
@@ -634,7 +635,7 @@ pub async fn handle_tech_collective_subxt_command(
             Ok(())
         }
 
-        TechCollectiveSubxtCommands::GetReferendum { index } => {
+        TechCollectiveCommands::GetReferendum { index } => {
             log_print!("📄 Tech Referendum #{} Details ", index);
             log_print!("");
 

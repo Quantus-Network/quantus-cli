@@ -102,7 +102,7 @@ pub async fn get_metadata_stats(client: &OnlineClient<ChainConfig>) -> crate::er
 }
 
 /// Handle metadata command execution
-pub async fn handle_metadata_subxt_command(
+pub async fn handle_metadata_command(
     node_url: &str,
     no_docs: bool,
     stats_only: bool,

@@ -2,8 +2,8 @@
 use crate::chain::client::ChainConfig;
 use crate::cli::common::get_fresh_nonce;
 use crate::{
-    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success,
-    log_verbose, wallet::QuantumKeyPair,
+    chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
+    wallet::QuantumKeyPair,
 };
 use colored::Colorize;
 use serde_json::Value;
@@ -402,8 +402,8 @@ where
     Ok(tx_hash)
 }
 
-/// Execute a generic call
-pub async fn execute_generic_call_subxt(
+/// Handle generic call command execution
+pub async fn handle_generic_call(
     pallet: &str,
     call: &str,
     args: Vec<Value>,

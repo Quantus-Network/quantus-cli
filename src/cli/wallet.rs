@@ -14,7 +14,7 @@ use subxt::OnlineClient;
 
 /// Wallet management commands
 #[derive(Subcommand, Debug)]
-pub enum WalletSubxtCommands {
+pub enum WalletCommands {
     /// Create a new wallet with quantum-safe keys
     Create {
         /// Wallet name
@@ -138,12 +138,12 @@ pub async fn get_account_nonce(
 }
 
 /// Handle wallet commands
-pub async fn handle_wallet_subxt_command(
-    command: WalletSubxtCommands,
+pub async fn handle_wallet_command(
+    command: WalletCommands,
     node_url: &str,
 ) -> crate::error::Result<()> {
     match command {
-        WalletSubxtCommands::Create { name, password } => {
+        WalletCommands::Create { name, password } => {
             log_print!("🔐 Creating new quantum wallet...");
 
             let wallet_manager = WalletManager::new()?;
@@ -175,7 +175,7 @@ pub async fn handle_wallet_subxt_command(
             Ok(())
         }
 
-        WalletSubxtCommands::View { name, all } => {
+        WalletCommands::View { name, all } => {
             log_print!("👁️  Viewing wallet information...");
 
             let wallet_manager = WalletManager::new()?;
@@ -270,7 +270,7 @@ pub async fn handle_wallet_subxt_command(
             Ok(())
         }
 
-        WalletSubxtCommands::Export { name, format } => {
+        WalletCommands::Export { name, format } => {
             log_print!("📤 Exporting wallet...");
             log_print!("Wallet: {}", name.bright_green());
             log_print!("Format: {}", format.bright_yellow());
@@ -278,7 +278,7 @@ pub async fn handle_wallet_subxt_command(
             Ok(())
         }
 
-        WalletSubxtCommands::Import {
+        WalletCommands::Import {
             name,
             mnemonic,
             password,
@@ -325,7 +325,7 @@ pub async fn handle_wallet_subxt_command(
             Ok(())
         }
 
-        WalletSubxtCommands::List => {
+        WalletCommands::List => {
             log_print!("📋 Listing all wallets...");
 
             let wallet_manager = WalletManager::new()?;
@@ -378,7 +378,7 @@ pub async fn handle_wallet_subxt_command(
             Ok(())
         }
 
-        WalletSubxtCommands::Delete { name, force } => {
+        WalletCommands::Delete { name, force } => {
             log_print!("🗑️  Deleting wallet...");
 
             let wallet_manager = WalletManager::new()?;
@@ -451,7 +451,7 @@ pub async fn handle_wallet_subxt_command(
             Ok(())
         }
 
-        WalletSubxtCommands::Nonce {
+        WalletCommands::Nonce {
             address,
             wallet,
             password,

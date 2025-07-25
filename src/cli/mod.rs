@@ -20,7 +20,7 @@ pub mod wallet;
 pub enum Commands {
     /// Wallet management commands
     #[command(subcommand)]
-    Wallet(wallet::WalletSubxtCommands),
+    Wallet(wallet::WalletCommands),
 
     /// Send tokens to another account
     Send {
@@ -47,23 +47,23 @@ pub enum Commands {
 
     /// Reversible transfer commands
     #[command(subcommand)]
-    Reversible(reversible::ReversibleSubxtCommands),
+    Reversible(reversible::ReversibleCommands),
 
     /// Scheduler commands
     #[command(subcommand)]
-    Scheduler(scheduler::SchedulerSubxtCommands),
+    Scheduler(scheduler::SchedulerCommands),
 
     /// Direct interaction with chain storage (Sudo required for set)
     #[command(subcommand)]
-    Storage(storage::StorageSubxtCommands),
+    Storage(storage::StorageCommands),
 
     /// Tech Collective management commands
     #[command(subcommand)]
-    TechCollective(tech_collective::TechCollectiveSubxtCommands),
+    TechCollective(tech_collective::TechCollectiveCommands),
 
     /// Runtime management commands (requires root/sudo permissions)
     #[command(subcommand)]
-    Runtime(runtime::RuntimeSubxtCommands),
+    Runtime(runtime::RuntimeCommands),
 
     /// Generic extrinsic call - call ANY pallet function!
     Call {
@@ -151,34 +151,28 @@ pub enum DeveloperCommands {
 /// Execute a CLI command
 pub async fn execute_command(command: Commands, node_url: &str) -> crate::error::Result<()> {
     match command {
-        Commands::Wallet(wallet_cmd) => {
-            wallet::handle_wallet_subxt_command(wallet_cmd, node_url).await
-        }
+        Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
         Commands::Send {
             from,
             to,
             amount,
             password,
             password_file,
-        } => {
-            send::handle_send_subxt_command(from, to, &amount, node_url, password, password_file)
-                .await
-        }
+        } => send::handle_send_command(from, to, &amount, node_url, password, password_file).await,
         Commands::Reversible(reversible_cmd) => {
-            reversible::handle_reversible_subxt_command(reversible_cmd, node_url).await
+            reversible::handle_reversible_command(reversible_cmd, node_url).await
         }
         Commands::Scheduler(scheduler_cmd) => {
-            scheduler::handle_scheduler_subxt_command(scheduler_cmd, node_url).await
+            scheduler::handle_scheduler_command(scheduler_cmd, node_url).await
         }
         Commands::Storage(storage_cmd) => {
-            storage::handle_storage_subxt_command(storage_cmd, node_url).await
+            storage::handle_storage_command(storage_cmd, node_url).await
         }
         Commands::TechCollective(tech_collective_cmd) => {
-            tech_collective::handle_tech_collective_subxt_command(tech_collective_cmd, node_url)
-                .await
+            tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await
         }
         Commands::Runtime(runtime_cmd) => {
-            runtime::handle_runtime_subxt_command(runtime_cmd, node_url).await
+            runtime::handle_runtime_command(runtime_cmd, node_url).await
         }
         Commands::Call {
             pallet,
@@ -191,7 +185,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             offline,
             call_data_only,
         } => {
-            handle_generic_call_subxt_command(
+            handle_generic_call_command(
                 pallet,
                 call,
                 args,
@@ -229,15 +223,15 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         },
         Commands::System { runtime, metadata } => {
             if runtime || metadata {
-                system::handle_system_subxt_extended_command(node_url, runtime, metadata).await
+                system::handle_system_extended_command(node_url, runtime, metadata).await
             } else {
-                system::handle_system_subxt_command(node_url).await
+                system::handle_system_command(node_url).await
             }
         }
         Commands::Metadata {
             no_docs,
             stats_only,
-        } => metadata::handle_metadata_subxt_command(node_url, no_docs, stats_only).await,
+        } => metadata::handle_metadata_command(node_url, no_docs, stats_only).await,
         Commands::Version => {
             log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 
@@ -254,7 +248,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
 }
 
 /// Handle generic extrinsic call command
-async fn handle_generic_call_subxt_command(
+async fn handle_generic_call_command(
     pallet: String,
     call: String,
     args: Option<String>,
@@ -287,7 +281,7 @@ async fn handle_generic_call_subxt_command(
         vec![]
     };
 
-    generic_call::execute_generic_call_subxt(&pallet, &call, args_vec, &from, tip, node_url).await
+    generic_call::handle_generic_call(&pallet, &call, args_vec, &from, tip, node_url).await
 }
 
 /// Handle developer subcommands
