@@ -5,7 +5,16 @@
 /// - Managing default settings
 /// - Environment variable handling
 /// - Configuration file validation
+/// - Runtime compatibility information
 use serde::{Deserialize, Serialize};
+
+/// List of runtime spec versions that this CLI is compatible with
+pub const COMPATIBLE_RUNTIME_VERSIONS: &[u32] = &[103, 104];
+
+/// Check if a runtime version is compatible with this CLI
+pub fn is_runtime_compatible(spec_version: u32) -> bool {
+    COMPATIBLE_RUNTIME_VERSIONS.contains(&spec_version)
+}
 
 /// Main CLI configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]

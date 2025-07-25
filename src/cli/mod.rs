@@ -139,6 +139,9 @@ pub enum Commands {
 
     /// Show version information
     Version,
+
+    /// Check compatibility with the connected node
+    CompatibilityCheck,
 }
 
 /// Developer subcommands
@@ -241,6 +244,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             );
             Ok(())
         }
+        Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
     }
 }
 
@@ -342,4 +346,80 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
             Ok(())
         }
     }
+}
+
+/// Handle compatibility check command
+async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> {
+    log_print!("🔍 Compatibility Check");
+    log_print!("🔗 Connecting to: {}", node_url.bright_cyan());
+    log_print!("");
+
+    // Connect to the node
+    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+
+    // Get runtime version
+    let runtime_version = runtime::get_runtime_version(quantus_client.client()).await?;
+
+    // Get system info for additional details
+    let chain_info = system::get_complete_chain_info(node_url).await?;
+
+    log_print!("📋 Version Information:");
+    log_print!(
+        "   • CLI Version: {}",
+        env!("CARGO_PKG_VERSION").bright_green()
+    );
+    log_print!(
+        "   • Runtime Spec Version: {}",
+        runtime_version.spec_version.to_string().bright_yellow()
+    );
+    log_print!(
+        "   • Runtime Impl Version: {}",
+        runtime_version.impl_version.to_string().bright_blue()
+    );
+    log_print!(
+        "   • Transaction Version: {}",
+        runtime_version
+            .transaction_version
+            .to_string()
+            .bright_magenta()
+    );
+
+    if let Some(name) = &chain_info.chain_name {
+        log_print!("   • Chain Name: {}", name.bright_cyan());
+    }
+
+    log_print!("");
+
+    // Check compatibility
+    let is_compatible = crate::config::is_runtime_compatible(runtime_version.spec_version);
+
+    log_print!("🔍 Compatibility Analysis:");
+    log_print!(
+        "   • Supported Runtime Versions: {:?}",
+        crate::config::COMPATIBLE_RUNTIME_VERSIONS
+    );
+    log_print!(
+        "   • Current Runtime Version: {}",
+        runtime_version.spec_version
+    );
+
+    if is_compatible {
+        log_success!("✅ COMPATIBLE - This CLI version supports the connected node");
+        log_print!("   • All features should work correctly");
+        log_print!("   • You can safely use all CLI commands");
+    } else {
+        log_error!("❌ INCOMPATIBLE - This CLI version may not work with the connected node");
+        log_print!("   • Some features may not work correctly");
+        log_print!("   • Consider updating the CLI or connecting to a compatible node");
+        log_print!(
+            "   • Supported versions: {:?}",
+            crate::config::COMPATIBLE_RUNTIME_VERSIONS
+        );
+    }
+
+    log_print!("");
+    log_print!("💡 Tip: Use 'quantus version' for quick version check");
+    log_print!("💡 Tip: Use 'quantus system --runtime' for detailed system info");
+
+    Ok(())
 }
