@@ -39,18 +39,11 @@ pub enum QuantusError {
     #[error("Insufficient balance: available {available}, required {required}")]
     InsufficientBalance { available: u128, required: u128 },
 
-    /// Wormhole-specific errors
-    #[error("Wormhole prover error: {0}")]
-    WormholeProver(String),
-
     #[error("Wormhole proof generation failed: {0}")]
     WormholeProofGeneration(String),
 
     #[error("Wormhole unsigned extrinsic submission failed: {0}")]
     WormholeUnsignedExtrinsic(String),
-
-    #[error("Wormhole storage proof error: {0}")]
-    WormholeStorageProof(String),
 }
 
 /// Wallet-specific errors

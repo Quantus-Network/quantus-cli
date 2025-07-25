@@ -1,7 +1,7 @@
 use super::quantus_runtime_config::QuantusRuntimeConfig;
 use crate::error::{QuantusError, Result};
 use crate::wallet::QuantumKeyPair;
-use crate::{log_debug, log_print, log_verbose};
+use crate::{log_debug, log_print, log_success, log_verbose};
 use colored::Colorize;
 
 // use crate::chain::types::reversible_transfers::events::TransactionCancelled;
@@ -10,9 +10,10 @@ use colored::Colorize;
 
 use sp_core::crypto::AccountId32;
 use sp_core::crypto::Ss58Codec;
+use sp_core::H256;
 use substrate_api_client::{
     ac_primitives::ExtrinsicSigner, extrinsic::BalancesExtrinsics, rpc::JsonrpseeClient, Api,
-    GetAccountInformation, GetStorage, SubmitAndWatch, SystemApi,
+    GetAccountInformation, GetChainInfo, GetStorage, SubmitAndWatch, SystemApi,
 };
 
 /// Macro to submit any type of extrinsic without code duplication
@@ -495,6 +496,44 @@ impl ChainClient {
             tx_hash.bright_green()
         );
         Ok(true)
+    }
+
+    /// Get a storage proof for a specific account at a given block.
+    /// This is a specific method for the wormhole flow.
+    pub async fn get_storage_proof_at_block(
+        &self,
+        account: &AccountId32,
+        at_block: H256,
+    ) -> Result<(H256, Vec<u8>, Vec<Vec<u8>>)> {
+        let storage_key = self
+            .api
+            .metadata()
+            .storage_map_key("System", "Account", account)
+            .map_err(|e| {
+                QuantusError::NetworkError(format!("Failed to create storage key: {:?}", e))
+            })?;
+
+        let proof = self
+            .api
+            .get_storage_map_proof("System", "Account", account, Some(at_block))
+            .await
+            .map_err(|e| {
+                QuantusError::NetworkError(format!("Failed to get storage proof: {:?}", e))
+            })?
+            .ok_or_else(|| QuantusError::Generic("Proof not found".to_string()))?;
+
+        let header = self
+            .api
+            .get_header(Some(at_block))
+            .await
+            .map_err(|e| QuantusError::NetworkError(format!("Failed to get header: {:?}", e)))?
+            .ok_or_else(|| {
+                QuantusError::NetworkError(format!("Header not found for block: {:?}", at_block))
+            })?;
+
+        let proof_bytes = proof.proof.into_iter().map(|bytes| bytes.0).collect();
+
+        Ok((header.state_root, storage_key.0, proof_bytes))
     }
 
     /// Get chain properties including token decimals

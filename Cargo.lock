@@ -3754,7 +3754,6 @@ dependencies = [
  "tokio",
  "toml",
  "wormhole-circuit",
- "wormhole-prover",
  "zeroize",
 ]
 
@@ -6583,16 +6582,7 @@ dependencies = [
  "anyhow",
  "hex",
  "plonky2",
- "zk-circuits-common",
-]
-
-[[package]]
-name = "wormhole-prover"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "plonky2",
- "wormhole-circuit",
+ "serde",
  "zk-circuits-common",
 ]
 
