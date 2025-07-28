@@ -8,13 +8,45 @@ use subxt::OnlineClient;
 pub async fn explore_chain_metadata(
     client: &OnlineClient<ChainConfig>,
     no_docs: bool,
+    pallet_filter: Option<String>,
 ) -> crate::error::Result<()> {
     log_verbose!("🔍 Exploring chain metadata...");
 
     let metadata = client.metadata();
-    let pallets: Vec<_> = metadata.pallets().collect();
+    let all_pallets: Vec<_> = metadata.pallets().collect();
 
-    log_print!("{}", "🏛️  Available Pallets & Calls".bold().underline());
+    // Filter pallets if pallet_filter is provided
+    let pallets: Vec<_> = if let Some(filter) = &pallet_filter {
+        all_pallets
+            .into_iter()
+            .filter(|pallet| pallet.name().to_lowercase() == filter.to_lowercase())
+            .collect()
+    } else {
+        all_pallets
+    };
+
+    if pallets.is_empty() {
+        if let Some(filter) = pallet_filter {
+            log_print!("❌ Pallet '{}' not found.", filter.bright_red());
+            log_print!("Available pallets:");
+            let all_pallets: Vec<_> = metadata.pallets().collect();
+            for pallet in all_pallets {
+                log_print!("  - {}", pallet.name().bright_blue());
+            }
+            return Ok(());
+        }
+    }
+
+    if pallet_filter.is_some() {
+        log_print!(
+            "{}",
+            format!("🏛️  Pallet Documentation: {}", pallets[0].name())
+                .bold()
+                .underline()
+        );
+    } else {
+        log_print!("{}", "🏛️  Available Pallets & Calls".bold().underline());
+    }
     log_print!("");
 
     for pallet in pallets.iter() {
@@ -106,12 +138,13 @@ pub async fn handle_metadata_command(
     node_url: &str,
     no_docs: bool,
     stats_only: bool,
+    pallet_filter: Option<String>,
 ) -> crate::error::Result<()> {
     let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
     if stats_only {
         get_metadata_stats(quantus_client.client()).await
     } else {
-        explore_chain_metadata(quantus_client.client(), no_docs).await
+        explore_chain_metadata(quantus_client.client(), no_docs, pallet_filter).await
     }
 }

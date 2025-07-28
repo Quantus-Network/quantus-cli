@@ -14,6 +14,7 @@ use subxt::config::substrate::SubstrateHeader;
 use subxt::config::DefaultExtrinsicParams;
 use subxt::{Config, OnlineClient};
 use subxt_metadata::Metadata as SubxtMetadata;
+use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SubxtPoseidonHasher;
@@ -42,10 +43,10 @@ impl Config for ChainConfig {
     type ExtrinsicParams = DefaultExtrinsicParams<Self>;
 }
 
-/// Wrapper around OnlineClient that also stores the node URL
-#[derive(Clone)]
+/// Wrapper around OnlineClient that also stores the node URL and RPC client
 pub struct QuantusClient {
     client: OnlineClient<ChainConfig>,
+    rpc_client: WsClient,
     node_url: String,
 }
 
@@ -54,14 +55,22 @@ impl QuantusClient {
     pub async fn new(node_url: &str) -> crate::error::Result<Self> {
         log_verbose!("🔗 Connecting to Quantus node: {}", node_url);
 
+        // Create SubXT client
         let client = OnlineClient::<ChainConfig>::from_url(node_url)
             .await
             .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
+
+        // Create separate RPC client for raw calls
+        let rpc_client = WsClientBuilder::default()
+            .build(node_url)
+            .await
+            .map_err(|e| QuantusError::NetworkError(format!("Failed to create RPC client: {:?}", e)))?;
 
         log_verbose!("✅ Connected to Quantus node successfully!");
 
         Ok(QuantusClient {
             client,
+            rpc_client,
             node_url: node_url.to_string(),
         })
     }
@@ -74,6 +83,11 @@ impl QuantusClient {
     /// Get the node URL
     pub fn node_url(&self) -> &str {
         &self.node_url
+    }
+
+    /// Get reference to the RPC client
+    pub fn rpc_client(&self) -> &WsClient {
+        &self.rpc_client
     }
 }
 

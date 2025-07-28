@@ -3,6 +3,7 @@ use clap::Subcommand;
 use colored::Colorize;
 
 pub mod common;
+pub mod events;
 pub mod generic_call;
 pub mod metadata;
 pub mod progress_spinner;
@@ -115,6 +116,37 @@ pub enum Commands {
     #[command(subcommand)]
     Developer(DeveloperCommands),
 
+    /// Query events from blocks
+    Events {
+        /// Block number to query events from (full support)
+        #[arg(long)]
+        block: Option<u32>,
+
+        /// Block hash to query events from (full support)
+        #[arg(long)]
+        block_hash: Option<String>,
+
+        /// Query events from latest block
+        #[arg(long)]
+        latest: bool,
+
+        /// Query events from finalized block (full support)
+        #[arg(long)]
+        finalized: bool,
+
+        /// Filter events by pallet name (e.g., "Balances")
+        #[arg(long)]
+        pallet: Option<String>,
+
+        /// Show raw event data
+        #[arg(long)]
+        raw: bool,
+
+        /// Disable event decoding (decoding is enabled by default)
+        #[arg(long)]
+        no_decode: bool,
+    },
+
     /// Query system information
     System {
         /// Show runtime version information
@@ -135,6 +167,10 @@ pub enum Commands {
         /// Show only metadata statistics
         #[arg(long)]
         stats_only: bool,
+
+        /// Filter by specific pallet name
+        #[arg(long)]
+        pallet: Option<String>,
     },
 
     /// Show version information
@@ -221,6 +257,20 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
                 Ok(())
             }
         },
+        Commands::Events {
+            block,
+            block_hash,
+            latest,
+            finalized,
+            pallet,
+            raw,
+            no_decode,
+        } => {
+            events::handle_events_command(
+                block, block_hash, latest, finalized, pallet, raw, !no_decode, node_url,
+            )
+            .await
+        }
         Commands::System { runtime, metadata } => {
             if runtime || metadata {
                 system::handle_system_extended_command(node_url, runtime, metadata).await
@@ -231,7 +281,8 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         Commands::Metadata {
             no_docs,
             stats_only,
-        } => metadata::handle_metadata_command(node_url, no_docs, stats_only).await,
+            pallet,
+        } => metadata::handle_metadata_command(node_url, no_docs, stats_only, pallet).await,
         Commands::Version => {
             log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 

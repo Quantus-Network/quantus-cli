@@ -54,6 +54,7 @@ codec = { package = "parity-scale-codec", version = "3.7", features = [
 sp-core = { version = "35.0" }
 sp-runtime = { version = "40.1" }
 subxt = "0.43.0"
+jsonrpsee = { version = "0.24", features = ["client"] }
 
 # Needed for implementing custom Subxt hasher
 subxt-metadata = "0.43.0"

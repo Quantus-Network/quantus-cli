@@ -196,19 +196,47 @@ pub async fn transfer(
 
     log_verbose!("✍️  Creating balance transfer extrinsic...");
 
-    // Create the transfer call using static API from quantus_subxt
-    let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
-        subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
-        amount,
-    );
+    // Submit the transaction with retry logic for nonce conflicts
+    let mut attempt = 0;
+    let tx_hash = loop {
+        attempt += 1;
+        log_verbose!("📤 Submitting transfer (attempt {})", attempt);
 
-    // Submit the transaction using the common helper
-    let tx_hash = crate::cli::common::submit_transaction(
-        quantus_client.client(),
-        from_keypair,
-        transfer_call,
-    )
-    .await?;
+        // Create the transfer call using static API from quantus_subxt (fresh each time)
+        let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
+            subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id.clone()),
+            amount,
+        );
+
+        match crate::cli::common::submit_transaction(
+            quantus_client.client(),
+            from_keypair,
+            transfer_call,
+        )
+        .await
+        {
+            Ok(hash) => break hash,
+            Err(e) => {
+                let error_msg = format!("{:?}", e);
+
+                // Check if it's a priority conflict, outdated transaction, or temporarily banned
+                if (error_msg.contains("Priority is too low")
+                    || error_msg.contains("Transaction is outdated")
+                    || error_msg.contains("Transaction is temporarily banned"))
+                    && attempt < 3
+                {
+                    log_verbose!(
+                        "⚠️  Nonce conflict detected, retrying in 5 seconds... (attempt {}/3)",
+                        attempt
+                    );
+                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
+                    continue;
+                } else {
+                    return Err(e);
+                }
+            }
+        }
+    };
 
     log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
 

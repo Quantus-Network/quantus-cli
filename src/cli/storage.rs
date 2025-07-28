@@ -45,7 +45,15 @@ pub enum StorageCommands {
 
         /// Attempt to decode the value as a specific type (e.g., "u64", "AccountId")
         #[arg(long)]
-        decode_as: Option<String>,
+        _decode_as: Option<String>,
+
+        /// Storage key parameter (e.g., AccountId for System::Account)
+        #[arg(long)]
+        key: Option<String>,
+
+        /// Type of the key parameter (e.g., "accountid", "u64")
+        #[arg(long)]
+        key_type: Option<String>,
     },
     /// Set a storage value on the chain.
     ///
@@ -139,7 +147,9 @@ pub async fn handle_storage_command(
         StorageCommands::Get {
             pallet,
             name,
-            decode_as,
+            _decode_as,
+            key,
+            key_type,
         } => {
             log_print!(
                 "🔎 Getting storage for {}::{}",
@@ -147,19 +157,34 @@ pub async fn handle_storage_command(
                 name.bright_cyan()
             );
 
+            if let Some(key_value) = &key {
+                log_print!("🔑 With key: {}", key_value.bright_yellow());
+            }
+
             // Validate pallet exists
             validate_pallet_exists(quantus_client.client(), &pallet)?;
 
-            // Construct the storage key
-            let mut key = twox_128(pallet.as_bytes()).to_vec();
-            key.extend(&twox_128(name.as_bytes()));
+            // Construct the storage key for all storage items
+            let mut storage_key = twox_128(pallet.as_bytes()).to_vec();
+            storage_key.extend(&twox_128(name.as_bytes()));
 
-            let result = get_storage_raw(quantus_client.client(), key).await?;
+            // Add key parameter if provided
+            if let Some(key_value) = key {
+                if let Some(key_type_str) = key_type {
+                    let key_bytes = encode_storage_key(&key_value, &key_type_str)?;
+                    storage_key.extend(key_bytes);
+                } else {
+                    log_error!("Key type (--key-type) is required when using --key parameter");
+                    return Ok(());
+                }
+            }
+
+            let result = get_storage_raw(quantus_client.client(), storage_key).await?;
 
             if let Some(value_bytes) = result {
                 log_success!("Raw Value: 0x{}", hex::encode(&value_bytes).bright_yellow());
 
-                if let Some(type_str) = decode_as {
+                if let Some(type_str) = _decode_as {
                     log_print!("Attempting to decode as {}...", type_str.bright_cyan());
                     match type_str.to_lowercase().as_str() {
                         "u64" | "moment" => match u64::decode(&mut &value_bytes[..]) {
@@ -290,5 +315,42 @@ pub async fn handle_storage_command(
 
             Ok(())
         }
+    }
+}
+
+/// Encode storage key parameter based on type
+fn encode_storage_key(key_value: &str, key_type: &str) -> crate::error::Result<Vec<u8>> {
+    use codec::Encode;
+    use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+
+    match key_type.to_lowercase().as_str() {
+        "accountid" | "accountid32" => {
+            let account_id = SpAccountId32::from_ss58check(key_value).map_err(|e| {
+                crate::error::QuantusError::Generic(format!("Invalid AccountId: {:?}", e))
+            })?;
+            Ok(account_id.encode())
+        }
+        "u64" => {
+            let value = key_value
+                .parse::<u64>()
+                .map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u64: {}", e)))?;
+            Ok(value.encode())
+        }
+        "u128" => {
+            let value = key_value
+                .parse::<u128>()
+                .map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u128: {}", e)))?;
+            Ok(value.encode())
+        }
+        "u32" => {
+            let value = key_value
+                .parse::<u32>()
+                .map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u32: {}", e)))?;
+            Ok(value.encode())
+        }
+        _ => Err(crate::error::QuantusError::Generic(format!(
+            "Unsupported key type: {}. Supported types: accountid, u64, u128, u32",
+            key_type
+        ))),
     }
 }

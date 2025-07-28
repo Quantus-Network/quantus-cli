@@ -90,7 +90,7 @@ where
             ))
         })?;
 
-    log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
+    crate::log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
 
     Ok(tx_hash)
 }
