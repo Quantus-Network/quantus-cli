@@ -5,16 +5,19 @@
 
 use crate::{error::QuantusError, log_verbose};
 use dilithium_crypto::ResonanceSignatureScheme;
+use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use poseidon_resonance::PoseidonHasher;
 use sp_core::crypto::AccountId32;
 use sp_core::ByteArray;
 use sp_runtime::traits::IdentifyAccount;
 use sp_runtime::MultiAddress;
+use std::sync::Arc;
+use std::time::Duration;
+use subxt::backend::rpc::RpcClient;
 use subxt::config::substrate::SubstrateHeader;
 use subxt::config::DefaultExtrinsicParams;
 use subxt::{Config, OnlineClient};
 use subxt_metadata::Metadata as SubxtMetadata;
-use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 
 #[derive(Debug, Clone, Copy)]
 pub struct SubxtPoseidonHasher;
@@ -46,7 +49,7 @@ impl Config for ChainConfig {
 /// Wrapper around OnlineClient that also stores the node URL and RPC client
 pub struct QuantusClient {
     client: OnlineClient<ChainConfig>,
-    rpc_client: WsClient,
+    rpc_client: Arc<WsClient>,
     node_url: String,
 }
 
@@ -55,22 +58,33 @@ impl QuantusClient {
     pub async fn new(node_url: &str) -> crate::error::Result<Self> {
         log_verbose!("🔗 Connecting to Quantus node: {}", node_url);
 
-        // Create SubXT client
-        let client = OnlineClient::<ChainConfig>::from_url(node_url)
-            .await
-            .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
-
-        // Create separate RPC client for raw calls
-        let rpc_client = WsClientBuilder::default()
+        // Create WS client with custom timeouts
+        let ws_client = WsClientBuilder::default()
+            // TODO: Make these configurable in a separate change
+            .connection_timeout(Duration::from_secs(30))
+            .request_timeout(Duration::from_secs(30))
             .build(node_url)
             .await
-            .map_err(|e| QuantusError::NetworkError(format!("Failed to create RPC client: {:?}", e)))?;
+            .map_err(|e| {
+                QuantusError::NetworkError(format!("Failed to create RPC client: {:?}", e))
+            })?;
+
+        // Wrap WS client in Arc for sharing
+        let ws_client = Arc::new(ws_client);
+
+        // Create RPC client wrapper for subxt
+        let rpc_client = RpcClient::new(ws_client.clone());
+
+        // Create SubXT client using the configured RPC client
+        let client = OnlineClient::<ChainConfig>::from_rpc_client(rpc_client)
+            .await
+            .map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
 
         log_verbose!("✅ Connected to Quantus node successfully!");
 
         Ok(QuantusClient {
             client,
-            rpc_client,
+            rpc_client: ws_client,
             node_url: node_url.to_string(),
         })
     }
