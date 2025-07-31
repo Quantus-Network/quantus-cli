@@ -168,7 +168,7 @@ pub async fn schedule_transfer(
 
     // Submit the transaction
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, transfer_call).await?;
+        crate::cli::common::submit_transaction(client, from_keypair, transfer_call, None).await?;
 
     log_verbose!("📋 Reversible transfer submitted: {:?}", tx_hash);
 
@@ -200,7 +200,7 @@ pub async fn cancel_transaction(
 
     // Submit the transaction
     let tx_hash_result =
-        crate::cli::common::submit_transaction(client, from_keypair, cancel_call).await?;
+        crate::cli::common::submit_transaction(client, from_keypair, cancel_call, None).await?;
 
     log_verbose!("📋 Cancel transaction submitted: {:?}", tx_hash_result);
 
@@ -254,7 +254,7 @@ pub async fn schedule_transfer_with_delay(
 
     // Submit the transaction
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, transfer_call).await?;
+        crate::cli::common::submit_transaction(client, from_keypair, transfer_call, None).await?;
 
     log_verbose!(
         "📋 Reversible transfer with custom delay submitted: {:?}",
@@ -720,7 +720,8 @@ async fn set_reversibility(
 
     // Submit the transaction
     let tx_hash =
-        crate::cli::common::submit_transaction(client, &from_keypair, set_high_security_tx).await?;
+        crate::cli::common::submit_transaction(client, &from_keypair, set_high_security_tx, None)
+            .await?;
 
     log_success!(
         "✅ SUCCESS Reversibility settings updated! Hash: 0x{}",

@@ -127,7 +127,8 @@ pub async fn set_storage_value(
     // Wrap in Sudo::sudo call
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
 
-    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
+    let tx_hash =
+        crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
 
     log_verbose!("📋 Set storage transaction submitted: {:?}", tx_hash);
 

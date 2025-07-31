@@ -128,7 +128,8 @@ pub async fn add_member(
     // Wrap in Sudo::sudo call
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(add_member_call);
 
-    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
+    let tx_hash =
+        crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
 
     log_verbose!("📋 Add member transaction submitted: {:?}", tx_hash);
 
@@ -165,7 +166,8 @@ pub async fn remove_member(
     // Wrap in Sudo::sudo call
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(remove_member_call);
 
-    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
+    let tx_hash =
+        crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
 
     log_verbose!("📋 Remove member transaction submitted: {:?}", tx_hash);
 
@@ -190,7 +192,8 @@ pub async fn vote_on_referendum(
         .tech_collective()
         .vote(referendum_index, aye);
 
-    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, vote_call).await?;
+    let tx_hash =
+        crate::cli::common::submit_transaction(client, from_keypair, vote_call, None).await?;
 
     log_verbose!("📋 Vote transaction submitted: {:?}", tx_hash);
 

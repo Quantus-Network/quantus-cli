@@ -57,20 +57,29 @@ pub async fn execute_generic_call(
         call_metadata.index
     );
 
+    // Parse tip amount if provided
+    let tip_amount = if let Some(tip_str) = &tip {
+        tip_str.parse::<u128>().ok()
+    } else {
+        None
+    };
+
     // Create and submit extrinsic based on pallet and call
     log_print!("🔧 Creating extrinsic for {}.{}", pallet, call);
 
     let tx_hash = match (pallet, call) {
         // Balances pallet calls
         ("Balances", "transfer_allow_death") => {
-            submit_balance_transfer(client, from_keypair, &args, false).await?
+            submit_balance_transfer(client, from_keypair, &args, false, tip_amount).await?
         }
         ("Balances", "transfer_keep_alive") => {
-            submit_balance_transfer(client, from_keypair, &args, true).await?
+            submit_balance_transfer(client, from_keypair, &args, true, tip_amount).await?
         }
 
         // System pallet calls
-        ("System", "remark") => submit_system_remark(client, from_keypair, &args).await?,
+        ("System", "remark") => {
+            submit_system_remark(client, from_keypair, &args, tip_amount).await?
+        }
 
         // Sudo pallet calls
         ("Sudo", "sudo") => submit_sudo_call(client, from_keypair, &args).await?,
@@ -132,6 +141,7 @@ async fn submit_balance_transfer(
     from_keypair: &QuantumKeyPair,
     args: &[Value],
     keep_alive: bool,
+    tip: Option<u128>,
 ) -> crate::error::Result<subxt::utils::H256> {
     if args.len() != 2 {
         return Err(QuantusError::Generic(
@@ -161,13 +171,13 @@ async fn submit_balance_transfer(
             subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id_subxt),
             amount,
         );
-        crate::cli::common::submit_transaction(client, from_keypair, transfer_call).await
+        crate::cli::common::submit_transaction(client, from_keypair, transfer_call, tip).await
     } else {
         let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
             subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id_subxt),
             amount,
         );
-        crate::cli::common::submit_transaction(client, from_keypair, transfer_call).await
+        crate::cli::common::submit_transaction(client, from_keypair, transfer_call, tip).await
     }
 }
 
@@ -176,6 +186,7 @@ async fn submit_system_remark(
     client: &OnlineClient<ChainConfig>,
     from_keypair: &QuantumKeyPair,
     args: &[Value],
+    tip: Option<u128>,
 ) -> crate::error::Result<subxt::utils::H256> {
     if args.len() != 1 {
         return Err(QuantusError::Generic(
@@ -191,7 +202,7 @@ async fn submit_system_remark(
         .system()
         .remark(remark.as_bytes().to_vec());
 
-    crate::cli::common::submit_transaction(client, from_keypair, remark_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, remark_call, tip).await
 }
 
 /// Submit sudo call
@@ -241,7 +252,7 @@ async fn submit_tech_collective_add_member(
             },
         ));
 
-    crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await
 }
 
 /// Submit tech collective remove member
@@ -278,7 +289,7 @@ async fn submit_tech_collective_remove_member(
             },
         ));
 
-    crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await
 }
 
 /// Submit tech collective vote
@@ -300,7 +311,7 @@ async fn submit_tech_collective_vote(
         .tech_collective()
         .vote(referendum_index, aye);
 
-    crate::cli::common::submit_transaction(client, from_keypair, vote_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, vote_call, None).await
 }
 
 /// Submit reversible transfer
@@ -338,7 +349,7 @@ async fn submit_reversible_transfer(
             amount,
         );
 
-    crate::cli::common::submit_transaction(client, from_keypair, schedule_call).await
+    crate::cli::common::submit_transaction(client, from_keypair, schedule_call, None).await
 }
 
 /// Submit scheduler schedule

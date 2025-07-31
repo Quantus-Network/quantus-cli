@@ -82,6 +82,7 @@ impl QuantusClient {
 
         log_verbose!("✅ Connected to Quantus node successfully!");
 
+
         Ok(QuantusClient {
             client,
             rpc_client: ws_client,

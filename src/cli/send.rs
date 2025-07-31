@@ -172,6 +172,7 @@ pub async fn transfer(
     from_keypair: &crate::wallet::QuantumKeyPair,
     to_address: &str,
     amount: u128,
+    tip: Option<u128>,
 ) -> Result<subxt::utils::H256> {
     log_verbose!("🚀 Creating transfer transaction...");
     log_verbose!(
@@ -208,33 +209,19 @@ pub async fn transfer(
             amount,
         );
 
+        // Use provided tip or default tip of 10 DEV to increase priority and avoid temporarily banned errors
+        let tip_to_use = tip.unwrap_or(10_000_000_000); // Use provided tip or default 10 DEV
+
         match crate::cli::common::submit_transaction(
             quantus_client.client(),
             from_keypair,
             transfer_call,
+            Some(tip_to_use),
         )
         .await
         {
             Ok(hash) => break hash,
-            Err(e) => {
-                let error_msg = format!("{:?}", e);
-
-                // Check if it's a priority conflict, outdated transaction, or temporarily banned
-                if (error_msg.contains("Priority is too low")
-                    || error_msg.contains("Transaction is outdated")
-                    || error_msg.contains("Transaction is temporarily banned"))
-                    && attempt < 3
-                {
-                    log_verbose!(
-                        "⚠️  Nonce conflict detected, retrying in 5 seconds... (attempt {}/3)",
-                        attempt
-                    );
-                    tokio::time::sleep(tokio::time::Duration::from_secs(5)).await;
-                    continue;
-                } else {
-                    return Err(e);
-                }
-            }
+            Err(e) => return Err(e),
         }
     };
 
@@ -253,6 +240,7 @@ pub async fn handle_send_command(
     node_url: &str,
     password: Option<String>,
     password_file: Option<String>,
+    tip: Option<String>,
 ) -> Result<()> {
     // Create quantus chain client
     let quantus_client = QuantusClient::new(node_url).await?;
@@ -301,8 +289,24 @@ pub async fn handle_send_command(
         "SIGN".bright_magenta().bold()
     );
 
+    // Parse tip amount if provided
+    let tip_amount = if let Some(tip_str) = &tip {
+        // Get chain properties for proper decimal parsing
+        let (_, decimals) = get_chain_properties(&quantus_client).await?;
+        parse_amount_with_decimals(tip_str, decimals).ok()
+    } else {
+        None
+    };
+
     // Submit transaction
-    let tx_hash = transfer(&quantus_client, &keypair, &resolved_address, amount).await?;
+    let tx_hash = transfer(
+        &quantus_client,
+        &keypair,
+        &resolved_address,
+        amount,
+        tip_amount,
+    )
+    .await?;
 
     log_print!(
         "✅ {} Transaction submitted! Hash: {:?}",

@@ -44,6 +44,10 @@ pub enum Commands {
         /// Read password from file (for scripting)
         #[arg(long)]
         password_file: Option<String>,
+
+        /// Optional tip amount to prioritize the transaction (e.g., "1", "0.5")
+        #[arg(long)]
+        tip: Option<String>,
     },
 
     /// Reversible transfer commands
@@ -197,7 +201,11 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             amount,
             password,
             password_file,
-        } => send::handle_send_command(from, to, &amount, node_url, password, password_file).await,
+            tip,
+        } => {
+            send::handle_send_command(from, to, &amount, node_url, password, password_file, tip)
+                .await
+        }
         Commands::Reversible(reversible_cmd) => {
             reversible::handle_reversible_command(reversible_cmd, node_url).await
         }

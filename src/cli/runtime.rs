@@ -115,7 +115,7 @@ pub async fn update_runtime(
     log_print!("📡 Submitting runtime update transaction...");
     log_print!("⏳ This may take longer than usual due to WASM size...");
 
-    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call).await?;
+    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
 
     log_success!(
         "✅ SUCCESS Runtime update transaction submitted! Hash: 0x{}",
