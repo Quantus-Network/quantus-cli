@@ -4,7 +4,7 @@
 #![allow(unused_imports)]
 
 use super::*;
-use dilithium_crypto::ResonanceSignatureScheme;
+use dilithium_crypto::DilithiumSignatureScheme;
 use poseidon_resonance::PoseidonHasher;
 use substrate_api_client::ac_primitives::{
     AccountData, AccountId32, Block, ExtrinsicSigner, GenericExtrinsicParams, Header, MultiAddress,
@@ -27,7 +27,7 @@ pub enum ChainConfig {}
 impl Config for ChainConfig {
     type AccountId = AccountId32;
     type Address = MultiAddress<Self::AccountId, u32>;
-    type Signature = ResonanceSignatureScheme;
+    type Signature = DilithiumSignatureScheme;
     type Hasher = BlakeTwo256; // TODO: replace with PoseidonHasher
     type Header = SubstrateHeader<u32, BlakeTwo256>;
     type AssetId = u32;

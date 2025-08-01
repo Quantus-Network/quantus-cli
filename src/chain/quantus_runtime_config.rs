@@ -9,8 +9,8 @@
 
 use codec::{Decode, Encode};
 use core::fmt::Debug;
-use dilithium_crypto::types::ResonancePair;
-use dilithium_crypto::types::ResonanceSignatureScheme;
+use dilithium_crypto::types::DilithiumPair;
+use dilithium_crypto::types::DilithiumSignatureScheme;
 use poseidon_resonance::PoseidonHasher;
 use substrate_api_client::ac_primitives::{
     AccountData, AccountId32, Block, Config, ExtrinsicSigner, GenericExtrinsicParams, Header,
@@ -27,12 +27,12 @@ impl Config for QuantusRuntimeConfig {
     type Hash = H256;
     type AccountId = AccountId32;
     type Address = MultiAddress<Self::AccountId, u32>;
-    type Signature = ResonanceSignatureScheme;
+    type Signature = DilithiumSignatureScheme;
     type Hasher = PoseidonHasher;
     type Header = Header<Self::BlockNumber, PoseidonHasher>;
     type AccountData = AccountData<Self::Balance>;
     type ExtrinsicParams = PlainTipExtrinsicParams<Self>;
-    type CryptoKey = ResonancePair;
+    type CryptoKey = DilithiumPair;
     type ExtrinsicSigner = ExtrinsicSigner<Self>;
     type Block = Block<Self::Header, OpaqueExtrinsic>;
     type Balance = u128;

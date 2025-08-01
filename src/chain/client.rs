@@ -380,7 +380,7 @@ impl ChainClient {
             ))
         })?;
 
-        // Convert our QuantumKeyPair to ResonancePair
+        // Convert our QuantumKeyPair to DilithiumPair
         let resonance_pair = from_keypair.to_resonance_pair().map_err(|e| {
             crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
         })?;
