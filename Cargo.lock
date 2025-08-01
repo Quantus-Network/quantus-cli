@@ -1274,9 +1274,8 @@ dependencies = [
 [[package]]
 name = "dilithium-crypto"
 version = "0.1.0"
-source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
+source = "git+https://github.com/Quantus-Network/chain#6d36c461770cb77252566956992284af0d988e70"
 dependencies = [
- "hdwallet",
  "log",
  "parity-scale-codec",
  "poseidon-resonance",
@@ -1288,7 +1287,6 @@ dependencies = [
  "sp-runtime-interface",
  "sp-std",
  "thiserror 2.0.12",
- "verify",
 ]
 
 [[package]]
@@ -2070,14 +2068,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "hdwallet"
-version = "0.1.0"
-source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
-dependencies = [
- "rusty-crystals-dilithium",
-]
-
-[[package]]
 name = "heck"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2676,6 +2666,7 @@ dependencies = [
  "once_cell",
  "serdect",
  "sha2 0.10.9",
+ "signature",
 ]
 
 [[package]]
@@ -2923,6 +2914,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "memzero"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "93c0d11ac30a033511ae414355d80f70d9f29a44a49140face477117a1ee90db"
+
+[[package]]
 name = "merlin"
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2973,6 +2970,19 @@ dependencies = [
  "num-traits",
  "simba",
  "typenum",
+]
+
+[[package]]
+name = "nam-tiny-hderive"
+version = "0.3.1-nam.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dfd77f274636f722e966c394b381a70233ed4c25150864a4c53d398028a6818"
+dependencies = [
+ "base58",
+ "hmac 0.12.1",
+ "k256",
+ "memzero",
+ "sha2 0.10.9",
 ]
 
 [[package]]
@@ -3172,7 +3182,7 @@ dependencies = [
 [[package]]
 name = "pallet-balances"
 version = "40.0.1"
-source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
+source = "git+https://github.com/Quantus-Network/chain#6d36c461770cb77252566956992284af0d988e70"
 dependencies = [
  "docify",
  "frame-benchmarking",
@@ -3181,6 +3191,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "poseidon-resonance",
+ "qp-wormhole",
  "scale-info",
  "sp-runtime",
 ]
@@ -3204,7 +3215,7 @@ dependencies = [
 [[package]]
 name = "pallet-reversible-transfers"
 version = "40.0.1"
-source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
+source = "git+https://github.com/Quantus-Network/chain#6d36c461770cb77252566956992284af0d988e70"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -3554,8 +3565,8 @@ dependencies = [
 
 [[package]]
 name = "poseidon-resonance"
-version = "0.6.0"
-source = "git+https://github.com/Quantus-Network/poseidon-resonance#fce507b40c166d9acae1a8885898eea83d0d3780"
+version = "0.8.0"
+source = "git+https://github.com/Quantus-Network/poseidon-resonance#12e43a0f956b0378c87543a48eec64814235ae6d"
 dependencies = [
  "log",
  "parity-scale-codec",
@@ -3704,13 +3715,18 @@ dependencies = [
 [[package]]
 name = "qp-scheduler"
 version = "0.1.0"
-source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
+source = "git+https://github.com/Quantus-Network/chain#6d36c461770cb77252566956992284af0d988e70"
 dependencies = [
  "frame-support",
  "parity-scale-codec",
  "scale-info",
  "sp-runtime",
 ]
+
+[[package]]
+name = "qp-wormhole"
+version = "0.1.0"
+source = "git+https://github.com/Quantus-Network/chain#6d36c461770cb77252566956992284af0d988e70"
 
 [[package]]
 name = "quantus-cli"
@@ -4122,7 +4138,7 @@ checksum = "8a0d197bd2c9dc6e53b84da9556a69ba4cdfab8619eb41a8bd1cc2027a0f6b1d"
 [[package]]
 name = "rusty-crystals-dilithium"
 version = "1.0.0"
-source = "git+https://github.com/Quantus-Network/rusty-crystals.git#9d51f1701a729a1f44bcbe165a2bfc269c330118"
+source = "git+https://github.com/Quantus-Network/rusty-crystals.git#5f24db84210217ba8643020be55550eb52e2323a"
 dependencies = [
  "rand 0.7.3",
  "sha2 0.10.9",
@@ -4131,16 +4147,20 @@ dependencies = [
 [[package]]
 name = "rusty-crystals-hdwallet"
 version = "0.1.1"
-source = "git+https://github.com/Quantus-Network/rusty-crystals.git#9d51f1701a729a1f44bcbe165a2bfc269c330118"
+source = "git+https://github.com/Quantus-Network/rusty-crystals.git#5f24db84210217ba8643020be55550eb52e2323a"
 dependencies = [
  "bip39",
+ "hex",
  "hex-literal",
  "hmac 0.12.1",
+ "nam-tiny-hderive",
  "poseidon-resonance",
  "rand 0.8.5",
  "rand_chacha 0.9.0",
  "rand_core 0.6.4",
  "rusty-crystals-dilithium",
+ "serde",
+ "serde_json",
  "sha2 0.10.9",
  "sp-core",
  "thiserror 2.0.12",
@@ -6007,15 +6027,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65"
 
 [[package]]
-name = "verify"
-version = "0.1.0"
-source = "git+https://github.com/Quantus-Network/chain#995790b9194b7c819a8b51781ddac1049a6844dd"
-dependencies = [
- "log",
- "rusty-crystals-dilithium",
-]
-
-[[package]]
 name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6274,7 +6285,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
