@@ -371,7 +371,7 @@ pub async fn handle_tech_collective_command(
             if success {
                 log_success!(
                     "🎉 {} Member added to Tech Collective!",
-                    "FINALIZED".bright_green().bold()
+                    "FINISHED".bright_green().bold()
                 );
             } else {
                 log_error!("Transaction failed!");
@@ -407,7 +407,7 @@ pub async fn handle_tech_collective_command(
             if success {
                 log_success!(
                     "🎉 {} Member removed from Tech Collective!",
-                    "FINALIZED".bright_green().bold()
+                    "FINISHED".bright_green().bold()
                 );
             } else {
                 log_error!("Transaction failed!");
@@ -450,7 +450,7 @@ pub async fn handle_tech_collective_command(
             let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
 
             if success {
-                log_success!("🎉 {} Vote submitted!", "FINALIZED".bright_green().bold());
+                log_success!("🎉 {} Vote submitted!", "FINISHED".bright_green().bold());
             } else {
                 log_error!("Transaction failed!");
             }

@@ -321,7 +321,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
                 log_info!("✅ Reversible transfer scheduled and confirmed on chain");
                 log_success!(
                     "🎉 {} Reversible transfer confirmed!",
-                    "FINALIZED".bright_green().bold()
+                    "FINISHED".bright_green().bold()
                 );
             } else {
                 log_error!("Transaction failed!");
@@ -359,7 +359,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
             if success {
                 log_success!(
                     "🎉 {} Cancel transaction confirmed!",
-                    "FINALIZED".bright_green().bold()
+                    "FINISHED".bright_green().bold()
                 );
             } else {
                 log_error!("Transaction failed!");
@@ -421,7 +421,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
             if success {
                 log_success!(
                     "🎉 {} Reversible transfer with custom delay confirmed!",
-                    "FINALIZED".bright_green().bold()
+                    "FINISHED".bright_green().bold()
                 );
 
                 if unit_blocks {
@@ -729,7 +729,7 @@ async fn set_reversibility(
         "✅ SUCCESS Reversibility settings updated! Hash: 0x{}",
         hex::encode(tx_hash.as_ref())
     );
-    log_success!("✅ 🎉 FINALIZED Reversibility settings confirmed!");
+    log_success!("✅ 🎉 FINISHED Reversibility settings confirmed!");
 
     // Display the settings
     match delay {

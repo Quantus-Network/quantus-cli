@@ -317,7 +317,7 @@ pub async fn handle_send_command(
         log_info!("✅ Transaction confirmed and finalized on chain");
         log_success!(
             "🎉 {} Transaction confirmed!",
-            "FINALIZED".bright_green().bold()
+            "FINISHED".bright_green().bold()
         );
 
         // Show updated balance with proper formatting

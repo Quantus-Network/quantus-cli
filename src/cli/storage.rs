@@ -308,7 +308,7 @@ pub async fn handle_storage_command(
             if success {
                 log_success!(
                     "🎉 {} Set storage transaction confirmed!",
-                    "FINALIZED".bright_green().bold()
+                    "FINISHED".bright_green().bold()
                 );
             } else {
                 log_error!("Transaction failed!");

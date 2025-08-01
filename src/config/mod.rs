@@ -9,7 +9,7 @@
 use serde::{Deserialize, Serialize};
 
 /// List of runtime spec versions that this CLI is compatible with
-pub const COMPATIBLE_RUNTIME_VERSIONS: &[u32] = &[103, 104];
+pub const COMPATIBLE_RUNTIME_VERSIONS: &[u32] = &[104];
 
 /// Check if a runtime version is compatible with this CLI
 pub fn is_runtime_compatible(spec_version: u32) -> bool {

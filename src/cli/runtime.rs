@@ -110,7 +110,7 @@ pub async fn update_runtime(
 
     // Wait for finalization
     wait_for_finalization(quantus_client.client(), tx_hash).await?;
-    log_success!("✅ 🎉 FINALIZED Runtime update completed!");
+    log_success!("✅ 🎉 FINISHED Runtime update completed!");
 
     Ok(tx_hash)
 }

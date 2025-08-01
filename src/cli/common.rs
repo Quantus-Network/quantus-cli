@@ -165,7 +165,10 @@ where
 
         // Create custom params with fresh nonce and optional tip
         use subxt::config::DefaultExtrinsicParamsBuilder;
-        let mut params_builder = DefaultExtrinsicParamsBuilder::new().immortal().nonce(nonce);
+        let mut params_builder = DefaultExtrinsicParamsBuilder::new()
+            .mortal(256) //Value higher than our finalization - TODO should come from config.
+            //.immortal()
+            .nonce(nonce);
 
         if let Some(tip_amount) = tip {
             params_builder = params_builder.tip(tip_amount);
