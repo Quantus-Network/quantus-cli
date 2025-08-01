@@ -51,7 +51,7 @@ async fn main() -> Result<(), QuantusError> {
     log_verbose!("");
 
     // Execute the command
-    match cli::execute_command(cli.command, &cli.node_url).await {
+    match cli::execute_command(cli.command, &cli.node_url, cli.verbose).await {
         Ok(_) => {
             log_verbose!("");
             log_verbose!("Command executed successfully!");

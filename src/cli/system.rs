@@ -157,26 +157,164 @@ pub async fn get_system_info(quantus_client: &QuantusClient) -> crate::error::Re
     Ok(())
 }
 
-/// Get runtime version information
-pub async fn get_runtime_version_info(
-    client: &OnlineClient<ChainConfig>,
+/// Get detailed chain parameters information
+pub async fn get_detailed_chain_params(
+    quantus_client: &crate::chain::client::QuantusClient,
+    show_raw_data: bool,
 ) -> crate::error::Result<()> {
-    log_verbose!("🔍 Getting runtime version...");
-
-    let runtime_version = client.runtime_version();
-
     log_print!("🔧 Runtime Information:");
+
+    // Get genesis hash
+    let genesis_hash = quantus_client.get_genesis_hash().await?;
+    log_print!(
+        "   🧬 Genesis hash: {}",
+        genesis_hash.to_string().bright_cyan()
+    );
+
+    // Get runtime version
+    let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
     log_print!(
         "   📋 Spec version: {}",
-        runtime_version.spec_version.to_string().bright_green()
+        spec_version.to_string().bright_green()
     );
     log_print!(
         "   🔄 Transaction version: {}",
-        runtime_version
-            .transaction_version
+        transaction_version.to_string().bright_yellow()
+    );
+
+    // Get current block info
+    use jsonrpsee::core::client::ClientT;
+    let current_block: serde_json::Value = quantus_client
+        .rpc_client()
+        .request::<serde_json::Value, [(); 0]>("chain_getHeader", [])
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to fetch current block: {:?}",
+                e
+            ))
+        })?;
+
+    if let Some(block_number_str) = current_block["number"].as_str() {
+        if let Ok(block_number) = u64::from_str_radix(&block_number_str[2..], 16) {
+            log_print!(
+                "   📦 Current block: {}",
+                block_number.to_string().bright_blue()
+            );
+
+            // Calculate era based on block number
+            let period = 64u64;
+            let phase = block_number % period;
+            log_print!("   ⏰ Era: period={}, phase={}", period, phase);
+            log_print!(
+                "   💡 Transaction era: Era::Mortal({}, {}) or Era::Immortal",
+                period,
+                phase
+            );
+        }
+    }
+
+    // Get full runtime info
+    let runtime_info: serde_json::Value = quantus_client
+        .rpc_client()
+        .request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to fetch runtime info: {:?}",
+                e
+            ))
+        })?;
+
+    if show_raw_data {
+        log_verbose!("📋 Full runtime info: {:?}", runtime_info);
+    }
+
+    log_print!("📋 Runtime Details:");
+    log_print!(
+        "   🏷️  Spec name: {}",
+        runtime_info["specName"]
+            .as_str()
+            .unwrap_or("unknown")
+            .bright_magenta()
+    );
+    log_print!(
+        "   🔧 Implementation name: {}",
+        runtime_info["implName"]
+            .as_str()
+            .unwrap_or("unknown")
+            .bright_cyan()
+    );
+    log_print!(
+        "   📦 Implementation version: {}",
+        runtime_info["implVersion"]
+            .as_u64()
+            .unwrap_or(0)
             .to_string()
             .bright_yellow()
     );
+    log_print!(
+        "   ✍️  Authoring version: {}",
+        runtime_info["authoringVersion"]
+            .as_u64()
+            .unwrap_or(0)
+            .to_string()
+            .bright_blue()
+    );
+    log_print!(
+        "   🗂️  State version: {}",
+        runtime_info["stateVersion"]
+            .as_u64()
+            .unwrap_or(0)
+            .to_string()
+            .bright_green()
+    );
+    log_print!(
+        "   💻 System version: {}",
+        runtime_info["systemVersion"]
+            .as_u64()
+            .unwrap_or(0)
+            .to_string()
+            .bright_red()
+    );
+
+    // Get chain properties
+    let chain_props: serde_json::Value = quantus_client
+        .rpc_client()
+        .request::<serde_json::Value, [(); 0]>("system_properties", [])
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to fetch chain properties: {:?}",
+                e
+            ))
+        })?;
+
+    if show_raw_data {
+        log_verbose!("🔗 Chain properties: {:?}", chain_props);
+    }
+
+    if show_raw_data {
+        log_verbose!("📦 Current block: {:?}", current_block);
+    }
+
+    // Show block details
+    log_print!("📦 Block Details:");
+    if let Some(parent_hash) = current_block["parentHash"].as_str() {
+        log_print!("   🔗 Parent hash: {}...", parent_hash[..16].bright_cyan());
+    }
+    if let Some(state_root) = current_block["stateRoot"].as_str() {
+        log_print!(
+            "   🗂️  State root: {}...",
+            state_root[..16].bright_magenta()
+        );
+    }
+    if let Some(extrinsics_root) = current_block["extrinsicsRoot"].as_str() {
+        log_print!(
+            "   📄 Extrinsics root: {}...",
+            extrinsics_root[..16].bright_yellow()
+        );
+    }
 
     Ok(())
 }
@@ -222,6 +360,7 @@ pub async fn handle_system_extended_command(
     node_url: &str,
     show_runtime: bool,
     show_metadata: bool,
+    verbose: bool,
 ) -> crate::error::Result<()> {
     log_print!("🚀 Extended System Information");
 
@@ -232,18 +371,13 @@ pub async fn handle_system_extended_command(
 
     if show_runtime {
         log_print!("");
-        get_runtime_version_info(quantus_client.client()).await?;
+        get_detailed_chain_params(&quantus_client, verbose).await?;
     }
 
     if show_metadata {
         log_print!("");
         get_metadata_stats(quantus_client.client()).await?;
     }
-
-    // Always show chain parameters for debugging
-    log_print!("");
-    log_print!("🔍 Chain Parameters (for debugging):");
-    quantus_client.get_chain_params().await?;
 
     Ok(())
 }

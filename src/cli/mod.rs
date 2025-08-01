@@ -192,7 +192,11 @@ pub enum DeveloperCommands {
 }
 
 /// Execute a CLI command
-pub async fn execute_command(command: Commands, node_url: &str) -> crate::error::Result<()> {
+pub async fn execute_command(
+    command: Commands,
+    node_url: &str,
+    verbose: bool,
+) -> crate::error::Result<()> {
     match command {
         Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
         Commands::Send {
@@ -281,7 +285,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         }
         Commands::System { runtime, metadata } => {
             if runtime || metadata {
-                system::handle_system_extended_command(node_url, runtime, metadata).await
+                system::handle_system_extended_command(node_url, runtime, metadata, verbose).await
             } else {
                 system::handle_system_command(node_url).await
             }
@@ -293,14 +297,6 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
         } => metadata::handle_metadata_command(node_url, no_docs, stats_only, pallet).await,
         Commands::Version => {
             log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
-
-            let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
-            let runtime_version = runtime::get_runtime_version(quantus_client.client()).await?;
-            log_print!(
-                "Connected toRuntime Version: spec_version: {}, impl_version: {}",
-                runtime_version.spec_version,
-                runtime_version.impl_version
-            );
             Ok(())
         }
         Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,

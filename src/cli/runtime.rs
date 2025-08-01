@@ -1,5 +1,4 @@
 //! `quantus runtime` subcommand - runtime management
-use crate::chain::client::ChainConfig;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
     chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
@@ -8,6 +7,7 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 
+use crate::chain::client::ChainConfig;
 use std::fs;
 use std::path::PathBuf;
 use subxt::OnlineClient;
@@ -37,18 +37,6 @@ pub enum RuntimeCommands {
         force: bool,
     },
 
-    /// Check the current runtime version
-    CheckVersion,
-
-    /// Get the current spec version
-    GetSpecVersion,
-
-    /// Get the current implementation version
-    GetImplVersion,
-
-    /// Get the runtime metadata version
-    GetMetadataVersion,
-
     /// Compare local WASM file with current runtime
     Compare {
         /// Path to the runtime WASM file to compare
@@ -66,12 +54,8 @@ pub async fn update_runtime(
 ) -> crate::error::Result<subxt::utils::H256> {
     log_verbose!("🔄 Updating runtime...");
 
-    // Get current runtime version before update
-    log_verbose!("🔍 Checking current runtime version...");
-    let current_version = get_runtime_version(quantus_client.client()).await?;
     log_print!("📋 Current runtime version:");
-    log_print!("   • Spec version: {}", current_version.spec_version);
-    log_print!("   • Impl version: {}", current_version.impl_version);
+    log_print!("   • Use 'quantus system --runtime' to see current version");
 
     // Show confirmation prompt unless force is used
     if !force {
@@ -131,7 +115,15 @@ pub async fn update_runtime(
     Ok(tx_hash)
 }
 
-/// Get runtime version information
+/// Runtime version information structure (internal use)
+#[derive(Debug, Clone)]
+pub struct RuntimeVersionInfo {
+    pub spec_version: u32,
+    pub impl_version: u32,
+    pub transaction_version: u32,
+}
+
+/// Get runtime version information (internal use)
 pub async fn get_runtime_version(
     client: &OnlineClient<ChainConfig>,
 ) -> crate::error::Result<RuntimeVersionInfo> {
@@ -142,29 +134,9 @@ pub async fn get_runtime_version(
     // SubXT RuntimeVersion only has spec_version and transaction_version
     // We'll use defaults for missing fields
     Ok(RuntimeVersionInfo {
-        spec_name: "quantus-node".to_string(), // Default spec name
-        impl_name: "quantus-node".to_string(), // Default impl name
         spec_version: runtime_version.spec_version,
-        impl_version: 1,      // Default impl version since not available in SubXT
-        authoring_version: 1, // Default authoring version since not available in SubXT
+        impl_version: 1, // Default impl version since not available in SubXT
         transaction_version: runtime_version.transaction_version,
-    })
-}
-
-/// Get metadata version and pallet count
-pub async fn get_metadata_info(
-    client: &OnlineClient<ChainConfig>,
-) -> crate::error::Result<MetadataInfo> {
-    log_verbose!("🔍 Getting metadata info...");
-
-    let metadata = client.metadata();
-    let pallets: Vec<_> = metadata.pallets().collect();
-
-    log_verbose!("🔍 SubXT metadata: {} pallets detected", pallets.len());
-
-    Ok(MetadataInfo {
-        version: "SubXT".to_string(), // SubXT metadata (version determined by SubXT)
-        pallet_count: pallets.len(),
     })
 }
 
@@ -176,24 +148,6 @@ pub async fn calculate_wasm_hash(wasm_code: &[u8]) -> crate::error::Result<Strin
     let local_hash = hasher.finalize();
 
     Ok(format!("0x{}", hex::encode(local_hash)))
-}
-
-/// Runtime version information structure
-#[derive(Debug, Clone)]
-pub struct RuntimeVersionInfo {
-    pub spec_name: String,
-    pub impl_name: String,
-    pub spec_version: u32,
-    pub impl_version: u32,
-    pub authoring_version: u32,
-    pub transaction_version: u32,
-}
-
-/// Metadata information structure
-#[derive(Debug, Clone)]
-pub struct MetadataInfo {
-    pub version: String,
-    pub pallet_count: usize,
 }
 
 /// Handle runtime subxt command
@@ -256,69 +210,6 @@ pub async fn handle_runtime_command(
             Ok(())
         }
 
-        RuntimeCommands::CheckVersion => {
-            log_print!("🚀 Runtime Management");
-            log_print!("🔍 Checking runtime version...");
-
-            let version = get_runtime_version(quantus_client.client()).await?;
-
-            log_print!("📋 Runtime Version Information:");
-            log_print!("   • Spec name: {}", version.spec_name.bright_cyan());
-            log_print!(
-                "   • Implementation name: {}",
-                version.impl_name.bright_blue()
-            );
-            log_print!(
-                "   • Spec version: {}",
-                version.spec_version.to_string().bright_green()
-            );
-            log_print!(
-                "   • Implementation version: {}",
-                version.impl_version.to_string().bright_yellow()
-            );
-            log_print!("   • Authoring version: {}", version.authoring_version);
-            log_print!("   • Transaction version: {}", version.transaction_version);
-
-            Ok(())
-        }
-
-        RuntimeCommands::GetSpecVersion => {
-            log_print!("🚀 Runtime Management");
-            let version = get_runtime_version(quantus_client.client()).await?;
-
-            log_print!(
-                "📊 Spec Version: {}",
-                version.spec_version.to_string().bright_green()
-            );
-            Ok(())
-        }
-
-        RuntimeCommands::GetImplVersion => {
-            log_print!("🚀 Runtime Management");
-            let version = get_runtime_version(quantus_client.client()).await?;
-
-            log_print!(
-                "📊 Implementation Version: {}",
-                version.impl_version.to_string().bright_yellow()
-            );
-            Ok(())
-        }
-
-        RuntimeCommands::GetMetadataVersion => {
-            log_print!("🚀 Runtime Management");
-            log_print!("🔍 Getting metadata version...");
-
-            let metadata_info = get_metadata_info(quantus_client.client()).await?;
-
-            log_print!(
-                "📊 Metadata Version: {}",
-                metadata_info.version.bright_magenta()
-            );
-            log_print!("📦 Total pallets: {}", metadata_info.pallet_count);
-
-            Ok(())
-        }
-
         RuntimeCommands::Compare { wasm_file } => {
             log_print!("🚀 Runtime Management");
             log_print!("🔍 Comparing WASM file with current runtime...");
@@ -346,12 +237,74 @@ pub async fn handle_runtime_command(
             log_print!("📋 Current chain runtime:");
             log_print!("   • Spec version: {}", current_version.spec_version);
             log_print!("   • Impl version: {}", current_version.impl_version);
+            log_print!(
+                "   • Transaction version: {}",
+                current_version.transaction_version
+            );
 
             // Calculate hash of local file
             let local_hash = calculate_wasm_hash(&local_wasm).await?;
             log_print!("🔐 Local WASM SHA256: {}", local_hash.bright_blue());
 
-            log_print!("💡 To see if versions match, use update with --force false to see current vs new version comparison");
+            // Try to get runtime hash from chain
+            if let Ok(Some(chain_runtime_hash)) = quantus_client.get_runtime_hash().await {
+                log_print!(
+                    "🔐 Chain runtime hash: {}",
+                    chain_runtime_hash.bright_yellow()
+                );
+
+                // Compare hashes
+                if local_hash == chain_runtime_hash {
+                    log_success!("✅ Runtime hashes match! The WASM file is identical to the current runtime.");
+                } else {
+                    log_print!("⚠️  Runtime hashes differ. The WASM file is different from the current runtime.");
+                }
+            } else {
+                log_print!("💡 Chain runtime hash not available for comparison");
+            }
+
+            // Try to extract version from filename
+            let filename = wasm_file.file_name().unwrap().to_string_lossy();
+            log_verbose!("🔍 Parsing filename: {}", filename);
+
+            if let Some(version_str) = filename.split('-').nth(2) {
+                log_verbose!("🔍 Version part: {}", version_str);
+                if let Some(version_num) = version_str.split('.').next() {
+                    log_verbose!("🔍 Version number: {}", version_num);
+                    // Remove 'v' prefix if present
+                    let clean_version = version_num.trim_start_matches('v');
+                    log_verbose!("🔍 Clean version: {}", clean_version);
+                    if let Ok(wasm_version) = clean_version.parse::<u32>() {
+                        log_print!("📋 Version comparison:");
+                        log_print!(
+                            "   • Local WASM version: {}",
+                            wasm_version.to_string().bright_green()
+                        );
+                        log_print!(
+                            "   • Chain runtime version: {}",
+                            current_version.spec_version.to_string().bright_yellow()
+                        );
+
+                        if wasm_version == current_version.spec_version {
+                            log_success!("✅ Versions match! The WASM file is compatible with the current runtime.");
+                        } else if wasm_version > current_version.spec_version {
+                            log_print!("🔄 The WASM file is newer than the current runtime.");
+                            log_print!("   • This would be an upgrade");
+                        } else {
+                            log_print!("⚠️  The WASM file is older than the current runtime.");
+                            log_print!("   • This would be a downgrade");
+                        }
+                    } else {
+                        log_print!("⚠️  Could not parse version number from filename");
+                    }
+                } else {
+                    log_print!("⚠️  Could not extract version number from filename");
+                }
+            } else {
+                log_print!("⚠️  Could not extract version from filename format");
+            }
+
+            log_print!("💡 Use 'quantus system --runtime' for detailed runtime information");
 
             Ok(())
         }
