@@ -134,7 +134,7 @@ pub enum ReversibleCommands {
 
 /// Schedule a transfer with default delay
 pub async fn schedule_transfer(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     to_address: &str,
     amount: u128,
@@ -168,7 +168,8 @@ pub async fn schedule_transfer(
 
     // Submit the transaction
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, transfer_call, None).await?;
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, transfer_call, None)
+            .await?;
 
     log_verbose!("📋 Reversible transfer submitted: {:?}", tx_hash);
 
@@ -177,7 +178,7 @@ pub async fn schedule_transfer(
 
 /// Cancel a pending reversible transaction
 pub async fn cancel_transaction(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     tx_id: &str,
 ) -> Result<subxt::utils::H256> {
@@ -200,7 +201,8 @@ pub async fn cancel_transaction(
 
     // Submit the transaction
     let tx_hash_result =
-        crate::cli::common::submit_transaction(client, from_keypair, cancel_call, None).await?;
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, cancel_call, None)
+            .await?;
 
     log_verbose!("📋 Cancel transaction submitted: {:?}", tx_hash_result);
 
@@ -209,7 +211,7 @@ pub async fn cancel_transaction(
 
 /// Schedule a transfer with custom delay
 pub async fn schedule_transfer_with_delay(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     to_address: &str,
     amount: u128,
@@ -254,7 +256,8 @@ pub async fn schedule_transfer_with_delay(
 
     // Submit the transaction
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, transfer_call, None).await?;
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, transfer_call, None)
+            .await?;
 
     log_verbose!(
         "📋 Reversible transfer with custom delay submitted: {:?}",
@@ -303,13 +306,8 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = schedule_transfer(
-                quantus_client.client(),
-                &keypair,
-                &resolved_address,
-                raw_amount,
-            )
-            .await?;
+            let tx_hash =
+                schedule_transfer(&quantus_client, &keypair, &resolved_address, raw_amount).await?;
 
             log_print!(
                 "✅ {} Reversible transfer scheduled! Hash: {:?}",
@@ -348,7 +346,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit cancel transaction
-            let tx_hash = cancel_transaction(quantus_client.client(), &keypair, &tx_id).await?;
+            let tx_hash = cancel_transaction(&quantus_client, &keypair, &tx_id).await?;
 
             log_print!(
                 "✅ {} Cancel transaction submitted! Hash: {:?}",
@@ -403,7 +401,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
 
             // Submit transaction
             let tx_hash = schedule_transfer_with_delay(
-                quantus_client.client(),
+                &quantus_client,
                 &keypair,
                 &resolved_address,
                 raw_amount,
@@ -457,7 +455,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
             password_file,
         } => {
             set_reversibility(
-                quantus_client.client(),
+                &quantus_client,
                 &delay,
                 &policy,
                 &reverser,
@@ -646,7 +644,7 @@ async fn list_pending_transactions(
 
 /// Set reversibility (high security) for an account
 async fn set_reversibility(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     delay: &Option<u64>,
     policy: &str,
     reverser: &Option<String>,
@@ -719,9 +717,13 @@ async fn set_reversibility(
         .set_high_security(delay_value, interceptor_subxt, reverser_subxt);
 
     // Submit the transaction
-    let tx_hash =
-        crate::cli::common::submit_transaction(client, &from_keypair, set_high_security_tx, None)
-            .await?;
+    let tx_hash = crate::cli::common::submit_transaction(
+        quantus_client,
+        &from_keypair,
+        set_high_security_tx,
+        None,
+    )
+    .await?;
 
     log_success!(
         "✅ SUCCESS Reversibility settings updated! Hash: 0x{}",

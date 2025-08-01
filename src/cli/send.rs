@@ -1,4 +1,4 @@
-use crate::chain::client::{ChainConfig, QuantusClient};
+use crate::chain::client::QuantusClient;
 use crate::cli::common::resolve_address;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
@@ -6,13 +6,9 @@ use crate::{
 };
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
-use subxt::OnlineClient;
 
 /// Get the `free` balance for the given account using on-chain storage.
-pub async fn get_balance(
-    client: &OnlineClient<ChainConfig>,
-    account_address: &str,
-) -> Result<u128> {
+pub async fn get_balance(quantus_client: &QuantusClient, account_address: &str) -> Result<u128> {
     use quantus_subxt::api;
 
     log_verbose!(
@@ -35,9 +31,10 @@ pub async fn get_balance(
     // Build the storage key for `System::Account` and fetch (or default-init) it.
     let storage_addr = api::storage().system().account(account_id);
 
-    let storage_at = client.storage().at_latest().await.map_err(|e| {
-        crate::error::QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-    })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     let account_info = storage_at
         .fetch_or_default(&storage_addr)
@@ -213,7 +210,7 @@ pub async fn transfer(
         let tip_to_use = tip.unwrap_or(10_000_000_000); // Use provided tip or default 10 DEV
 
         match crate::cli::common::submit_transaction(
-            quantus_client.client(),
+            quantus_client,
             from_keypair,
             transfer_call,
             Some(tip_to_use),
@@ -270,7 +267,7 @@ pub async fn handle_send_command(
 
     // Get account information
     let from_account_id = keypair.to_account_id_ss58check();
-    let balance = get_balance(quantus_client.client(), &from_account_id).await?;
+    let balance = get_balance(&quantus_client, &from_account_id).await?;
 
     // Get formatted balance with proper decimals
     let formatted_balance = format_balance_with_symbol(&quantus_client, balance).await?;
@@ -324,7 +321,7 @@ pub async fn handle_send_command(
         );
 
         // Show updated balance with proper formatting
-        let new_balance = get_balance(quantus_client.client(), &from_account_id).await?;
+        let new_balance = get_balance(&quantus_client, &from_account_id).await?;
         let formatted_new_balance =
             format_balance_with_symbol(&quantus_client, new_balance).await?;
 

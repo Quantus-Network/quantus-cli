@@ -59,7 +59,7 @@ pub enum RuntimeCommands {
 
 /// Update runtime with sudo wrapper
 pub async fn update_runtime(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     wasm_code: Vec<u8>,
     from_keypair: &QuantumKeyPair,
     force: bool,
@@ -68,7 +68,7 @@ pub async fn update_runtime(
 
     // Get current runtime version before update
     log_verbose!("🔍 Checking current runtime version...");
-    let current_version = get_runtime_version(client).await?;
+    let current_version = get_runtime_version(quantus_client.client()).await?;
     log_print!("📋 Current runtime version:");
     log_print!("   • Spec version: {}", current_version.spec_version);
     log_print!("   • Impl version: {}", current_version.impl_version);
@@ -115,7 +115,9 @@ pub async fn update_runtime(
     log_print!("📡 Submitting runtime update transaction...");
     log_print!("⏳ This may take longer than usual due to WASM size...");
 
-    let tx_hash = crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
+    let tx_hash =
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
+            .await?;
 
     log_success!(
         "✅ SUCCESS Runtime update transaction submitted! Hash: 0x{}",
@@ -123,7 +125,7 @@ pub async fn update_runtime(
     );
 
     // Wait for finalization
-    wait_for_finalization(client, tx_hash).await?;
+    wait_for_finalization(quantus_client.client(), tx_hash).await?;
     log_success!("✅ 🎉 FINALIZED Runtime update completed!");
 
     Ok(tx_hash)
@@ -243,7 +245,7 @@ pub async fn handle_runtime_command(
             log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 
             // Update runtime
-            update_runtime(quantus_client.client(), wasm_code, &keypair, force).await?;
+            update_runtime(&quantus_client, wasm_code, &keypair, force).await?;
 
             log_success!("🎉 Runtime update completed!");
             log_print!(

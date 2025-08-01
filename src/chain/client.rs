@@ -82,7 +82,6 @@ impl QuantusClient {
 
         log_verbose!("✅ Connected to Quantus node successfully!");
 
-
         Ok(QuantusClient {
             client,
             rpc_client: ws_client,
@@ -103,6 +102,124 @@ impl QuantusClient {
     /// Get reference to the RPC client
     pub fn rpc_client(&self) -> &WsClient {
         &self.rpc_client
+    }
+
+    /// Get the latest block (best block) using RPC call
+    /// This bypasses SubXT's default behavior of using finalized blocks
+    pub async fn get_latest_block(&self) -> crate::error::Result<subxt::utils::H256> {
+        log_verbose!("🔍 Fetching latest block hash via RPC...");
+
+        // Use RPC call to get the latest block hash
+        use jsonrpsee::core::client::ClientT;
+        let latest_hash: subxt::utils::H256 = self
+            .rpc_client
+            .request::<subxt::utils::H256, [(); 0]>("chain_getBlockHash", [])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch latest block hash: {:?}",
+                    e
+                ))
+            })?;
+
+        log_verbose!("📦 Latest block hash: {:?}", latest_hash);
+        Ok(latest_hash)
+    }
+
+    /// Get account nonce from the best block (latest) using direct RPC call
+    /// This bypasses SubXT's default behavior of using finalized blocks
+    pub async fn get_account_nonce_from_best_block(
+        &self,
+        account_id: &AccountId32,
+    ) -> crate::error::Result<u64> {
+        log_verbose!("🔍 Fetching account nonce from best block via RPC...");
+
+        // Get latest block hash first
+        let latest_block_hash = self.get_latest_block().await?;
+        log_verbose!(
+            "📦 Latest block hash for nonce query: {:?}",
+            latest_block_hash
+        );
+
+        // Convert sp_core::AccountId32 to subxt::utils::AccountId32
+        let account_bytes: [u8; 32] = *account_id.as_ref();
+        let subxt_account_id = subxt::utils::AccountId32::from(account_bytes);
+
+        // Use SubXT's storage API to query nonce at the best block
+        use crate::chain::quantus_subxt::api;
+        let storage_addr = api::storage().system().account(subxt_account_id);
+
+        let storage_at = self.client.storage().at(latest_block_hash);
+
+        let account_info = storage_at
+            .fetch_or_default(&storage_addr)
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch account info from best block: {:?}",
+                    e
+                ))
+            })?;
+
+        log_verbose!("✅ Nonce from best block: {}", account_info.nonce);
+        Ok(account_info.nonce as u64)
+    }
+
+    /// Get genesis hash using RPC call
+    pub async fn get_genesis_hash(&self) -> crate::error::Result<subxt::utils::H256> {
+        log_verbose!("🔍 Fetching genesis hash via RPC...");
+
+        use jsonrpsee::core::client::ClientT;
+        let genesis_hash: subxt::utils::H256 = self
+            .rpc_client
+            .request::<subxt::utils::H256, [u32; 1]>("chain_getBlockHash", [0u32])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch genesis hash: {:?}",
+                    e
+                ))
+            })?;
+
+        log_verbose!("🧬 Genesis hash: {:?}", genesis_hash);
+        Ok(genesis_hash)
+    }
+
+    /// Get runtime version using RPC call
+    pub async fn get_runtime_version(&self) -> crate::error::Result<(u32, u32)> {
+        log_verbose!("🔍 Fetching runtime version via RPC...");
+
+        use jsonrpsee::core::client::ClientT;
+        let runtime_version: serde_json::Value = self
+            .rpc_client
+            .request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch runtime version: {:?}",
+                    e
+                ))
+            })?;
+
+        let spec_version = runtime_version["specVersion"].as_u64().ok_or_else(|| {
+            crate::error::QuantusError::NetworkError("Failed to parse spec version".to_string())
+        })? as u32;
+
+        let transaction_version =
+            runtime_version["transactionVersion"]
+                .as_u64()
+                .ok_or_else(|| {
+                    crate::error::QuantusError::NetworkError(
+                        "Failed to parse transaction version".to_string(),
+                    )
+                })? as u32;
+
+        log_verbose!(
+            "🔧 Runtime version: spec={}, tx={}",
+            spec_version,
+            transaction_version
+        );
+        Ok((spec_version, transaction_version))
     }
 }
 

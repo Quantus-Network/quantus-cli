@@ -101,7 +101,7 @@ pub enum TechCollectiveCommands {
 
 /// Add a member to the Tech Collective using sudo
 pub async fn add_member(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     who_address: &str,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -129,7 +129,8 @@ pub async fn add_member(
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(add_member_call);
 
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
+            .await?;
 
     log_verbose!("📋 Add member transaction submitted: {:?}", tx_hash);
 
@@ -138,7 +139,7 @@ pub async fn add_member(
 
 /// Remove a member from the Tech Collective using sudo
 pub async fn remove_member(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     who_address: &str,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -167,7 +168,8 @@ pub async fn remove_member(
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(remove_member_call);
 
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
+            .await?;
 
     log_verbose!("📋 Remove member transaction submitted: {:?}", tx_hash);
 
@@ -176,7 +178,7 @@ pub async fn remove_member(
 
 /// Vote on a Tech Referenda proposal
 pub async fn vote_on_referendum(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     referendum_index: u32,
     aye: bool,
@@ -193,7 +195,8 @@ pub async fn vote_on_referendum(
         .vote(referendum_index, aye);
 
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, vote_call, None).await?;
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, vote_call, None)
+            .await?;
 
     log_verbose!("📋 Vote transaction submitted: {:?}", tx_hash);
 
@@ -355,7 +358,7 @@ pub async fn handle_tech_collective_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = add_member(quantus_client.client(), &keypair, &who).await?;
+            let tx_hash = add_member(&quantus_client, &keypair, &who).await?;
 
             log_print!(
                 "✅ {} Add member transaction submitted! Hash: {:?}",
@@ -391,7 +394,7 @@ pub async fn handle_tech_collective_command(
             let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
             // Submit transaction
-            let tx_hash = remove_member(quantus_client.client(), &keypair, &who).await?;
+            let tx_hash = remove_member(&quantus_client, &keypair, &who).await?;
 
             log_print!(
                 "✅ {} Remove member transaction submitted! Hash: {:?}",
@@ -436,8 +439,7 @@ pub async fn handle_tech_collective_command(
 
             // Submit transaction
             let tx_hash =
-                vote_on_referendum(quantus_client.client(), &keypair, referendum_index, aye)
-                    .await?;
+                vote_on_referendum(&quantus_client, &keypair, referendum_index, aye).await?;
 
             log_print!(
                 "✅ {} Vote transaction submitted! Hash: {:?}",

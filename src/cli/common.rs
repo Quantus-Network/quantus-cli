@@ -1,8 +1,7 @@
 //! Common SubXT utilities and functions shared across CLI commands
-use crate::{chain::client::ChainConfig, error::Result, log_verbose};
+use crate::{error::Result, log_verbose};
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
-use subxt::OnlineClient;
 
 /// Resolve address - if it's a wallet name, return the wallet's address
 /// If it's already an SS58 address, return it as is
@@ -31,11 +30,13 @@ pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
     )))
 }
 
-/// Get fresh nonce for account using direct storage query to avoid cache
-/// This function ensures we always get the latest nonce from the chain
+/// Get fresh nonce for account using SubXT's default behavior (finalized block)
+
+/// Get fresh nonce for account from the latest block using existing QuantusClient
+/// This function ensures we always get the most current nonce from the chain
 /// to avoid "Transaction is outdated" errors
-pub async fn get_fresh_nonce(
-    client: &OnlineClient<ChainConfig>,
+pub async fn get_fresh_nonce_with_client(
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
 ) -> Result<u64> {
     let from_account_id = AccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
@@ -43,25 +44,47 @@ pub async fn get_fresh_nonce(
             crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e))
         })?;
 
-    let nonce = client
+    // Get nonce from the latest block (best block)
+    let latest_nonce = quantus_client
+        .get_account_nonce_from_best_block(&from_account_id)
+        .await
+        .map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!(
+                "Failed to get account nonce from best block: {:?}",
+                e
+            ))
+        })?;
+
+    log_verbose!("🔢 Using fresh nonce from latest block: {}", latest_nonce);
+
+    // Compare with nonce from finalized block for debugging
+    let finalized_nonce = quantus_client
+        .client()
         .tx()
         .account_nonce(&from_account_id)
         .await
         .map_err(|e| {
             crate::error::QuantusError::NetworkError(format!(
-                "Failed to get account nonce: {:?}",
+                "Failed to get account nonce from finalized block: {:?}",
                 e
             ))
         })?;
 
-    log_verbose!("🔢 Using fresh nonce from tx API: {}", nonce);
-    Ok(nonce)
+    if latest_nonce != finalized_nonce {
+        log_verbose!(
+            "⚠️  Nonce difference detected! Latest: {}, Finalized: {}",
+            latest_nonce,
+            finalized_nonce
+        );
+    }
+
+    Ok(latest_nonce)
 }
 
-/// Get incremented nonce for retry scenarios
+/// Get incremented nonce for retry scenarios from the latest block using existing QuantusClient
 /// This is useful when a transaction fails but the chain doesn't update the nonce
-pub async fn get_incremented_nonce(
-    client: &OnlineClient<ChainConfig>,
+pub async fn get_incremented_nonce_with_client(
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     base_nonce: u64,
 ) -> Result<u64> {
@@ -70,13 +93,13 @@ pub async fn get_incremented_nonce(
             crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e))
         })?;
 
-    let current_nonce = client
-        .tx()
-        .account_nonce(&from_account_id)
+    // Get current nonce from the latest block
+    let current_nonce = quantus_client
+        .get_account_nonce_from_best_block(&from_account_id)
         .await
         .map_err(|e| {
             crate::error::QuantusError::NetworkError(format!(
-                "Failed to get account nonce: {:?}",
+                "Failed to get account nonce from best block: {:?}",
                 e
             ))
         })?;
@@ -84,7 +107,7 @@ pub async fn get_incremented_nonce(
     // Use the higher of current nonce or base_nonce + 1
     let incremented_nonce = std::cmp::max(current_nonce, base_nonce + 1);
     log_verbose!(
-        "🔢 Using incremented nonce: {} (base: {}, current: {})",
+        "🔢 Using incremented nonce: {} (base: {}, current from latest block: {})",
         incremented_nonce,
         base_nonce,
         current_nonce
@@ -93,8 +116,9 @@ pub async fn get_incremented_nonce(
 }
 
 /// Helper function to submit transaction with nonce management and retry logic
+/// Submit transaction with best block nonce for better performance on fast chains
 pub async fn submit_transaction<Call>(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     call: Call,
     tip: Option<u128>,
@@ -116,30 +140,28 @@ where
         // Get fresh nonce for each attempt, or increment if we have a previous nonce
         let nonce = if let Some(prev_nonce) = current_nonce {
             // After first failure, try with incremented nonce
-            let incremented_nonce = get_incremented_nonce(client, from_keypair, prev_nonce).await?;
+            let incremented_nonce =
+                get_incremented_nonce_with_client(quantus_client, from_keypair, prev_nonce).await?;
             log_verbose!(
-                "🔢 Using incremented nonce: {} (previous: {})",
+                "🔢 Using incremented nonce from best block: {} (previous: {})",
                 incremented_nonce,
                 prev_nonce
             );
             incremented_nonce
         } else {
-            // First attempt - get fresh nonce
-            let fresh_nonce = get_fresh_nonce(client, from_keypair).await?;
-            log_verbose!("🔢 Using fresh nonce: {}", fresh_nonce);
+            // First attempt - get fresh nonce from best block
+            let fresh_nonce = get_fresh_nonce_with_client(quantus_client, from_keypair).await?;
+            log_verbose!("🔢 Using fresh nonce from best block: {}", fresh_nonce);
             fresh_nonce
         };
         current_nonce = Some(nonce);
 
-        // Get current block for logging
-        let current_block = client.blocks().at_latest().await.map_err(|e| {
-            crate::error::QuantusError::NetworkError(format!(
-                "Failed to get current block: {:?}",
-                e
-            ))
+        // Get current block for logging using latest block hash
+        let latest_block_hash = quantus_client.get_latest_block().await.map_err(|e| {
+            crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {:?}", e))
         })?;
 
-        log_verbose!("🔗 Current block: #{}", current_block.number());
+        log_verbose!("🔗 Latest block hash: {:?}", latest_block_hash);
 
         // Create custom params with fresh nonce and optional tip
         use subxt::config::DefaultExtrinsicParamsBuilder;
@@ -152,10 +174,39 @@ where
             log_verbose!("💰 No tip specified, using default priority");
         }
 
+        // Try to get chain parameters from the client
+        let genesis_hash = quantus_client.get_genesis_hash().await?;
+        let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
+
+        log_verbose!("🔍 Chain parameters:");
+        log_verbose!("   Genesis hash: {:?}", genesis_hash);
+        log_verbose!("   Spec version: {}", spec_version);
+        log_verbose!("   Transaction version: {}", transaction_version);
+
         let params = params_builder.build();
 
+        // Log transaction parameters for debugging
+        log_verbose!("🔍 Transaction parameters:");
+        log_verbose!("   Nonce: {}", nonce);
+        log_verbose!("   Tip: {:?}", tip);
+        log_verbose!("   Latest block hash: {:?}", latest_block_hash);
+
+        // Get and log era information
+        log_verbose!("   Era: Using default era from SubXT");
+        log_verbose!("   Genesis hash: Using default from SubXT");
+        log_verbose!("   Spec version: Using default from SubXT");
+
+        // Log additional debugging info
+        log_verbose!("🔍 Additional debugging:");
+        log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
+
         // Submit the transaction with fresh nonce and optional tip
-        match client.tx().sign_and_submit(&call, &signer, params).await {
+        match quantus_client
+            .client()
+            .tx()
+            .sign_and_submit(&call, &signer, params)
+            .await
+        {
             Ok(tx_hash) => {
                 crate::log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
                 return Ok(tx_hash);

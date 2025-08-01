@@ -111,7 +111,7 @@ pub async fn get_storage_raw(
 
 /// Set storage value using sudo (requires sudo privileges)
 pub async fn set_storage_value(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     from_keypair: &crate::wallet::QuantumKeyPair,
     storage_key: Vec<u8>,
     value_bytes: Vec<u8>,
@@ -128,7 +128,8 @@ pub async fn set_storage_value(
     let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
 
     let tx_hash =
-        crate::cli::common::submit_transaction(client, from_keypair, sudo_call, None).await?;
+        crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
+            .await?;
 
     log_verbose!("📋 Set storage transaction submitted: {:?}", tx_hash);
 
@@ -294,8 +295,7 @@ pub async fn handle_storage_command(
 
             // 4. Submit the set storage transaction
             let tx_hash =
-                set_storage_value(quantus_client.client(), &keypair, storage_key, value_bytes)
-                    .await?;
+                set_storage_value(&quantus_client, &keypair, storage_key, value_bytes).await?;
 
             log_print!(
                 "✅ {} Set storage transaction submitted! Hash: {:?}",

@@ -252,7 +252,7 @@ pub async fn execute_command(command: Commands, node_url: &str) -> crate::error:
             // Resolve address (could be wallet name or SS58 address)
             let resolved_address = common::resolve_address(&address)?;
 
-            let balance = send::get_balance(quantus_client.client(), &resolved_address).await?;
+            let balance = send::get_balance(&quantus_client, &resolved_address).await?;
             let formatted_balance =
                 send::format_balance_with_symbol(&quantus_client, balance).await?;
             log_print!("💰 Balance: {}", formatted_balance);
