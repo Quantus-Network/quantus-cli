@@ -165,7 +165,7 @@ where
 
         // Create custom params with fresh nonce and optional tip
         use subxt::config::DefaultExtrinsicParamsBuilder;
-        let mut params_builder = DefaultExtrinsicParamsBuilder::new().nonce(nonce);
+        let mut params_builder = DefaultExtrinsicParamsBuilder::new().immortal().nonce(nonce);
 
         if let Some(tip_amount) = tip {
             params_builder = params_builder.tip(tip_amount);
@@ -183,6 +183,7 @@ where
         log_verbose!("   Spec version: {}", spec_version);
         log_verbose!("   Transaction version: {}", transaction_version);
 
+        // For now, just use the default params
         let params = params_builder.build();
 
         // Log transaction parameters for debugging

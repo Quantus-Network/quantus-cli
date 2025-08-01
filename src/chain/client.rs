@@ -221,6 +221,96 @@ impl QuantusClient {
         );
         Ok((spec_version, transaction_version))
     }
+
+    /// Get chain parameters including era information
+    pub async fn get_chain_params(&self) -> crate::error::Result<()> {
+        log_verbose!("🔍 Fetching chain parameters via RPC...");
+
+        // Get genesis hash
+        let genesis_hash = self.get_genesis_hash().await?;
+        log_verbose!("🧬 Genesis hash: {:?}", genesis_hash);
+
+        // Get runtime version
+        let (spec_version, transaction_version) = self.get_runtime_version().await?;
+        log_verbose!("🔧 Spec version: {}", spec_version);
+        log_verbose!("🔄 Transaction version: {}", transaction_version);
+
+        // Try to get era information from chain state
+        use jsonrpsee::core::client::ClientT;
+        let chain_state: serde_json::Value = self
+            .rpc_client
+            .request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch runtime version: {:?}",
+                    e
+                ))
+            })?;
+
+        log_verbose!("📋 Full runtime info: {:?}", chain_state);
+
+        // Try to get chain properties
+        let chain_props: serde_json::Value = self
+            .rpc_client
+            .request::<serde_json::Value, [(); 0]>("system_properties", [])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch chain properties: {:?}",
+                    e
+                ))
+            })?;
+
+        log_verbose!("🔗 Chain properties: {:?}", chain_props);
+
+        // Try to get transaction parameters
+        let tx_params: serde_json::Value = self
+            .rpc_client
+            .request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch transaction params: {:?}",
+                    e
+                ))
+            })?;
+
+        log_verbose!("📋 Transaction params: {:?}", tx_params);
+
+        // Try to get current block header to understand era
+        let current_block: serde_json::Value = self
+            .rpc_client
+            .request::<serde_json::Value, [(); 0]>("chain_getHeader", [])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to fetch current block: {:?}",
+                    e
+                ))
+            })?;
+
+        log_verbose!("📦 Current block: {:?}", current_block);
+
+        // Try to get era information from block header
+        if let Some(block_number_str) = current_block["number"].as_str() {
+            if let Ok(block_number) = u64::from_str_radix(&block_number_str[2..], 16) {
+                log_verbose!("📊 Current block number: {}", block_number);
+
+                // Calculate era based on block number
+                // For mortal transactions, era is typically calculated as:
+                // period = 64 blocks (typical for Substrate)
+                // phase = block_number % period
+                let period = 64u64;
+                let phase = block_number % period;
+                log_verbose!("⏰ Calculated era: period={}, phase={}", period, phase);
+                log_verbose!("💡 For mortal transactions, use Era::Mortal(period, phase)");
+                log_verbose!("💡 For immortal transactions, use Era::Immortal");
+            }
+        }
+
+        Ok(())
+    }
 }
 
 // Implement subxt::tx::Signer for ResonancePair

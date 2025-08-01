@@ -240,5 +240,10 @@ pub async fn handle_system_extended_command(
         get_metadata_stats(quantus_client.client()).await?;
     }
 
+    // Always show chain parameters for debugging
+    log_print!("");
+    log_print!("🔍 Chain Parameters (for debugging):");
+    quantus_client.get_chain_params().await?;
+
     Ok(())
 }
