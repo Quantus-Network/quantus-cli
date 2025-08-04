@@ -8,7 +8,7 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
-use sp_runtime::traits::IdentifyAccount;
+
 use subxt::OnlineClient;
 
 /// Tech Collective management commands
@@ -86,7 +86,11 @@ pub enum TechCollectiveCommands {
     },
 
     /// Check who has sudo permissions in the network
-    CheckSudo,
+    CheckSudo {
+        /// Address to check if it's the sudo account (optional)
+        #[arg(short, long)]
+        address: Option<String>,
+    },
 
     /// List active Tech Referenda
     ListReferenda,
@@ -532,39 +536,38 @@ pub async fn handle_tech_collective_command(
             Ok(())
         }
 
-        TechCollectiveCommands::CheckSudo => {
+        TechCollectiveCommands::CheckSudo { address } => {
             log_print!("🏛️  Checking sudo permissions ");
 
             match get_sudo_account(quantus_client.client()).await? {
                 Some(sudo_account) => {
-                    log_success!(
-                        "✅ Found sudo account: {}",
-                        sudo_account.to_ss58check().bright_green()
-                    );
-                    log_print!("🔑 This account has root/sudo permissions");
+                    let sudo_address = sudo_account.to_ss58check();
+                    log_verbose!("🔍 Found sudo account: {}", sudo_address);
+                    log_success!("✅ Found sudo account: {}", sudo_address.bright_green());
 
-                    // Check if crystal_alice is the sudo account (get address dynamically)
-                    let crystal_alice_addr = dilithium_crypto::crystal_alice()
-                        .public()
-                        .into_account()
-                        .to_ss58check();
-                    if sudo_account.to_ss58check() == crystal_alice_addr {
-                        log_success!("✅ crystal_alice IS the sudo account!");
+                    // If an address was provided, check if it matches the sudo account
+                    if let Some(check_address) = address {
+                        log_verbose!("🔍 Checking if provided address is sudo...");
+
+                        // Resolve address (could be wallet name or SS58 address)
+                        let resolved_address = resolve_address(&check_address)?;
+                        log_verbose!("   👤 Address to check: {}", resolved_address);
+
+                        if sudo_address == resolved_address {
+                            log_success!("✅ Provided address IS the sudo account!");
+                        } else {
+                            log_print!("❌ Provided address is NOT the sudo account");
+                            log_verbose!("💡 Provided address: {}", resolved_address);
+                            log_verbose!("💡 Actual sudo address: {}", sudo_address);
+                        }
                     } else {
-                        log_print!("❌ crystal_alice is NOT the sudo account");
-                        log_print!(
-                            "💡 crystal_alice address: {}",
-                            crystal_alice_addr.bright_cyan()
-                        );
-                        log_print!(
-                            "💡 Actual sudo address: {}",
-                            sudo_account.to_ss58check().bright_yellow()
-                        );
+                        // No address provided, just show the sudo account
+                        log_verbose!("💡 Use 'quantus tech-collective check-sudo --address <ADDRESS>' to check if a specific address is sudo");
                     }
                 }
                 None => {
                     log_print!("📭 No sudo account found in network");
-                    log_print!("💡 The network may not have sudo configured");
+                    log_verbose!("💡 The network may not have sudo configured");
                 }
             }
 
