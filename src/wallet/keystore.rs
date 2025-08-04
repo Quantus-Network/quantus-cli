@@ -20,7 +20,7 @@ use rand::{rng, RngCore};
 
 use std::path::Path;
 
-use dilithium_crypto::types::{ResonancePair, ResonancePublic};
+use dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
 use sp_runtime::traits::IdentifyAccount;
 
 /// Quantum-safe key pair using Dilithium post-quantum signatures
@@ -50,18 +50,18 @@ impl QuantumKeyPair {
         })
     }
 
-    /// Convert to ResonancePair for use with substrate-api-client
-    pub fn to_resonance_pair(&self) -> Result<ResonancePair> {
-        // Convert our QuantumKeyPair to ResonancePair using from_seed
+    /// Convert to DilithiumPair for use with substrate-api-client
+    pub fn to_resonance_pair(&self) -> Result<DilithiumPair> {
+        // Convert our QuantumKeyPair to DilithiumPair using from_seed
         // Use the private key as the seed
-        Ok(ResonancePair {
+        Ok(DilithiumPair {
             public: self.public_key.as_slice().try_into().unwrap(),
             secret: self.private_key.as_slice().try_into().unwrap(),
         })
     }
 
     #[allow(dead_code)]
-    pub fn from_resonance_pair(keypair: &ResonancePair) -> Self {
+    pub fn from_resonance_pair(keypair: &DilithiumPair) -> Self {
         Self {
             public_key: keypair.public.as_ref().to_vec(),
             private_key: keypair.secret.as_ref().to_vec(),
@@ -69,9 +69,9 @@ impl QuantumKeyPair {
     }
 
     pub fn to_account_id_32(&self) -> AccountId32 {
-        // Use the ResonancePublic's into_account method for correct address generation
+        // Use the DilithiumPublic's into_account method for correct address generation
         let resonance_public =
-            ResonancePublic::from_slice(&self.public_key).expect("Invalid public key");
+            DilithiumPublic::from_slice(&self.public_key).expect("Invalid public key");
         resonance_public.into_account()
     }
 
@@ -81,8 +81,8 @@ impl QuantumKeyPair {
     }
 
     /// Convert to subxt Signer for use
-    pub fn to_subxt_signer(&self) -> Result<dilithium_crypto::types::ResonancePair> {
-        // Convert to ResonancePair first - now it implements subxt::tx::Signer<ChainConfig>
+    pub fn to_subxt_signer(&self) -> Result<dilithium_crypto::types::DilithiumPair> {
+        // Convert to DilithiumPair first - now it implements subxt::tx::Signer<ChainConfig>
         let resonance_pair = self.to_resonance_pair()?;
 
         Ok(resonance_pair)
@@ -389,11 +389,11 @@ mod tests {
                 name
             );
 
-            // Verify it matches the direct ResonancePair method
+            // Verify it matches the direct DilithiumPair method
             let expected_address = resonance_pair.public().into_account().to_ss58check();
             assert_eq!(
                 ss58_address, expected_address,
-                "Address should match ResonancePair method for {}",
+                "Address should match DilithiumPair method for {}",
                 name
             );
         }
@@ -453,7 +453,7 @@ mod tests {
         );
         assert_eq!(
             addr2, addr3,
-            "Address should match direct ResonancePair calculation"
+            "Address should match direct DilithiumPair calculation"
         );
     }
 
