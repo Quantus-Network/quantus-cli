@@ -202,10 +202,10 @@ impl Keystore {
         // 2. Derive encryption key from password using Argon2 (quantum-safe)
         let argon2 = Argon2::default();
         let salt_string = argon2::password_hash::SaltString::encode_b64(&argon2_salt)
-            .map_err(|_| WalletError::Encryption)?;
+            .map_err(|e| WalletError::Encryption(e.to_string()))?;
         let password_hash = argon2
             .hash_password(password.as_bytes(), &salt_string)
-            .map_err(|_| WalletError::Encryption)?;
+            .map_err(|e| WalletError::Encryption(e.to_string()))?;
 
         // 3. Use password hash as AES-256 key (quantum-safe with 256-bit key)
         let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
@@ -217,7 +217,7 @@ impl Keystore {
         let serialized_data = serde_json::to_vec(data)?;
         let encrypted_data = cipher
             .encrypt(&nonce, serialized_data.as_ref())
-            .map_err(|_| WalletError::Encryption)?;
+            .map_err(|e| WalletError::Encryption(e.to_string()))?;
 
         Ok(EncryptedWallet {
             name: data.name.clone(),

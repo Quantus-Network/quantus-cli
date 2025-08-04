@@ -137,6 +137,17 @@ impl WalletManager {
         })
     }
 
+    /// Export a wallet's mnemonic phrase
+    pub fn export_mnemonic(&self, name: &str, password: Option<&str>) -> Result<String> {
+        let final_password = password::get_wallet_password(name, password.map(String::from), None)?;
+
+        let wallet_data = self.load_wallet(name, &final_password)?;
+
+        wallet_data
+            .mnemonic
+            .ok_or_else(|| WalletError::MnemonicNotAvailable.into())
+    }
+
     /// List all wallets
     pub fn list_wallets(&self) -> Result<Vec<WalletInfo>> {
         let keystore = Keystore::new(&self.wallets_dir);

@@ -43,6 +43,10 @@ pub enum WalletCommands {
         #[arg(short, long)]
         name: String,
 
+        /// Password to decrypt the wallet (optional, will prompt if not provided)
+        #[arg(short, long)]
+        password: Option<String>,
+
         /// Export format: mnemonic, private-key
         #[arg(short, long, default_value = "mnemonic")]
         format: String,
@@ -270,11 +274,47 @@ pub async fn handle_wallet_command(
             Ok(())
         }
 
-        WalletCommands::Export { name, format } => {
+        WalletCommands::Export {
+            name,
+            password,
+            format,
+        } => {
             log_print!("📤 Exporting wallet...");
-            log_print!("Wallet: {}", name.bright_green());
-            log_print!("Format: {}", format.bright_yellow());
-            log_print!("{}", "✅ Export completed! (STUB)".green());
+
+            if format.to_lowercase() != "mnemonic" {
+                log_error!("Only 'mnemonic' export format is currently supported.");
+                return Err(crate::error::QuantusError::Generic(
+                    "Export format not supported".to_string(),
+                ));
+            }
+
+            let wallet_manager = WalletManager::new()?;
+
+            match wallet_manager.export_mnemonic(&name, password.as_deref()) {
+                Ok(mnemonic) => {
+                    log_success!("✅ Wallet exported successfully!");
+                    log_print!("\nYour secret mnemonic phrase:");
+                    log_print!(
+                        "{}",
+                        "--------------------------------------------------".dimmed()
+                    );
+                    log_print!("{}", mnemonic.bright_yellow());
+                    log_print!(
+                        "{}",
+                        "--------------------------------------------------".dimmed()
+                    );
+                    log_print!(
+                        "\n{}",
+                        "⚠️  Keep this phrase safe and secret. Anyone with this phrase can access your funds."
+                            .bright_red()
+                    );
+                }
+                Err(e) => {
+                    log_error!("{}", format!("❌ Failed to export wallet: {}", e).red());
+                    return Err(e);
+                }
+            }
+
             Ok(())
         }
 

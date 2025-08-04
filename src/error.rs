@@ -45,17 +45,18 @@ pub enum WalletError {
 
     #[error("Invalid mnemonic phrase")]
     InvalidMnemonic,
-
+    #[error("Mnemonic phrase is not available for this wallet")]
+    MnemonicNotAvailable,
     #[error("Invalid password")]
     InvalidPassword,
 
     #[error("Key generation failed")]
     KeyGeneration,
 
-    #[error("Encryption failed")]
-    Encryption,
+    #[error("Encryption failed: {0}")]
+    Encryption(String),
 
-    #[error("Decryption failed")]
+    #[error("Decryption failed. Check your password.")]
     Decryption,
 }
 
