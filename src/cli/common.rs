@@ -30,8 +30,6 @@ pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
     )))
 }
 
-/// Get fresh nonce for account using SubXT's default behavior (finalized block)
-
 /// Get fresh nonce for account from the latest block using existing QuantusClient
 /// This function ensures we always get the most current nonce from the chain
 /// to avoid "Transaction is outdated" errors
@@ -166,8 +164,7 @@ where
         // Create custom params with fresh nonce and optional tip
         use subxt::config::DefaultExtrinsicParamsBuilder;
         let mut params_builder = DefaultExtrinsicParamsBuilder::new()
-            .mortal(256) //Value higher than our finalization - TODO should come from config.
-            //.immortal()
+            .mortal(256) // Value higher than our finalization - TODO: should come from config
             .nonce(nonce);
 
         if let Some(tip_amount) = tip {

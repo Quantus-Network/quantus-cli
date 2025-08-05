@@ -61,6 +61,7 @@ impl QuantusClient {
         // Create WS client with custom timeouts
         let ws_client = WsClientBuilder::default()
             // TODO: Make these configurable in a separate change
+            // These timeouts should be configurable via CLI or config file
             .connection_timeout(Duration::from_secs(30))
             .request_timeout(Duration::from_secs(30))
             .build(node_url)

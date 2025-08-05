@@ -272,7 +272,7 @@ pub async fn handle_storage_command(
                     // Default to hex decoding if no type is specified
                     // Try to parse as H256 first, then fall back to hex decode
                     if value.starts_with("0x") && value.len() == 66 {
-                        // 0x + 64 hex chars = 66
+                        // 0x + 64 hex chars = 66 (32 bytes)
                         // Try to parse as H256
                         let h256_value = subxt::utils::H256::from_str(&value).map_err(|e| {
                             QuantusError::Generic(format!("Invalid H256 value: {}", e))

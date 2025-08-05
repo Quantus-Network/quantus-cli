@@ -44,6 +44,7 @@ impl QuantumKeyPair {
     pub fn to_dilithium_keypair(&self) -> Result<Keypair> {
         // TODO: Implement conversion from bytes back to Keypair
         // For now, generate a new one as placeholder
+        // This function should properly reconstruct the Keypair from stored bytes
         Ok(Keypair {
             public: PublicKey::from_bytes(&self.public_key).expect("Failed to parse public key"),
             secret: SecretKey::from_bytes(&self.private_key).expect("Failed to parse private key"),

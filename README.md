@@ -32,72 +32,39 @@ cargo build --release
 
 ### First Steps
 
+Start by exploring the available commands:
+
 ```bash
-# Get help
+# Get help to see all available commands
 quantus --help
 
-# Create your first wallet
-quantus wallet create --name my-wallet
-
-# Create test wallets for development
-quantus developer create-test-wallets
-
-# Check a wallet's balance
-quantus balance --address qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
-
-# Send tokens
-quantus send --from crystal_alice --to qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2 --amount 10.5
-
-# Manage Tech Collective governance
-quantus tech-collective list-members
-quantus tech-collective vote --referendum-index 0 --aye true --from crystal_alice
-
-# Call any blockchain function generically
-quantus call --pallet Balances --call transfer_allow_death --args '["qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ", "1000000000"]' --from crystal_alice
-
-# Explore the blockchain
-quantus metadata --stats-only
+# Explore specific command groups
+quantus wallet --help
+quantus send --help
+quantus tech-collective --help
 ```
+
+The CLI provides comprehensive help at every level, allowing you to discover functionality step by step.
 
 ## 📋 CLI Navigation
 
 ### Help System
-Every command and subcommand has built-in help. Use `--help` at any level:
+The CLI provides comprehensive help at every level. Every command and subcommand supports `--help`:
 
-```bash
-# Main help - shows all available commands
-quantus --help
+- **Main level**: `quantus --help` shows all available top-level commands
+- **Command level**: `quantus <command> --help` shows options for specific commands
+- **Subcommand level**: `quantus <command> <subcommand> --help` shows options for subcommands
+- **Deep nesting**: Help is available at any depth of command nesting
 
-# Command help - shows options for a specific command
-quantus wallet --help
-quantus send --help
-quantus call --help
-
-# Subcommand help - shows options for subcommands
-quantus wallet create --help
-quantus runtime check-version --help
-quantus tech-collective list-members --help
-
-# Even deeper subcommands
-quantus wallet export --help
-quantus storage get --help
-```
+This hierarchical help system allows you to discover available functionality step by step, starting from the main help and drilling down to specific command options.
 
 ### Verbose Mode
 Every command supports `--verbose` for detailed debugging information:
 
-```bash
-# Basic command
-quantus send --from crystal_alice --to bob --amount 10
-
-# Same command with verbose output
-quantus send --from crystal_alice --to bob --amount 10 --verbose
-
-# Verbose works on any command level
-quantus wallet create --name my-wallet --verbose
-quantus balance --address alice --verbose
-quantus compatibility-check --verbose
-```
+- **Standard output**: Commands show essential information by default
+- **Verbose output**: Adding `--verbose` provides detailed execution logs, network calls, and internal state information
+- **Universal support**: Verbose mode works on any command level and any subcommand
+- **Debugging aid**: Use verbose mode to troubleshoot issues or understand command execution flow
 
 ### Global Options
 These options work on every command:
@@ -112,77 +79,18 @@ The CLI uses a hierarchical structure:
 quantus [GLOBAL_OPTIONS] <COMMAND> [COMMAND_OPTIONS] <SUBCOMMAND> [SUBCOMMAND_OPTIONS]
 ```
 
-**Examples:**
-```bash
-# Top level command
-quantus version
-
-# Command with options
-quantus send --from alice --to bob --amount 10
-
-# Command with subcommand
-quantus wallet create --name my-wallet
-
-# Command with subcommand and options
-quantus runtime check-version --verbose
-
-# Deep nesting
-quantus tech-collective vote --referendum-index 0 --aye true --from alice
-```
+**Structure:**
+The CLI follows a consistent pattern where global options can be combined with any command and subcommand at any level of nesting.
 
 ### Discovering Commands
-Start with the main help and drill down:
-
-```bash
-# See all available commands
-quantus --help
-
-# Explore a command group
-quantus wallet --help
-
-# See what a subcommand does
-quantus wallet create --help
-
-# Check if a command exists
-quantus nonexistent-command --help  # Will show error with suggestions
-```
-
-### Error Recovery
-When you make a mistake, the CLI provides helpful guidance:
-
-```bash
-# Wrong command - shows suggestions
-quantus wallt create  # Typo in "wallet"
-# Error: 'wallt' isn't a valid command. Did you mean 'wallet'?
-
-# Missing required arguments
-quantus send --from alice
-# Error: the following required arguments were not provided: --to <TO> --amount <AMOUNT>
-
-# Wrong subcommand
-quantus wallet nonexistent --help
-# Error: 'nonexistent' isn't a valid subcommand for 'wallet'
-```
+Start with the main help and drill down to explore available functionality. The CLI provides helpful error messages and suggestions when you make mistakes, guiding you to the correct command syntax.
 
 ### Quick Reference
 Common navigation patterns:
-
-```bash
-# Always start here
-quantus --help
-
-# Explore any command
-quantus <command> --help
-
-# Get verbose output for debugging
-quantus <command> --verbose
-
-# Check compatibility first
-quantus compatibility-check
-
-# Use different node
-quantus <command> --node-url ws://other-node:9944
-```
+- Start with `quantus --help` to see all available commands
+- Use `quantus <command> --help` to explore specific command options
+- Add `--verbose` to any command for detailed debugging information
+- Use `--node-url` to connect to different nodes (defaults to localhost)
 
 
 
@@ -195,54 +103,16 @@ quantus <command> --node-url ws://other-node:9944
 ### Node Configuration  
 - Set via `--node-url` flag or default to `ws://127.0.0.1:9944`
 
-## 💡 Usage Examples
+## 💡 Getting Started
 
-### Complete Workflow Example
-```bash
-# 1. Set up development environment
-export QUANTUS_WALLET_PASSWORD_CRYSTAL_ALICE=""
-quantus developer create-test-wallets
+The CLI provides a comprehensive set of commands for blockchain interaction. Start by exploring the help system to discover available functionality:
 
-# 2. Check initial balance
-quantus balance --address qzpVkR5dV7o2ryrQaWFWA7ifma4tonnJS4sr3MzJLpti9cTvQ
+1. **Explore commands**: Use `quantus --help` to see all available commands
+2. **Discover options**: Use `quantus <command> --help` to see command-specific options
+3. **Get details**: Add `--verbose` to any command for detailed execution information
+4. **Connect to nodes**: Use `--node-url` to connect to different blockchain nodes
 
-# 3. Create your own wallet
-quantus wallet create --name my-production-wallet
-
-# 4. Send some test tokens (traditional way)
-quantus send --from crystal_alice --to my-production-wallet --amount 100 --verbose
-
-# 4b. Or use the generic call interface
-quantus call --pallet Balances --call transfer_allow_death --args '["my-production-wallet", "50000000000"]' --from crystal_alice
-
-# 5. Verify the transfer
-quantus balance --address $(quantus wallet view --name my-production-wallet | grep Address | cut -d' ' -f2)
-
-# 6. Explore what else you can do
-quantus metadata --stats-only
-
-# 7. Try other generic calls
-quantus call --pallet System --call remark --args '["0x48656c6c6f20576f726c64"]' --from crystal_alice
-```
-
-### Scripting Example
-```bash
-#!/bin/bash
-# Script to distribute tokens to multiple accounts
-
-export QUANTUS_WALLET_PASSWORD_CRYSTAL_ALICE=""
-
-RECIPIENTS=(
-    "qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2"
-    "qzkx3FCxAA1eCtA1n6ij7xS3W9oNmuncYaPReWoYNviddvaT3"
-)
-
-for recipient in "${RECIPIENTS[@]}"; do
-    echo "Sending 50 DEV to $recipient"
-    quantus send --from crystal_alice --to "$recipient" --amount 50
-    sleep 2  # Wait between transactions
-done
-```
+The CLI supports both simple commands and complex workflows, with built-in help and error recovery at every level.
 
 ## 🏗️ Architecture
 
@@ -262,39 +132,33 @@ done
 - **Progress Indicators**: Spinners during network operations
 - **Error Recovery**: Comprehensive error handling with helpful messages
 - **Development Mode**: Empty password detection for test wallets
+- **Event Decoding**: Automatic SS58 address formatting in event output
+- **Fresh Nonce Management**: Automatic nonce handling to avoid transaction conflicts
+- **Transaction Retry Logic**: Exponential backoff for failed transactions
+- **Latest Block Reading**: Consistent reading from latest (not finalized) blocks
 
 ### Real Blockchain Integration
 - **Substrate Integration**: Direct connection to Quantus node via WebSocket
 - **Metadata-Driven**: Discovers available functionality from chain metadata
 - **Transaction Monitoring**: Real-time transaction confirmation and fee calculation
 - **Extensible Architecture**: Macro-based extrinsic submission supports any pallet
+- **Event System**: Query events by block number, hash, or finalized status
+- **Storage Operations**: Direct storage queries and sudo-based storage modifications
+- **Reversible Transfers**: Schedule and cancel reversible transactions
+- **Scheduler Integration**: Query and manage scheduled operations
 
 ## 🛠️ Current Status
 
-**🔮 Architecture Ready For:**
-- Additional pallet integrations (staking, governance, etc.)
-- Hardware wallet support
-- Multi-chain support
-- Advanced key derivation
-
-## 📦 Technical Dependencies
-
-### Core Runtime
-- `clap`: Modern CLI argument parsing
-- `tokio`: Async runtime for blockchain operations
-- `subxt`: Modern Substrate client with type-safe API
-- `serde` + `serde_json`: Data serialization
-
-### Cryptography
-- `dilithium-crypto`: Post-quantum signatures
-- `aes-gcm`: Symmetric encryption
-- `argon2`: Password-based key derivation
-- `bip39`: Mnemonic phrase generation
-
-### User Experience
-- `colored`: Terminal output colorization
-- `chrono`: Date/time formatting
-- `thiserror`: Structured error handling
+**✅ Fully Implemented:**
+- Quantum-safe wallet management with Dilithium cryptography
+- Real blockchain operations (send, balance, storage, events)
+- Tech Collective governance (add/remove members, voting)
+- Generic pallet calls via metadata-driven parsing
+- Reversible transfers with scheduling and cancellation
+- Scheduler integration for automated operations
+- System information and runtime management
+- Event querying with SS58 address formatting
+- Fresh nonce management and transaction retry logic
 
 ## 🎯 Real-World Ready
 
@@ -336,12 +200,24 @@ The project includes a script to regenerate SubXT types and metadata when the bl
 - To ensure CLI compatibility with the latest chain version
 
 **Requirements:**
-- Quantus node must be running on `ws://127.0.0.1:9944`
 - `subxt-cli` must be installed: `cargo install subxt-cli`
 - Node must be fully synced and ready
 
+**Usage:**
+```bash
+# Use default node URL (ws://127.0.0.1:9944)
+./regenerate_metadata.sh
+
+# Use custom node URL
+./regenerate_metadata.sh --node-url ws://other-node:9944
+
+# Show help
+./regenerate_metadata.sh --help
+```
+
 **Output:**
 ```
+Using node URL: ws://127.0.0.1:9944
 Updating metadata file at src/quantus_metadata.scale...
 Generating SubXT types to src/chain/quantus_subxt.rs...
 Formatting generated code...

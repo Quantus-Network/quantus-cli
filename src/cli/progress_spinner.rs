@@ -42,7 +42,6 @@ pub async fn wait_for_finalization(
     let mut spinner = ProgressSpinner::new();
 
     // For now, we use a simple delay approach similar to substrate-api-client
-    // TODO: Implement proper finalization watching using events
     for _ in 0..10 {
         spinner.tick();
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
