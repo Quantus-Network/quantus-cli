@@ -23,6 +23,10 @@ pub enum QuantusError {
     #[error("TOML serialization error: {0}")]
     TomlSer(#[from] toml::ser::Error),
 
+    /// SubXT errors
+    #[error("SubXT error: {0}")]
+    Subxt(#[from] subxt::Error),
+
     /// Generic errors
     #[error("Error: {0}")]
     Generic(String),
