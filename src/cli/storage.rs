@@ -93,13 +93,13 @@ pub enum StorageCommands {
 
 /// Get raw storage value by key
 pub async fn get_storage_raw(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     key: Vec<u8>,
 ) -> crate::error::Result<Option<Vec<u8>>> {
-    let storage_at =
-        client.storage().at_latest().await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-        })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     let result = storage_at
         .fetch_raw(key)
@@ -181,7 +181,7 @@ pub async fn handle_storage_command(
                 }
             }
 
-            let result = get_storage_raw(quantus_client.client(), storage_key).await?;
+            let result = get_storage_raw(&quantus_client, storage_key).await?;
 
             if let Some(value_bytes) = result {
                 log_success!("Raw Value: 0x{}", hex::encode(&value_bytes).bright_yellow());

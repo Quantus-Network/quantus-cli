@@ -72,18 +72,20 @@ pub async fn handle_events_command(
             Err(e) => {
                 log_print!("⚠️  RPC call failed, falling back to latest block: {:?}", e);
 
-                let latest_block =
-                    quantus_client
-                        .client()
-                        .blocks()
-                        .at_latest()
-                        .await
-                        .map_err(|e| {
-                            crate::error::QuantusError::NetworkError(format!(
-                                "Failed to get latest block: {:?}",
-                                e
-                            ))
-                        })?;
+                // Get the latest block hash to read from the latest state (not finalized)
+                let latest_block_hash = quantus_client.get_latest_block().await?;
+
+                let latest_block = quantus_client
+                    .client()
+                    .blocks()
+                    .at(latest_block_hash)
+                    .await
+                    .map_err(|e| {
+                        crate::error::QuantusError::NetworkError(format!(
+                            "Failed to get latest block: {:?}",
+                            e
+                        ))
+                    })?;
 
                 let latest_num = latest_block.number();
 
@@ -177,10 +179,13 @@ pub async fn handle_events_command(
                     e
                 );
 
+                // Get the latest block hash to read from the latest state (not finalized)
+                let latest_block_hash = quantus_client.get_latest_block().await?;
+
                 quantus_client
                     .client()
                     .blocks()
-                    .at_latest()
+                    .at(latest_block_hash)
                     .await
                     .map_err(|e| {
                         crate::error::QuantusError::NetworkError(format!(
@@ -193,10 +198,13 @@ pub async fn handle_events_command(
     } else {
         log_print!("📋 Querying events from latest block");
 
+        // Get the latest block hash to read from the latest state (not finalized)
+        let latest_block_hash = quantus_client.get_latest_block().await?;
+
         quantus_client
             .client()
             .blocks()
-            .at_latest()
+            .at(latest_block_hash)
             .await
             .map_err(|e| {
                 crate::error::QuantusError::NetworkError(format!(

@@ -1,4 +1,3 @@
-use crate::chain::client::ChainConfig;
 use crate::cli::common::resolve_address;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
@@ -7,7 +6,6 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
-use subxt::OnlineClient;
 
 /// Reversible transfer commands
 #[derive(Subcommand, Debug)]
@@ -472,21 +470,14 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
             password,
             password_file,
         } => {
-            list_pending_transactions(
-                quantus_client.client(),
-                address,
-                from,
-                password,
-                password_file,
-            )
-            .await
+            list_pending_transactions(&quantus_client, address, from, password, password_file).await
         }
     }
 }
 
 /// List all pending reversible transactions for an account
 async fn list_pending_transactions(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     address: Option<String>,
     wallet_name: Option<String>,
     password: Option<String>,
@@ -530,11 +521,13 @@ async fn list_pending_transactions(
         .reversible_transfers()
         .pending_transfers_by_sender(account_id.clone());
 
-    let outgoing_transfers = client
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let outgoing_transfers = quantus_client
+        .client()
         .storage()
-        .at_latest()
-        .await
-        .map_err(|e| crate::error::QuantusError::NetworkError(format!("Storage error: {:?}", e)))?
+        .at(latest_block_hash)
         .fetch(&sender_storage_address)
         .await
         .map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {:?}", e)))?;
@@ -544,11 +537,10 @@ async fn list_pending_transactions(
         .reversible_transfers()
         .pending_transfers_by_recipient(account_id);
 
-    let incoming_transfers = client
+    let incoming_transfers = quantus_client
+        .client()
         .storage()
-        .at_latest()
-        .await
-        .map_err(|e| crate::error::QuantusError::NetworkError(format!("Storage error: {:?}", e)))?
+        .at(latest_block_hash)
         .fetch(&recipient_storage_address)
         .await
         .map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {:?}", e)))?;
@@ -568,13 +560,10 @@ async fn list_pending_transactions(
                     .reversible_transfers()
                     .pending_transfers(*hash);
 
-                if let Ok(Some(transfer_details)) = client
+                if let Ok(Some(transfer_details)) = quantus_client
+                    .client()
                     .storage()
-                    .at_latest()
-                    .await
-                    .map_err(|e| {
-                        crate::error::QuantusError::NetworkError(format!("Storage error: {:?}", e))
-                    })?
+                    .at(latest_block_hash)
                     .fetch(&transfer_storage_address)
                     .await
                     .map_err(|e| {
@@ -606,13 +595,10 @@ async fn list_pending_transactions(
                     .reversible_transfers()
                     .pending_transfers(*hash);
 
-                if let Ok(Some(transfer_details)) = client
+                if let Ok(Some(transfer_details)) = quantus_client
+                    .client()
                     .storage()
-                    .at_latest()
-                    .await
-                    .map_err(|e| {
-                        crate::error::QuantusError::NetworkError(format!("Storage error: {:?}", e))
-                    })?
+                    .at(latest_block_hash)
                     .fetch(&transfer_storage_address)
                     .await
                     .map_err(|e| {

@@ -1,5 +1,4 @@
 //! `quantus wallet` subcommand - wallet operations
-use crate::chain::client::ChainConfig;
 use crate::{
     chain::quantus_subxt,
     error::QuantusError,
@@ -10,7 +9,6 @@ use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::io::{self, Write};
-use subxt::OnlineClient;
 
 /// Wallet management commands
 #[derive(Subcommand, Debug)]
@@ -99,7 +97,7 @@ pub enum WalletCommands {
 
 /// Get the nonce (transaction count) of an account
 pub async fn get_account_nonce(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     account_address: &str,
 ) -> crate::error::Result<u32> {
     log_verbose!(
@@ -123,10 +121,10 @@ pub async fn get_account_nonce(
     use quantus_subxt::api;
     let storage_addr = api::storage().system().account(account_id);
 
-    let storage_at =
-        client.storage().at_latest().await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-        })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     let account_info = storage_at
         .fetch_or_default(&storage_addr)
@@ -522,7 +520,7 @@ pub async fn handle_wallet_command(
 
             log_print!("Account: {}", target_address.bright_cyan());
 
-            match get_account_nonce(quantus_client.client(), &target_address).await {
+            match get_account_nonce(&quantus_client, &target_address).await {
                 Ok(nonce) => {
                     log_success!("Nonce: {}", nonce.to_string().bright_green());
                 }

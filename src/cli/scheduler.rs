@@ -1,7 +1,5 @@
-use crate::chain::client::ChainConfig;
 use crate::{chain::quantus_subxt, error::Result, log_print, log_success};
 use clap::Subcommand;
-use subxt::OnlineClient;
 
 /// Scheduler-related commands
 #[derive(Subcommand, Debug)]
@@ -12,7 +10,7 @@ pub enum SchedulerCommands {
 
 /// Get the last processed timestamp from the scheduler
 pub async fn get_last_processed_timestamp(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
 ) -> Result<Option<u64>> {
     use quantus_subxt::api;
 
@@ -21,9 +19,10 @@ pub async fn get_last_processed_timestamp(
     // Build the storage key for Scheduler::LastProcessedTimestamp
     let storage_addr = api::storage().scheduler().last_processed_timestamp();
 
-    let storage_at = client.storage().at_latest().await.map_err(|e| {
-        crate::error::QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-    })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     let timestamp = storage_at.fetch(&storage_addr).await.map_err(|e| {
         crate::error::QuantusError::NetworkError(format!(
@@ -43,7 +42,7 @@ pub async fn handle_scheduler_command(command: SchedulerCommands, node_url: &str
 
     match command {
         SchedulerCommands::GetLastProcessedTimestamp => {
-            match get_last_processed_timestamp(quantus_client.client()).await? {
+            match get_last_processed_timestamp(&quantus_client).await? {
                 Some(timestamp) => {
                     log_success!("🎉 Last processed timestamp: {}", timestamp);
                 }
