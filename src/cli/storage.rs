@@ -9,6 +9,7 @@ use codec::{Decode, Encode};
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use sp_core::twox_128;
+use std::str::FromStr;
 use subxt::OnlineClient;
 
 /// Validate that a pallet exists in the chain metadata
@@ -269,9 +270,21 @@ pub async fn handle_storage_command(
                     .encode(),
                 None => {
                     // Default to hex decoding if no type is specified
-                    let value_hex = value.strip_prefix("0x").unwrap_or(&value);
-                    hex::decode(value_hex)
-                        .map_err(|e| QuantusError::Generic(format!("Invalid hex value: {}", e)))?
+                    // Try to parse as H256 first, then fall back to hex decode
+                    if value.starts_with("0x") && value.len() == 66 {
+                        // 0x + 64 hex chars = 66
+                        // Try to parse as H256
+                        let h256_value = subxt::utils::H256::from_str(&value).map_err(|e| {
+                            QuantusError::Generic(format!("Invalid H256 value: {}", e))
+                        })?;
+                        h256_value.0.to_vec()
+                    } else {
+                        // Fall back to hex decode for other hex values
+                        let value_hex = value.strip_prefix("0x").unwrap_or(&value);
+                        hex::decode(value_hex).map_err(|e| {
+                            QuantusError::Generic(format!("Invalid hex value: {}", e))
+                        })?
+                    }
                 }
                 Some(unsupported) => {
                     return Err(QuantusError::Generic(format!(

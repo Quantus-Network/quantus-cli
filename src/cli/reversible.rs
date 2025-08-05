@@ -6,6 +6,7 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+use std::str::FromStr;
 
 /// Reversible transfer commands
 #[derive(Subcommand, Debug)]
@@ -183,12 +184,10 @@ pub async fn cancel_transaction(
     log_verbose!("❌ Cancelling reversible transfer...");
     log_verbose!("   Transaction ID: {}", tx_id.bright_yellow());
 
-    // Parse transaction ID
-    let tx_hash_bytes = hex::decode(tx_id.trim_start_matches("0x")).map_err(|e| {
+    // Parse transaction ID using H256::from_str
+    let tx_hash = subxt::utils::H256::from_str(tx_id).map_err(|e| {
         crate::error::QuantusError::Generic(format!("Invalid transaction ID: {:?}", e))
     })?;
-
-    let tx_hash = sp_core::H256::from_slice(&tx_hash_bytes);
 
     log_verbose!("✍️  Creating cancel transaction extrinsic...");
 
