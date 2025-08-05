@@ -1,5 +1,4 @@
 //! `quantus tech-collective` subcommand - tech collective management
-use crate::chain::client::ChainConfig;
 use crate::cli::common::resolve_address;
 use crate::cli::progress_spinner::wait_for_finalization;
 use crate::{
@@ -8,8 +7,6 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
-
-use subxt::OnlineClient;
 
 /// Tech Collective management commands
 #[derive(Subcommand, Debug)]
@@ -209,7 +206,7 @@ pub async fn vote_on_referendum(
 
 /// Check if an address is a member of the Tech Collective
 pub async fn is_member(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
     address: &str,
 ) -> crate::error::Result<bool> {
     log_verbose!("🔍 Checking membership...");
@@ -228,10 +225,10 @@ pub async fn is_member(
         .tech_collective()
         .members(account_id);
 
-    let storage_at =
-        client.storage().at_latest().await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-        })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     let member_data = storage_at
         .fetch(&storage_addr)
@@ -243,7 +240,7 @@ pub async fn is_member(
 
 /// Get member count information
 pub async fn get_member_count(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
 ) -> crate::error::Result<Option<u32>> {
     log_verbose!("🔍 Getting member count...");
 
@@ -252,10 +249,10 @@ pub async fn get_member_count(
         .tech_collective()
         .member_count(0u16);
 
-    let storage_at =
-        client.storage().at_latest().await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-        })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     let count_data = storage_at.fetch(&storage_addr).await.map_err(|e| {
         QuantusError::NetworkError(format!("Failed to fetch member count: {:?}", e))
@@ -266,14 +263,14 @@ pub async fn get_member_count(
 
 /// Get list of all members
 pub async fn get_member_list(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
 ) -> crate::error::Result<Vec<AccountId32>> {
     log_verbose!("🔍 Getting member list...");
 
-    let storage_at =
-        client.storage().at_latest().await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-        })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     // Query all Members storage entries
     let members_storage = quantus_subxt::api::storage()
@@ -312,17 +309,17 @@ pub async fn get_member_list(
 
 /// Get sudo account information
 pub async fn get_sudo_account(
-    client: &OnlineClient<ChainConfig>,
+    quantus_client: &crate::chain::client::QuantusClient,
 ) -> crate::error::Result<Option<AccountId32>> {
     log_verbose!("🔍 Getting sudo account...");
 
     // Query Sudo::Key storage
     let storage_addr = quantus_subxt::api::storage().sudo().key();
 
-    let storage_at =
-        client.storage().at_latest().await.map_err(|e| {
-            QuantusError::NetworkError(format!("Failed to access storage: {:?}", e))
-        })?;
+    // Get the latest block hash to read from the latest state (not finalized)
+    let latest_block_hash = quantus_client.get_latest_block().await?;
+
+    let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
     let sudo_account = storage_at.fetch(&storage_addr).await.map_err(|e| {
         QuantusError::NetworkError(format!("Failed to fetch sudo account: {:?}", e))
@@ -467,7 +464,7 @@ pub async fn handle_tech_collective_command(
             log_print!("");
 
             // Get actual member list
-            match get_member_list(quantus_client.client()).await {
+            match get_member_list(&quantus_client).await {
                 Ok(members) => {
                     if members.is_empty() {
                         log_print!("📭 No members in Tech Collective");
@@ -487,7 +484,7 @@ pub async fn handle_tech_collective_command(
                 Err(e) => {
                     log_verbose!("⚠️  Failed to get member list: {:?}", e);
                     // Fallback to member count
-                    match get_member_count(quantus_client.client()).await? {
+                    match get_member_count(&quantus_client).await? {
                         Some(count_data) => {
                             log_verbose!("✅ Got member count data: {:?}", count_data);
                             if count_data > 0 {
@@ -525,7 +522,7 @@ pub async fn handle_tech_collective_command(
 
             log_print!("   👤 Address: {}", resolved_address.bright_cyan());
 
-            if is_member(quantus_client.client(), &resolved_address).await? {
+            if is_member(&quantus_client, &resolved_address).await? {
                 log_success!("✅ Address IS a member of Tech Collective!");
                 log_print!("👥 Member data found in storage");
             } else {
@@ -539,7 +536,7 @@ pub async fn handle_tech_collective_command(
         TechCollectiveCommands::CheckSudo { address } => {
             log_print!("🏛️  Checking sudo permissions ");
 
-            match get_sudo_account(quantus_client.client()).await? {
+            match get_sudo_account(&quantus_client).await? {
                 Some(sudo_account) => {
                     let sudo_address = sudo_account.to_ss58check();
                     log_verbose!("🔍 Found sudo account: {}", sudo_address);
