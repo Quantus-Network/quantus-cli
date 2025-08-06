@@ -34,7 +34,7 @@ impl ProgressSpinner {
 }
 
 /// Common function to wait for transaction finalization using ProgressSpinner
-pub async fn wait_for_finalization(
+pub async fn wait_for_tx_confirmation(
     _client: &OnlineClient<ChainConfig>,
     _tx_hash: subxt::utils::H256,
 ) -> Result<bool> {

@@ -42,8 +42,26 @@ pub async fn handle_events_command(
             crate::error::QuantusError::NetworkError(format!("Invalid block hash: {}", e))
         })?;
 
-        // For now, just use 0 as block number when querying by hash
-        let block_num = 0u32;
+        // Get block number from hash
+        let block_header: serde_json::Value = quantus_client
+            .rpc_client()
+            .request::<serde_json::Value, [String; 1]>("chain_getHeader", [hash_str.clone()])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to get block header for hash {}: {:?}",
+                    hash_str, e
+                ))
+            })?;
+
+        let block_num = if let Some(block_number_str) = block_header["number"].as_str() {
+            u64::from_str_radix(&block_number_str[2..], 16)
+                .map(|n| n as u32)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
         (hash, block_num)
     } else if finalized {
         log_print!("📋 Querying events from finalized block");
@@ -60,8 +78,26 @@ pub async fn handle_events_command(
                 ))
             })?;
 
-        // For now, just use 0 as block number
-        let block_num = 0u32;
+        // Get block number from finalized head
+        let block_header: serde_json::Value = quantus_client
+            .rpc_client()
+            .request::<serde_json::Value, [String; 1]>("chain_getHeader", [format!("0x{:x}", hash)])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to get finalized block header: {:?}",
+                    e
+                ))
+            })?;
+
+        let block_num = if let Some(block_number_str) = block_header["number"].as_str() {
+            u64::from_str_radix(&block_number_str[2..], 16)
+                .map(|n| n as u32)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
         (hash, block_num)
     } else {
         // Use latest block (default)
@@ -69,8 +105,26 @@ pub async fn handle_events_command(
 
         let hash = quantus_client.get_latest_block().await?;
 
-        // For now, just use 0 as block number
-        let block_num = 0u32;
+        // Get block number from latest block
+        let block_header: serde_json::Value = quantus_client
+            .rpc_client()
+            .request::<serde_json::Value, [(); 0]>("chain_getHeader", [])
+            .await
+            .map_err(|e| {
+                crate::error::QuantusError::NetworkError(format!(
+                    "Failed to get latest block header: {:?}",
+                    e
+                ))
+            })?;
+
+        let block_num = if let Some(block_number_str) = block_header["number"].as_str() {
+            u64::from_str_radix(&block_number_str[2..], 16)
+                .map(|n| n as u32)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
         (hash, block_num)
     };
 

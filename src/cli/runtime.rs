@@ -1,5 +1,5 @@
 //! `quantus runtime` subcommand - runtime management
-use crate::cli::progress_spinner::wait_for_finalization;
+use crate::cli::progress_spinner::wait_for_tx_confirmation;
 use crate::{
     chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
     wallet::QuantumKeyPair,
@@ -109,7 +109,7 @@ pub async fn update_runtime(
     );
 
     // Wait for finalization
-    wait_for_finalization(quantus_client.client(), tx_hash).await?;
+    wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
     log_success!("✅ 🎉 FINISHED Runtime update completed!");
 
     Ok(tx_hash)

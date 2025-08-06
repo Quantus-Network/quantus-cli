@@ -1,6 +1,6 @@
 use crate::chain::client::QuantusClient;
 use crate::cli::common::resolve_address;
-use crate::cli::progress_spinner::wait_for_finalization;
+use crate::cli::progress_spinner::wait_for_tx_confirmation;
 use crate::{
     chain::quantus_subxt, error::Result, log_error, log_info, log_print, log_success, log_verbose,
 };
@@ -311,7 +311,7 @@ pub async fn handle_send_command(
         tx_hash
     );
 
-    let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
+    let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 
     if success {
         log_info!("✅ Transaction confirmed and finalized on chain");

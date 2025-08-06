@@ -1,6 +1,6 @@
 //! `quantus storage` subcommand - storage operations
 use crate::chain::client::ChainConfig;
-use crate::cli::progress_spinner::wait_for_finalization;
+use crate::cli::progress_spinner::wait_for_tx_confirmation;
 use crate::{
     chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
 };
@@ -316,7 +316,7 @@ pub async fn handle_storage_command(
                 tx_hash
             );
 
-            let success = wait_for_finalization(quantus_client.client(), tx_hash).await?;
+            let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 
             if success {
                 log_success!(
