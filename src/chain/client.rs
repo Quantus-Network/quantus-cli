@@ -58,6 +58,23 @@ impl QuantusClient {
     pub async fn new(node_url: &str) -> crate::error::Result<Self> {
         log_verbose!("🔗 Connecting to Quantus node: {}", node_url);
 
+        // Validate URL format and provide helpful error messages
+        if !node_url.starts_with("ws://") && !node_url.starts_with("wss://") {
+            return Err(QuantusError::NetworkError(format!(
+                "Invalid WebSocket URL: '{}'. URL must start with 'ws://' (unsecured) or 'wss://' (secured)",
+                node_url
+            )));
+        }
+
+        // Provide helpful hints for common URL issues
+        if node_url.starts_with("ws://")
+            && (node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm"))
+        {
+            log_verbose!(
+                "💡 Hint: Remote nodes typically require secure WebSocket connections (wss://)"
+            );
+        }
+
         // Create WS client with custom timeouts
         let ws_client = WsClientBuilder::default()
             // TODO: Make these configurable in a separate change
@@ -67,7 +84,24 @@ impl QuantusClient {
             .build(node_url)
             .await
             .map_err(|e| {
-                QuantusError::NetworkError(format!("Failed to create RPC client: {:?}", e))
+                // Provide more helpful error messages for common issues
+                let error_str = format!("{:?}", e);
+                let error_msg = if error_str.contains("TimedOut") || error_str.contains("timed out") {
+                    if node_url.starts_with("ws://") && (node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm")) {
+                        format!(
+                            "Connection timed out. This remote node requires secure WebSocket connections (wss://). Try using 'wss://{}' instead of 'ws://{}'",
+                            node_url.strip_prefix("ws://").unwrap_or(node_url),
+                            node_url.strip_prefix("ws://").unwrap_or(node_url)
+                        )
+                    } else {
+                        format!("Connection timed out. Please check if the node is running and accessible at: {}", node_url)
+                    }
+                } else if error_str.contains("HTTP") {
+                    format!("HTTP error: {}. This might indicate the node doesn't support WebSocket connections", error_str)
+                } else {
+                    format!("Failed to create RPC client: {}", error_str)
+                };
+                QuantusError::NetworkError(error_msg)
             })?;
 
         // Wrap WS client in Arc for sharing
