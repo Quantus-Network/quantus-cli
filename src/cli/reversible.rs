@@ -570,9 +570,15 @@ async fn list_pending_transactions(
                     })
                 {
                     let formatted_amount = format_amount(transfer_details.amount);
-                    log_print!("      👤 To: {}", transfer_details.to);
+                    log_print!(
+                        "      👤 To: {}",
+                        ss58_to_quantus_format(&format!("{}", transfer_details.to))
+                    );
                     log_print!("      💰 Amount: {}", formatted_amount);
-                    log_print!("      🔄 Interceptor: {}", transfer_details.interceptor);
+                    log_print!(
+                        "      🔄 Interceptor: {}",
+                        ss58_to_quantus_format(&format!("{}", transfer_details.interceptor))
+                    );
                 }
             }
         }
@@ -605,9 +611,15 @@ async fn list_pending_transactions(
                     })
                 {
                     let formatted_amount = format_amount(transfer_details.amount);
-                    log_print!("      👤 From: {}", transfer_details.from);
+                    log_print!(
+                        "      👤 From: {}",
+                        ss58_to_quantus_format(&format!("{}", transfer_details.from))
+                    );
                     log_print!("      💰 Amount: {}", formatted_amount);
-                    log_print!("      🔄 Interceptor: {}", transfer_details.interceptor);
+                    log_print!(
+                        "      🔄 Interceptor: {}",
+                        ss58_to_quantus_format(&format!("{}", transfer_details.interceptor))
+                    );
                 }
             }
         }
@@ -737,6 +749,18 @@ async fn set_reversibility(
     log_print!("🔄 Recoverer: {}", reverser_display);
 
     Ok(())
+}
+
+/// Helper function to convert SS58 address to Quantus format
+fn ss58_to_quantus_format(ss58_address: &str) -> String {
+    // Parse the SS58 address and convert to Quantus format (custom version 189)
+    if let Ok(account_id) = sp_core::crypto::AccountId32::from_ss58check(ss58_address) {
+        // Convert to Quantus format using custom SS58 version 189
+        account_id.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
+    } else {
+        // If parsing fails, return the original address
+        ss58_address.to_string()
+    }
 }
 
 /// Helper function to format amount with QUAN units
