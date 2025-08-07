@@ -7,7 +7,6 @@ use std::str::FromStr;
 pub async fn handle_events_command(
 	block: Option<u32>,
 	block_hash: Option<String>,
-	_latest: bool,
 	finalized: bool,
 	pallet_filter: Option<String>,
 	raw: bool,

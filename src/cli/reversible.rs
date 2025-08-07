@@ -466,8 +466,7 @@ async fn list_pending_transactions(
 		(None, None) => {
 			return Err(crate::error::QuantusError::Generic(
 				"Either --address or --from must be provided".to_string(),
-			)
-			.into());
+			));
 		},
 	};
 
@@ -634,8 +633,7 @@ async fn set_reversibility(
 	} else {
 		return Err(crate::error::QuantusError::Generic(
 			"Delay must be specified for setting reversibility".to_string(),
-		)
-		.into());
+		));
 	};
 
 	// Parse reverser account

@@ -1,0 +1,6 @@
+# Clippy configuration file
+# This file allows you to customize Clippy's behavior
+
+# Increase the limit for too_many_arguments from default 7 to 10
+# TODO: We should decrease it to max 6
+too-many-arguments-threshold = 10

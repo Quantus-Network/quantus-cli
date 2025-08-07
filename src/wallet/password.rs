@@ -45,7 +45,7 @@ pub fn get_wallet_password(
 	// Option 5: Try empty password first (for development wallets)
 	log_verbose!("🔑 Trying empty password first...");
 	let wallet_manager = WalletManager::new()?;
-	if let Ok(_) = wallet_manager.load_wallet(wallet_name, "") {
+	if wallet_manager.load_wallet(wallet_name, "").is_ok() {
 		log_verbose!("✅ Empty password works for wallet '{}'", wallet_name);
 		return Ok("".to_string());
 	}

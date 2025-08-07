@@ -55,7 +55,7 @@ pub async fn get_chain_properties(quantus_client: &QuantusClient) -> Result<(Str
 		},
 		Err(e) => {
 			log_verbose!("❌ ChainHead API failed: {:?}", e);
-			Err(e.into())
+			Err(e)
 		},
 	}
 }
@@ -102,7 +102,7 @@ pub async fn parse_amount(quantus_client: &QuantusClient, amount_str: &str) -> R
 
 /// Parse amount string with specific decimals
 pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128> {
-	let amount_part = amount_str.trim().split_whitespace().next().unwrap_or("");
+	let amount_part = amount_str.split_whitespace().next().unwrap_or("");
 
 	if amount_part.is_empty() {
 		return Err(crate::error::QuantusError::Generic("Amount cannot be empty".to_string()));
@@ -178,34 +178,24 @@ pub async fn transfer(
 
 	log_verbose!("✍️  Creating balance transfer extrinsic...");
 
-	// Submit the transaction with retry logic for nonce conflicts
-	let mut attempt = 0;
-	let tx_hash = loop {
-		attempt += 1;
-		log_verbose!("📤 Submitting transfer (attempt {})", attempt);
+	// Create the transfer call using static API from quantus_subxt
+	let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
+		subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id.clone()),
+		amount,
+	);
 
-		// Create the transfer call using static API from quantus_subxt (fresh each time)
-		let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
-			subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id.clone()),
-			amount,
-		);
+	// Use provided tip or default tip of 10 DEV to increase priority and avoid temporarily
+	// banned errors
+	let tip_to_use = tip.unwrap_or(10_000_000_000); // Use provided tip or default 10 DEV
 
-		// Use provided tip or default tip of 10 DEV to increase priority and avoid temporarily
-		// banned errors
-		let tip_to_use = tip.unwrap_or(10_000_000_000); // Use provided tip or default 10 DEV
-
-		match crate::cli::common::submit_transaction(
-			quantus_client,
-			from_keypair,
-			transfer_call,
-			Some(tip_to_use),
-		)
-		.await
-		{
-			Ok(hash) => break hash,
-			Err(e) => return Err(e),
-		}
-	};
+	// Submit the transaction
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		transfer_call,
+		Some(tip_to_use),
+	)
+	.await?;
 
 	log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
 

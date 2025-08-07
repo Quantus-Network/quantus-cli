@@ -256,9 +256,9 @@ pub async fn execute_command(
 				Ok(())
 			},
 		},
-		Commands::Events { block, block_hash, latest, finalized, pallet, raw, no_decode } =>
+		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } =>
 			events::handle_events_command(
-				block, block_hash, latest, finalized, pallet, raw, !no_decode, node_url,
+				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
 			)
 			.await,
 		Commands::System { runtime, metadata } =>
