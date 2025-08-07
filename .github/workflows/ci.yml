@@ -30,10 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
+        uses: dtolnay/rust-toolchain@nightly
       - name: Install required components
         run: rustup component add rustfmt
       - name: Install taplo
@@ -55,18 +52,8 @@ jobs:
           - macos-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-      - name: Install Rust (macOS)
-        if: matrix.os == 'macos-latest'
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@nightly
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -90,10 +77,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
+        uses: dtolnay/rust-toolchain@nightly
       - name: Install dependencies
         run: |
           sudo apt-get update -yqq
