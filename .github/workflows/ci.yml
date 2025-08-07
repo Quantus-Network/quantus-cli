@@ -32,7 +32,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
       - name: Install required components
         run: rustup component add rustfmt
@@ -59,13 +59,13 @@ jobs:
         if: matrix.os == 'ubuntu-latest'
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
       - name: Install Rust (macOS)
         if: matrix.os == 'macos-latest'
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
@@ -92,7 +92,7 @@ jobs:
       - name: Install Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           override: true
       - name: Install dependencies
         run: |
@@ -106,29 +106,3 @@ jobs:
         run: cargo clippy --locked -- -D warnings
       - name: Run doc
         run: cargo doc --locked --no-deps
-
-  release-build:
-    name: 📦 Release Build
-    needs: [fast-checks, build-and-test-matrix, analysis]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -yqq
-          sudo apt-get install -yqq --no-install-recommends \
-            libclang-dev \
-            protobuf-compiler
-      - name: Build release binary
-        run: cargo build --locked --release
-      - name: Upload release artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: quantus-cli-release
-          path: target/release/quantus
