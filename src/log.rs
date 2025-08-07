@@ -12,41 +12,41 @@ static VERBOSE: AtomicBool = AtomicBool::new(false);
 
 /// Set the verbose mode for the application
 pub fn set_verbose(verbose: bool) {
-    VERBOSE.store(verbose, Ordering::Relaxed);
+	VERBOSE.store(verbose, Ordering::Relaxed);
 }
 
 /// Check if verbose mode is enabled
 pub fn is_verbose() -> bool {
-    VERBOSE.load(Ordering::Relaxed)
+	VERBOSE.load(Ordering::Relaxed)
 }
 
 /// Print formatted message only when verbose mode is enabled
 pub fn verboseln(args: std::fmt::Arguments) {
-    if is_verbose() {
-        println!("{}", args);
-    }
+	if is_verbose() {
+		println!("{}", args);
+	}
 }
 
 /// Print formatted message regardless of verbose mode (for important user output)
 pub fn println(args: std::fmt::Arguments) {
-    println!("{}", args);
+	println!("{}", args);
 }
 
 /// Print formatted error message regardless of verbose mode
 pub fn errorln(args: std::fmt::Arguments) {
-    eprintln!("{} {}", "❌ Error:".red().bold(), args);
+	eprintln!("{} {}", "❌ Error:".red().bold(), args);
 }
 
 /// Print formatted success message regardless of verbose mode
 pub fn successln(args: std::fmt::Arguments) {
-    println!("{} {}", "✅".green(), args);
+	println!("{} {}", "✅".green(), args);
 }
 
 /// Print formatted info message in verbose mode
 pub fn infoln(args: std::fmt::Arguments) {
-    if is_verbose() {
-        println!("{} {}", "ℹ️ ".bright_blue(), args);
-    }
+	if is_verbose() {
+		println!("{} {}", "ℹ️ ".bright_blue(), args);
+	}
 }
 
 // Macros for easier usage (similar to println! but for our logging)

@@ -4,55 +4,55 @@ use clap::Subcommand;
 /// Scheduler-related commands
 #[derive(Subcommand, Debug)]
 pub enum SchedulerCommands {
-    /// Get the last processed timestamp from the scheduler
-    GetLastProcessedTimestamp,
+	/// Get the last processed timestamp from the scheduler
+	GetLastProcessedTimestamp,
 }
 
 /// Get the last processed timestamp from the scheduler
 pub async fn get_last_processed_timestamp(
-    quantus_client: &crate::chain::client::QuantusClient,
+	quantus_client: &crate::chain::client::QuantusClient,
 ) -> Result<Option<u64>> {
-    use quantus_subxt::api;
+	use quantus_subxt::api;
 
-    log_print!("🕒 Getting last processed timestamp from the scheduler");
+	log_print!("🕒 Getting last processed timestamp from the scheduler");
 
-    // Build the storage key for Scheduler::LastProcessedTimestamp
-    let storage_addr = api::storage().scheduler().last_processed_timestamp();
+	// Build the storage key for Scheduler::LastProcessedTimestamp
+	let storage_addr = api::storage().scheduler().last_processed_timestamp();
 
-    // Get the latest block hash to read from the latest state (not finalized)
-    let latest_block_hash = quantus_client.get_latest_block().await?;
+	// Get the latest block hash to read from the latest state (not finalized)
+	let latest_block_hash = quantus_client.get_latest_block().await?;
 
-    let storage_at = quantus_client.client().storage().at(latest_block_hash);
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-    let timestamp = storage_at.fetch(&storage_addr).await.map_err(|e| {
-        crate::error::QuantusError::NetworkError(format!(
-            "Failed to fetch last processed timestamp: {:?}",
-            e
-        ))
-    })?;
+	let timestamp = storage_at.fetch(&storage_addr).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!(
+			"Failed to fetch last processed timestamp: {:?}",
+			e
+		))
+	})?;
 
-    Ok(timestamp)
+	Ok(timestamp)
 }
 
 /// Handle scheduler commands
 pub async fn handle_scheduler_command(command: SchedulerCommands, node_url: &str) -> Result<()> {
-    log_print!("🗓️  Scheduler");
+	log_print!("🗓️  Scheduler");
 
-    let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
-    match command {
-        SchedulerCommands::GetLastProcessedTimestamp => {
-            match get_last_processed_timestamp(&quantus_client).await? {
-                Some(timestamp) => {
-                    log_success!("🎉 Last processed timestamp: {}", timestamp);
-                }
-                None => {
-                    log_print!(
-                        "🤷 No last processed timestamp found. The scheduler may not have run yet."
-                    );
-                }
-            }
-            Ok(())
-        }
-    }
+	match command {
+		SchedulerCommands::GetLastProcessedTimestamp => {
+			match get_last_processed_timestamp(&quantus_client).await? {
+				Some(timestamp) => {
+					log_success!("🎉 Last processed timestamp: {}", timestamp);
+				},
+				None => {
+					log_print!(
+						"🤷 No last processed timestamp found. The scheduler may not have run yet."
+					);
+				},
+			}
+			Ok(())
+		},
+	}
 }
