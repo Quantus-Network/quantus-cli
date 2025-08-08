@@ -1725,7 +1725,7 @@ dependencies = [
  "sp-state-machine",
  "sp-std",
  "sp-tracing",
- "sp-trie",
+ "sp-trie 38.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-weights",
  "static_assertions",
  "tt-call",
@@ -3565,7 +3565,7 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-storage",
- "sp-trie",
+ "sp-trie 38.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -3732,6 +3732,7 @@ dependencies = [
  "log",
  "pallet-reversible-transfers",
  "parity-scale-codec",
+ "plonky2",
  "poseidon-resonance",
  "primitive-types 0.13.1",
  "qp-scheduler",
@@ -3747,14 +3748,17 @@ dependencies = [
  "sp-core",
  "sp-crypto-hashing",
  "sp-runtime",
+ "sp-trie 38.0.0 (git+https://github.com/Quantus-Network/zk-trie)",
  "substrate-api-client",
  "subxt",
  "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml",
+ "trie-db",
  "wormhole-circuit",
  "zeroize",
+ "zk-circuits-common",
 ]
 
 [[package]]
@@ -4754,7 +4758,7 @@ dependencies = [
  "sp-runtime",
  "sp-runtime-interface",
  "sp-state-machine",
- "sp-trie",
+ "sp-trie 38.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-version",
  "thiserror 1.0.69",
 ]
@@ -4945,7 +4949,7 @@ dependencies = [
  "sp-runtime-interface",
  "sp-state-machine",
  "sp-tracing",
- "sp-trie",
+ "sp-trie 38.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tracing",
  "tracing-core",
 ]
@@ -5007,7 +5011,7 @@ dependencies = [
  "sp-core",
  "sp-io",
  "sp-std",
- "sp-trie",
+ "sp-trie 38.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "sp-weights",
  "tracing",
  "tuplex",
@@ -5076,7 +5080,7 @@ dependencies = [
  "sp-core",
  "sp-externalities",
  "sp-panic-handler",
- "sp-trie",
+ "sp-trie 38.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror 1.0.69",
  "tracing",
  "trie-db",
@@ -5121,6 +5125,29 @@ checksum = "1851c4929ae88932c6bcdb9e60f4063e478ca612012af3b6d365c7dc9c591f7f"
 dependencies = [
  "ahash",
  "hash-db",
+ "memory-db",
+ "nohash-hasher",
+ "parity-scale-codec",
+ "parking_lot",
+ "rand 0.8.5",
+ "scale-info",
+ "schnellru",
+ "sp-core",
+ "sp-externalities",
+ "thiserror 1.0.69",
+ "tracing",
+ "trie-db",
+ "trie-root",
+]
+
+[[package]]
+name = "sp-trie"
+version = "38.0.0"
+source = "git+https://github.com/Quantus-Network/zk-trie#bb1c142115ef1c7cae9378dd438b179d113d29cb"
+dependencies = [
+ "ahash",
+ "hash-db",
+ "log",
  "memory-db",
  "nohash-hasher",
  "parity-scale-codec",

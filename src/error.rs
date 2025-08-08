@@ -44,6 +44,15 @@ pub enum QuantusError {
 
     #[error("Wormhole unsigned extrinsic submission failed: {0}")]
     WormholeUnsignedExtrinsic(String),
+
+    #[error("Substrate API client error: {0}")]
+    SubstrateClient(String),
+}
+
+impl From<substrate_api_client::Error> for QuantusError {
+    fn from(e: substrate_api_client::Error) -> Self {
+        QuantusError::SubstrateClient(format!("{:?}", e))
+    }
 }
 
 /// Wallet-specific errors

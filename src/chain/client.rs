@@ -3,6 +3,8 @@ use crate::error::{QuantusError, Result};
 use crate::wallet::QuantumKeyPair;
 use crate::{log_debug, log_print, log_success, log_verbose};
 use colored::Colorize;
+use poseidon_resonance::PoseidonHasher;
+use sp_core::Hasher;
 
 // use crate::chain::types::reversible_transfers::events::TransactionCancelled;
 // use crate::chain::types::reversible_transfers::events::TransactionScheduled;
@@ -10,11 +12,28 @@ use colored::Colorize;
 
 use sp_core::crypto::AccountId32;
 use sp_core::crypto::Ss58Codec;
+use sp_core::twox_128;
 use sp_core::H256;
+use substrate_api_client::ac_primitives::StorageKey;
 use substrate_api_client::{
     ac_primitives::ExtrinsicSigner, extrinsic::BalancesExtrinsics, rpc::JsonrpseeClient, Api,
     GetAccountInformation, GetChainInfo, GetStorage, SubmitAndWatch, SystemApi,
 };
+
+/// Computes the storage key leaf for a `Balances.TransferProof` entry.
+fn compute_transfer_proof_leaf(
+    tx_count: u64,
+    from: &AccountId32,
+    to: &AccountId32,
+    amount: u128,
+) -> [u8; 32] {
+    let mut key_bytes = Vec::new();
+    key_bytes.extend_from_slice(&tx_count.to_le_bytes());
+    key_bytes.extend_from_slice(from.as_ref());
+    key_bytes.extend_from_slice(to.as_ref());
+    key_bytes.extend_from_slice(&amount.to_le_bytes());
+    <PoseidonHasher as Hasher>::hash(&key_bytes).into()
+}
 
 /// Macro to submit any type of extrinsic without code duplication
 /// Note: This should be a method but it seems impossible to figure out the correct parameter types for this call.
@@ -534,6 +553,48 @@ impl ChainClient {
         let proof_bytes = proof.proof.into_iter().map(|bytes| bytes.0).collect();
 
         Ok((header.state_root, storage_key.0, proof_bytes))
+    }
+
+    /// Fetches the storage proof for a specific transfer from the `Balances.TransferProof` map.
+    pub async fn get_transfer_storage_proof_at_block(
+        &self,
+        from: &AccountId32,
+        to: &AccountId32,
+        amount: u128,
+        at_block: H256,
+    ) -> Result<(H256, Vec<Vec<u8>>)> {
+        // 1. Get the transfer count nonce at the specific block.
+        let transfer_count: u64 = self
+            .api
+            .get_storage("Balances", "TransferCount", Some(at_block))
+            .await?
+            .unwrap_or(0u64);
+
+        // The count is incremented *after* the transfer, so we use `count - 1`.
+        let leaf_hash = compute_transfer_proof_leaf(transfer_count - 1, from, to, amount);
+
+        // 2. Construct the full storage key for the proof map.
+        let pallet_prefix = twox_128("Balances".as_bytes());
+        let storage_prefix = twox_128("TransferProof".as_bytes());
+        let full_storage_key =
+            [&pallet_prefix[..], &storage_prefix[..], leaf_hash.as_ref()].concat();
+        let storage_key = StorageKey(full_storage_key);
+
+        // 3. Fetch the proof for this specific key.
+        let proof = self
+            .api
+            .get_storage_proof_by_keys(vec![storage_key], Some(at_block))
+            .await?
+            .ok_or_else(|| QuantusError::Generic("TransferProof not found".to_string()))?;
+
+        // 4. Get the state root from the block header.
+        let header = self.api.get_header(Some(at_block)).await?.ok_or_else(|| {
+            QuantusError::NetworkError(format!("Header not found for block: {:?}", at_block))
+        })?;
+
+        let proof_bytes = proof.proof.into_iter().map(|bytes| bytes.0).collect();
+
+        Ok((header.state_root, proof_bytes))
     }
 
     /// Get chain properties including token decimals
