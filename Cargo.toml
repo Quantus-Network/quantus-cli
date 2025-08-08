@@ -47,6 +47,10 @@ poseidon-resonance = { git = "https://github.com/Quantus-Network/poseidon-resona
 ] }
 dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package = "dilithium-crypto" }
 
+# Wormhole and zk-circuits
+wormhole-circuit = { git = "https://github.com/Quantus-Network/zk-circuits", package = "wormhole-circuit" }
+zk-circuits-common = { git = "https://github.com/Quantus-Network/zk-circuits", package = "zk-circuits-common" }
+
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
 	"derive",

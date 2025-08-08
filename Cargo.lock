@@ -3264,6 +3264,8 @@ dependencies = [
  "thiserror 2.0.12",
  "tokio",
  "toml 0.9.4",
+ "wormhole-circuit",
+ "zk-circuits-common",
 ]
 
 [[package]]
@@ -5943,6 +5945,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "wormhole-circuit"
+version = "0.1.0"
+source = "git+https://github.com/Quantus-Network/zk-circuits#547cd0d2514aa2a849af85368b4f89f4132cdb97"
+dependencies = [
+ "anyhow",
+ "hex",
+ "plonky2",
+ "zk-circuits-common",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6091,4 +6104,13 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.104",
+]
+
+[[package]]
+name = "zk-circuits-common"
+version = "0.1.0"
+source = "git+https://github.com/Quantus-Network/zk-circuits#547cd0d2514aa2a849af85368b4f89f4132cdb97"
+dependencies = [
+ "anyhow",
+ "plonky2",
 ]
