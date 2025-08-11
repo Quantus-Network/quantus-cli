@@ -395,9 +395,7 @@ async fn create_preimage(
 
 	// Submit Preimage::note_preimage with bounded bytes
 	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes =
-		<PreimageBytes as core::convert::TryFrom<Vec<u8>>>::try_from(encoded_call.clone())
-			.map_err(|_| QuantusError::Generic("Preimage too large".to_string()))?;
+	let bounded_bytes: PreimageBytes = encoded_call.clone();
 
 	log_print!("📝 Submitting preimage...");
 	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);

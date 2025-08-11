@@ -7,7 +7,7 @@ use crate::{
 };
 use clap::Subcommand;
 use colored::Colorize;
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 
 /// Tech Referenda management commands
 #[derive(Subcommand, Debug)]
@@ -195,9 +195,9 @@ async fn submit_runtime_upgrade(
 	log_print!("   🔗 Preimage hash: {}", preimage_hash.bright_cyan());
 	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
 
-	// Parse preimage hash
-	let preimage_hash_parsed: sp_core::H256 = preimage_hash
-		.parse()
+	// Parse preimage hash (trim 0x)
+	let hash_str = preimage_hash.trim_start_matches("0x");
+	let preimage_hash_parsed: sp_core::H256 = sp_core::H256::from_str(hash_str)
 		.map_err(|_| QuantusError::Generic("Invalid preimage hash format".to_string()))?;
 
 	// Load wallet keypair
@@ -324,9 +324,7 @@ async fn submit_runtime_upgrade_with_preimage(
 
 	// Submit Preimage::note_preimage with bounded bytes
 	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes =
-		<PreimageBytes as core::convert::TryFrom<Vec<u8>>>::try_from(encoded_call.clone())
-			.map_err(|_| QuantusError::Generic("Preimage too large".to_string()))?;
+	let bounded_bytes: PreimageBytes = encoded_call.clone();
 
 	log_print!("📝 Submitting preimage...");
 	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
