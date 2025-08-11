@@ -232,47 +232,49 @@ async fn list_preimages(
 	let latest_block_hash = quantus_client.get_latest_block().await?;
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	// Get all preimage statuses
-	let status_addr = quantus_subxt::api::storage().preimage().request_status_for_iter();
-	let mut status_stream = storage_at.iter(status_addr).await.map_err(|e| {
-		QuantusError::Generic(format!("Failed to iterate preimage statuses: {:?}", e))
-	})?;
-
 	let mut preimage_count = 0;
 	let mut unrequested_count = 0;
 	let mut requested_count = 0;
 
-	log_print!("🔍 Scanning preimage statuses...");
+	// Iterate PreimageFor keys; extract (hash, len) from key_bytes and optionally fetch status
+	let preimage_for_addr = quantus_subxt::api::storage().preimage().preimage_for_iter();
+	let mut image_stream = storage_at.iter(preimage_for_addr).await.map_err(|e| {
+		QuantusError::Generic(format!("Failed to iterate preimage contents: {:?}", e))
+	})?;
 
-	while let Some(result) = status_stream.next().await {
+	while let Some(result) = image_stream.next().await {
 		match result {
-			Ok(key_value_pair) => {
-				preimage_count += 1;
+			Ok(entry) => {
+				let key = entry.key_bytes;
+				if key.len() >= 36 {
+					let len_le = &key[key.len() - 4..];
+					let len = u32::from_le_bytes([len_le[0], len_le[1], len_le[2], len_le[3]]);
+					let hash = sp_core::H256::from_slice(&key[key.len() - 36..key.len() - 4]);
 
-				// Extract hash from storage key
-				let hash_bytes = key_value_pair.key_bytes.as_slice();
-				if hash_bytes.len() >= 32 {
-					let hash = sp_core::H256::from_slice(&hash_bytes[hash_bytes.len() - 32..]);
+					let status = storage_at
+						.fetch(&quantus_subxt::api::storage().preimage().request_status_for(hash))
+						.await
+						.ok()
+						.flatten();
 
-					match key_value_pair.value {
-						quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Unrequested { ticket: _, len } => {
+					preimage_count += 1;
+					match status {
+						Some(quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Unrequested { ticket: _, len: status_len }) => {
 							unrequested_count += 1;
-							log_print!("   🔗 {} (Unrequested, {} bytes)", hash, len);
+							log_print!("   🔗 {} (Unrequested, {} bytes)", hash, status_len);
 						},
-						quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Requested { maybe_ticket: _, count, maybe_len } => {
+						Some(quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Requested { maybe_ticket: _, count, maybe_len }) => {
 							requested_count += 1;
-							let len_str = match maybe_len {
-								Some(len) => format!("{} bytes", len),
-								None => "unknown length".to_string(),
-							};
+							let len_str = match maybe_len { Some(l) => format!("{} bytes", l), None => format!("{} bytes (from key)", len) };
 							log_print!("   🔗 {} (Requested, count: {}, {})", hash, count, len_str);
+						},
+						None => {
+							log_print!("   🔗 {} (Unknown status, {} bytes)", hash, len);
 						},
 					}
 				}
 			},
-			Err(e) => {
-				log_verbose!("⚠️  Error reading preimage status: {:?}", e);
-			},
+			Err(e) => log_verbose!("⚠️  Error reading preimage content entry: {:?}", e),
 		}
 	}
 
