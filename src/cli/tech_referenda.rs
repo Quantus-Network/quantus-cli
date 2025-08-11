@@ -12,8 +12,27 @@ use std::path::PathBuf;
 /// Tech Referenda management commands
 #[derive(Subcommand, Debug)]
 pub enum TechReferendaCommands {
-	/// Submit a runtime upgrade proposal to Tech Referenda
+	/// Submit a runtime upgrade proposal to Tech Referenda (requires existing preimage)
 	Submit {
+		/// Preimage hash (must already exist on chain)
+		#[arg(long)]
+		preimage_hash: String,
+
+		/// Wallet name to sign with (must be a Tech Collective member or root)
+		#[arg(short, long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Submit a runtime upgrade proposal to Tech Referenda (creates preimage first)
+	SubmitWithPreimage {
 		/// Path to the runtime WASM file
 		#[arg(short, long)]
 		wasm_file: PathBuf,
@@ -136,9 +155,18 @@ pub async fn handle_tech_referenda_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		TechReferendaCommands::Submit { wasm_file, from, password, password_file } =>
-			submit_runtime_upgrade(&quantus_client, &wasm_file, &from, password, password_file)
+		TechReferendaCommands::Submit { preimage_hash, from, password, password_file } =>
+			submit_runtime_upgrade(&quantus_client, &preimage_hash, &from, password, password_file)
 				.await,
+		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } =>
+			submit_runtime_upgrade_with_preimage(
+				&quantus_client,
+				&wasm_file,
+				&from,
+				password,
+				password_file,
+			)
+			.await,
 		TechReferendaCommands::List => list_proposals(&quantus_client).await,
 		TechReferendaCommands::Get { index } => get_proposal_details(&quantus_client, index).await,
 		TechReferendaCommands::Status { index } =>
@@ -155,8 +183,100 @@ pub async fn handle_tech_referenda_command(
 	}
 }
 
-/// Submit a runtime upgrade proposal to Tech Referenda
+/// Submit a runtime upgrade proposal to Tech Referenda (uses existing preimage)
 async fn submit_runtime_upgrade(
+	quantus_client: &crate::chain::client::QuantusClient,
+	preimage_hash: &str,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<()> {
+	log_print!("📝 Submitting Runtime Upgrade Proposal to Tech Referenda");
+	log_print!("   🔗 Preimage hash: {}", preimage_hash.bright_cyan());
+	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
+
+	// Parse preimage hash
+	let preimage_hash_parsed: sp_core::H256 = preimage_hash
+		.parse()
+		.map_err(|_| QuantusError::Generic("Invalid preimage hash format".to_string()))?;
+
+	// Load wallet keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+	// Check if preimage exists and get its length
+	log_print!("🔍 Checking preimage status...");
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let preimage_status = storage_at
+		.fetch(
+			&quantus_subxt::api::storage()
+				.preimage()
+				.request_status_for(preimage_hash_parsed),
+		)
+		.await
+		.map_err(|e| QuantusError::Generic(format!("Failed to fetch preimage status: {:?}", e)))?
+		.ok_or_else(|| QuantusError::Generic("Preimage not found on chain".to_string()))?;
+
+	let preimage_len = match preimage_status {
+		quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Unrequested {
+			ticket: _,
+			len,
+		} => len,
+		quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Requested {
+			maybe_ticket: _,
+			count: _,
+			maybe_len,
+		} => match maybe_len {
+			Some(len) => len,
+			None => return Err(QuantusError::Generic("Preimage length not available".to_string())),
+		},
+	};
+
+	log_print!("✅ Preimage found! Length: {} bytes", preimage_len);
+
+	// Build TechReferenda::submit call using Lookup preimage reference
+	type ProposalBounded =
+		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded<
+			quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall,
+			quantus_subxt::api::runtime_types::poseidon_resonance::PoseidonHasher,
+		>;
+
+	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash_parsed;
+	let proposal: ProposalBounded =
+		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: preimage_len };
+
+	let raw_origin_root =
+		quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
+	let origin_caller =
+		quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin_root);
+
+	let enactment =
+		quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime::After(
+			0u32,
+		);
+
+	log_print!("🔧 Creating TechReferenda::submit call...");
+	let submit_call =
+		quantus_subxt::api::tx()
+			.tech_referenda()
+			.submit(origin_caller, proposal, enactment);
+
+	let tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None).await?;
+	log_print!(
+		"✅ {} Runtime upgrade proposal submitted! Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		tx_hash
+	);
+
+	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
+	log_success!("🎉 {} Proposal created!", "FINISHED".bright_green().bold());
+	log_print!("💡 Use 'quantus tech-referenda list' to see active proposals");
+	Ok(())
+}
+
+/// Submit a runtime upgrade proposal to Tech Referenda (creates preimage first)
+async fn submit_runtime_upgrade_with_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_file: &PathBuf,
 	from: &str,
