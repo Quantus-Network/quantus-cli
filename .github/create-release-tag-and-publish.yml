@@ -1,0 +1,172 @@
+name: Create Release Tag & Publish
+
+on:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+jobs:
+  create-tag:
+    name: Create Tag
+    if: github.event.pull_request.merged == true && contains(github.event.pull_request.labels.*.name, 'release-proposal')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      version: ${{ steps.extract_version.outputs.version }}
+      is_draft: ${{ steps.extract_version.outputs.is_draft }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from PR title
+        id: extract_version
+        run: |
+          # Extract version from PR title (format: "ci: Automate version bump to vX.Y.Z")
+          VERSION=$(echo "${{ github.event.pull_request.title }}" | grep -o 'v[0-9]\+\.[0-9]\+\.[0-9]\+')
+          if [ -z "$VERSION" ]; then
+            echo "Error: Could not extract version from PR title: ${{ github.event.pull_request.title }}"
+            exit 1
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+          # Check if this is a draft release
+          if [[ "${{ contains(github.event.pull_request.labels.*.name, 'draft-release') }}" == "true" ]]; then
+            echo "is_draft=true" >> $GITHUB_OUTPUT
+          else
+            echo "is_draft=false" >> $GITHUB_OUTPUT
+          fi
+          echo "Extracted version: $VERSION"
+
+      - name: Create and push tag
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git tag -a "${{ steps.extract_version.outputs.version }}" -m "Release ${{ steps.extract_version.outputs.version }}"
+          git push origin "${{ steps.extract_version.outputs.version }}"
+
+  build-and-release:
+    name: Build & Release
+    needs: create-tag
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-24.04
+            artifact_name: quantus-cli-linux
+          - target: x86_64-apple-darwin
+            os: macos-15
+            artifact_name: quantus-cli-macos
+          - target: x86_64-pc-windows-msvc
+            os: windows-2025
+            artifact_name: quantus-cli-windows
+    steps:
+      - name: Checkout code at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-tag.outputs.version }}
+
+      - name: Install Rust toolchain
+        run: |
+          rustup update
+          rustup target add ${{ matrix.target }}
+          rustup component add rustfmt clippy
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build binary
+        run: |
+          cargo build --release --target ${{ matrix.target }}
+
+      - name: Prepare Release Assets
+        id: prepare_assets
+        env:
+          NEW_VERSION: ${{ needs.create-tag.outputs.version }}
+          TARGET_ARCH: ${{ matrix.target }}
+        shell: bash
+        run: |
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            asset_name="quantus-cli-${NEW_VERSION}-${TARGET_ARCH}.exe"
+            cp "target/${TARGET_ARCH}/release/quantus.exe" "${asset_name}"
+          else
+            asset_name="quantus-cli-${NEW_VERSION}-${TARGET_ARCH}"
+            cp "target/${TARGET_ARCH}/release/quantus" "${asset_name}"
+          fi
+          echo "Created asset: ${asset_name}"
+
+      - name: Upload Release Assets as Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.target }}
+          path: quantus-cli-${{ needs.create-tag.outputs.version }}-${{ matrix.target }}*
+
+  create-github-release:
+    name: 🚀 Create GitHub Release
+    needs: [create-tag, build-and-release]
+    if: always() && needs.build-and-release.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-tag.outputs.version }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download all release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.ADMIN_PAT }}
+          NEW_VERSION: ${{ needs.create-tag.outputs.version }}
+        run: |
+          release_notes="Automated release for version $NEW_VERSION."
+          printf "%s" "$release_notes" > release_notes.txt
+
+          # Find all asset files
+          find downloaded-artifacts -type f -print0 > asset_files.txt
+
+          # Add draft flag if this is a draft release
+          if [[ "${{ needs.create-tag.outputs.is_draft }}" == "true" ]]; then
+            DRAFT_FLAG="--draft"
+          else
+            DRAFT_FLAG=""
+          fi
+
+          echo "Creating release with DRAFT_FLAG: $DRAFT_FLAG"
+
+          # Create release with all assets
+          asset_args=()
+          while IFS= read -r -d $'\0' file; do
+            asset_args+=("$file")
+          done < asset_files.txt
+
+          gh release create "$NEW_VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Quantus CLI $NEW_VERSION" \
+            --notes-file release_notes.txt \
+            --target main \
+            $DRAFT_FLAG \
+            "${asset_args[@]}"
+
+      - name: Publish to crates.io
+        run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }} --allow-dirty
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+
