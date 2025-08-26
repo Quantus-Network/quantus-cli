@@ -16,8 +16,7 @@ pub async fn get_balance(quantus_client: &QuantusClient, account_address: &str) 
 	// Decode the SS58 address into `AccountId32` (sp-core) first …
 	let account_id_sp = SpAccountId32::from_ss58check(account_address).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
-			"Invalid account address '{}': {:?}",
-			account_address, e
+			"Invalid account address '{account_address}': {e:?}"
 		))
 	})?;
 
@@ -34,7 +33,7 @@ pub async fn get_balance(quantus_client: &QuantusClient, account_address: &str) 
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
 	let account_info = storage_at.fetch_or_default(&storage_addr).await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Failed to fetch account info: {:?}", e))
+		crate::error::QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}"))
 	})?;
 
 	Ok(account_info.data.free)
@@ -67,7 +66,7 @@ pub async fn format_balance_with_symbol(
 ) -> Result<String> {
 	let (symbol, decimals) = get_chain_properties(quantus_client).await?;
 	let formatted_amount = format_balance(amount, decimals);
-	Ok(format!("{} {}", formatted_amount, symbol))
+	Ok(format!("{formatted_amount} {symbol}"))
 }
 
 /// Format balance with proper decimals
@@ -89,7 +88,7 @@ pub fn format_balance(amount: u128, decimals: u8) -> String {
 		if fractional_str.is_empty() {
 			whole_part.to_string()
 		} else {
-			format!("{}.{}", whole_part, fractional_str)
+			format!("{whole_part}.{fractional_str}")
 		}
 	}
 }
@@ -110,8 +109,7 @@ pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128
 
 	let parsed_amount: f64 = amount_part.parse().map_err(|_| {
 		crate::error::QuantusError::Generic(format!(
-			"Invalid amount format: '{}'. Use formats like '10', '10.5', '0.0001'",
-			amount_part
+			"Invalid amount format: '{amount_part}'. Use formats like '10', '10.5', '0.0001'"
 		))
 	})?;
 
@@ -122,8 +120,7 @@ pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128
 	if let Some(decimal_part) = amount_part.split('.').nth(1) {
 		if decimal_part.len() > decimals as usize {
 			return Err(crate::error::QuantusError::Generic(format!(
-				"Too many decimal places. Maximum {} decimal places allowed for this chain",
-				decimals
+				"Too many decimal places. Maximum {decimals} decimal places allowed for this chain"
 			)));
 		}
 	}
@@ -169,7 +166,7 @@ pub async fn transfer(
 
 	// Parse the destination address
 	let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {:?}", e))
+		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
 	})?;
 
 	// Convert to subxt_core AccountId32

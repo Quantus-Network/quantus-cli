@@ -11,6 +11,12 @@ pub struct ProgressSpinner {
 	start_time: Instant,
 }
 
+impl Default for ProgressSpinner {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl ProgressSpinner {
 	pub fn new() -> Self {
 		Self { chars: vec!['|', '/', '-', '\\'], current: 0, start_time: Instant::now() }

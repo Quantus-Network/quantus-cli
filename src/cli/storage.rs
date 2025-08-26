@@ -172,11 +172,11 @@ pub async fn resolve_block_hash(
 	if block_identifier.starts_with("0x") {
 		// It's already a hash, parse it
 		subxt::utils::H256::from_str(block_identifier)
-			.map_err(|e| QuantusError::Generic(format!("Invalid block hash format: {}", e)))
+			.map_err(|e| QuantusError::Generic(format!("Invalid block hash format: {e}")))
 	} else {
 		// It's a block number, convert to hash
 		let block_number = block_identifier.parse::<u32>().map_err(|e| {
-			QuantusError::Generic(format!("Invalid block number '{}': {}", block_identifier, e))
+			QuantusError::Generic(format!("Invalid block number '{block_identifier}': {e}"))
 		})?;
 
 		log_verbose!("🔍 Converting block number {} to hash...", block_number);
@@ -188,8 +188,7 @@ pub async fn resolve_block_hash(
 			.await
 			.map_err(|e| {
 				QuantusError::NetworkError(format!(
-					"Failed to fetch block hash for block {}: {:?}",
-					block_number, e
+					"Failed to fetch block hash for block {block_number}: {e:?}"
 				))
 			})?;
 
@@ -434,7 +433,7 @@ pub async fn count_storage_entries(
 
 	use jsonrpsee::core::client::ClientT;
 
-	let block_hash_str = format!("{:#x}", block_hash);
+	let block_hash_str = format!("{block_hash:#x}");
 	let prefix_hex = format!("0x{}", hex::encode(&prefix));
 	let page_size = 1000u32; // Max allowed per request
 	let mut total_count = 0u32;
@@ -456,8 +455,7 @@ pub async fn count_storage_entries(
 			.await
 			.map_err(|e| {
 				QuantusError::NetworkError(format!(
-					"Failed to fetch storage keys at block {:?}: {:?}",
-					block_hash, e
+					"Failed to fetch storage keys at block {block_hash:?}: {e:?}"
 				))
 			})?;
 
@@ -548,7 +546,7 @@ pub async fn iterate_storage_entries(
 	// Use RPC to get keys with pagination
 	use jsonrpsee::core::client::ClientT;
 
-	let block_hash_str = format!("{:#x}", block_hash);
+	let block_hash_str = format!("{block_hash:#x}");
 	let keys: Vec<String> = quantus_client
 		.rpc_client()
 		.request::<Vec<String>, (String, u32, Option<String>, Option<String>)>(
@@ -563,8 +561,7 @@ pub async fn iterate_storage_entries(
 		.await
 		.map_err(|e| {
 			QuantusError::NetworkError(format!(
-				"Failed to fetch storage keys at block {:?}: {:?}",
-				block_hash, e
+				"Failed to fetch storage keys at block {block_hash:?}: {e:?}"
 			))
 		})?;
 
@@ -617,23 +614,22 @@ fn decode_storage_value(value_bytes: &[u8], type_str: &str) -> crate::error::Res
 	match type_str.to_lowercase().as_str() {
 		"u32" => match u32::decode(&mut &value_bytes[..]) {
 			Ok(decoded_value) => Ok(decoded_value.to_string()),
-			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as u32: {}", e))),
+			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as u32: {e}"))),
 		},
 		"u64" | "moment" => match u64::decode(&mut &value_bytes[..]) {
 			Ok(decoded_value) => Ok(decoded_value.to_string()),
-			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as u64: {}", e))),
+			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as u64: {e}"))),
 		},
 		"u128" | "balance" => match u128::decode(&mut &value_bytes[..]) {
 			Ok(decoded_value) => Ok(decoded_value.to_string()),
-			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as u128: {}", e))),
+			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as u128: {e}"))),
 		},
 		"accountid" | "accountid32" => match AccountId32::decode(&mut &value_bytes[..]) {
 			Ok(account_id) => Ok(account_id.to_ss58check()),
-			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as AccountId32: {}", e))),
+			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as AccountId32: {e}"))),
 		},
 		_ => Err(QuantusError::Generic(format!(
-			"Unsupported type for decoding: {}. Supported types: u32, u64, moment, u128, balance, accountid",
-			type_str
+			"Unsupported type for decoding: {type_str}. Supported types: u32, u64, moment, u128, balance, accountid"
 		))),
 	}
 }
@@ -789,16 +785,14 @@ pub async fn handle_storage_command(
 			let value_bytes = match r#type.as_deref() {
 				Some("u64") | Some("moment") => value
 					.parse::<u64>()
-					.map_err(|e| QuantusError::Generic(format!("Invalid u64 value: {}", e)))?
+					.map_err(|e| QuantusError::Generic(format!("Invalid u64 value: {e}")))?
 					.encode(),
 				Some("u128") | Some("balance") => value
 					.parse::<u128>()
-					.map_err(|e| QuantusError::Generic(format!("Invalid u128 value: {}", e)))?
+					.map_err(|e| QuantusError::Generic(format!("Invalid u128 value: {e}")))?
 					.encode(),
 				Some("accountid") | Some("accountid32") => AccountId32::from_ss58check(&value)
-					.map_err(|e| {
-						QuantusError::Generic(format!("Invalid AccountId value: {:?}", e))
-					})?
+					.map_err(|e| QuantusError::Generic(format!("Invalid AccountId value: {e:?}")))?
 					.encode(),
 				None => {
 					// Default to hex decoding if no type is specified
@@ -807,21 +801,19 @@ pub async fn handle_storage_command(
 						// 0x + 64 hex chars = 66 (32 bytes)
 						// Try to parse as H256
 						let h256_value = subxt::utils::H256::from_str(&value).map_err(|e| {
-							QuantusError::Generic(format!("Invalid H256 value: {}", e))
+							QuantusError::Generic(format!("Invalid H256 value: {e}"))
 						})?;
 						h256_value.0.to_vec()
 					} else {
 						// Fall back to hex decode for other hex values
 						let value_hex = value.strip_prefix("0x").unwrap_or(&value);
-						hex::decode(value_hex).map_err(|e| {
-							QuantusError::Generic(format!("Invalid hex value: {}", e))
-						})?
+						hex::decode(value_hex)
+							.map_err(|e| QuantusError::Generic(format!("Invalid hex value: {e}")))?
 					}
 				},
 				Some(unsupported) =>
 					return Err(QuantusError::Generic(format!(
-						"Unsupported type for --type: {}",
-						unsupported
+						"Unsupported type for --type: {unsupported}"
 					))),
 			};
 
@@ -868,38 +860,36 @@ fn encode_storage_key(key_value: &str, key_type: &str) -> crate::error::Result<V
 	match key_type.to_lowercase().as_str() {
 		"accountid" | "accountid32" => {
 			let account_id = SpAccountId32::from_ss58check(key_value).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid AccountId: {:?}", e))
+				crate::error::QuantusError::Generic(format!("Invalid AccountId: {e:?}"))
 			})?;
 			Ok(account_id.encode())
 		},
 		"u64" => {
 			let value = key_value
 				.parse::<u64>()
-				.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u64: {}", e)))?;
+				.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u64: {e}")))?;
 			Ok(value.encode())
 		},
 		"u128" => {
 			let value = key_value
 				.parse::<u128>()
-				.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u128: {}", e)))?;
+				.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u128: {e}")))?;
 			Ok(value.encode())
 		},
 		"u32" => {
 			let value = key_value
 				.parse::<u32>()
-				.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u32: {}", e)))?;
+				.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid u32: {e}")))?;
 			Ok(value.encode())
 		},
 		"hex" | "raw" => {
 			// For hex/raw keys, decode the hex string directly
 			let value_hex = key_value.strip_prefix("0x").unwrap_or(key_value);
-			hex::decode(value_hex).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid hex value: {}", e))
-			})
+			hex::decode(value_hex)
+				.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid hex value: {e}")))
 		},
 		_ => Err(crate::error::QuantusError::Generic(format!(
-			"Unsupported key type: {}. Supported types: accountid, u64, u128, u32, hex, raw",
-			key_type
+			"Unsupported key type: {key_type}. Supported types: accountid, u64, u128, u32, hex, raw"
 		))),
 	}
 }

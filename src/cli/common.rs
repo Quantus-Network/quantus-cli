@@ -25,8 +25,7 @@ pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
 
 	// Neither a valid SS58 address nor a wallet name
 	Err(crate::error::QuantusError::Generic(format!(
-		"Invalid destination: '{}' is neither a valid SS58 address nor a known wallet name",
-		address_or_wallet_name
+		"Invalid destination: '{address_or_wallet_name}' is neither a valid SS58 address nor a known wallet name"
 	)))
 }
 
@@ -39,7 +38,7 @@ pub async fn get_fresh_nonce_with_client(
 ) -> Result<u64> {
 	let from_account_id = AccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
 		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e))
+			crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}"))
 		})?;
 
 	// Get nonce from the latest block (best block)
@@ -48,8 +47,7 @@ pub async fn get_fresh_nonce_with_client(
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::NetworkError(format!(
-				"Failed to get account nonce from best block: {:?}",
-				e
+				"Failed to get account nonce from best block: {e:?}"
 			))
 		})?;
 
@@ -63,8 +61,7 @@ pub async fn get_fresh_nonce_with_client(
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::NetworkError(format!(
-				"Failed to get account nonce from finalized block: {:?}",
-				e
+				"Failed to get account nonce from finalized block: {e:?}"
 			))
 		})?;
 
@@ -88,7 +85,7 @@ pub async fn get_incremented_nonce_with_client(
 ) -> Result<u64> {
 	let from_account_id = AccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
 		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Invalid from address: {:?}", e))
+			crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}"))
 		})?;
 
 	// Get current nonce from the latest block
@@ -97,8 +94,7 @@ pub async fn get_incremented_nonce_with_client(
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::NetworkError(format!(
-				"Failed to get account nonce from best block: {:?}",
-				e
+				"Failed to get account nonce from best block: {e:?}"
 			))
 		})?;
 
@@ -125,7 +121,7 @@ where
 	Call: subxt::tx::Payload,
 {
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e))
+		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
 
 	// Retry logic with automatic nonce management
@@ -156,7 +152,7 @@ where
 
 		// Get current block for logging using latest block hash
 		let latest_block_hash = quantus_client.get_latest_block().await.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {:?}", e))
+			crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {e:?}"))
 		})?;
 
 		log_verbose!("🔗 Latest block hash: {:?}", latest_block_hash);
@@ -208,7 +204,7 @@ where
 				return Ok(tx_hash);
 			},
 			Err(e) => {
-				let error_msg = format!("{:?}", e);
+				let error_msg = format!("{e:?}");
 
 				// Check if it's a retryable error
 				let is_retryable = error_msg.contains("Priority is too low") ||
@@ -232,8 +228,7 @@ where
 				} else {
 					log_verbose!("❌ Final error after {} attempts: {}", attempt, error_msg);
 					return Err(crate::error::QuantusError::NetworkError(format!(
-						"Failed to submit transaction: {:?}",
-						e
+						"Failed to submit transaction: {e:?}"
 					)));
 				}
 			},

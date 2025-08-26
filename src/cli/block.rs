@@ -119,7 +119,7 @@ async fn handle_block_analyze_command(
 		let storage_at = quantus_client.client().storage().at(parsed_hash);
 		let number_addr = crate::chain::quantus_subxt::api::storage().system().number();
 		let block_num = storage_at.fetch_or_default(&number_addr).await.map_err(|e| {
-			QuantusError::NetworkError(format!("Failed to get block number: {:?}", e))
+			QuantusError::NetworkError(format!("Failed to get block number: {e:?}"))
 		})?;
 		(block_num, parsed_hash)
 	} else if latest {
@@ -128,7 +128,7 @@ async fn handle_block_analyze_command(
 		let storage_at = quantus_client.client().storage().at(hash);
 		let number_addr = crate::chain::quantus_subxt::api::storage().system().number();
 		let block_num = storage_at.fetch_or_default(&number_addr).await.map_err(|e| {
-			QuantusError::NetworkError(format!("Failed to get latest block number: {:?}", e))
+			QuantusError::NetworkError(format!("Failed to get latest block number: {e:?}"))
 		})?;
 		(block_num, hash)
 	} else {
@@ -142,9 +142,9 @@ async fn handle_block_analyze_command(
 	use jsonrpsee::core::client::ClientT;
 	let block_data: serde_json::Value = quantus_client
 		.rpc_client()
-		.request("chain_getBlock", [format!("{:#x}", block_hash)])
+		.request("chain_getBlock", [format!("{block_hash:#x}")])
 		.await
-		.map_err(|e| QuantusError::NetworkError(format!("Failed to get block data: {:?}", e)))?;
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to get block data: {e:?}")))?;
 
 	// Show basic block header information
 	show_block_header(&block_data)?;
@@ -340,7 +340,7 @@ fn show_extrinsic_details(block_data: &serde_json::Value) -> crate::error::Resul
 							if hex_part.len() % 2 == 0 {
 								total_size_bytes += hex_part.len() / 2;
 							} else {
-								total_size_bytes += (hex_part.len() + 1) / 2;
+								total_size_bytes += hex_part.len().div_ceil(2);
 							}
 						} else {
 							// If not hex, assume it's already in bytes
@@ -362,7 +362,7 @@ fn show_extrinsic_details(block_data: &serde_json::Value) -> crate::error::Resul
 						if hex_part.len() % 2 == 0 {
 							hex_part.len() / 2
 						} else {
-							(hex_part.len() + 1) / 2
+							hex_part.len().div_ceil(2)
 						}
 					} else {
 						ext_str.len()
@@ -412,7 +412,7 @@ fn show_all_extrinsic_details(block_data: &serde_json::Value) -> crate::error::R
 							if hex_part.len() % 2 == 0 {
 								total_size_bytes += hex_part.len() / 2;
 							} else {
-								total_size_bytes += (hex_part.len() + 1) / 2;
+								total_size_bytes += hex_part.len().div_ceil(2);
 							}
 						} else {
 							// If not hex, assume it's already in bytes
@@ -434,7 +434,7 @@ fn show_all_extrinsic_details(block_data: &serde_json::Value) -> crate::error::R
 						if hex_part.len() % 2 == 0 {
 							hex_part.len() / 2
 						} else {
-							(hex_part.len() + 1) / 2
+							hex_part.len().div_ceil(2)
 						}
 					} else {
 						ext_str.len()
@@ -522,8 +522,7 @@ async fn list_blocks_in_range(
 			.await
 			.map_err(|e| {
 				QuantusError::NetworkError(format!(
-					"Failed to get block hash for block {}: {:?}",
-					block_num, e
+					"Failed to get block hash for block {block_num}: {e:?}"
 				))
 			})?;
 
@@ -532,13 +531,12 @@ async fn list_blocks_in_range(
 			.rpc_client()
 			.request::<serde_json::Value, [String; 1]>(
 				"chain_getBlock",
-				[format!("{:#x}", block_hash)],
+				[format!("{block_hash:#x}")],
 			)
 			.await
 			.map_err(|e| {
 				QuantusError::NetworkError(format!(
-					"Failed to get block data for block {}: {:?}",
-					block_num, e
+					"Failed to get block data for block {block_num}: {e:?}"
 				))
 			})?;
 
@@ -579,7 +577,7 @@ async fn list_blocks_in_range(
 								if hex_part.len() % 2 == 0 {
 									total_bytes += hex_part.len() / 2;
 								} else {
-									total_bytes += (hex_part.len() + 1) / 2;
+									total_bytes += hex_part.len().div_ceil(2);
 								}
 							} else {
 								total_bytes += ext_str.len();
@@ -620,11 +618,11 @@ async fn list_blocks_in_range(
 
 		log_print!(
 			"📦 {:<18} {:<20} {:<12} {:<10} {:<8}",
-			format!("#{}", block_num).bright_green(),
+			format!("#{block_num}").bright_green(),
 			time_str.bright_cyan(),
 			extrinsics_count.to_string().bright_blue(),
 			event_count.to_string().bright_yellow(),
-			format!("{:.1}K", block_size_kb).bright_magenta()
+			format!("{block_size_kb:.1}K").bright_magenta()
 		);
 	}
 

@@ -146,7 +146,7 @@ pub async fn schedule_transfer(
 
 	// Parse the destination address
 	let to_account_id_sp = SpAccountId32::from_ss58check(to_address).map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {:?}", e))
+		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
 	})?;
 
 	// Convert to subxt_core AccountId32
@@ -181,7 +181,7 @@ pub async fn cancel_transaction(
 
 	// Parse transaction ID using H256::from_str
 	let tx_hash = subxt::utils::H256::from_str(tx_id).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Invalid transaction ID: {:?}", e))
+		crate::error::QuantusError::Generic(format!("Invalid transaction ID: {e:?}"))
 	})?;
 
 	log_verbose!("✍️  Creating cancel transaction extrinsic...");
@@ -217,7 +217,7 @@ pub async fn schedule_transfer_with_delay(
 
 	// Parse the destination address
 	let to_account_id_sp = SpAccountId32::from_ss58check(to_address).map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {:?}", e))
+		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
 	})?;
 	let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
 	let to_account_id_subxt = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
@@ -453,7 +453,7 @@ async fn list_pending_transactions(
 		(Some(addr), _) => {
 			// Validate the provided address
 			SpAccountId32::from_ss58check(&addr).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid address: {:?}", e))
+				crate::error::QuantusError::Generic(format!("Invalid address: {e:?}"))
 			})?;
 			addr
 		},
@@ -472,7 +472,7 @@ async fn list_pending_transactions(
 
 	// Convert to AccountId32 for storage queries
 	let account_id_sp = SpAccountId32::from_ss58check(&target_address)
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 	let account_id_bytes: [u8; 32] = *account_id_sp.as_ref();
 	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_id_bytes);
 
@@ -492,7 +492,7 @@ async fn list_pending_transactions(
 		.at(latest_block_hash)
 		.fetch(&sender_storage_address)
 		.await
-		.map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {:?}", e)))?;
+		.map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}")))?;
 
 	// Query pending transfers by recipient (incoming)
 	let recipient_storage_address = crate::chain::quantus_subxt::api::storage()
@@ -505,7 +505,7 @@ async fn list_pending_transactions(
 		.at(latest_block_hash)
 		.fetch(&recipient_storage_address)
 		.await
-		.map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {:?}", e)))?;
+		.map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}")))?;
 
 	let mut total_transfers = 0;
 
@@ -529,7 +529,7 @@ async fn list_pending_transactions(
 					.fetch(&transfer_storage_address)
 					.await
 					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!("Fetch error: {:?}", e))
+						crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
 					}) {
 					let formatted_amount = format_amount(transfer_details.amount);
 					log_print!(
@@ -569,7 +569,7 @@ async fn list_pending_transactions(
 					.fetch(&transfer_storage_address)
 					.await
 					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!("Fetch error: {:?}", e))
+						crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
 					}) {
 					let formatted_amount = format_amount(transfer_details.amount);
 					log_print!(
@@ -641,12 +641,12 @@ async fn set_reversibility(
 		// Resolve the reverser address (could be wallet name or SS58 address)
 		let resolved_reverser = resolve_address(reverser_addr)?;
 		SpAccountId32::from_ss58check(&resolved_reverser).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid reverser address: {:?}", e))
+			crate::error::QuantusError::Generic(format!("Invalid reverser address: {e:?}"))
 		})?
 	} else {
 		// Default to self if no reverser specified
 		SpAccountId32::from_ss58check(&from_keypair.to_account_id_ss58check()).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid from address: {:?}", e))
+			crate::error::QuantusError::Generic(format!("Invalid from address: {e:?}"))
 		})?
 	};
 
@@ -728,14 +728,14 @@ fn format_amount(amount: u128) -> String {
 		let fractional = amount % QUAN_DECIMALS;
 
 		if fractional == 0 {
-			format!("{} QUAN", whole)
+			format!("{whole} QUAN")
 		} else {
 			// Remove trailing zeros from fractional part
-			let fractional_str = format!("{:012}", fractional);
+			let fractional_str = format!("{fractional:012}");
 			let trimmed = fractional_str.trim_end_matches('0');
-			format!("{}.{} QUAN", whole, trimmed)
+			format!("{whole}.{trimmed} QUAN")
 		}
 	} else {
-		format!("{} pico-QUAN", amount)
+		format!("{amount} pico-QUAN")
 	}
 }

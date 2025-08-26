@@ -313,7 +313,7 @@ async fn handle_generic_call_command(
 
 	let args_vec = if let Some(args_str) = args {
 		serde_json::from_str(&args_str).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid JSON for arguments: {}", e))
+			crate::error::QuantusError::Generic(format!("Invalid JSON for arguments: {e}"))
 		})?
 	} else {
 		vec![]
