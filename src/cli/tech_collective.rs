@@ -112,7 +112,7 @@ pub async fn add_member(
 
 	// Parse the member address
 	let member_account_sp = AccountId32::from_ss58check(who_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
@@ -150,7 +150,7 @@ pub async fn remove_member(
 
 	// Parse the member address
 	let member_account_sp = AccountId32::from_ss58check(who_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
@@ -213,7 +213,7 @@ pub async fn is_member(
 
 	// Parse the address
 	let account_sp = AccountId32::from_ss58check(address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let account_bytes: [u8; 32] = *account_sp.as_ref();
@@ -230,7 +230,7 @@ pub async fn is_member(
 	let member_data = storage_at
 		.fetch(&storage_addr)
 		.await
-		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch member data: {:?}", e)))?;
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch member data: {e:?}")))?;
 
 	Ok(member_data.is_some())
 }
@@ -249,9 +249,10 @@ pub async fn get_member_count(
 
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let count_data = storage_at.fetch(&storage_addr).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to fetch member count: {:?}", e))
-	})?;
+	let count_data = storage_at
+		.fetch(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch member count: {e:?}")))?;
 
 	Ok(count_data)
 }
@@ -272,7 +273,7 @@ pub async fn get_member_list(
 
 	let mut members = Vec::new();
 	let mut iter = storage_at.iter(members_storage).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to create members iterator: {:?}", e))
+		QuantusError::NetworkError(format!("Failed to create members iterator: {e:?}"))
 	})?;
 
 	while let Some(result) = iter.next().await {
@@ -314,9 +315,10 @@ pub async fn get_sudo_account(
 
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let sudo_account = storage_at.fetch(&storage_addr).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to fetch sudo account: {:?}", e))
-	})?;
+	let sudo_account = storage_at
+		.fetch(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch sudo account: {e:?}")))?;
 
 	// Convert from subxt_core AccountId32 to sp_core AccountId32
 	if let Some(subxt_account) = sudo_account {

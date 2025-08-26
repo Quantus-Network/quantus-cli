@@ -27,19 +27,19 @@ pub async fn execute_generic_call(
 	// Convert our QuantumKeyPair to subxt Signer
 	let _signer = from_keypair
 		.to_subxt_signer()
-		.map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {:?}", e)))?;
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}")))?;
 
 	// Validate pallet/call exists in metadata
 	let metadata = quantus_client.client().metadata();
-	let pallet_metadata = metadata.pallet_by_name(pallet).ok_or_else(|| {
-		QuantusError::Generic(format!("Pallet '{}' not found in metadata", pallet))
-	})?;
+	let pallet_metadata = metadata
+		.pallet_by_name(pallet)
+		.ok_or_else(|| QuantusError::Generic(format!("Pallet '{pallet}' not found in metadata")))?;
 
 	log_verbose!("✅ Found pallet '{}' with index {}", pallet, pallet_metadata.index());
 
 	// Find the call in the pallet
 	let call_metadata = pallet_metadata.call_variant_by_name(call).ok_or_else(|| {
-		QuantusError::Generic(format!("Call '{}' not found in pallet '{}'", call, pallet))
+		QuantusError::Generic(format!("Call '{call}' not found in pallet '{pallet}'"))
 	})?;
 
 	log_verbose!("✅ Found call '{}' with index {}", call, call_metadata.index);
@@ -98,8 +98,7 @@ pub async fn execute_generic_call(
 			log_print!("   • Scheduler: schedule, cancel");
 			log_print!("💡 For other calls, use the original 'quantus call' command");
 			return Err(QuantusError::Generic(format!(
-				"Unsupported pallet/call combination in SubXT: {}.{}",
-				pallet, call
+				"Unsupported pallet/call combination in SubXT: {pallet}.{call}"
 			)));
 		},
 	};
@@ -134,7 +133,7 @@ async fn submit_balance_transfer(
 
 	// Convert to AccountId32
 	let to_account_id = AccountId32::from_ss58check(to_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid to_address: {:?}", e)))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid to_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let to_account_id_bytes: [u8; 32] = *to_account_id.as_ref();
@@ -211,7 +210,7 @@ async fn submit_tech_collective_add_member(
 	})?;
 
 	let member_account_id = AccountId32::from_ss58check(member_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid member_address: {:?}", e)))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid member_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let member_account_id_bytes: [u8; 32] = *member_account_id.as_ref();
@@ -245,7 +244,7 @@ async fn submit_tech_collective_remove_member(
 	})?;
 
 	let member_account_id = AccountId32::from_ss58check(member_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid member_address: {:?}", e)))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid member_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let member_account_id_bytes: [u8; 32] = *member_account_id.as_ref();
@@ -305,7 +304,7 @@ async fn submit_reversible_transfer(
 	})?;
 
 	let to_account_id = AccountId32::from_ss58check(to_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid to_address: {:?}", e)))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid to_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let to_account_id_bytes: [u8; 32] = *to_account_id.as_ref();

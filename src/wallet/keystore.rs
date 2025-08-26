@@ -145,7 +145,7 @@ impl Keystore {
 
 	/// Load an encrypted wallet from disk
 	pub fn load_wallet(&self, name: &str) -> Result<Option<EncryptedWallet>> {
-		let wallet_file = self.storage_path.join(format!("{}.json", name));
+		let wallet_file = self.storage_path.join(format!("{name}.json"));
 
 		if !wallet_file.exists() {
 			return Ok(None);
@@ -180,7 +180,7 @@ impl Keystore {
 
 	/// Delete a wallet file
 	pub fn delete_wallet(&self, name: &str) -> Result<bool> {
-		let wallet_file = self.storage_path.join(format!("{}.json", name));
+		let wallet_file = self.storage_path.join(format!("{name}.json"));
 
 		if wallet_file.exists() {
 			std::fs::remove_file(wallet_file)?;
@@ -346,27 +346,24 @@ mod tests {
 			let ss58_address = quantum_keypair.to_account_id_ss58check();
 
 			// Verify address format
-			assert!(ss58_address.starts_with("5"), "SS58 address for {} should start with 5", name);
+			assert!(ss58_address.starts_with("5"), "SS58 address for {name} should start with 5");
 			assert!(
 				ss58_address.len() >= 47,
-				"SS58 address for {} should be at least 47 characters",
-				name
+				"SS58 address for {name} should be at least 47 characters"
 			);
 
 			// Verify consistency between methods
 			assert_eq!(
 				account_id.to_ss58check(),
 				ss58_address,
-				"Address methods should be consistent for {}",
-				name
+				"Address methods should be consistent for {name}"
 			);
 
 			// Verify it matches the direct DilithiumPair method
 			let expected_address = resonance_pair.public().into_account().to_ss58check();
 			assert_eq!(
 				ss58_address, expected_address,
-				"Address should match DilithiumPair method for {}",
-				name
+				"Address should match DilithiumPair method for {name}"
 			);
 		}
 	}
@@ -445,9 +442,9 @@ mod tests {
 		assert!(charlie_addr.starts_with("5"), "Charlie address should be valid SS58");
 
 		println!("Test wallet addresses:");
-		println!("  Alice:   {}", alice_addr);
-		println!("  Bob:     {}", bob_addr);
-		println!("  Charlie: {}", charlie_addr);
+		println!("  Alice:   {alice_addr}");
+		println!("  Bob:     {bob_addr}");
+		println!("  Charlie: {charlie_addr}");
 	}
 
 	#[test]
@@ -463,7 +460,7 @@ mod tests {
 		for invalid_addr in invalid_addresses {
 			let result =
 				std::panic::catch_unwind(|| QuantumKeyPair::ss58_to_account_id(invalid_addr));
-			assert!(result.is_err(), "Should panic on invalid address: {}", invalid_addr);
+			assert!(result.is_err(), "Should panic on invalid address: {invalid_addr}");
 		}
 	}
 
@@ -494,7 +491,7 @@ mod tests {
 
 		match result {
 			Ok(address) => {
-				println!("✅ Address generation successful: {}", address);
+				println!("✅ Address generation successful: {address}");
 				// Verify it matches the expected address
 				let expected = alice_pair.public().into_account().to_ss58check();
 				assert_eq!(address, expected, "Stored wallet should generate correct address");
@@ -551,7 +548,7 @@ mod tests {
 
 		match result {
 			Ok(address) => {
-				println!("✅ Encrypted wallet address generation successful: {}", address);
+				println!("✅ Encrypted wallet address generation successful: {address}");
 				// Verify it matches the expected address
 				let expected = alice_pair.public().into_account().to_ss58check();
 				assert_eq!(address, expected, "Decrypted wallet should generate correct address");
@@ -608,7 +605,7 @@ mod tests {
 
 		match result {
 			Ok(address) => {
-				println!("✅ Send command flow works: {}", address);
+				println!("✅ Send command flow works: {address}");
 				// If this passes, the bug is fixed
 				let expected = alice_pair.public().into_account().to_ss58check();
 				assert_eq!(address, expected, "Loaded wallet should generate correct address");

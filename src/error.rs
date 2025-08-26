@@ -25,7 +25,7 @@ pub enum QuantusError {
 
 	/// SubXT errors
 	#[error("SubXT error: {0}")]
-	Subxt(#[from] subxt::Error),
+	Subxt(#[from] Box<subxt::Error>),
 
 	/// Generic errors
 	#[error("Error: {0}")]
@@ -66,3 +66,9 @@ pub enum WalletError {
 
 /// Type alias for Results using QuantusError
 pub type Result<T> = std::result::Result<T, QuantusError>;
+
+impl From<subxt::Error> for QuantusError {
+	fn from(err: subxt::Error) -> Self {
+		QuantusError::Subxt(Box::new(err))
+	}
+}

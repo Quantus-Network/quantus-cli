@@ -59,8 +59,7 @@ impl QuantusClient {
 		// Validate URL format and provide helpful error messages
 		if !node_url.starts_with("ws://") && !node_url.starts_with("wss://") {
 			return Err(QuantusError::NetworkError(format!(
-                "Invalid WebSocket URL: '{}'. URL must start with 'ws://' (unsecured) or 'wss://' (secured)",
-                node_url
+                "Invalid WebSocket URL: '{node_url}'. URL must start with 'ws://' (unsecured) or 'wss://' (secured)"
             )));
 		}
 
@@ -83,7 +82,7 @@ impl QuantusClient {
             .await
             .map_err(|e| {
                 // Provide more helpful error messages for common issues
-                let error_str = format!("{:?}", e);
+                let error_str = format!("{e:?}");
                 let error_msg = if error_str.contains("TimedOut") || error_str.contains("timed out") {
                     if node_url.starts_with("ws://") && (node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm")) {
                         format!(
@@ -92,12 +91,12 @@ impl QuantusClient {
                             node_url.strip_prefix("ws://").unwrap_or(node_url)
                         )
                     } else {
-                        format!("Connection timed out. Please check if the node is running and accessible at: {}", node_url)
+                        format!("Connection timed out. Please check if the node is running and accessible at: {node_url}")
                     }
                 } else if error_str.contains("HTTP") {
-                    format!("HTTP error: {}. This might indicate the node doesn't support WebSocket connections", error_str)
+                    format!("HTTP error: {error_str}. This might indicate the node doesn't support WebSocket connections")
                 } else {
-                    format!("Failed to create RPC client: {}", error_str)
+                    format!("Failed to create RPC client: {error_str}")
                 };
                 QuantusError::NetworkError(error_msg)
             })?;
@@ -144,8 +143,7 @@ impl QuantusClient {
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch latest block hash: {:?}",
-					e
+					"Failed to fetch latest block hash: {e:?}"
 				))
 			})?;
 
@@ -192,8 +190,7 @@ impl QuantusClient {
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch genesis hash: {:?}",
-					e
+					"Failed to fetch genesis hash: {e:?}"
 				))
 			})?;
 
@@ -212,8 +209,7 @@ impl QuantusClient {
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch runtime version: {:?}",
-					e
+					"Failed to fetch runtime version: {e:?}"
 				))
 			})?;
 

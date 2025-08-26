@@ -181,7 +181,7 @@ pub async fn handle_runtime_command(
 			// Read WASM file
 			log_verbose!("📖 Reading WASM file...");
 			let wasm_code = fs::read(&wasm_file)
-				.map_err(|e| QuantusError::Generic(format!("Failed to read WASM file: {}", e)))?;
+				.map_err(|e| QuantusError::Generic(format!("Failed to read WASM file: {e}")))?;
 
 			log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 
@@ -212,7 +212,7 @@ pub async fn handle_runtime_command(
 
 			// Read local WASM file
 			let local_wasm = fs::read(&wasm_file)
-				.map_err(|e| QuantusError::Generic(format!("Failed to read WASM file: {}", e)))?;
+				.map_err(|e| QuantusError::Generic(format!("Failed to read WASM file: {e}")))?;
 
 			log_print!("📊 Local WASM size: {} bytes", local_wasm.len());
 

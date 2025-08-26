@@ -23,13 +23,13 @@ pub fn is_verbose() -> bool {
 /// Print formatted message only when verbose mode is enabled
 pub fn verboseln(args: std::fmt::Arguments) {
 	if is_verbose() {
-		println!("{}", args);
+		println!("{args}");
 	}
 }
 
 /// Print formatted message regardless of verbose mode (for important user output)
 pub fn println(args: std::fmt::Arguments) {
-	println!("{}", args);
+	println!("{args}");
 }
 
 /// Print formatted error message regardless of verbose mode
