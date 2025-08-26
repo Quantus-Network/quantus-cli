@@ -45,6 +45,7 @@ impl Config for ChainConfig {
 }
 
 /// Wrapper around OnlineClient that also stores the node URL and RPC client
+#[derive(Clone)]
 pub struct QuantusClient {
 	client: OnlineClient<ChainConfig>,
 	rpc_client: Arc<WsClient>,
