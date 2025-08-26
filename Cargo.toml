@@ -46,17 +46,17 @@ aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 # Quantus crypto dependencies
 rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/rusty-crystals.git", package = "rusty-crystals-dilithium" }
 rusty-crystals-hdwallet = { git = "https://github.com/Quantus-Network/rusty-crystals.git", package = "rusty-crystals-hdwallet" }
-poseidon-resonance = { git = "https://github.com/Quantus-Network/poseidon-resonance", features = [
+poseidon-resonance = { git = "https://github.com/Quantus-Network/poseidon-resonance", branch = "main", features = [
 	"serde",
 ] }
-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package = "dilithium-crypto" }
+dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package = "dilithium-crypto", tag = "v0.1.6" }
 
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
 	"derive",
 ] }
-sp-core = { version = "35.0" }
-sp-runtime = { version = "40.1" }
+sp-core = { version = "37.0.0" }
+sp-runtime = { version = "42.0.0" }
 subxt = "0.43.0"
 jsonrpsee = { version = "0.24", features = ["client"] }
 
