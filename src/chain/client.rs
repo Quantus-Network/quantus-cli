@@ -36,7 +36,7 @@ impl subxt::config::Hasher for SubxtPoseidonHasher {
 pub enum ChainConfig {}
 impl Config for ChainConfig {
 	type AccountId = AccountId32;
-	type Address = MultiAddress<Self::AccountId, u32>;
+	type Address = MultiAddress<Self::AccountId, ()>;
 	type Signature = DilithiumSignatureScheme;
 	type Hasher = SubxtPoseidonHasher;
 	type Header = SubstrateHeader<u32, SubxtPoseidonHasher>;
