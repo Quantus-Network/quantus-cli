@@ -76,6 +76,7 @@ async fn get_account_balance(client: &QuantusClient, account_id: &AccountId32) -
 }
 
 /// Send tokens to another account
+#[allow(dead_code)]
 async fn send_tokens(
 	client: &QuantusClient,
 	from_keypair: &QuantumKeyPair,
@@ -112,6 +113,7 @@ async fn send_tokens(
 }
 
 /// Example of creating a wallet from mnemonic
+#[allow(dead_code)]
 async fn create_wallet_from_mnemonic() -> Result<()> {
 	let wallet_manager = WalletManager::new()?;
 
@@ -129,6 +131,7 @@ async fn create_wallet_from_mnemonic() -> Result<()> {
 }
 
 /// Example of listing all wallets
+#[allow(dead_code)]
 async fn list_all_wallets() -> Result<()> {
 	let wallet_manager = WalletManager::new()?;
 	let wallets = wallet_manager.list_wallets()?;
@@ -142,6 +145,7 @@ async fn list_all_wallets() -> Result<()> {
 }
 
 /// Example of using developer/test wallets
+#[allow(dead_code)]
 async fn create_developer_wallet() -> Result<()> {
 	let wallet_manager = WalletManager::new()?;
 

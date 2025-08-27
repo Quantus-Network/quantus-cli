@@ -180,8 +180,9 @@ impl WalletService {
 
 		// Query balance from storage
 		let storage_addr = api::storage().system().account(subxt_account_id);
-		let account_info =
-			client.client().storage().at_latest().fetch_or_default(&storage_addr).await?;
+		let latest_block_hash = client.get_latest_block().await?;
+		let storage_at = client.client().storage().at(latest_block_hash);
+		let account_info = storage_at.fetch_or_default(&storage_addr).await?;
 
 		Ok(account_info.data.free)
 	}
@@ -201,7 +202,8 @@ impl WalletService {
 		let to_subxt_account_id = subxt::utils::AccountId32::from(to_account_bytes);
 
 		// Create transfer call
-		let transfer_call = api::tx().balances().transfer(to_subxt_account_id.into(), amount);
+		let transfer_call =
+			api::tx().balances().transfer_allow_death(to_subxt_account_id.into(), amount);
 
 		// Convert QuantumKeyPair to DilithiumPair for signing
 		let dilithium_pair = from_keypair.to_subxt_signer()?;
@@ -272,6 +274,7 @@ async fn main() -> Result<()> {
 }
 
 /// Example of error handling in a service
+#[allow(dead_code)]
 async fn demonstrate_service_error_handling() -> Result<()> {
 	let service = WalletService::new("ws://127.0.0.1:9944").await?;
 
@@ -302,6 +305,7 @@ async fn demonstrate_service_error_handling() -> Result<()> {
 }
 
 /// Example of concurrent operations
+#[allow(dead_code)]
 async fn demonstrate_concurrent_operations() -> Result<()> {
 	let service = Arc::new(WalletService::new("ws://127.0.0.1:9944").await?);
 
