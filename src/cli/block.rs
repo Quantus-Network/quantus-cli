@@ -7,6 +7,7 @@ use clap::Subcommand;
 use colored::Colorize;
 use poseidon_resonance::PoseidonHasher;
 use sp_core::crypto::Ss58Codec;
+use std::str::FromStr;
 use subxt::events::EventDetails;
 
 /// Block management and analysis commands
@@ -375,6 +376,38 @@ async fn show_extrinsic_details(
 					}
 				}
 
+				// Get extrinsics via subxt for detailed analysis
+				let block = quantus_client.client().blocks().at(block_hash).await?;
+				let extrinsics = block.extrinsics().await?;
+
+				// Get parent block hash for nonce calculation
+				let parent_hash = {
+					use jsonrpsee::core::client::ClientT;
+					let header: serde_json::Value = quantus_client
+						.rpc_client()
+						.request("chain_getHeader", [format!("{:#x}", block_hash)])
+						.await
+						.map_err(|e| {
+							crate::error::QuantusError::NetworkError(format!(
+								"Failed to get header: {e:?}"
+							))
+						})?;
+					let parent_hash_str = header["parentHash"].as_str().ok_or_else(|| {
+						crate::error::QuantusError::NetworkError(
+							"Missing parentHash in header".to_string(),
+						)
+					})?;
+					subxt::utils::H256::from_str(parent_hash_str).map_err(|e| {
+						crate::error::QuantusError::NetworkError(format!(
+							"Invalid parent hash: {e:?}"
+						))
+					})?
+				};
+
+				// Track nonce per signer in this block
+				let mut signer_nonce_tracker: std::collections::HashMap<String, u32> =
+					std::collections::HashMap::new();
+
 				// Show first 3 extrinsics with details
 				for (index, extrinsic) in extrinsics_array.iter().take(3).enumerate() {
 					let ext_str = extrinsic.as_str().unwrap_or("unknown");
@@ -386,6 +419,76 @@ async fn show_extrinsic_details(
 						ext_size_bytes.to_string().bright_cyan(),
 						preview.bright_magenta()
 					);
+
+					// Extract signer and transaction details
+					if let Some(ext_details) = extrinsics.iter().nth(index) {
+						if ext_details.is_signed() {
+							// Extract signer and tip from events
+							let mut signer_from_events: Option<String> = None;
+							let mut tip_from_events: Option<u128> = None;
+
+							if let Some(event_list) = events_by_ex_idx.get(&index) {
+								for event_line in event_list {
+									if event_line.contains("TransactionFeePaid") {
+										// Extract signer (who field)
+										if let Some(who_start) = event_line.find("who: ") {
+											if let Some(who_end) =
+												event_line[who_start + 5..].find(',')
+											{
+												let signer = &event_line
+													[who_start + 5..who_start + 5 + who_end];
+												signer_from_events = Some(signer.to_string());
+											}
+										}
+										// Extract tip
+										if let Some(tip_start) = event_line.find("tip: ") {
+											if let Some(tip_end) =
+												event_line[tip_start + 5..].find(' ')
+											{
+												let tip_str = &event_line
+													[tip_start + 5..tip_start + 5 + tip_end];
+												if let Ok(tip_val) = tip_str.parse::<u128>() {
+													tip_from_events = Some(tip_val);
+												}
+											}
+										}
+									}
+								}
+							}
+
+							if let Some(ref signer) = signer_from_events {
+								log_print!("       • Signer: {}", signer);
+
+								// Calculate nonce from parent block + track per signer
+								if !signer_nonce_tracker.contains_key(signer) {
+									let nonce = get_account_nonce_at_block(
+										quantus_client,
+										signer,
+										parent_hash,
+									)
+									.await
+									.unwrap_or(0);
+									signer_nonce_tracker.insert(signer.clone(), nonce);
+								}
+
+								// Get current nonce for this signer (increments for each tx from
+								// same signer)
+								let current_nonce = *signer_nonce_tracker.get(signer).unwrap();
+								log_print!("       • Nonce: {}", current_nonce);
+
+								// Increment for next transaction from this signer
+								signer_nonce_tracker.insert(signer.clone(), current_nonce + 1);
+							}
+
+							if let Some(tip) = tip_from_events {
+								// Format tip nicely
+								let tip_hei = tip as f64 / 1_000_000_000_000.0;
+								log_print!("       • Tip: {:.6} HEI", tip_hei);
+							}
+						} else {
+							log_print!("       • Unsigned extrinsic");
+						}
+					}
 
 					// Related events (if any)
 					if let Some(list) = events_by_ex_idx.get(&index) {
@@ -463,6 +566,38 @@ async fn show_all_extrinsic_details(
 					}
 				}
 
+				// Get extrinsics via subxt for detailed analysis
+				let block = quantus_client.client().blocks().at(block_hash).await?;
+				let extrinsics = block.extrinsics().await?;
+
+				// Get parent block hash for nonce calculation
+				let parent_hash = {
+					use jsonrpsee::core::client::ClientT;
+					let header: serde_json::Value = quantus_client
+						.rpc_client()
+						.request("chain_getHeader", [format!("{:#x}", block_hash)])
+						.await
+						.map_err(|e| {
+							crate::error::QuantusError::NetworkError(format!(
+								"Failed to get header: {e:?}"
+							))
+						})?;
+					let parent_hash_str = header["parentHash"].as_str().ok_or_else(|| {
+						crate::error::QuantusError::NetworkError(
+							"Missing parentHash in header".to_string(),
+						)
+					})?;
+					subxt::utils::H256::from_str(parent_hash_str).map_err(|e| {
+						crate::error::QuantusError::NetworkError(format!(
+							"Invalid parent hash: {e:?}"
+						))
+					})?
+				};
+
+				// Track nonce per signer in this block
+				let mut signer_nonce_tracker: std::collections::HashMap<String, u32> =
+					std::collections::HashMap::new();
+
 				// Show all extrinsics with details
 				for (index, extrinsic) in extrinsics_array.iter().enumerate() {
 					let ext_str = extrinsic.as_str().unwrap_or("unknown");
@@ -474,6 +609,76 @@ async fn show_all_extrinsic_details(
 						ext_size_bytes.to_string().bright_cyan(),
 						preview.bright_magenta()
 					);
+
+					// Extract signer and transaction details
+					if let Some(ext_details) = extrinsics.iter().nth(index) {
+						if ext_details.is_signed() {
+							// Extract signer and tip from events
+							let mut signer_from_events: Option<String> = None;
+							let mut tip_from_events: Option<u128> = None;
+
+							if let Some(event_list) = events_by_ex_idx.get(&index) {
+								for event_line in event_list {
+									if event_line.contains("TransactionFeePaid") {
+										// Extract signer (who field)
+										if let Some(who_start) = event_line.find("who: ") {
+											if let Some(who_end) =
+												event_line[who_start + 5..].find(',')
+											{
+												let signer = &event_line
+													[who_start + 5..who_start + 5 + who_end];
+												signer_from_events = Some(signer.to_string());
+											}
+										}
+										// Extract tip
+										if let Some(tip_start) = event_line.find("tip: ") {
+											if let Some(tip_end) =
+												event_line[tip_start + 5..].find(' ')
+											{
+												let tip_str = &event_line
+													[tip_start + 5..tip_start + 5 + tip_end];
+												if let Ok(tip_val) = tip_str.parse::<u128>() {
+													tip_from_events = Some(tip_val);
+												}
+											}
+										}
+									}
+								}
+							}
+
+							if let Some(ref signer) = signer_from_events {
+								log_print!("       • Signer: {}", signer);
+
+								// Calculate nonce from parent block + track per signer
+								if !signer_nonce_tracker.contains_key(signer) {
+									let nonce = get_account_nonce_at_block(
+										quantus_client,
+										signer,
+										parent_hash,
+									)
+									.await
+									.unwrap_or(0);
+									signer_nonce_tracker.insert(signer.clone(), nonce);
+								}
+
+								// Get current nonce for this signer (increments for each tx from
+								// same signer)
+								let current_nonce = *signer_nonce_tracker.get(signer).unwrap();
+								log_print!("       • Nonce: {}", current_nonce);
+
+								// Increment for next transaction from this signer
+								signer_nonce_tracker.insert(signer.clone(), current_nonce + 1);
+							}
+
+							if let Some(tip) = tip_from_events {
+								// Format tip nicely
+								let tip_hei = tip as f64 / 1_000_000_000_000.0;
+								log_print!("       • Tip: {:.6} HEI", tip_hei);
+							}
+						} else {
+							log_print!("       • Unsigned extrinsic");
+						}
+					}
 
 					// Related events (if any)
 					if let Some(list) = events_by_ex_idx.get(&index) {
@@ -559,6 +764,33 @@ fn format_account_id(account_id: &subxt::utils::AccountId32) -> String {
 	let bytes: [u8; 32] = account_id.0;
 	let sp_account_id = sp_core::crypto::AccountId32::from(bytes);
 	sp_account_id.to_ss58check()
+}
+
+/// Get account nonce at specific block
+async fn get_account_nonce_at_block(
+	quantus_client: &QuantusClient,
+	account_address: &str,
+	block_hash: subxt::utils::H256,
+) -> crate::error::Result<u32> {
+	// Parse the SS58 address to AccountId32 (sp-core)
+	let account_id_sp = sp_core::crypto::AccountId32::from_ss58check(account_address)
+		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
+
+	// Convert to subxt_core AccountId32 for storage query
+	let account_bytes: [u8; 32] = *account_id_sp.as_ref();
+	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+
+	// Use SubXT to query System::Account storage at specific block
+	use crate::chain::quantus_subxt::api;
+	let storage_addr = api::storage().system().account(account_id);
+	let storage_at = quantus_client.client().storage().at(block_hash);
+
+	let account_info = storage_at
+		.fetch_or_default(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}")))?;
+
+	Ok(account_info.nonce)
 }
 
 /// Handle block list command
