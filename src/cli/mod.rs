@@ -7,6 +7,7 @@ pub mod common;
 pub mod events;
 pub mod generic_call;
 pub mod metadata;
+pub mod preimage;
 pub mod progress_spinner;
 pub mod reversible;
 pub mod runtime;
@@ -15,6 +16,7 @@ pub mod send;
 pub mod storage;
 pub mod system;
 pub mod tech_collective;
+pub mod tech_referenda;
 pub mod wallet;
 
 /// Main CLI commands
@@ -66,6 +68,12 @@ pub enum Commands {
 	/// Tech Collective management commands
 	#[command(subcommand)]
 	TechCollective(tech_collective::TechCollectiveCommands),
+
+	/// Tech Referenda management commands (for runtime upgrade proposals)
+	#[command(subcommand)]
+	Preimage(preimage::PreimageCommands),
+	#[command(subcommand)]
+	TechReferenda(tech_referenda::TechReferendaCommands),
 
 	/// Runtime management commands (requires root/sudo permissions)
 	#[command(subcommand)]
@@ -216,6 +224,10 @@ pub async fn execute_command(
 			storage::handle_storage_command(storage_cmd, node_url).await,
 		Commands::TechCollective(tech_collective_cmd) =>
 			tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await,
+		Commands::Preimage(preimage_cmd) =>
+			preimage::handle_preimage_command(preimage_cmd, node_url).await,
+		Commands::TechReferenda(tech_referenda_cmd) =>
+			tech_referenda::handle_tech_referenda_command(tech_referenda_cmd, node_url).await,
 		Commands::Runtime(runtime_cmd) =>
 			runtime::handle_runtime_command(runtime_cmd, node_url).await,
 		Commands::Call {
