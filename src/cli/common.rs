@@ -1,5 +1,5 @@
 //! Common SubXT utilities and functions shared across CLI commands
-use crate::{error::Result, log_verbose};
+use crate::{error::Result, log_error, log_verbose};
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 
@@ -233,5 +233,59 @@ where
 				}
 			},
 		}
+	}
+}
+
+/// Submit transaction with manual nonce (no retry logic - use exact nonce provided)
+pub async fn submit_transaction_with_nonce<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: Call,
+	tip: Option<u128>,
+	nonce: u32,
+) -> crate::error::Result<subxt::utils::H256>
+where
+	Call: subxt::tx::Payload,
+{
+	let signer = from_keypair.to_subxt_signer().map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
+	})?;
+
+	// Get current block for logging using latest block hash
+	let latest_block_hash = quantus_client.get_latest_block().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {e:?}"))
+	})?;
+
+	log_verbose!("🔗 Latest block hash: {:?}", latest_block_hash);
+
+	// Create custom params with manual nonce and optional tip
+	use subxt::config::DefaultExtrinsicParamsBuilder;
+	let mut params_builder = DefaultExtrinsicParamsBuilder::new()
+		.mortal(256) // Value higher than our finalization - TODO: should come from config
+		.nonce(nonce.into());
+
+	if let Some(tip_amount) = tip {
+		params_builder = params_builder.tip(tip_amount);
+		log_verbose!("💰 Using tip: {}", tip_amount);
+	}
+
+	let params = params_builder.build();
+
+	log_verbose!("🔢 Using manual nonce: {}", nonce);
+	log_verbose!("📤 Submitting transaction with manual nonce...");
+
+	// Submit the transaction with manual nonce
+	match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
+		Ok(tx_hash) => {
+			log_verbose!("✅ Transaction submitted successfully: {:?}", tx_hash);
+			Ok(tx_hash)
+		},
+		Err(e) => {
+			log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
+			Err(crate::error::QuantusError::NetworkError(format!(
+				"Failed to submit transaction with nonce {}: {e:?}",
+				nonce
+			)))
+		},
 	}
 }

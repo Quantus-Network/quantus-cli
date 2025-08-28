@@ -2,6 +2,7 @@ use crate::{log_error, log_print, log_success, log_verbose};
 use clap::Subcommand;
 use colored::Colorize;
 
+pub mod batch;
 pub mod block;
 pub mod common;
 pub mod events;
@@ -49,7 +50,15 @@ pub enum Commands {
 		/// Optional tip amount to prioritize the transaction (e.g., "1", "0.5")
 		#[arg(long)]
 		tip: Option<String>,
+
+		/// Manual nonce override (use with caution - must be exact next nonce for account)
+		#[arg(long)]
+		nonce: Option<u32>,
 	},
+
+	/// Batch transfer commands and configuration
+	#[command(subcommand)]
+	Batch(batch::BatchCommands),
 
 	/// Reversible transfer commands
 	#[command(subcommand)]
@@ -205,9 +214,19 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip } =>
-			send::handle_send_command(from, to, &amount, node_url, password, password_file, tip)
-				.await,
+		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
+			send::handle_send_command(
+				from,
+				to,
+				&amount,
+				node_url,
+				password,
+				password_file,
+				tip,
+				nonce,
+			)
+			.await,
+		Commands::Batch(batch_cmd) => batch::handle_batch_command(batch_cmd, node_url).await,
 		Commands::Reversible(reversible_cmd) =>
 			reversible::handle_reversible_command(reversible_cmd, node_url).await,
 		Commands::Scheduler(scheduler_cmd) =>

@@ -147,13 +147,26 @@ pub async fn validate_and_format_amount(
 	Ok((raw_amount, formatted))
 }
 
-/// Transfer tokens
+/// Transfer tokens with automatic nonce
+#[allow(dead_code)] // Used by external libraries via lib.rs export
 pub async fn transfer(
 	quantus_client: &QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	to_address: &str,
 	amount: u128,
 	tip: Option<u128>,
+) -> Result<subxt::utils::H256> {
+	transfer_with_nonce(quantus_client, from_keypair, to_address, amount, tip, None).await
+}
+
+/// Transfer tokens with manual nonce override
+pub async fn transfer_with_nonce(
+	quantus_client: &QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	to_address: &str,
+	amount: u128,
+	tip: Option<u128>,
+	nonce: Option<u32>,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating transfer transaction...");
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
@@ -185,16 +198,122 @@ pub async fn transfer(
 	// banned errors
 	let tip_to_use = tip.unwrap_or(10_000_000_000); // Use provided tip or default 10 DEV
 
-	// Submit the transaction
+	// Submit the transaction with optional manual nonce
+	let tx_hash = if let Some(manual_nonce) = nonce {
+		log_verbose!("🔢 Using manual nonce: {}", manual_nonce);
+		crate::cli::common::submit_transaction_with_nonce(
+			quantus_client,
+			from_keypair,
+			transfer_call,
+			Some(tip_to_use),
+			manual_nonce,
+		)
+		.await?
+	} else {
+		crate::cli::common::submit_transaction(
+			quantus_client,
+			from_keypair,
+			transfer_call,
+			Some(tip_to_use),
+		)
+		.await?
+	};
+
+	log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
+
+	Ok(tx_hash)
+}
+
+/// Batch transfer tokens to multiple recipients in a single transaction
+pub async fn batch_transfer(
+	quantus_client: &QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	transfers: Vec<(String, u128)>, // (to_address, amount) pairs
+	tip: Option<u128>,
+) -> Result<subxt::utils::H256> {
+	log_verbose!("🚀 Creating batch transfer transaction with {} transfers...", transfers.len());
+	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+
+	if transfers.is_empty() {
+		return Err(crate::error::QuantusError::Generic(
+			"No transfers provided for batch".to_string(),
+		));
+	}
+
+	// Get dynamic limits from chain
+	let (safe_limit, recommended_limit) =
+		get_batch_limits(quantus_client).await.unwrap_or((500, 1000));
+
+	if transfers.len() as u32 > recommended_limit {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Too many transfers in batch ({}) - chain limit is ~{} (safe: {})",
+			transfers.len(),
+			recommended_limit,
+			safe_limit
+		)));
+	}
+
+	// Warn about large batches
+	if transfers.len() as u32 > safe_limit {
+		log_verbose!(
+			"⚠️  Large batch ({} transfers) - approaching chain limits (safe: {}, max: {})",
+			transfers.len(),
+			safe_limit,
+			recommended_limit
+		);
+	}
+
+	// Prepare all transfer calls as RuntimeCall
+	let mut calls = Vec::new();
+	for (to_address, amount) in transfers {
+		log_verbose!("   To: {} Amount: {}", to_address.bright_green(), amount);
+
+		// Resolve the destination address
+		let resolved_address = crate::cli::common::resolve_address(&to_address)?;
+
+		// Parse the destination address
+		let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Invalid destination address {}: {e:?}",
+				resolved_address
+			))
+		})?;
+
+		// Convert to subxt_core AccountId32
+		let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
+		let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
+
+		// Create the transfer call as RuntimeCall
+		use quantus_subxt::api::runtime_types::{
+			pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
+		};
+
+		let transfer_call = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
+			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
+			value: amount,
+		});
+
+		calls.push(transfer_call);
+	}
+
+	log_verbose!("✍️  Creating batch extrinsic with {} calls...", calls.len());
+
+	// Create the batch call using utility pallet
+	let batch_call = quantus_subxt::api::tx().utility().batch(calls);
+
+	// Use provided tip or default tip
+	let tip_to_use = tip.unwrap_or(10_000_000_000);
+
+	// Submit the batch transaction
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
 		from_keypair,
-		transfer_call,
+		batch_call,
 		Some(tip_to_use),
 	)
 	.await?;
 
-	log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
+	log_verbose!("📋 Batch transaction submitted: {:?}", tx_hash);
 
 	Ok(tx_hash)
 }
@@ -210,6 +329,7 @@ pub async fn handle_send_command(
 	password: Option<String>,
 	password_file: Option<String>,
 	tip: Option<String>,
+	nonce: Option<u32>,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -261,8 +381,15 @@ pub async fn handle_send_command(
 	};
 
 	// Submit transaction
-	let tx_hash =
-		transfer(&quantus_client, &keypair, &resolved_address, amount, tip_amount).await?;
+	let tx_hash = transfer_with_nonce(
+		&quantus_client,
+		&keypair,
+		&resolved_address,
+		amount,
+		tip_amount,
+		nonce,
+	)
+	.await?;
 
 	log_print!("✅ {} Transaction submitted! Hash: {:?}", "SUCCESS".bright_green().bold(), tx_hash);
 
@@ -290,4 +417,73 @@ pub async fn handle_send_command(
 	}
 
 	Ok(())
+}
+
+/// Load transfers from JSON file
+pub async fn load_transfers_from_file(file_path: &str) -> Result<Vec<(String, u128)>> {
+	use serde_json;
+	use std::fs;
+
+	#[derive(serde::Deserialize)]
+	struct TransferEntry {
+		to: String,
+		amount: String,
+	}
+
+	let content = fs::read_to_string(file_path).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read batch file: {e:?}"))
+	})?;
+
+	let entries: Vec<TransferEntry> = serde_json::from_str(&content).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to parse batch file JSON: {e:?}"))
+	})?;
+
+	let mut transfers = Vec::new();
+	for entry in entries {
+		// Parse amount as raw units (no decimals conversion here)
+		let amount = entry.amount.parse::<u128>().map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid amount '{}': {e:?}", entry.amount))
+		})?;
+		transfers.push((entry.to, amount));
+	}
+
+	Ok(transfers)
+}
+
+/// Get chain constants for batch limits
+pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u32)> {
+	// Try to get actual chain constants
+	let constants = quantus_client.client().constants();
+
+	// Get block weight limit
+	let block_weight_limit = constants
+		.at(&quantus_subxt::api::constants().system().block_weights())
+		.map(|weights| weights.max_block.ref_time)
+		.unwrap_or(2_000_000_000_000); // Default 2 trillion weight units
+
+	// Estimate transfers per block (rough calculation)
+	let transfer_weight = 1_500_000_000u64; // Rough estimate per transfer
+	let max_transfers_by_weight = (block_weight_limit / transfer_weight) as u32;
+
+	// Get max extrinsic length
+	let max_extrinsic_length = constants
+		.at(&quantus_subxt::api::constants().system().block_length())
+		.map(|length| length.max.normal)
+		.unwrap_or(5_242_880); // Default 5MB
+
+	// Estimate transfers per extrinsic size (very rough)
+	let transfer_size = 100u32; // Rough estimate per transfer in bytes
+	let max_transfers_by_size = max_extrinsic_length / transfer_size;
+
+	let recommended_limit = std::cmp::min(max_transfers_by_weight, max_transfers_by_size);
+	let safe_limit = recommended_limit / 2; // Be conservative
+
+	log_verbose!(
+		"📊 Chain limits: weight allows ~{}, size allows ~{}",
+		max_transfers_by_weight,
+		max_transfers_by_size
+	);
+	log_verbose!("📊 Recommended batch size: {} (safe: {})", recommended_limit, safe_limit);
+
+	Ok((safe_limit, recommended_limit))
 }

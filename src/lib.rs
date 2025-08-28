@@ -24,6 +24,11 @@ pub use dilithium_crypto;
 pub use sp_core::crypto::AccountId32;
 pub use sp_runtime::MultiAddress;
 
+// Re-export transfer functions for library usage
+pub use cli::send::{
+	batch_transfer, format_balance_with_symbol, get_balance, transfer, transfer_with_nonce,
+};
+
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
