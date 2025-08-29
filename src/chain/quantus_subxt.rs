@@ -6,7 +6,7 @@ pub mod api {
 	mod root_mod {
 		pub use super::*;
 	}
-	pub static PALLETS: [&str; 22usize] = [
+	pub static PALLETS: [&str; 21usize] = [
 		"System",
 		"Timestamp",
 		"Balances",
@@ -28,9 +28,20 @@ pub mod api {
 		"TreasuryPallet",
 		"Origins",
 		"Recovery",
-		"Assets",
 	];
-	pub static RUNTIME_APIS: [&str; 0usize] = [];
+	pub static RUNTIME_APIS: [&str; 11usize] = [
+		"Core",
+		"Metadata",
+		"BlockBuilder",
+		"TaggedTransactionQueue",
+		"OffchainWorkerApi",
+		"SessionKeys",
+		"QPoWApi",
+		"AccountNonceApi",
+		"TransactionPaymentApi",
+		"TransactionPaymentCallApi",
+		"GenesisBuilder",
+	];
 	#[doc = r" The error type that is returned when there is a runtime issue."]
 	pub type DispatchError = runtime_types::sp_runtime::DispatchError;
 	#[doc = r" The outer event enum."]
@@ -55,7 +66,2004 @@ pub mod api {
 		use super::{root_mod, runtime_types};
 		use ::subxt::ext::subxt_core::ext::codec::Encode;
 		pub struct RuntimeApi;
-		impl RuntimeApi {}
+		impl RuntimeApi {
+			pub fn core(&self) -> core::Core {
+				core::Core
+			}
+			pub fn metadata(&self) -> metadata::Metadata {
+				metadata::Metadata
+			}
+			pub fn block_builder(&self) -> block_builder::BlockBuilder {
+				block_builder::BlockBuilder
+			}
+			pub fn tagged_transaction_queue(
+				&self,
+			) -> tagged_transaction_queue::TaggedTransactionQueue {
+				tagged_transaction_queue::TaggedTransactionQueue
+			}
+			pub fn offchain_worker_api(&self) -> offchain_worker_api::OffchainWorkerApi {
+				offchain_worker_api::OffchainWorkerApi
+			}
+			pub fn session_keys(&self) -> session_keys::SessionKeys {
+				session_keys::SessionKeys
+			}
+			pub fn q_po_w_api(&self) -> q_po_w_api::QPoWApi {
+				q_po_w_api::QPoWApi
+			}
+			pub fn account_nonce_api(&self) -> account_nonce_api::AccountNonceApi {
+				account_nonce_api::AccountNonceApi
+			}
+			pub fn transaction_payment_api(
+				&self,
+			) -> transaction_payment_api::TransactionPaymentApi {
+				transaction_payment_api::TransactionPaymentApi
+			}
+			pub fn transaction_payment_call_api(
+				&self,
+			) -> transaction_payment_call_api::TransactionPaymentCallApi {
+				transaction_payment_call_api::TransactionPaymentCallApi
+			}
+			pub fn genesis_builder(&self) -> genesis_builder::GenesisBuilder {
+				genesis_builder::GenesisBuilder
+			}
+		}
+		pub mod core {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `Core` runtime api that every Substrate runtime needs to implement."]
+			pub struct Core;
+			impl Core {
+				#[doc = " Returns the version of the runtime."]
+				pub fn version(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::Version,
+					types::version::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Core",
+						"version",
+						types::Version {},
+						[
+							79u8, 22u8, 137u8, 4u8, 40u8, 64u8, 30u8, 180u8, 49u8, 222u8, 114u8,
+							125u8, 44u8, 25u8, 33u8, 152u8, 98u8, 42u8, 72u8, 178u8, 240u8, 103u8,
+							34u8, 187u8, 81u8, 161u8, 183u8, 6u8, 120u8, 2u8, 146u8, 0u8,
+						],
+					)
+				}
+				#[doc = " Execute the given block."]
+				pub fn execute_block(
+					&self,
+					block: types::execute_block::Block,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::ExecuteBlock,
+					types::execute_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Core",
+						"execute_block",
+						types::ExecuteBlock { block },
+						[
+							133u8, 135u8, 228u8, 65u8, 106u8, 27u8, 85u8, 158u8, 112u8, 254u8,
+							93u8, 26u8, 102u8, 201u8, 118u8, 216u8, 249u8, 247u8, 91u8, 74u8, 56u8,
+							208u8, 231u8, 115u8, 131u8, 29u8, 209u8, 6u8, 65u8, 57u8, 214u8, 125u8,
+						],
+					)
+				}
+				#[doc = " Initialize a block with the given header and return the runtime executive mode."]
+				pub fn initialize_block(
+					&self,
+					header: types::initialize_block::Header,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::InitializeBlock,
+					types::initialize_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Core",
+						"initialize_block",
+						types::InitializeBlock { header },
+						[
+							132u8, 169u8, 113u8, 112u8, 80u8, 139u8, 113u8, 35u8, 41u8, 81u8, 36u8,
+							35u8, 37u8, 202u8, 29u8, 207u8, 205u8, 229u8, 145u8, 7u8, 133u8, 94u8,
+							25u8, 108u8, 233u8, 86u8, 234u8, 29u8, 236u8, 57u8, 56u8, 186u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod version {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_version::RuntimeVersion;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct Version {}
+				pub mod execute_block {
+					use super::runtime_types;
+					pub type Block = runtime_types :: sp_runtime :: generic :: block :: Block < runtime_types :: sp_runtime :: generic :: header :: Header < :: core :: primitive :: u32 > , :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > > ;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ();
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ExecuteBlock {
+					pub block: execute_block::Block,
+				}
+				pub mod initialize_block {
+					use super::runtime_types;
+					pub type Header =
+						runtime_types::sp_runtime::generic::header::Header<::core::primitive::u32>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_runtime::ExtrinsicInclusionMode;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct InitializeBlock {
+					pub header: initialize_block::Header,
+				}
+			}
+		}
+		pub mod metadata {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `Metadata` api trait that returns metadata for the runtime."]
+			pub struct Metadata;
+			impl Metadata {
+				#[doc = " Returns the metadata of a runtime."]
+				pub fn metadata(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::Metadata,
+					types::metadata::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Metadata",
+						"metadata",
+						types::Metadata {},
+						[
+							231u8, 24u8, 67u8, 152u8, 23u8, 26u8, 188u8, 82u8, 229u8, 6u8, 185u8,
+							27u8, 175u8, 68u8, 83u8, 122u8, 69u8, 89u8, 185u8, 74u8, 248u8, 87u8,
+							217u8, 124u8, 193u8, 252u8, 199u8, 186u8, 196u8, 179u8, 179u8, 96u8,
+						],
+					)
+				}
+				#[doc = " Returns the metadata at a given version."]
+				#[doc = ""]
+				#[doc = " If the given `version` isn't supported, this will return `None`."]
+				#[doc = " Use [`Self::metadata_versions`] to find out about supported metadata version of the runtime."]
+				pub fn metadata_at_version(
+					&self,
+					version: types::metadata_at_version::Version,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::MetadataAtVersion,
+					types::metadata_at_version::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Metadata",
+						"metadata_at_version",
+						types::MetadataAtVersion { version },
+						[
+							131u8, 53u8, 212u8, 234u8, 16u8, 25u8, 120u8, 252u8, 153u8, 153u8,
+							216u8, 28u8, 54u8, 113u8, 52u8, 236u8, 146u8, 68u8, 142u8, 8u8, 10u8,
+							169u8, 131u8, 142u8, 204u8, 38u8, 48u8, 108u8, 134u8, 86u8, 226u8,
+							61u8,
+						],
+					)
+				}
+				#[doc = " Returns the supported metadata versions."]
+				#[doc = ""]
+				#[doc = " This can be used to call `metadata_at_version`."]
+				pub fn metadata_versions(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::MetadataVersions,
+					types::metadata_versions::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Metadata",
+						"metadata_versions",
+						types::MetadataVersions {},
+						[
+							23u8, 144u8, 137u8, 91u8, 188u8, 39u8, 231u8, 208u8, 252u8, 218u8,
+							224u8, 176u8, 77u8, 32u8, 130u8, 212u8, 223u8, 76u8, 100u8, 190u8,
+							82u8, 94u8, 190u8, 8u8, 82u8, 244u8, 225u8, 179u8, 85u8, 176u8, 56u8,
+							16u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod metadata {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_core::OpaqueMetadata;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct Metadata {}
+				pub mod metadata_at_version {
+					use super::runtime_types;
+					pub type Version = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::core::option::Option<runtime_types::sp_core::OpaqueMetadata>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct MetadataAtVersion {
+					pub version: metadata_at_version::Version,
+				}
+				pub mod metadata_versions {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u32>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct MetadataVersions {}
+			}
+		}
+		pub mod block_builder {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `BlockBuilder` api trait that provides the required functionality for building a block."]
+			pub struct BlockBuilder;
+			impl BlockBuilder {
+				#[doc = " Apply the given extrinsic."]
+				#[doc = ""]
+				#[doc = " Returns an inclusion outcome which specifies if this extrinsic is included in"]
+				#[doc = " this block or not."]
+				pub fn apply_extrinsic(
+					&self,
+					extrinsic: types::apply_extrinsic::Extrinsic,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::ApplyExtrinsic,
+					types::apply_extrinsic::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"apply_extrinsic",
+						types::ApplyExtrinsic { extrinsic },
+						[
+							192u8, 184u8, 199u8, 4u8, 85u8, 136u8, 214u8, 205u8, 29u8, 29u8, 98u8,
+							145u8, 172u8, 92u8, 168u8, 161u8, 150u8, 133u8, 100u8, 243u8, 100u8,
+							100u8, 118u8, 28u8, 104u8, 82u8, 93u8, 63u8, 79u8, 36u8, 149u8, 144u8,
+						],
+					)
+				}
+				#[doc = " Finish the current block."]
+				pub fn finalize_block(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::FinalizeBlock,
+					types::finalize_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"finalize_block",
+						types::FinalizeBlock {},
+						[
+							244u8, 207u8, 24u8, 33u8, 13u8, 69u8, 9u8, 249u8, 145u8, 143u8, 122u8,
+							96u8, 197u8, 55u8, 64u8, 111u8, 238u8, 224u8, 34u8, 201u8, 27u8, 146u8,
+							232u8, 99u8, 191u8, 30u8, 114u8, 16u8, 32u8, 220u8, 58u8, 62u8,
+						],
+					)
+				}
+				#[doc = " Generate inherent extrinsics. The inherent data will vary from chain to chain."]
+				pub fn inherent_extrinsics(
+					&self,
+					inherent: types::inherent_extrinsics::Inherent,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::InherentExtrinsics,
+					types::inherent_extrinsics::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"inherent_extrinsics",
+						types::InherentExtrinsics { inherent },
+						[
+							254u8, 110u8, 245u8, 201u8, 250u8, 192u8, 27u8, 228u8, 151u8, 213u8,
+							166u8, 89u8, 94u8, 81u8, 189u8, 234u8, 64u8, 18u8, 245u8, 80u8, 29u8,
+							18u8, 140u8, 129u8, 113u8, 236u8, 135u8, 55u8, 79u8, 159u8, 175u8,
+							183u8,
+						],
+					)
+				}
+				#[doc = " Check that the inherents are valid. The inherent data will vary from chain to chain."]
+				pub fn check_inherents(
+					&self,
+					block: types::check_inherents::Block,
+					data: types::check_inherents::Data,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::CheckInherents,
+					types::check_inherents::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"check_inherents",
+						types::CheckInherents { block, data },
+						[
+							153u8, 134u8, 1u8, 215u8, 139u8, 11u8, 53u8, 51u8, 210u8, 175u8, 197u8,
+							28u8, 38u8, 209u8, 175u8, 247u8, 142u8, 157u8, 50u8, 151u8, 164u8,
+							191u8, 181u8, 118u8, 80u8, 97u8, 160u8, 248u8, 110u8, 217u8, 181u8,
+							234u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod apply_extrinsic {
+					use super::runtime_types;
+					pub type Extrinsic = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = :: core :: result :: Result < :: core :: result :: Result < () , runtime_types :: sp_runtime :: DispatchError > , runtime_types :: sp_runtime :: transaction_validity :: TransactionValidityError > ;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ApplyExtrinsic {
+					pub extrinsic: apply_extrinsic::Extrinsic,
+				}
+				pub mod finalize_block {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_runtime::generic::header::Header<
+							::core::primitive::u32,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct FinalizeBlock {}
+				pub mod inherent_extrinsics {
+					use super::runtime_types;
+					pub type Inherent = runtime_types::sp_inherents::InherentData;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = :: subxt :: ext :: subxt_core :: alloc :: vec :: Vec < :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > > ;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct InherentExtrinsics {
+					pub inherent: inherent_extrinsics::Inherent,
+				}
+				pub mod check_inherents {
+					use super::runtime_types;
+					pub type Block = runtime_types :: sp_runtime :: generic :: block :: Block < runtime_types :: sp_runtime :: generic :: header :: Header < :: core :: primitive :: u32 > , :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > > ;
+					pub type Data = runtime_types::sp_inherents::InherentData;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_inherents::CheckInherentsResult;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct CheckInherents {
+					pub block: check_inherents::Block,
+					pub data: check_inherents::Data,
+				}
+			}
+		}
+		pub mod tagged_transaction_queue {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `TaggedTransactionQueue` api trait for interfering with the transaction queue."]
+			pub struct TaggedTransactionQueue;
+			impl TaggedTransactionQueue {
+				#[doc = " Validate the transaction."]
+				#[doc = ""]
+				#[doc = " This method is invoked by the transaction pool to learn details about given transaction."]
+				#[doc = " The implementation should make sure to verify the correctness of the transaction"]
+				#[doc = " against current state. The given `block_hash` corresponds to the hash of the block"]
+				#[doc = " that is used as current state."]
+				#[doc = ""]
+				#[doc = " Note that this call may be performed by the pool multiple times and transactions"]
+				#[doc = " might be verified in any possible order."]
+				pub fn validate_transaction(
+					&self,
+					source: types::validate_transaction::Source,
+					tx: types::validate_transaction::Tx,
+					block_hash: types::validate_transaction::BlockHash,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::ValidateTransaction,
+					types::validate_transaction::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TaggedTransactionQueue",
+						"validate_transaction",
+						types::ValidateTransaction { source, tx, block_hash },
+						[
+							19u8, 53u8, 170u8, 115u8, 75u8, 121u8, 231u8, 50u8, 199u8, 181u8,
+							243u8, 170u8, 163u8, 224u8, 213u8, 134u8, 206u8, 207u8, 88u8, 242u8,
+							80u8, 139u8, 233u8, 87u8, 175u8, 249u8, 178u8, 169u8, 255u8, 171u8,
+							4u8, 125u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod validate_transaction {
+					use super::runtime_types;
+					pub type Source =
+						runtime_types::sp_runtime::transaction_validity::TransactionSource;
+					pub type Tx = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub type BlockHash = ::subxt::ext::subxt_core::utils::H256;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = :: core :: result :: Result < runtime_types :: sp_runtime :: transaction_validity :: ValidTransaction , runtime_types :: sp_runtime :: transaction_validity :: TransactionValidityError > ;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ValidateTransaction {
+					pub source: validate_transaction::Source,
+					pub tx: validate_transaction::Tx,
+					pub block_hash: validate_transaction::BlockHash,
+				}
+			}
+		}
+		pub mod offchain_worker_api {
+			use super::{root_mod, runtime_types};
+			#[doc = " The offchain worker api."]
+			pub struct OffchainWorkerApi;
+			impl OffchainWorkerApi {
+				#[doc = " Starts the off-chain task for given block header."]
+				pub fn offchain_worker(
+					&self,
+					header: types::offchain_worker::Header,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::OffchainWorker,
+					types::offchain_worker::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"OffchainWorkerApi",
+						"offchain_worker",
+						types::OffchainWorker { header },
+						[
+							10u8, 135u8, 19u8, 153u8, 33u8, 216u8, 18u8, 242u8, 33u8, 140u8, 4u8,
+							223u8, 200u8, 130u8, 103u8, 118u8, 137u8, 24u8, 19u8, 127u8, 161u8,
+							29u8, 184u8, 111u8, 222u8, 111u8, 253u8, 73u8, 45u8, 31u8, 79u8, 60u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod offchain_worker {
+					use super::runtime_types;
+					pub type Header =
+						runtime_types::sp_runtime::generic::header::Header<::core::primitive::u32>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ();
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct OffchainWorker {
+					pub header: offchain_worker::Header,
+				}
+			}
+		}
+		pub mod session_keys {
+			use super::{root_mod, runtime_types};
+			#[doc = " Session keys runtime api."]
+			pub struct SessionKeys;
+			impl SessionKeys {
+				#[doc = " Generate a set of session keys with optionally using the given seed."]
+				#[doc = " The keys should be stored within the keystore exposed via runtime"]
+				#[doc = " externalities."]
+				#[doc = ""]
+				#[doc = " The seed needs to be a valid `utf8` string."]
+				#[doc = ""]
+				#[doc = " Returns the concatenated SCALE encoded public keys."]
+				pub fn generate_session_keys(
+					&self,
+					seed: types::generate_session_keys::Seed,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GenerateSessionKeys,
+					types::generate_session_keys::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"SessionKeys",
+						"generate_session_keys",
+						types::GenerateSessionKeys { seed },
+						[
+							96u8, 171u8, 164u8, 166u8, 175u8, 102u8, 101u8, 47u8, 133u8, 95u8,
+							102u8, 202u8, 83u8, 26u8, 238u8, 47u8, 126u8, 132u8, 22u8, 11u8, 33u8,
+							190u8, 175u8, 94u8, 58u8, 245u8, 46u8, 80u8, 195u8, 184u8, 107u8, 65u8,
+						],
+					)
+				}
+				#[doc = " Decode the given public session keys."]
+				#[doc = ""]
+				#[doc = " Returns the list of public raw public keys + key type."]
+				pub fn decode_session_keys(
+					&self,
+					encoded: types::decode_session_keys::Encoded,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::DecodeSessionKeys,
+					types::decode_session_keys::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"SessionKeys",
+						"decode_session_keys",
+						types::DecodeSessionKeys { encoded },
+						[
+							57u8, 242u8, 18u8, 51u8, 132u8, 110u8, 238u8, 255u8, 39u8, 194u8, 8u8,
+							54u8, 198u8, 178u8, 75u8, 151u8, 148u8, 176u8, 144u8, 197u8, 87u8,
+							29u8, 179u8, 235u8, 176u8, 78u8, 252u8, 103u8, 72u8, 203u8, 151u8,
+							248u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod generate_session_keys {
+					use super::runtime_types;
+					pub type Seed = ::core::option::Option<
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+					>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GenerateSessionKeys {
+					pub seed: generate_session_keys::Seed,
+				}
+				pub mod decode_session_keys {
+					use super::runtime_types;
+					pub type Encoded =
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::option::Option<
+							::subxt::ext::subxt_core::alloc::vec::Vec<(
+								::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+								runtime_types::sp_core::crypto::KeyTypeId,
+							)>,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct DecodeSessionKeys {
+					pub encoded: decode_session_keys::Encoded,
+				}
+			}
+		}
+		pub mod q_po_w_api {
+			use super::{root_mod, runtime_types};
+			pub struct QPoWApi;
+			impl QPoWApi {
+				#[doc = " Verify a nonce for a historical block that's already in the chain"]
+				pub fn verify_historical_block(
+					&self,
+					header: types::verify_historical_block::Header,
+					nonce: types::verify_historical_block::Nonce,
+					block_number: types::verify_historical_block::BlockNumber,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::VerifyHistoricalBlock,
+					types::verify_historical_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"verify_historical_block",
+						types::VerifyHistoricalBlock { header, nonce, block_number },
+						[
+							110u8, 10u8, 34u8, 119u8, 84u8, 17u8, 127u8, 204u8, 198u8, 160u8,
+							190u8, 122u8, 224u8, 127u8, 150u8, 62u8, 227u8, 220u8, 49u8, 212u8,
+							211u8, 96u8, 227u8, 95u8, 212u8, 124u8, 124u8, 159u8, 93u8, 74u8, 62u8,
+							203u8,
+						],
+					)
+				}
+				#[doc = " calculate distance header with nonce to with nonce"]
+				pub fn get_nonce_distance(
+					&self,
+					block_hash: types::get_nonce_distance::BlockHash,
+					nonce: types::get_nonce_distance::Nonce,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetNonceDistance,
+					types::get_nonce_distance::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_nonce_distance",
+						types::GetNonceDistance { block_hash, nonce },
+						[
+							129u8, 114u8, 220u8, 23u8, 229u8, 124u8, 105u8, 65u8, 77u8, 91u8, 9u8,
+							2u8, 2u8, 177u8, 124u8, 108u8, 143u8, 100u8, 174u8, 61u8, 29u8, 55u8,
+							166u8, 162u8, 16u8, 61u8, 75u8, 213u8, 182u8, 125u8, 7u8, 120u8,
+						],
+					)
+				}
+				#[doc = " Get the max possible reorg depth"]
+				pub fn get_max_reorg_depth(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetMaxReorgDepth,
+					types::get_max_reorg_depth::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_max_reorg_depth",
+						types::GetMaxReorgDepth {},
+						[
+							95u8, 253u8, 190u8, 31u8, 75u8, 182u8, 224u8, 166u8, 3u8, 9u8, 29u8,
+							200u8, 89u8, 143u8, 104u8, 126u8, 178u8, 83u8, 156u8, 109u8, 140u8,
+							177u8, 70u8, 113u8, 23u8, 182u8, 236u8, 236u8, 111u8, 145u8, 237u8,
+							148u8,
+						],
+					)
+				}
+				#[doc = " Get the max possible distance_threshold for work calculation"]
+				pub fn get_max_distance(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetMaxDistance,
+					types::get_max_distance::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_max_distance",
+						types::GetMaxDistance {},
+						[
+							228u8, 221u8, 157u8, 71u8, 206u8, 66u8, 16u8, 79u8, 17u8, 1u8, 0u8,
+							134u8, 36u8, 195u8, 232u8, 254u8, 165u8, 162u8, 169u8, 184u8, 85u8,
+							136u8, 11u8, 10u8, 40u8, 197u8, 225u8, 249u8, 240u8, 43u8, 120u8, 45u8,
+						],
+					)
+				}
+				#[doc = " Get the current difficulty (max_distance / distance_threshold)"]
+				pub fn get_difficulty(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetDifficulty,
+					types::get_difficulty::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_difficulty",
+						types::GetDifficulty {},
+						[
+							180u8, 101u8, 92u8, 73u8, 15u8, 146u8, 167u8, 45u8, 127u8, 230u8,
+							148u8, 6u8, 174u8, 121u8, 38u8, 103u8, 46u8, 5u8, 235u8, 20u8, 133u8,
+							207u8, 67u8, 211u8, 25u8, 112u8, 83u8, 196u8, 118u8, 66u8, 118u8,
+							179u8,
+						],
+					)
+				}
+				#[doc = " Get the current distance_threshold target for proof generation"]
+				pub fn get_distance_threshold(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetDistanceThreshold,
+					types::get_distance_threshold::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_distance_threshold",
+						types::GetDistanceThreshold {},
+						[
+							84u8, 236u8, 60u8, 104u8, 10u8, 61u8, 150u8, 165u8, 61u8, 214u8, 204u8,
+							210u8, 47u8, 211u8, 67u8, 136u8, 243u8, 72u8, 252u8, 132u8, 128u8,
+							28u8, 166u8, 87u8, 131u8, 48u8, 61u8, 109u8, 115u8, 66u8, 190u8, 201u8,
+						],
+					)
+				}
+				#[doc = " Get distance_threshold at block"]
+				pub fn get_distance_threshold_at_block(
+					&self,
+					block_number: types::get_distance_threshold_at_block::BlockNumber,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetDistanceThresholdAtBlock,
+					types::get_distance_threshold_at_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_distance_threshold_at_block",
+						types::GetDistanceThresholdAtBlock { block_number },
+						[
+							22u8, 139u8, 170u8, 164u8, 154u8, 98u8, 153u8, 248u8, 43u8, 220u8,
+							56u8, 38u8, 101u8, 236u8, 112u8, 68u8, 45u8, 57u8, 158u8, 156u8, 252u8,
+							177u8, 112u8, 188u8, 176u8, 200u8, 221u8, 206u8, 144u8, 8u8, 98u8,
+							106u8,
+						],
+					)
+				}
+				#[doc = " Get total work"]
+				pub fn get_total_work(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetTotalWork,
+					types::get_total_work::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_total_work",
+						types::GetTotalWork {},
+						[
+							1u8, 91u8, 59u8, 140u8, 203u8, 250u8, 8u8, 65u8, 208u8, 35u8, 187u8,
+							190u8, 255u8, 125u8, 190u8, 111u8, 216u8, 168u8, 83u8, 32u8, 37u8,
+							203u8, 102u8, 226u8, 88u8, 207u8, 253u8, 59u8, 86u8, 72u8, 30u8, 171u8,
+						],
+					)
+				}
+				#[doc = " Get sum of block times in rolling history"]
+				pub fn get_block_time_sum(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetBlockTimeSum,
+					types::get_block_time_sum::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_block_time_sum",
+						types::GetBlockTimeSum {},
+						[
+							135u8, 226u8, 38u8, 138u8, 155u8, 194u8, 162u8, 121u8, 106u8, 22u8,
+							48u8, 208u8, 71u8, 14u8, 50u8, 123u8, 66u8, 153u8, 169u8, 95u8, 75u8,
+							70u8, 237u8, 160u8, 129u8, 81u8, 117u8, 200u8, 238u8, 102u8, 138u8,
+							98u8,
+						],
+					)
+				}
+				#[doc = " Get median block time for preconfigured list of elements"]
+				pub fn get_median_block_time(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetMedianBlockTime,
+					types::get_median_block_time::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_median_block_time",
+						types::GetMedianBlockTime {},
+						[
+							202u8, 211u8, 53u8, 71u8, 198u8, 56u8, 32u8, 243u8, 236u8, 124u8,
+							116u8, 100u8, 215u8, 111u8, 101u8, 20u8, 4u8, 55u8, 98u8, 187u8, 90u8,
+							224u8, 167u8, 20u8, 175u8, 252u8, 50u8, 220u8, 146u8, 87u8, 245u8,
+							52u8,
+						],
+					)
+				}
+				#[doc = " Get last block timestamp"]
+				pub fn get_last_block_time(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetLastBlockTime,
+					types::get_last_block_time::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_last_block_time",
+						types::GetLastBlockTime {},
+						[
+							207u8, 192u8, 227u8, 7u8, 154u8, 92u8, 133u8, 111u8, 21u8, 9u8, 21u8,
+							171u8, 235u8, 117u8, 143u8, 199u8, 19u8, 67u8, 76u8, 35u8, 220u8, 32u8,
+							221u8, 166u8, 0u8, 234u8, 107u8, 217u8, 122u8, 89u8, 91u8, 144u8,
+						],
+					)
+				}
+				pub fn get_last_block_duration(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetLastBlockDuration,
+					types::get_last_block_duration::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_last_block_duration",
+						types::GetLastBlockDuration {},
+						[
+							103u8, 98u8, 123u8, 21u8, 125u8, 171u8, 88u8, 46u8, 187u8, 94u8, 96u8,
+							238u8, 16u8, 122u8, 81u8, 108u8, 157u8, 204u8, 79u8, 43u8, 170u8,
+							235u8, 176u8, 238u8, 174u8, 235u8, 47u8, 152u8, 167u8, 245u8, 243u8,
+							157u8,
+						],
+					)
+				}
+				pub fn get_chain_height(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetChainHeight,
+					types::get_chain_height::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_chain_height",
+						types::GetChainHeight {},
+						[
+							249u8, 203u8, 37u8, 234u8, 170u8, 203u8, 200u8, 147u8, 30u8, 193u8,
+							91u8, 97u8, 96u8, 104u8, 39u8, 96u8, 171u8, 69u8, 119u8, 30u8, 112u8,
+							81u8, 132u8, 33u8, 69u8, 168u8, 70u8, 33u8, 196u8, 16u8, 215u8, 113u8,
+						],
+					)
+				}
+				pub fn get_random_rsa(
+					&self,
+					block_hash: types::get_random_rsa::BlockHash,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetRandomRsa,
+					types::get_random_rsa::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_random_rsa",
+						types::GetRandomRsa { block_hash },
+						[
+							179u8, 195u8, 121u8, 252u8, 235u8, 176u8, 160u8, 58u8, 188u8, 236u8,
+							106u8, 222u8, 47u8, 7u8, 73u8, 89u8, 186u8, 175u8, 25u8, 77u8, 196u8,
+							68u8, 111u8, 186u8, 181u8, 178u8, 2u8, 205u8, 215u8, 142u8, 157u8,
+							160u8,
+						],
+					)
+				}
+				pub fn hash_to_group_bigint(
+					&self,
+					h: types::hash_to_group_bigint::H,
+					m: types::hash_to_group_bigint::M,
+					n: types::hash_to_group_bigint::N,
+					solution: types::hash_to_group_bigint::Solution,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::HashToGroupBigint,
+					types::hash_to_group_bigint::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"hash_to_group_bigint",
+						types::HashToGroupBigint { h, m, n, solution },
+						[
+							117u8, 71u8, 148u8, 115u8, 194u8, 210u8, 59u8, 139u8, 102u8, 255u8,
+							55u8, 207u8, 118u8, 114u8, 98u8, 151u8, 147u8, 99u8, 142u8, 158u8,
+							185u8, 151u8, 118u8, 31u8, 192u8, 26u8, 63u8, 150u8, 50u8, 123u8, 40u8,
+							163u8,
+						],
+					)
+				}
+				pub fn verify_nonce_on_import_block(
+					&self,
+					block_hash: types::verify_nonce_on_import_block::BlockHash,
+					nonce: types::verify_nonce_on_import_block::Nonce,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::VerifyNonceOnImportBlock,
+					types::verify_nonce_on_import_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"verify_nonce_on_import_block",
+						types::VerifyNonceOnImportBlock { block_hash, nonce },
+						[
+							178u8, 216u8, 20u8, 254u8, 253u8, 202u8, 63u8, 238u8, 164u8, 135u8,
+							163u8, 28u8, 170u8, 44u8, 183u8, 157u8, 211u8, 62u8, 4u8, 77u8, 30u8,
+							32u8, 68u8, 166u8, 42u8, 161u8, 111u8, 79u8, 54u8, 54u8, 40u8, 15u8,
+						],
+					)
+				}
+				pub fn verify_nonce_local_mining(
+					&self,
+					block_hash: types::verify_nonce_local_mining::BlockHash,
+					nonce: types::verify_nonce_local_mining::Nonce,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::VerifyNonceLocalMining,
+					types::verify_nonce_local_mining::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"verify_nonce_local_mining",
+						types::VerifyNonceLocalMining { block_hash, nonce },
+						[
+							10u8, 191u8, 243u8, 4u8, 31u8, 132u8, 202u8, 157u8, 183u8, 189u8, 49u8,
+							76u8, 201u8, 182u8, 52u8, 197u8, 34u8, 248u8, 253u8, 226u8, 64u8,
+							100u8, 108u8, 2u8, 119u8, 85u8, 184u8, 96u8, 25u8, 156u8, 108u8, 240u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod verify_historical_block {
+					use super::runtime_types;
+					pub type Header = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub type BlockNumber = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::bool;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct VerifyHistoricalBlock {
+					pub header: verify_historical_block::Header,
+					pub nonce: verify_historical_block::Nonce,
+					pub block_number: verify_historical_block::BlockNumber,
+				}
+				pub mod get_nonce_distance {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetNonceDistance {
+					pub block_hash: get_nonce_distance::BlockHash,
+					pub nonce: get_nonce_distance::Nonce,
+				}
+				pub mod get_max_reorg_depth {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u32;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetMaxReorgDepth {}
+				pub mod get_max_distance {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetMaxDistance {}
+				pub mod get_difficulty {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetDifficulty {}
+				pub mod get_distance_threshold {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetDistanceThreshold {}
+				pub mod get_distance_threshold_at_block {
+					use super::runtime_types;
+					pub type BlockNumber = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetDistanceThresholdAtBlock {
+					pub block_number: get_distance_threshold_at_block::BlockNumber,
+				}
+				pub mod get_total_work {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetTotalWork {}
+				pub mod get_block_time_sum {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetBlockTimeSum {}
+				pub mod get_median_block_time {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetMedianBlockTime {}
+				pub mod get_last_block_time {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetLastBlockTime {}
+				pub mod get_last_block_duration {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetLastBlockDuration {}
+				pub mod get_chain_height {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u32;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetChainHeight {}
+				pub mod get_random_rsa {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = (
+							runtime_types::primitive_types::U512,
+							runtime_types::primitive_types::U512,
+						);
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetRandomRsa {
+					pub block_hash: get_random_rsa::BlockHash,
+				}
+				pub mod hash_to_group_bigint {
+					use super::runtime_types;
+					pub type H = runtime_types::primitive_types::U512;
+					pub type M = runtime_types::primitive_types::U512;
+					pub type N = runtime_types::primitive_types::U512;
+					pub type Solution = runtime_types::primitive_types::U512;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct HashToGroupBigint {
+					pub h: hash_to_group_bigint::H,
+					pub m: hash_to_group_bigint::M,
+					pub n: hash_to_group_bigint::N,
+					pub solution: hash_to_group_bigint::Solution,
+				}
+				pub mod verify_nonce_on_import_block {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::bool;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct VerifyNonceOnImportBlock {
+					pub block_hash: verify_nonce_on_import_block::BlockHash,
+					pub nonce: verify_nonce_on_import_block::Nonce,
+				}
+				pub mod verify_nonce_local_mining {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::bool;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct VerifyNonceLocalMining {
+					pub block_hash: verify_nonce_local_mining::BlockHash,
+					pub nonce: verify_nonce_local_mining::Nonce,
+				}
+			}
+		}
+		pub mod account_nonce_api {
+			use super::{root_mod, runtime_types};
+			#[doc = " The API to query account nonce."]
+			pub struct AccountNonceApi;
+			impl AccountNonceApi {
+				#[doc = " Get current account nonce of given `AccountId`."]
+				pub fn account_nonce(
+					&self,
+					account: types::account_nonce::Account,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::AccountNonce,
+					types::account_nonce::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"AccountNonceApi",
+						"account_nonce",
+						types::AccountNonce { account },
+						[
+							231u8, 82u8, 7u8, 227u8, 131u8, 2u8, 215u8, 252u8, 173u8, 82u8, 11u8,
+							103u8, 200u8, 25u8, 114u8, 116u8, 79u8, 229u8, 152u8, 150u8, 236u8,
+							37u8, 101u8, 26u8, 220u8, 146u8, 182u8, 101u8, 73u8, 55u8, 191u8,
+							171u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod account_nonce {
+					use super::runtime_types;
+					pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u32;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct AccountNonce {
+					pub account: account_nonce::Account,
+				}
+			}
+		}
+		pub mod transaction_payment_api {
+			use super::{root_mod, runtime_types};
+			pub struct TransactionPaymentApi;
+			impl TransactionPaymentApi {
+				pub fn query_info(
+					&self,
+					uxt: types::query_info::Uxt,
+					len: types::query_info::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryInfo,
+					types::query_info::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_info",
+						types::QueryInfo { uxt, len },
+						[
+							56u8, 30u8, 174u8, 34u8, 202u8, 24u8, 177u8, 189u8, 145u8, 36u8, 1u8,
+							156u8, 98u8, 209u8, 178u8, 49u8, 198u8, 23u8, 150u8, 173u8, 35u8,
+							205u8, 147u8, 129u8, 42u8, 22u8, 69u8, 3u8, 129u8, 8u8, 196u8, 139u8,
+						],
+					)
+				}
+				pub fn query_fee_details(
+					&self,
+					uxt: types::query_fee_details::Uxt,
+					len: types::query_fee_details::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryFeeDetails,
+					types::query_fee_details::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_fee_details",
+						types::QueryFeeDetails { uxt, len },
+						[
+							117u8, 60u8, 137u8, 159u8, 237u8, 252u8, 216u8, 238u8, 232u8, 1u8,
+							100u8, 152u8, 26u8, 185u8, 145u8, 125u8, 68u8, 189u8, 4u8, 30u8, 125u8,
+							7u8, 196u8, 153u8, 235u8, 51u8, 219u8, 108u8, 185u8, 254u8, 100u8,
+							201u8,
+						],
+					)
+				}
+				pub fn query_weight_to_fee(
+					&self,
+					weight: types::query_weight_to_fee::Weight,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryWeightToFee,
+					types::query_weight_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_weight_to_fee",
+						types::QueryWeightToFee { weight },
+						[
+							206u8, 243u8, 189u8, 83u8, 231u8, 244u8, 247u8, 52u8, 126u8, 208u8,
+							224u8, 5u8, 163u8, 108u8, 254u8, 114u8, 214u8, 156u8, 227u8, 217u8,
+							211u8, 198u8, 121u8, 164u8, 110u8, 54u8, 181u8, 146u8, 50u8, 146u8,
+							146u8, 23u8,
+						],
+					)
+				}
+				pub fn query_length_to_fee(
+					&self,
+					length: types::query_length_to_fee::Length,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryLengthToFee,
+					types::query_length_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_length_to_fee",
+						types::QueryLengthToFee { length },
+						[
+							92u8, 132u8, 29u8, 119u8, 66u8, 11u8, 196u8, 224u8, 129u8, 23u8, 249u8,
+							12u8, 32u8, 28u8, 92u8, 50u8, 188u8, 101u8, 203u8, 229u8, 248u8, 216u8,
+							130u8, 150u8, 212u8, 161u8, 81u8, 254u8, 116u8, 89u8, 162u8, 48u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod query_info {
+					use super::runtime_types;
+					pub type Uxt = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::RuntimeDispatchInfo<
+								::core::primitive::u128,
+								runtime_types::sp_weights::weight_v2::Weight,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryInfo {
+					pub uxt: query_info::Uxt,
+					pub len: query_info::Len,
+				}
+				pub mod query_fee_details {
+					use super::runtime_types;
+					pub type Uxt = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::FeeDetails<
+								::core::primitive::u128,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryFeeDetails {
+					pub uxt: query_fee_details::Uxt,
+					pub len: query_fee_details::Len,
+				}
+				pub mod query_weight_to_fee {
+					use super::runtime_types;
+					pub type Weight = runtime_types::sp_weights::weight_v2::Weight;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryWeightToFee {
+					pub weight: query_weight_to_fee::Weight,
+				}
+				pub mod query_length_to_fee {
+					use super::runtime_types;
+					pub type Length = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryLengthToFee {
+					pub length: query_length_to_fee::Length,
+				}
+			}
+		}
+		pub mod transaction_payment_call_api {
+			use super::{root_mod, runtime_types};
+			pub struct TransactionPaymentCallApi;
+			impl TransactionPaymentCallApi {
+				#[doc = " Query information of a dispatch class, weight, and fee of a given encoded `Call`."]
+				pub fn query_call_info(
+					&self,
+					call: types::query_call_info::Call,
+					len: types::query_call_info::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryCallInfo,
+					types::query_call_info::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_call_info",
+						types::QueryCallInfo { call, len },
+						[
+							137u8, 213u8, 145u8, 74u8, 243u8, 30u8, 225u8, 181u8, 84u8, 222u8,
+							242u8, 134u8, 217u8, 218u8, 177u8, 114u8, 170u8, 117u8, 198u8, 36u8,
+							95u8, 74u8, 139u8, 114u8, 200u8, 128u8, 88u8, 95u8, 202u8, 132u8, 54u8,
+							110u8,
+						],
+					)
+				}
+				#[doc = " Query fee details of a given encoded `Call`."]
+				pub fn query_call_fee_details(
+					&self,
+					call: types::query_call_fee_details::Call,
+					len: types::query_call_fee_details::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryCallFeeDetails,
+					types::query_call_fee_details::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_call_fee_details",
+						types::QueryCallFeeDetails { call, len },
+						[
+							186u8, 20u8, 221u8, 69u8, 0u8, 177u8, 162u8, 164u8, 64u8, 67u8, 14u8,
+							41u8, 60u8, 200u8, 55u8, 223u8, 35u8, 255u8, 96u8, 173u8, 29u8, 211u8,
+							90u8, 140u8, 122u8, 108u8, 249u8, 199u8, 22u8, 52u8, 226u8, 124u8,
+						],
+					)
+				}
+				#[doc = " Query the output of the current `WeightToFee` given some input."]
+				pub fn query_weight_to_fee(
+					&self,
+					weight: types::query_weight_to_fee::Weight,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryWeightToFee,
+					types::query_weight_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_weight_to_fee",
+						types::QueryWeightToFee { weight },
+						[
+							117u8, 91u8, 94u8, 22u8, 248u8, 212u8, 15u8, 23u8, 97u8, 116u8, 64u8,
+							228u8, 83u8, 123u8, 87u8, 77u8, 97u8, 7u8, 98u8, 181u8, 6u8, 165u8,
+							114u8, 141u8, 164u8, 113u8, 126u8, 88u8, 174u8, 171u8, 224u8, 35u8,
+						],
+					)
+				}
+				#[doc = " Query the output of the current `LengthToFee` given some input."]
+				pub fn query_length_to_fee(
+					&self,
+					length: types::query_length_to_fee::Length,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryLengthToFee,
+					types::query_length_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_length_to_fee",
+						types::QueryLengthToFee { length },
+						[
+							246u8, 40u8, 4u8, 160u8, 152u8, 94u8, 170u8, 53u8, 205u8, 122u8, 5u8,
+							69u8, 70u8, 25u8, 128u8, 156u8, 119u8, 134u8, 116u8, 147u8, 14u8,
+							164u8, 65u8, 140u8, 86u8, 13u8, 250u8, 218u8, 89u8, 95u8, 234u8, 228u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod query_call_info {
+					use super::runtime_types;
+					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::RuntimeDispatchInfo<
+								::core::primitive::u128,
+								runtime_types::sp_weights::weight_v2::Weight,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryCallInfo {
+					pub call: query_call_info::Call,
+					pub len: query_call_info::Len,
+				}
+				pub mod query_call_fee_details {
+					use super::runtime_types;
+					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::FeeDetails<
+								::core::primitive::u128,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryCallFeeDetails {
+					pub call: query_call_fee_details::Call,
+					pub len: query_call_fee_details::Len,
+				}
+				pub mod query_weight_to_fee {
+					use super::runtime_types;
+					pub type Weight = runtime_types::sp_weights::weight_v2::Weight;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryWeightToFee {
+					pub weight: query_weight_to_fee::Weight,
+				}
+				pub mod query_length_to_fee {
+					use super::runtime_types;
+					pub type Length = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryLengthToFee {
+					pub length: query_length_to_fee::Length,
+				}
+			}
+		}
+		pub mod genesis_builder {
+			use super::{root_mod, runtime_types};
+			#[doc = " API to interact with `RuntimeGenesisConfig` for the runtime"]
+			pub struct GenesisBuilder;
+			impl GenesisBuilder {
+				#[doc = " Build `RuntimeGenesisConfig` from a JSON blob not using any defaults and store it in the"]
+				#[doc = " storage."]
+				#[doc = ""]
+				#[doc = " In the case of a FRAME-based runtime, this function deserializes the full"]
+				#[doc = " `RuntimeGenesisConfig` from the given JSON blob and puts it into the storage. If the"]
+				#[doc = " provided JSON blob is incorrect or incomplete or the deserialization fails, an error"]
+				#[doc = " is returned."]
+				#[doc = ""]
+				#[doc = " Please note that provided JSON blob must contain all `RuntimeGenesisConfig` fields, no"]
+				#[doc = " defaults will be used."]
+				pub fn build_state(
+					&self,
+					json: types::build_state::Json,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::BuildState,
+					types::build_state::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"GenesisBuilder",
+						"build_state",
+						types::BuildState { json },
+						[
+							203u8, 233u8, 104u8, 116u8, 111u8, 131u8, 201u8, 235u8, 117u8, 116u8,
+							140u8, 185u8, 93u8, 25u8, 155u8, 210u8, 56u8, 49u8, 23u8, 32u8, 253u8,
+							92u8, 149u8, 241u8, 85u8, 245u8, 137u8, 45u8, 209u8, 189u8, 81u8, 2u8,
+						],
+					)
+				}
+				#[doc = " Returns a JSON blob representation of the built-in `RuntimeGenesisConfig` identified by"]
+				#[doc = " `id`."]
+				#[doc = ""]
+				#[doc = " If `id` is `None` the function should return JSON blob representation of the default"]
+				#[doc = " `RuntimeGenesisConfig` struct of the runtime. Implementation must provide default"]
+				#[doc = " `RuntimeGenesisConfig`."]
+				#[doc = ""]
+				#[doc = " Otherwise function returns a JSON representation of the built-in, named"]
+				#[doc = " `RuntimeGenesisConfig` preset identified by `id`, or `None` if such preset does not"]
+				#[doc = " exist. Returned `Vec<u8>` contains bytes of JSON blob (patch) which comprises a list of"]
+				#[doc = " (potentially nested) key-value pairs that are intended for customizing the default"]
+				#[doc = " runtime genesis config. The patch shall be merged (rfc7386) with the JSON representation"]
+				#[doc = " of the default `RuntimeGenesisConfig` to create a comprehensive genesis config that can"]
+				#[doc = " be used in `build_state` method."]
+				pub fn get_preset(
+					&self,
+					id: types::get_preset::Id,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetPreset,
+					types::get_preset::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"GenesisBuilder",
+						"get_preset",
+						types::GetPreset { id },
+						[
+							43u8, 153u8, 23u8, 52u8, 113u8, 161u8, 227u8, 122u8, 169u8, 135u8,
+							119u8, 8u8, 128u8, 33u8, 143u8, 235u8, 13u8, 173u8, 58u8, 121u8, 178u8,
+							223u8, 66u8, 217u8, 22u8, 244u8, 168u8, 113u8, 202u8, 186u8, 241u8,
+							124u8,
+						],
+					)
+				}
+				#[doc = " Returns a list of identifiers for available builtin `RuntimeGenesisConfig` presets."]
+				#[doc = ""]
+				#[doc = " The presets from the list can be queried with [`GenesisBuilder::get_preset`] method. If"]
+				#[doc = " no named presets are provided by the runtime the list is empty."]
+				pub fn preset_names(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::PresetNames,
+					types::preset_names::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"GenesisBuilder",
+						"preset_names",
+						types::PresetNames {},
+						[
+							150u8, 117u8, 54u8, 129u8, 221u8, 130u8, 186u8, 71u8, 13u8, 140u8,
+							77u8, 180u8, 141u8, 37u8, 22u8, 219u8, 149u8, 218u8, 186u8, 206u8,
+							80u8, 42u8, 165u8, 41u8, 99u8, 184u8, 73u8, 37u8, 125u8, 188u8, 167u8,
+							122u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod build_state {
+					use super::runtime_types;
+					pub type Json =
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::result::Result<
+							(),
+							::subxt::ext::subxt_core::alloc::string::String,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct BuildState {
+					pub json: build_state::Json,
+				}
+				pub mod get_preset {
+					use super::runtime_types;
+					pub type Id =
+						::core::option::Option<::subxt::ext::subxt_core::alloc::string::String>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::option::Option<
+							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetPreset {
+					pub id: get_preset::Id,
+				}
+				pub mod preset_names {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::subxt::ext::subxt_core::alloc::vec::Vec<
+							::subxt::ext::subxt_core::alloc::string::String,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct PresetNames {}
+			}
+		}
 	}
 	pub fn view_functions() -> ViewFunctionsApi {
 		ViewFunctionsApi
@@ -118,9 +2126,6 @@ pub mod api {
 		pub fn recovery(&self) -> recovery::constants::ConstantsApi {
 			recovery::constants::ConstantsApi
 		}
-		pub fn assets(&self) -> assets::constants::ConstantsApi {
-			assets::constants::ConstantsApi
-		}
 	}
 	pub struct StorageApi;
 	impl StorageApi {
@@ -181,9 +2186,6 @@ pub mod api {
 		pub fn recovery(&self) -> recovery::storage::StorageApi {
 			recovery::storage::StorageApi
 		}
-		pub fn assets(&self) -> assets::storage::StorageApi {
-			assets::storage::StorageApi
-		}
 	}
 	pub struct TransactionApi;
 	impl TransactionApi {
@@ -238,9 +2240,6 @@ pub mod api {
 		pub fn recovery(&self) -> recovery::calls::TransactionApi {
 			recovery::calls::TransactionApi
 		}
-		pub fn assets(&self) -> assets::calls::TransactionApi {
-			assets::calls::TransactionApi
-		}
 	}
 	pub struct ViewFunctionsApi;
 	impl ViewFunctionsApi {}
@@ -253,9 +2252,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				194u8, 234u8, 109u8, 25u8, 240u8, 103u8, 143u8, 152u8, 152u8, 123u8, 135u8, 34u8,
-				95u8, 169u8, 221u8, 115u8, 28u8, 211u8, 56u8, 222u8, 194u8, 231u8, 21u8, 105u8,
-				64u8, 35u8, 195u8, 72u8, 212u8, 35u8, 16u8, 95u8,
+				240u8, 112u8, 102u8, 204u8, 216u8, 190u8, 219u8, 229u8, 197u8, 118u8, 25u8, 7u8,
+				73u8, 111u8, 144u8, 131u8, 85u8, 15u8, 151u8, 63u8, 213u8, 167u8, 202u8, 109u8,
+				233u8, 27u8, 76u8, 131u8, 173u8, 48u8, 182u8, 159u8,
 			]
 	}
 	pub mod system {
@@ -921,6 +2920,27 @@ pub mod api {
 				const PALLET: &'static str = "System";
 				const EVENT: &'static str = "UpgradeAuthorized";
 			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "An invalid authorized upgrade was rejected while trying to apply it."]
+			pub struct RejectedInvalidAuthorizedUpgrade {
+				pub code_hash: rejected_invalid_authorized_upgrade::CodeHash,
+				pub error: rejected_invalid_authorized_upgrade::Error,
+			}
+			pub mod rejected_invalid_authorized_upgrade {
+				use super::runtime_types;
+				pub type CodeHash = ::subxt::ext::subxt_core::utils::H256;
+				pub type Error = runtime_types::sp_runtime::DispatchError;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for RejectedInvalidAuthorizedUpgrade {
+				const PALLET: &'static str = "System";
+				const EVENT: &'static str = "RejectedInvalidAuthorizedUpgrade";
+			}
 		}
 		pub mod storage {
 			use super::runtime_types;
@@ -1017,6 +3037,11 @@ pub mod api {
 					use super::runtime_types;
 					pub type AuthorizedUpgrade =
 						runtime_types::frame_system::CodeUpgradeAuthorization;
+				}
+				pub mod extrinsic_weight_reclaimed {
+					use super::runtime_types;
+					pub type ExtrinsicWeightReclaimed =
+						runtime_types::sp_weights::weight_v2::Weight;
 				}
 			}
 			pub struct StorageApi;
@@ -1328,10 +3353,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							95u8, 60u8, 238u8, 49u8, 111u8, 173u8, 121u8, 142u8, 243u8, 9u8, 153u8,
-							23u8, 166u8, 110u8, 208u8, 76u8, 235u8, 221u8, 246u8, 174u8, 90u8,
-							109u8, 149u8, 184u8, 200u8, 47u8, 95u8, 75u8, 180u8, 130u8, 124u8,
-							112u8,
+							213u8, 39u8, 192u8, 125u8, 137u8, 244u8, 247u8, 215u8, 104u8, 155u8,
+							36u8, 12u8, 160u8, 64u8, 31u8, 103u8, 172u8, 115u8, 193u8, 199u8,
+							246u8, 157u8, 255u8, 138u8, 9u8, 166u8, 97u8, 147u8, 65u8, 72u8, 222u8,
+							117u8,
 						],
 					)
 				}
@@ -1525,6 +3550,34 @@ pub mod api {
 							165u8, 97u8, 27u8, 138u8, 2u8, 28u8, 55u8, 92u8, 96u8, 96u8, 168u8,
 							169u8, 55u8, 178u8, 44u8, 127u8, 58u8, 140u8, 206u8, 178u8, 1u8, 37u8,
 							214u8, 213u8, 251u8, 123u8, 5u8, 111u8, 90u8, 148u8, 217u8, 135u8,
+						],
+					)
+				}
+				#[doc = " The weight reclaimed for the extrinsic."]
+				#[doc = ""]
+				#[doc = " This information is available until the end of the extrinsic execution."]
+				#[doc = " More precisely this information is removed in `note_applied_extrinsic`."]
+				#[doc = ""]
+				#[doc = " Logic doing some post dispatch weight reduction must update this storage to avoid duplicate"]
+				#[doc = " reduction."]
+				pub fn extrinsic_weight_reclaimed(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::extrinsic_weight_reclaimed::ExtrinsicWeightReclaimed,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"System",
+						"ExtrinsicWeightReclaimed",
+						(),
+						[
+							195u8, 143u8, 164u8, 84u8, 225u8, 194u8, 227u8, 128u8, 196u8, 241u8,
+							188u8, 159u8, 59u8, 197u8, 11u8, 12u8, 119u8, 164u8, 46u8, 229u8, 92u8,
+							212u8, 236u8, 255u8, 238u8, 54u8, 105u8, 200u8, 229u8, 191u8, 221u8,
+							202u8,
 						],
 					)
 				}
@@ -3665,10 +5718,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							198u8, 228u8, 153u8, 119u8, 75u8, 89u8, 206u8, 201u8, 30u8, 105u8,
-							148u8, 23u8, 81u8, 60u8, 167u8, 228u8, 76u8, 253u8, 232u8, 81u8, 65u8,
-							133u8, 196u8, 146u8, 244u8, 80u8, 222u8, 43u8, 218u8, 248u8, 169u8,
-							232u8,
+							87u8, 23u8, 4u8, 4u8, 159u8, 106u8, 223u8, 190u8, 133u8, 103u8, 103u8,
+							160u8, 232u8, 245u8, 96u8, 170u8, 192u8, 161u8, 52u8, 60u8, 226u8, 3u8,
+							183u8, 40u8, 122u8, 117u8, 19u8, 237u8, 41u8, 230u8, 159u8, 79u8,
 						],
 					)
 				}
@@ -3691,9 +5743,10 @@ pub mod api {
 							weight,
 						},
 						[
-							91u8, 102u8, 107u8, 163u8, 3u8, 40u8, 188u8, 236u8, 128u8, 119u8, 31u8,
-							122u8, 179u8, 114u8, 93u8, 83u8, 63u8, 62u8, 88u8, 200u8, 159u8, 160u8,
-							168u8, 129u8, 8u8, 151u8, 35u8, 4u8, 111u8, 248u8, 133u8, 185u8,
+							72u8, 236u8, 99u8, 180u8, 204u8, 84u8, 167u8, 177u8, 89u8, 249u8,
+							181u8, 211u8, 177u8, 64u8, 167u8, 164u8, 254u8, 237u8, 247u8, 109u8,
+							194u8, 194u8, 174u8, 134u8, 252u8, 112u8, 68u8, 160u8, 240u8, 228u8,
+							195u8, 117u8,
 						],
 					)
 				}
@@ -3731,9 +5784,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							133u8, 191u8, 77u8, 51u8, 251u8, 26u8, 250u8, 53u8, 47u8, 122u8, 117u8,
-							43u8, 29u8, 57u8, 45u8, 132u8, 170u8, 47u8, 28u8, 203u8, 203u8, 31u8,
-							59u8, 99u8, 192u8, 114u8, 198u8, 126u8, 222u8, 244u8, 206u8, 229u8,
+							149u8, 140u8, 96u8, 188u8, 16u8, 180u8, 19u8, 117u8, 237u8, 4u8, 72u8,
+							145u8, 88u8, 188u8, 167u8, 117u8, 240u8, 63u8, 242u8, 55u8, 53u8,
+							226u8, 7u8, 46u8, 116u8, 200u8, 216u8, 196u8, 183u8, 20u8, 49u8, 127u8,
 						],
 					)
 				}
@@ -3888,10 +5941,14 @@ pub mod api {
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub struct ProofSubmitted {
 				pub nonce: proof_submitted::Nonce,
+				pub difficulty: proof_submitted::Difficulty,
+				pub distance_achieved: proof_submitted::DistanceAchieved,
 			}
 			pub mod proof_submitted {
 				use super::runtime_types;
 				pub type Nonce = [::core::primitive::u8; 64usize];
+				pub type Difficulty = runtime_types::primitive_types::U512;
+				pub type DistanceAchieved = runtime_types::primitive_types::U512;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProofSubmitted {
 				const PALLET: &'static str = "QPoW";
@@ -3928,10 +5985,6 @@ pub mod api {
 					use super::runtime_types;
 					pub type BlockDistanceThresholds = runtime_types::primitive_types::U512;
 					pub type Param0 = ::core::primitive::u32;
-				}
-				pub mod latest_nonce {
-					use super::runtime_types;
-					pub type LatestNonce = [::core::primitive::u8; 64usize];
 				}
 				pub mod last_block_time {
 					use super::runtime_types;
@@ -4011,26 +6064,6 @@ pub mod api {
 							227u8, 54u8, 166u8, 201u8, 139u8, 81u8, 223u8, 125u8, 243u8, 78u8, 5u8,
 							216u8, 42u8, 222u8, 152u8, 140u8, 234u8, 243u8, 47u8, 240u8, 251u8,
 							220u8,
-						],
-					)
-				}
-				pub fn latest_nonce(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::latest_nonce::LatestNonce,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"LatestNonce",
-						(),
-						[
-							117u8, 69u8, 169u8, 11u8, 105u8, 55u8, 185u8, 77u8, 68u8, 196u8, 128u8,
-							128u8, 81u8, 145u8, 22u8, 154u8, 249u8, 226u8, 39u8, 6u8, 5u8, 205u8,
-							220u8, 88u8, 67u8, 72u8, 38u8, 82u8, 60u8, 81u8, 167u8, 242u8,
 						],
 					)
 				}
@@ -5133,6 +7166,27 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A vesting schedule has been created."]
+			pub struct VestingCreated {
+				pub account: vesting_created::Account,
+				pub schedule_index: vesting_created::ScheduleIndex,
+			}
+			pub mod vesting_created {
+				use super::runtime_types;
+				pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type ScheduleIndex = ::core::primitive::u32;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingCreated {
+				const PALLET: &'static str = "Vesting";
+				const EVENT: &'static str = "VestingCreated";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			#[doc = "The amount vested has been updated. This could indicate a change in funds available."]
 			#[doc = "The balance given is the amount which is left unvested (and thus locked)."]
 			pub struct VestingUpdated {
@@ -5428,7 +7482,7 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Ensure that the a bulk of pre-images is upgraded."]
+				#[doc = "Ensure that the bulk of pre-images is upgraded."]
 				#[doc = ""]
 				#[doc = "The caller pays no fee if at least 90% of pre-images were successfully updated."]
 				pub struct EnsureUpdated {
@@ -5529,7 +7583,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Ensure that the a bulk of pre-images is upgraded."]
+				#[doc = "Ensure that the bulk of pre-images is upgraded."]
 				#[doc = ""]
 				#[doc = "The caller pays no fee if at least 90% of pre-images were successfully updated."]
 				pub fn ensure_updated(
@@ -6161,10 +8215,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							47u8, 177u8, 243u8, 244u8, 65u8, 140u8, 198u8, 118u8, 141u8, 171u8,
-							97u8, 208u8, 200u8, 86u8, 90u8, 129u8, 54u8, 225u8, 118u8, 107u8, 45u8,
-							183u8, 0u8, 129u8, 122u8, 99u8, 169u8, 214u8, 239u8, 187u8, 173u8,
-							112u8,
+							216u8, 88u8, 145u8, 193u8, 191u8, 130u8, 243u8, 81u8, 132u8, 179u8,
+							170u8, 148u8, 127u8, 79u8, 183u8, 62u8, 168u8, 91u8, 241u8, 9u8, 155u8,
+							82u8, 12u8, 34u8, 194u8, 188u8, 108u8, 147u8, 205u8, 133u8, 97u8,
+							246u8,
 						],
 					)
 				}
@@ -6206,9 +8260,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							221u8, 20u8, 219u8, 119u8, 223u8, 96u8, 88u8, 226u8, 245u8, 137u8, 9u8,
-							127u8, 51u8, 199u8, 95u8, 80u8, 228u8, 156u8, 102u8, 239u8, 165u8,
-							28u8, 41u8, 17u8, 139u8, 211u8, 23u8, 170u8, 97u8, 163u8, 57u8, 102u8,
+							6u8, 221u8, 216u8, 145u8, 84u8, 222u8, 174u8, 166u8, 197u8, 130u8,
+							223u8, 50u8, 208u8, 143u8, 3u8, 159u8, 116u8, 11u8, 159u8, 171u8,
+							144u8, 7u8, 221u8, 184u8, 84u8, 43u8, 46u8, 113u8, 23u8, 35u8, 212u8,
+							120u8,
 						],
 					)
 				}
@@ -6247,10 +8302,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							98u8, 112u8, 95u8, 200u8, 64u8, 199u8, 162u8, 207u8, 168u8, 219u8,
-							235u8, 78u8, 224u8, 210u8, 130u8, 195u8, 135u8, 253u8, 67u8, 48u8,
-							39u8, 19u8, 94u8, 184u8, 195u8, 52u8, 47u8, 35u8, 101u8, 202u8, 121u8,
-							165u8,
+							239u8, 195u8, 20u8, 34u8, 177u8, 205u8, 131u8, 51u8, 116u8, 199u8,
+							94u8, 248u8, 35u8, 183u8, 134u8, 253u8, 193u8, 74u8, 218u8, 106u8,
+							231u8, 225u8, 166u8, 157u8, 216u8, 15u8, 110u8, 24u8, 28u8, 67u8, 1u8,
+							160u8,
 						],
 					)
 				}
@@ -6275,10 +8330,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							30u8, 107u8, 131u8, 175u8, 133u8, 185u8, 140u8, 81u8, 238u8, 253u8,
-							141u8, 65u8, 91u8, 29u8, 190u8, 234u8, 191u8, 130u8, 183u8, 43u8,
-							131u8, 159u8, 248u8, 86u8, 204u8, 26u8, 81u8, 88u8, 34u8, 99u8, 69u8,
-							209u8,
+							107u8, 174u8, 73u8, 0u8, 141u8, 214u8, 253u8, 93u8, 53u8, 22u8, 203u8,
+							101u8, 77u8, 245u8, 67u8, 214u8, 219u8, 150u8, 90u8, 21u8, 211u8,
+							179u8, 195u8, 194u8, 111u8, 49u8, 85u8, 67u8, 246u8, 9u8, 165u8, 251u8,
 						],
 					)
 				}
@@ -6779,10 +8833,9 @@ pub mod api {
 						"Agenda",
 						(),
 						[
-							40u8, 202u8, 246u8, 38u8, 132u8, 7u8, 46u8, 62u8, 12u8, 89u8, 165u8,
-							174u8, 22u8, 19u8, 15u8, 179u8, 152u8, 131u8, 221u8, 249u8, 122u8,
-							142u8, 58u8, 183u8, 157u8, 17u8, 63u8, 243u8, 101u8, 160u8, 200u8,
-							96u8,
+							188u8, 177u8, 84u8, 167u8, 206u8, 4u8, 136u8, 133u8, 67u8, 121u8,
+							247u8, 186u8, 6u8, 46u8, 115u8, 104u8, 239u8, 41u8, 75u8, 143u8, 24u8,
+							155u8, 212u8, 196u8, 166u8, 82u8, 63u8, 39u8, 104u8, 21u8, 19u8, 93u8,
 						],
 					)
 				}
@@ -6804,10 +8857,9 @@ pub mod api {
 						"Agenda",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							40u8, 202u8, 246u8, 38u8, 132u8, 7u8, 46u8, 62u8, 12u8, 89u8, 165u8,
-							174u8, 22u8, 19u8, 15u8, 179u8, 152u8, 131u8, 221u8, 249u8, 122u8,
-							142u8, 58u8, 183u8, 157u8, 17u8, 63u8, 243u8, 101u8, 160u8, 200u8,
-							96u8,
+							188u8, 177u8, 84u8, 167u8, 206u8, 4u8, 136u8, 133u8, 67u8, 121u8,
+							247u8, 186u8, 6u8, 46u8, 115u8, 104u8, 239u8, 41u8, 75u8, 143u8, 24u8,
+							155u8, 212u8, 196u8, 166u8, 82u8, 63u8, 39u8, 104u8, 21u8, 19u8, 93u8,
 						],
 					)
 				}
@@ -7200,6 +9252,84 @@ pub mod api {
 					const PALLET: &'static str = "Utility";
 					const CALL: &'static str = "with_weight";
 				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Dispatch a fallback call in the event the main call fails to execute."]
+				#[doc = "May be called from any origin except `None`."]
+				#[doc = ""]
+				#[doc = "This function first attempts to dispatch the `main` call."]
+				#[doc = "If the `main` call fails, the `fallback` is attemted."]
+				#[doc = "if the fallback is successfully dispatched, the weights of both calls"]
+				#[doc = "are accumulated and an event containing the main call error is deposited."]
+				#[doc = ""]
+				#[doc = "In the event of a fallback failure the whole call fails"]
+				#[doc = "with the weights returned."]
+				#[doc = ""]
+				#[doc = "- `main`: The main call to be dispatched. This is the primary action to execute."]
+				#[doc = "- `fallback`: The fallback call to be dispatched in case the `main` call fails."]
+				#[doc = ""]
+				#[doc = "## Dispatch Logic"]
+				#[doc = "- If the origin is `root`, both the main and fallback calls are executed without"]
+				#[doc = "  applying any origin filters."]
+				#[doc = "- If the origin is not `root`, the origin filter is applied to both the `main` and"]
+				#[doc = "  `fallback` calls."]
+				#[doc = ""]
+				#[doc = "## Use Case"]
+				#[doc = "- Some use cases might involve submitting a `batch` type call in either main, fallback"]
+				#[doc = "  or both."]
+				pub struct IfElse {
+					pub main: ::subxt::ext::subxt_core::alloc::boxed::Box<if_else::Main>,
+					pub fallback: ::subxt::ext::subxt_core::alloc::boxed::Box<if_else::Fallback>,
+				}
+				pub mod if_else {
+					use super::runtime_types;
+					pub type Main = runtime_types::quantus_runtime::RuntimeCall;
+					pub type Fallback = runtime_types::quantus_runtime::RuntimeCall;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for IfElse {
+					const PALLET: &'static str = "Utility";
+					const CALL: &'static str = "if_else";
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Dispatches a function call with a provided origin."]
+				#[doc = ""]
+				#[doc = "Almost the same as [`Pallet::dispatch_as`] but forwards any error of the inner call."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Root_."]
+				pub struct DispatchAsFallible {
+					pub as_origin:
+						::subxt::ext::subxt_core::alloc::boxed::Box<dispatch_as_fallible::AsOrigin>,
+					pub call:
+						::subxt::ext::subxt_core::alloc::boxed::Box<dispatch_as_fallible::Call>,
+				}
+				pub mod dispatch_as_fallible {
+					use super::runtime_types;
+					pub type AsOrigin = runtime_types::quantus_runtime::OriginCaller;
+					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for DispatchAsFallible {
+					const PALLET: &'static str = "Utility";
+					const CALL: &'static str = "dispatch_as_fallible";
+				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
@@ -7230,10 +9360,10 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							19u8, 206u8, 118u8, 149u8, 51u8, 183u8, 56u8, 103u8, 145u8, 193u8,
-							181u8, 39u8, 61u8, 254u8, 153u8, 220u8, 111u8, 101u8, 210u8, 167u8,
-							130u8, 15u8, 179u8, 34u8, 118u8, 49u8, 254u8, 143u8, 99u8, 232u8,
-							249u8, 59u8,
+							95u8, 49u8, 63u8, 6u8, 99u8, 141u8, 102u8, 196u8, 12u8, 24u8, 80u8,
+							166u8, 12u8, 184u8, 52u8, 205u8, 241u8, 116u8, 122u8, 20u8, 172u8,
+							197u8, 253u8, 63u8, 171u8, 19u8, 58u8, 121u8, 104u8, 55u8, 146u8,
+							123u8,
 						],
 					)
 				}
@@ -7263,9 +9393,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							125u8, 52u8, 89u8, 91u8, 77u8, 219u8, 217u8, 39u8, 39u8, 253u8, 115u8,
-							163u8, 228u8, 120u8, 15u8, 130u8, 192u8, 253u8, 79u8, 167u8, 198u8,
-							207u8, 90u8, 233u8, 246u8, 39u8, 165u8, 47u8, 68u8, 200u8, 33u8, 175u8,
+							0u8, 169u8, 255u8, 58u8, 170u8, 161u8, 177u8, 170u8, 78u8, 235u8,
+							115u8, 55u8, 145u8, 164u8, 214u8, 14u8, 4u8, 26u8, 175u8, 195u8, 145u8,
+							25u8, 233u8, 162u8, 234u8, 135u8, 156u8, 250u8, 140u8, 45u8, 139u8,
+							50u8,
 						],
 					)
 				}
@@ -7291,10 +9422,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							253u8, 128u8, 115u8, 70u8, 86u8, 186u8, 16u8, 72u8, 37u8, 159u8, 23u8,
-							253u8, 105u8, 138u8, 186u8, 196u8, 108u8, 126u8, 4u8, 239u8, 11u8,
-							47u8, 125u8, 85u8, 222u8, 195u8, 135u8, 98u8, 163u8, 242u8, 181u8,
-							161u8,
+							211u8, 135u8, 169u8, 155u8, 41u8, 244u8, 13u8, 144u8, 165u8, 230u8,
+							142u8, 34u8, 10u8, 93u8, 240u8, 61u8, 32u8, 143u8, 186u8, 191u8, 151u8,
+							52u8, 129u8, 33u8, 110u8, 88u8, 43u8, 156u8, 130u8, 143u8, 19u8, 121u8,
 						],
 					)
 				}
@@ -7317,9 +9447,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							166u8, 235u8, 27u8, 28u8, 121u8, 227u8, 130u8, 155u8, 124u8, 143u8,
-							89u8, 234u8, 97u8, 80u8, 76u8, 5u8, 198u8, 66u8, 189u8, 134u8, 78u8,
-							36u8, 179u8, 47u8, 210u8, 56u8, 104u8, 170u8, 60u8, 8u8, 31u8, 103u8,
+							219u8, 206u8, 50u8, 176u8, 112u8, 195u8, 114u8, 10u8, 1u8, 242u8, 71u8,
+							206u8, 56u8, 67u8, 180u8, 7u8, 15u8, 69u8, 186u8, 118u8, 156u8, 241u8,
+							254u8, 210u8, 189u8, 106u8, 142u8, 12u8, 224u8, 119u8, 92u8, 177u8,
 						],
 					)
 				}
@@ -7345,10 +9475,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							122u8, 151u8, 216u8, 201u8, 80u8, 153u8, 253u8, 115u8, 15u8, 11u8,
-							58u8, 182u8, 48u8, 133u8, 2u8, 107u8, 202u8, 249u8, 2u8, 135u8, 135u8,
-							253u8, 150u8, 165u8, 152u8, 135u8, 136u8, 191u8, 37u8, 155u8, 37u8,
-							243u8,
+							77u8, 186u8, 47u8, 91u8, 16u8, 107u8, 105u8, 61u8, 244u8, 114u8, 50u8,
+							239u8, 239u8, 218u8, 166u8, 191u8, 240u8, 255u8, 211u8, 248u8, 82u8,
+							10u8, 133u8, 108u8, 40u8, 181u8, 146u8, 19u8, 152u8, 45u8, 12u8, 176u8,
 						],
 					)
 				}
@@ -7371,9 +9500,77 @@ pub mod api {
 							weight,
 						},
 						[
-							21u8, 81u8, 80u8, 83u8, 118u8, 162u8, 108u8, 192u8, 200u8, 210u8, 62u8,
-							7u8, 18u8, 76u8, 102u8, 77u8, 122u8, 52u8, 182u8, 146u8, 145u8, 243u8,
-							231u8, 141u8, 89u8, 165u8, 39u8, 32u8, 8u8, 63u8, 1u8, 28u8,
+							199u8, 132u8, 168u8, 103u8, 83u8, 203u8, 42u8, 197u8, 2u8, 67u8, 107u8,
+							242u8, 123u8, 62u8, 62u8, 206u8, 239u8, 210u8, 63u8, 234u8, 127u8,
+							18u8, 177u8, 42u8, 200u8, 101u8, 101u8, 242u8, 98u8, 228u8, 227u8,
+							85u8,
+						],
+					)
+				}
+				#[doc = "Dispatch a fallback call in the event the main call fails to execute."]
+				#[doc = "May be called from any origin except `None`."]
+				#[doc = ""]
+				#[doc = "This function first attempts to dispatch the `main` call."]
+				#[doc = "If the `main` call fails, the `fallback` is attemted."]
+				#[doc = "if the fallback is successfully dispatched, the weights of both calls"]
+				#[doc = "are accumulated and an event containing the main call error is deposited."]
+				#[doc = ""]
+				#[doc = "In the event of a fallback failure the whole call fails"]
+				#[doc = "with the weights returned."]
+				#[doc = ""]
+				#[doc = "- `main`: The main call to be dispatched. This is the primary action to execute."]
+				#[doc = "- `fallback`: The fallback call to be dispatched in case the `main` call fails."]
+				#[doc = ""]
+				#[doc = "## Dispatch Logic"]
+				#[doc = "- If the origin is `root`, both the main and fallback calls are executed without"]
+				#[doc = "  applying any origin filters."]
+				#[doc = "- If the origin is not `root`, the origin filter is applied to both the `main` and"]
+				#[doc = "  `fallback` calls."]
+				#[doc = ""]
+				#[doc = "## Use Case"]
+				#[doc = "- Some use cases might involve submitting a `batch` type call in either main, fallback"]
+				#[doc = "  or both."]
+				pub fn if_else(
+					&self,
+					main: types::if_else::Main,
+					fallback: types::if_else::Fallback,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::IfElse> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Utility",
+						"if_else",
+						types::IfElse {
+							main: ::subxt::ext::subxt_core::alloc::boxed::Box::new(main),
+							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
+						},
+						[
+							4u8, 167u8, 93u8, 56u8, 207u8, 104u8, 113u8, 182u8, 74u8, 2u8, 167u8,
+							104u8, 247u8, 231u8, 148u8, 50u8, 180u8, 121u8, 72u8, 181u8, 154u8,
+							188u8, 73u8, 171u8, 73u8, 18u8, 12u8, 248u8, 12u8, 45u8, 234u8, 106u8,
+						],
+					)
+				}
+				#[doc = "Dispatches a function call with a provided origin."]
+				#[doc = ""]
+				#[doc = "Almost the same as [`Pallet::dispatch_as`] but forwards any error of the inner call."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Root_."]
+				pub fn dispatch_as_fallible(
+					&self,
+					as_origin: types::dispatch_as_fallible::AsOrigin,
+					call: types::dispatch_as_fallible::Call,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::DispatchAsFallible>
+				{
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Utility",
+						"dispatch_as_fallible",
+						types::DispatchAsFallible {
+							as_origin: ::subxt::ext::subxt_core::alloc::boxed::Box::new(as_origin),
+							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
+						},
+						[
+							34u8, 70u8, 71u8, 147u8, 94u8, 186u8, 226u8, 233u8, 176u8, 83u8, 76u8,
+							44u8, 6u8, 137u8, 81u8, 142u8, 229u8, 190u8, 17u8, 110u8, 106u8, 155u8,
+							32u8, 0u8, 166u8, 90u8, 226u8, 239u8, 42u8, 155u8, 223u8, 195u8,
 						],
 					)
 				}
@@ -7482,6 +9679,38 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for DispatchedAs {
 				const PALLET: &'static str = "Utility";
 				const EVENT: &'static str = "DispatchedAs";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Main call was dispatched."]
+			pub struct IfElseMainSuccess;
+			impl ::subxt::ext::subxt_core::events::StaticEvent for IfElseMainSuccess {
+				const PALLET: &'static str = "Utility";
+				const EVENT: &'static str = "IfElseMainSuccess";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The fallback call was dispatched."]
+			pub struct IfElseFallbackCalled {
+				pub main_error: if_else_fallback_called::MainError,
+			}
+			pub mod if_else_fallback_called {
+				use super::runtime_types;
+				pub type MainError = runtime_types::sp_runtime::DispatchError;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for IfElseFallbackCalled {
+				const PALLET: &'static str = "Utility";
+				const EVENT: &'static str = "IfElseFallbackCalled";
 			}
 		}
 		pub mod constants {
@@ -7823,10 +10052,9 @@ pub mod api {
 							enactment_moment,
 						},
 						[
-							140u8, 121u8, 244u8, 4u8, 5u8, 245u8, 133u8, 203u8, 193u8, 24u8, 133u8,
-							222u8, 208u8, 74u8, 248u8, 59u8, 153u8, 154u8, 194u8, 226u8, 101u8,
-							232u8, 174u8, 79u8, 177u8, 183u8, 39u8, 178u8, 178u8, 229u8, 0u8,
-							188u8,
+							30u8, 232u8, 132u8, 0u8, 199u8, 166u8, 49u8, 94u8, 238u8, 61u8, 236u8,
+							207u8, 2u8, 136u8, 37u8, 81u8, 67u8, 133u8, 2u8, 147u8, 177u8, 176u8,
+							178u8, 113u8, 155u8, 180u8, 104u8, 176u8, 215u8, 255u8, 240u8, 100u8,
 						],
 					)
 				}
@@ -8469,10 +10697,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						(),
 						[
-							150u8, 135u8, 148u8, 14u8, 234u8, 44u8, 147u8, 114u8, 210u8, 214u8,
-							53u8, 21u8, 27u8, 74u8, 105u8, 144u8, 164u8, 60u8, 59u8, 206u8, 51u8,
-							137u8, 152u8, 240u8, 99u8, 171u8, 224u8, 210u8, 109u8, 85u8, 243u8,
-							89u8,
+							141u8, 184u8, 126u8, 61u8, 215u8, 190u8, 148u8, 93u8, 186u8, 72u8,
+							110u8, 37u8, 82u8, 237u8, 65u8, 197u8, 69u8, 83u8, 173u8, 114u8, 117u8,
+							72u8, 146u8, 28u8, 235u8, 60u8, 188u8, 247u8, 80u8, 240u8, 16u8, 194u8,
 						],
 					)
 				}
@@ -8494,10 +10721,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							150u8, 135u8, 148u8, 14u8, 234u8, 44u8, 147u8, 114u8, 210u8, 214u8,
-							53u8, 21u8, 27u8, 74u8, 105u8, 144u8, 164u8, 60u8, 59u8, 206u8, 51u8,
-							137u8, 152u8, 240u8, 99u8, 171u8, 224u8, 210u8, 109u8, 85u8, 243u8,
-							89u8,
+							141u8, 184u8, 126u8, 61u8, 215u8, 190u8, 148u8, 93u8, 186u8, 72u8,
+							110u8, 37u8, 82u8, 237u8, 65u8, 197u8, 69u8, 83u8, 173u8, 114u8, 117u8,
+							72u8, 146u8, 28u8, 235u8, 60u8, 188u8, 247u8, 80u8, 240u8, 16u8, 194u8,
 						],
 					)
 				}
@@ -8732,15 +10958,18 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Information concerning the different referendum tracks."]
+				#[doc = " A list of tracks."]
+				#[doc = ""]
+				#[doc = " Note: if the tracks are dynamic, the value in the static metadata might be inaccurate."]
 				pub fn tracks(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
 					::subxt::ext::subxt_core::alloc::vec::Vec<(
 						::core::primitive::u16,
-						runtime_types::pallet_referenda::types::TrackInfo<
+						runtime_types::pallet_referenda::types::TrackDetails<
 							::core::primitive::u128,
 							::core::primitive::u32,
+							::subxt::ext::subxt_core::alloc::string::String,
 						>,
 					)>,
 				> {
@@ -9449,7 +11678,8 @@ pub mod api {
 					)
 				}
 				#[doc = " Maps interceptor accounts to the list of accounts they can intercept for."]
-				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an interceptor."]
+				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an"]
+				#[doc = " interceptor."]
 				pub fn interceptor_index_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -9472,7 +11702,8 @@ pub mod api {
 					)
 				}
 				#[doc = " Maps interceptor accounts to the list of accounts they can intercept for."]
-				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an interceptor."]
+				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an"]
+				#[doc = " interceptor."]
 				pub fn interceptor_index(
 					&self,
 					_0: types::interceptor_index::Param0,
@@ -10142,7 +12373,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An account that has voted"]
+			#[doc = "An account has voted"]
 			pub struct Voted {
 				pub who: voted::Who,
 				pub vote: voted::Vote,
@@ -10165,7 +12396,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A vote that been removed"]
+			#[doc = "A vote has been removed"]
 			pub struct VoteRemoved {
 				pub who: vote_removed::Who,
 				pub vote: vote_removed::Vote,
@@ -10180,6 +12411,27 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for VoteRemoved {
 				const PALLET: &'static str = "ConvictionVoting";
 				const EVENT: &'static str = "VoteRemoved";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The lockup period of a conviction vote expired, and the funds have been unlocked."]
+			pub struct VoteUnlocked {
+				pub who: vote_unlocked::Who,
+				pub class: vote_unlocked::Class,
+			}
+			pub mod vote_unlocked {
+				use super::runtime_types;
+				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Class = ::core::primitive::u16;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for VoteUnlocked {
+				const PALLET: &'static str = "ConvictionVoting";
+				const EVENT: &'static str = "VoteUnlocked";
 			}
 		}
 		pub mod storage {
@@ -11658,10 +13910,9 @@ pub mod api {
 							enactment_moment,
 						},
 						[
-							140u8, 121u8, 244u8, 4u8, 5u8, 245u8, 133u8, 203u8, 193u8, 24u8, 133u8,
-							222u8, 208u8, 74u8, 248u8, 59u8, 153u8, 154u8, 194u8, 226u8, 101u8,
-							232u8, 174u8, 79u8, 177u8, 183u8, 39u8, 178u8, 178u8, 229u8, 0u8,
-							188u8,
+							30u8, 232u8, 132u8, 0u8, 199u8, 166u8, 49u8, 94u8, 238u8, 61u8, 236u8,
+							207u8, 2u8, 136u8, 37u8, 81u8, 67u8, 133u8, 2u8, 147u8, 177u8, 176u8,
+							178u8, 113u8, 155u8, 180u8, 104u8, 176u8, 215u8, 255u8, 240u8, 100u8,
 						],
 					)
 				}
@@ -12296,9 +14547,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						(),
 						[
-							192u8, 180u8, 68u8, 141u8, 53u8, 224u8, 151u8, 105u8, 99u8, 45u8,
-							177u8, 250u8, 11u8, 236u8, 98u8, 81u8, 52u8, 44u8, 71u8, 238u8, 77u8,
-							139u8, 182u8, 93u8, 241u8, 238u8, 66u8, 73u8, 10u8, 96u8, 129u8, 162u8,
+							12u8, 160u8, 226u8, 48u8, 96u8, 127u8, 60u8, 27u8, 37u8, 158u8, 31u8,
+							162u8, 106u8, 183u8, 90u8, 169u8, 244u8, 35u8, 25u8, 121u8, 84u8,
+							120u8, 20u8, 206u8, 137u8, 42u8, 139u8, 47u8, 62u8, 73u8, 157u8, 182u8,
 						],
 					)
 				}
@@ -12320,9 +14571,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							192u8, 180u8, 68u8, 141u8, 53u8, 224u8, 151u8, 105u8, 99u8, 45u8,
-							177u8, 250u8, 11u8, 236u8, 98u8, 81u8, 52u8, 44u8, 71u8, 238u8, 77u8,
-							139u8, 182u8, 93u8, 241u8, 238u8, 66u8, 73u8, 10u8, 96u8, 129u8, 162u8,
+							12u8, 160u8, 226u8, 48u8, 96u8, 127u8, 60u8, 27u8, 37u8, 158u8, 31u8,
+							162u8, 106u8, 183u8, 90u8, 169u8, 244u8, 35u8, 25u8, 121u8, 84u8,
+							120u8, 20u8, 206u8, 137u8, 42u8, 139u8, 47u8, 62u8, 73u8, 157u8, 182u8,
 						],
 					)
 				}
@@ -12559,15 +14810,18 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Information concerning the different referendum tracks."]
+				#[doc = " A list of tracks."]
+				#[doc = ""]
+				#[doc = " Note: if the tracks are dynamic, the value in the static metadata might be inaccurate."]
 				pub fn tracks(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
 					::subxt::ext::subxt_core::alloc::vec::Vec<(
 						::core::primitive::u16,
-						runtime_types::pallet_referenda::types::TrackInfo<
+						runtime_types::pallet_referenda::types::TrackDetails<
 							::core::primitive::u128,
 							::core::primitive::u32,
+							::subxt::ext::subxt_core::alloc::string::String,
 						>,
 					)>,
 				> {
@@ -14346,6 +16600,23 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = " Gets this pallet's derived pot account."]
+				pub fn pot_account(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					::subxt::ext::subxt_core::utils::AccountId32,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"TreasuryPallet",
+						"pot_account",
+						[
+							115u8, 233u8, 13u8, 223u8, 88u8, 20u8, 202u8, 139u8, 153u8, 28u8,
+							155u8, 157u8, 224u8, 66u8, 3u8, 250u8, 23u8, 53u8, 88u8, 168u8, 211u8,
+							204u8, 122u8, 166u8, 248u8, 23u8, 174u8, 225u8, 99u8, 108u8, 89u8,
+							135u8,
+						],
+					)
+				}
 			}
 		}
 	}
@@ -14409,7 +16680,7 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Allow ROOT to bypass the recovery process and set an a rescuer account"]
+				#[doc = "Allow ROOT to bypass the recovery process and set a rescuer account"]
 				#[doc = "for a lost account directly."]
 				#[doc = ""]
 				#[doc = "The dispatch origin for this call must be _ROOT_."]
@@ -14687,6 +16958,56 @@ pub mod api {
 					const PALLET: &'static str = "Recovery";
 					const CALL: &'static str = "cancel_recovered";
 				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Poke deposits for recovery configurations and / or active recoveries."]
+				#[doc = ""]
+				#[doc = "This can be used by accounts to possibly lower their locked amount."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Signed_."]
+				#[doc = ""]
+				#[doc = "Parameters:"]
+				#[doc = "- `maybe_account`: Optional recoverable account for which you have an active recovery"]
+				#[doc = "and want to adjust the deposit for the active recovery."]
+				#[doc = ""]
+				#[doc = "This function checks both recovery configuration deposit and active recovery deposits"]
+				#[doc = "of the caller:"]
+				#[doc = "- If the caller has created a recovery configuration, checks and adjusts its deposit"]
+				#[doc = "- If the caller has initiated any active recoveries, and provides the account in"]
+				#[doc = "`maybe_account`, checks and adjusts those deposits"]
+				#[doc = ""]
+				#[doc = "If any deposit is updated, the difference will be reserved/unreserved from the caller's"]
+				#[doc = "account."]
+				#[doc = ""]
+				#[doc = "The transaction is made free if any deposit is updated and paid otherwise."]
+				#[doc = ""]
+				#[doc = "Emits `DepositPoked` if any deposit is updated."]
+				#[doc = "Multiple events may be emitted in case both types of deposits are updated."]
+				pub struct PokeDeposit {
+					pub maybe_account: poke_deposit::MaybeAccount,
+				}
+				pub mod poke_deposit {
+					use super::runtime_types;
+					pub type MaybeAccount = ::core::option::Option<
+						::subxt::ext::subxt_core::utils::MultiAddress<
+							::subxt::ext::subxt_core::utils::AccountId32,
+							(),
+						>,
+					>;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for PokeDeposit {
+					const PALLET: &'static str = "Recovery";
+					const CALL: &'static str = "poke_deposit";
+				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
@@ -14711,13 +17032,13 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							73u8, 156u8, 224u8, 32u8, 62u8, 42u8, 40u8, 157u8, 16u8, 250u8, 121u8,
-							113u8, 185u8, 125u8, 247u8, 113u8, 58u8, 229u8, 172u8, 209u8, 153u8,
-							36u8, 204u8, 24u8, 125u8, 23u8, 195u8, 48u8, 153u8, 32u8, 203u8, 100u8,
+							231u8, 130u8, 246u8, 209u8, 160u8, 0u8, 86u8, 24u8, 13u8, 132u8, 210u8,
+							234u8, 145u8, 137u8, 200u8, 207u8, 165u8, 168u8, 232u8, 129u8, 181u8,
+							63u8, 61u8, 47u8, 72u8, 255u8, 11u8, 90u8, 174u8, 216u8, 132u8, 30u8,
 						],
 					)
 				}
-				#[doc = "Allow ROOT to bypass the recovery process and set an a rescuer account"]
+				#[doc = "Allow ROOT to bypass the recovery process and set a rescuer account"]
 				#[doc = "for a lost account directly."]
 				#[doc = ""]
 				#[doc = "The dispatch origin for this call must be _ROOT_."]
@@ -14936,6 +17257,44 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = "Poke deposits for recovery configurations and / or active recoveries."]
+				#[doc = ""]
+				#[doc = "This can be used by accounts to possibly lower their locked amount."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Signed_."]
+				#[doc = ""]
+				#[doc = "Parameters:"]
+				#[doc = "- `maybe_account`: Optional recoverable account for which you have an active recovery"]
+				#[doc = "and want to adjust the deposit for the active recovery."]
+				#[doc = ""]
+				#[doc = "This function checks both recovery configuration deposit and active recovery deposits"]
+				#[doc = "of the caller:"]
+				#[doc = "- If the caller has created a recovery configuration, checks and adjusts its deposit"]
+				#[doc = "- If the caller has initiated any active recoveries, and provides the account in"]
+				#[doc = "`maybe_account`, checks and adjusts those deposits"]
+				#[doc = ""]
+				#[doc = "If any deposit is updated, the difference will be reserved/unreserved from the caller's"]
+				#[doc = "account."]
+				#[doc = ""]
+				#[doc = "The transaction is made free if any deposit is updated and paid otherwise."]
+				#[doc = ""]
+				#[doc = "Emits `DepositPoked` if any deposit is updated."]
+				#[doc = "Multiple events may be emitted in case both types of deposits are updated."]
+				pub fn poke_deposit(
+					&self,
+					maybe_account: types::poke_deposit::MaybeAccount,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::PokeDeposit> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Recovery",
+						"poke_deposit",
+						types::PokeDeposit { maybe_account },
+						[
+							177u8, 98u8, 53u8, 15u8, 228u8, 36u8, 173u8, 55u8, 125u8, 3u8, 234u8,
+							70u8, 147u8, 147u8, 124u8, 86u8, 31u8, 101u8, 171u8, 56u8, 148u8,
+							180u8, 87u8, 149u8, 11u8, 113u8, 195u8, 35u8, 56u8, 32u8, 251u8, 56u8,
+						],
+					)
+				}
 			}
 		}
 		#[doc = "Events type."]
@@ -15065,6 +17424,33 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for RecoveryRemoved {
 				const PALLET: &'static str = "Recovery";
 				const EVENT: &'static str = "RecoveryRemoved";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A deposit has been updated."]
+			pub struct DepositPoked {
+				pub who: deposit_poked::Who,
+				pub kind: deposit_poked::Kind,
+				pub old_deposit: deposit_poked::OldDeposit,
+				pub new_deposit: deposit_poked::NewDeposit,
+			}
+			pub mod deposit_poked {
+				use super::runtime_types;
+				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Kind = runtime_types::pallet_recovery::DepositKind<
+					runtime_types::quantus_runtime::Runtime,
+				>;
+				pub type OldDeposit = ::core::primitive::u128;
+				pub type NewDeposit = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for DepositPoked {
+				const PALLET: &'static str = "Recovery";
+				const EVENT: &'static str = "DepositPoked";
 			}
 		}
 		pub mod storage {
@@ -15378,3524 +17764,6 @@ pub mod api {
 			}
 		}
 	}
-	pub mod assets {
-		use super::{root_mod, runtime_types};
-		#[doc = "The `Error` enum of this pallet."]
-		pub type Error = runtime_types::pallet_assets::pallet::Error;
-		#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-		pub type Call = runtime_types::pallet_assets::pallet::Call;
-		pub mod calls {
-			use super::{root_mod, runtime_types};
-			type DispatchError = runtime_types::sp_runtime::DispatchError;
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Issue a new class of fungible assets from a public origin."]
-				#[doc = ""]
-				#[doc = "This new asset class has no assets initially and its owner is the origin."]
-				#[doc = ""]
-				#[doc = "The origin must conform to the configured `CreateOrigin` and have sufficient funds free."]
-				#[doc = ""]
-				#[doc = "Funds of sender are reserved by `AssetDeposit`."]
-				#[doc = ""]
-				#[doc = "Parameters:"]
-				#[doc = "- `id`: The identifier of the new asset. This must not be currently in use to identify"]
-				#[doc = "an existing asset. If [`NextAssetId`] is set, then this must be equal to it."]
-				#[doc = "- `admin`: The admin of this class of assets. The admin is the initial address of each"]
-				#[doc = "member of the asset class's admin team."]
-				#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-				#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-				#[doc = ""]
-				#[doc = "Emits `Created` event when successful."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct Create {
-					#[codec(compact)]
-					pub id: create::Id,
-					pub admin: create::Admin,
-					pub min_balance: create::MinBalance,
-				}
-				pub mod create {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Admin = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type MinBalance = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Create {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "create";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Issue a new class of fungible assets from a privileged origin."]
-				#[doc = ""]
-				#[doc = "This new asset class has no assets initially."]
-				#[doc = ""]
-				#[doc = "The origin must conform to `ForceOrigin`."]
-				#[doc = ""]
-				#[doc = "Unlike `create`, no funds are reserved."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the new asset. This must not be currently in use to identify"]
-				#[doc = "an existing asset. If [`NextAssetId`] is set, then this must be equal to it."]
-				#[doc = "- `owner`: The owner of this class of assets. The owner has full superuser permissions"]
-				#[doc = "over this asset, but may later change and configure the permissions using"]
-				#[doc = "`transfer_ownership` and `set_team`."]
-				#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-				#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-				#[doc = ""]
-				#[doc = "Emits `ForceCreated` event when successful."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct ForceCreate {
-					#[codec(compact)]
-					pub id: force_create::Id,
-					pub owner: force_create::Owner,
-					pub is_sufficient: force_create::IsSufficient,
-					#[codec(compact)]
-					pub min_balance: force_create::MinBalance,
-				}
-				pub mod force_create {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Owner = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type IsSufficient = ::core::primitive::bool;
-					pub type MinBalance = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceCreate {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "force_create";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Start the process of destroying a fungible asset class."]
-				#[doc = ""]
-				#[doc = "`start_destroy` is the first in a series of extrinsics that should be called, to allow"]
-				#[doc = "destruction of an asset class."]
-				#[doc = ""]
-				#[doc = "The origin must conform to `ForceOrigin` or must be `Signed` by the asset's `owner`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				pub struct StartDestroy {
-					#[codec(compact)]
-					pub id: start_destroy::Id,
-				}
-				pub mod start_destroy {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for StartDestroy {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "start_destroy";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Destroy all accounts associated with a given asset."]
-				#[doc = ""]
-				#[doc = "`destroy_accounts` should only be called after `start_destroy` has been called, and the"]
-				#[doc = "asset is in a `Destroying` state."]
-				#[doc = ""]
-				#[doc = "Due to weight restrictions, this function may need to be called multiple times to fully"]
-				#[doc = "destroy all accounts. It will destroy `RemoveItemsLimit` accounts at a time."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				#[doc = ""]
-				#[doc = "Each call emits the `Event::DestroyedAccounts` event."]
-				pub struct DestroyAccounts {
-					#[codec(compact)]
-					pub id: destroy_accounts::Id,
-				}
-				pub mod destroy_accounts {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for DestroyAccounts {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "destroy_accounts";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Destroy all approvals associated with a given asset up to the max (T::RemoveItemsLimit)."]
-				#[doc = ""]
-				#[doc = "`destroy_approvals` should only be called after `start_destroy` has been called, and the"]
-				#[doc = "asset is in a `Destroying` state."]
-				#[doc = ""]
-				#[doc = "Due to weight restrictions, this function may need to be called multiple times to fully"]
-				#[doc = "destroy all approvals. It will destroy `RemoveItemsLimit` approvals at a time."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				#[doc = ""]
-				#[doc = "Each call emits the `Event::DestroyedApprovals` event."]
-				pub struct DestroyApprovals {
-					#[codec(compact)]
-					pub id: destroy_approvals::Id,
-				}
-				pub mod destroy_approvals {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for DestroyApprovals {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "destroy_approvals";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Complete destroying asset and unreserve currency."]
-				#[doc = ""]
-				#[doc = "`finish_destroy` should only be called after `start_destroy` has been called, and the"]
-				#[doc = "asset is in a `Destroying` state. All accounts or approvals should be destroyed before"]
-				#[doc = "hand."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				#[doc = ""]
-				#[doc = "Each successful call emits the `Event::Destroyed` event."]
-				pub struct FinishDestroy {
-					#[codec(compact)]
-					pub id: finish_destroy::Id,
-				}
-				pub mod finish_destroy {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for FinishDestroy {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "finish_destroy";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Mint assets of a particular class."]
-				#[doc = ""]
-				#[doc = "The origin must be Signed and the sender must be the Issuer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount minted."]
-				#[doc = "- `beneficiary`: The account to be credited with the minted assets."]
-				#[doc = "- `amount`: The amount of the asset to be minted."]
-				#[doc = ""]
-				#[doc = "Emits `Issued` event when successful."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`."]
-				pub struct Mint {
-					#[codec(compact)]
-					pub id: mint::Id,
-					pub beneficiary: mint::Beneficiary,
-					#[codec(compact)]
-					pub amount: mint::Amount,
-				}
-				pub mod mint {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Beneficiary = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Amount = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Mint {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "mint";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Reduce the balance of `who` by as much as possible up to `amount` assets of `id`."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Manager of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Bails with `NoAccount` if the `who` is already dead."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount burned."]
-				#[doc = "- `who`: The account to be debited from."]
-				#[doc = "- `amount`: The maximum amount by which `who`'s balance should be reduced."]
-				#[doc = ""]
-				#[doc = "Emits `Burned` with the actual amount burned. If this takes the balance to below the"]
-				#[doc = "minimum for the asset, then the amount burned is increased to take it to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Post-existence of `who`; Pre & post Zombie-status of `who`."]
-				pub struct Burn {
-					#[codec(compact)]
-					pub id: burn::Id,
-					pub who: burn::Who,
-					#[codec(compact)]
-					pub amount: burn::Amount,
-				}
-				pub mod burn {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Who = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Amount = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Burn {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "burn";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Move some assets from the sender account to another."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-				#[doc = "- `target`: The account to be credited."]
-				#[doc = "- `amount`: The amount by which the sender's balance of assets should be reduced and"]
-				#[doc = "`target`'s balance increased. The amount actually transferred may be slightly greater in"]
-				#[doc = "the case that the transfer would otherwise take the sender balance above zero but below"]
-				#[doc = "the minimum balance. Must be greater than zero."]
-				#[doc = ""]
-				#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-				#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-				#[doc = "to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of"]
-				#[doc = "`target`."]
-				pub struct Transfer {
-					#[codec(compact)]
-					pub id: transfer::Id,
-					pub target: transfer::Target,
-					#[codec(compact)]
-					pub amount: transfer::Amount,
-				}
-				pub mod transfer {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Amount = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Transfer {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "transfer";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Move some assets from the sender account to another, keeping the sender account alive."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-				#[doc = "- `target`: The account to be credited."]
-				#[doc = "- `amount`: The amount by which the sender's balance of assets should be reduced and"]
-				#[doc = "`target`'s balance increased. The amount actually transferred may be slightly greater in"]
-				#[doc = "the case that the transfer would otherwise take the sender balance above zero but below"]
-				#[doc = "the minimum balance. Must be greater than zero."]
-				#[doc = ""]
-				#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-				#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-				#[doc = "to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of"]
-				#[doc = "`target`."]
-				pub struct TransferKeepAlive {
-					#[codec(compact)]
-					pub id: transfer_keep_alive::Id,
-					pub target: transfer_keep_alive::Target,
-					#[codec(compact)]
-					pub amount: transfer_keep_alive::Amount,
-				}
-				pub mod transfer_keep_alive {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Amount = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for TransferKeepAlive {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "transfer_keep_alive";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Move some assets from one account to another."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-				#[doc = "- `source`: The account to be debited."]
-				#[doc = "- `dest`: The account to be credited."]
-				#[doc = "- `amount`: The amount by which the `source`'s balance of assets should be reduced and"]
-				#[doc = "`dest`'s balance increased. The amount actually transferred may be slightly greater in"]
-				#[doc = "the case that the transfer would otherwise take the `source` balance above zero but"]
-				#[doc = "below the minimum balance. Must be greater than zero."]
-				#[doc = ""]
-				#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-				#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-				#[doc = "to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existence of `dest`; Post-existence of `source`; Account pre-existence of"]
-				#[doc = "`dest`."]
-				pub struct ForceTransfer {
-					#[codec(compact)]
-					pub id: force_transfer::Id,
-					pub source: force_transfer::Source,
-					pub dest: force_transfer::Dest,
-					#[codec(compact)]
-					pub amount: force_transfer::Amount,
-				}
-				pub mod force_transfer {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Source = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Dest = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Amount = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceTransfer {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "force_transfer";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Disallow further unprivileged transfers of an asset `id` from an account `who`. `who`"]
-				#[doc = "must already exist as an entry in `Account`s of the asset. If you want to freeze an"]
-				#[doc = "account that does not have an entry, use `touch_other` first."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = "- `who`: The account to be frozen."]
-				#[doc = ""]
-				#[doc = "Emits `Frozen`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct Freeze {
-					#[codec(compact)]
-					pub id: freeze::Id,
-					pub who: freeze::Who,
-				}
-				pub mod freeze {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Who = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Freeze {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "freeze";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Allow unprivileged transfers to and from an account again."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = "- `who`: The account to be unfrozen."]
-				#[doc = ""]
-				#[doc = "Emits `Thawed`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct Thaw {
-					#[codec(compact)]
-					pub id: thaw::Id,
-					pub who: thaw::Who,
-				}
-				pub mod thaw {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Who = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Thaw {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "thaw";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Disallow further unprivileged transfers for the asset class."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = ""]
-				#[doc = "Emits `Frozen`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct FreezeAsset {
-					#[codec(compact)]
-					pub id: freeze_asset::Id,
-				}
-				pub mod freeze_asset {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for FreezeAsset {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "freeze_asset";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Allow unprivileged transfers for the asset again."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be thawed."]
-				#[doc = ""]
-				#[doc = "Emits `Thawed`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct ThawAsset {
-					#[codec(compact)]
-					pub id: thaw_asset::Id,
-				}
-				pub mod thaw_asset {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ThawAsset {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "thaw_asset";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Change the Owner of an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `owner`: The new Owner of this asset."]
-				#[doc = ""]
-				#[doc = "Emits `OwnerChanged`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct TransferOwnership {
-					#[codec(compact)]
-					pub id: transfer_ownership::Id,
-					pub owner: transfer_ownership::Owner,
-				}
-				pub mod transfer_ownership {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Owner = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for TransferOwnership {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "transfer_ownership";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Change the Issuer, Admin and Freezer of an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = "- `issuer`: The new Issuer of this asset."]
-				#[doc = "- `admin`: The new Admin of this asset."]
-				#[doc = "- `freezer`: The new Freezer of this asset."]
-				#[doc = ""]
-				#[doc = "Emits `TeamChanged`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct SetTeam {
-					#[codec(compact)]
-					pub id: set_team::Id,
-					pub issuer: set_team::Issuer,
-					pub admin: set_team::Admin,
-					pub freezer: set_team::Freezer,
-				}
-				pub mod set_team {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Issuer = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Admin = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Freezer = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetTeam {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "set_team";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Set the metadata for an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Funds of sender are reserved according to the formula:"]
-				#[doc = "`MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into"]
-				#[doc = "account any already reserved funds."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to update."]
-				#[doc = "- `name`: The user friendly name of this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `decimals`: The number of decimals this asset uses to represent one unit."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataSet`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct SetMetadata {
-					#[codec(compact)]
-					pub id: set_metadata::Id,
-					pub name: set_metadata::Name,
-					pub symbol: set_metadata::Symbol,
-					pub decimals: set_metadata::Decimals,
-				}
-				pub mod set_metadata {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Name =
-						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
-					pub type Symbol =
-						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
-					pub type Decimals = ::core::primitive::u8;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetMetadata {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "set_metadata";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Clear the metadata for an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Any deposit is freed for the asset owner."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to clear."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataCleared`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct ClearMetadata {
-					#[codec(compact)]
-					pub id: clear_metadata::Id,
-				}
-				pub mod clear_metadata {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ClearMetadata {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "clear_metadata";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Force the metadata for an asset to some value."]
-				#[doc = ""]
-				#[doc = "Origin must be ForceOrigin."]
-				#[doc = ""]
-				#[doc = "Any deposit is left alone."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to update."]
-				#[doc = "- `name`: The user friendly name of this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `decimals`: The number of decimals this asset uses to represent one unit."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataSet`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(N + S)` where N and S are the length of the name and symbol respectively."]
-				pub struct ForceSetMetadata {
-					#[codec(compact)]
-					pub id: force_set_metadata::Id,
-					pub name: force_set_metadata::Name,
-					pub symbol: force_set_metadata::Symbol,
-					pub decimals: force_set_metadata::Decimals,
-					pub is_frozen: force_set_metadata::IsFrozen,
-				}
-				pub mod force_set_metadata {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Name =
-						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
-					pub type Symbol =
-						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
-					pub type Decimals = ::core::primitive::u8;
-					pub type IsFrozen = ::core::primitive::bool;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceSetMetadata {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "force_set_metadata";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Clear the metadata for an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be ForceOrigin."]
-				#[doc = ""]
-				#[doc = "Any deposit is returned."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to clear."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataCleared`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct ForceClearMetadata {
-					#[codec(compact)]
-					pub id: force_clear_metadata::Id,
-				}
-				pub mod force_clear_metadata {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceClearMetadata {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "force_clear_metadata";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Alter the attributes of a given asset."]
-				#[doc = ""]
-				#[doc = "Origin must be `ForceOrigin`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `owner`: The new Owner of this asset."]
-				#[doc = "- `issuer`: The new Issuer of this asset."]
-				#[doc = "- `admin`: The new Admin of this asset."]
-				#[doc = "- `freezer`: The new Freezer of this asset."]
-				#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-				#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-				#[doc = "- `is_sufficient`: Whether a non-zero balance of this asset is deposit of sufficient"]
-				#[doc = "value to account for the state bloat associated with its balance storage. If set to"]
-				#[doc = "`true`, then non-zero balances may be stored without a `consumer` reference (and thus"]
-				#[doc = "an ED in the Balances pallet or whatever else is used to control user-account state"]
-				#[doc = "growth)."]
-				#[doc = "- `is_frozen`: Whether this asset class is frozen except for permissioned/admin"]
-				#[doc = "instructions."]
-				#[doc = ""]
-				#[doc = "Emits `AssetStatusChanged` with the identity of the asset."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct ForceAssetStatus {
-					#[codec(compact)]
-					pub id: force_asset_status::Id,
-					pub owner: force_asset_status::Owner,
-					pub issuer: force_asset_status::Issuer,
-					pub admin: force_asset_status::Admin,
-					pub freezer: force_asset_status::Freezer,
-					#[codec(compact)]
-					pub min_balance: force_asset_status::MinBalance,
-					pub is_sufficient: force_asset_status::IsSufficient,
-					pub is_frozen: force_asset_status::IsFrozen,
-				}
-				pub mod force_asset_status {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Owner = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Issuer = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Admin = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Freezer = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type MinBalance = ::core::primitive::u128;
-					pub type IsSufficient = ::core::primitive::bool;
-					pub type IsFrozen = ::core::primitive::bool;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceAssetStatus {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "force_asset_status";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Approve an amount of asset for transfer by a delegated third-party account."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed."]
-				#[doc = ""]
-				#[doc = "Ensures that `ApprovalDeposit` worth of `Currency` is reserved from signing account"]
-				#[doc = "for the purpose of holding the approval. If some non-zero amount of assets is already"]
-				#[doc = "approved from signing account to `delegate`, then it is topped up or unreserved to"]
-				#[doc = "meet the right value."]
-				#[doc = ""]
-				#[doc = "NOTE: The signing account does not need to own `amount` of assets at the point of"]
-				#[doc = "making this call."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `delegate`: The account to delegate permission to transfer asset."]
-				#[doc = "- `amount`: The amount of asset that may be transferred by `delegate`. If there is"]
-				#[doc = "already an approval in place, then this acts additively."]
-				#[doc = ""]
-				#[doc = "Emits `ApprovedTransfer` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct ApproveTransfer {
-					#[codec(compact)]
-					pub id: approve_transfer::Id,
-					pub delegate: approve_transfer::Delegate,
-					#[codec(compact)]
-					pub amount: approve_transfer::Amount,
-				}
-				pub mod approve_transfer {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Delegate = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Amount = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ApproveTransfer {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "approve_transfer";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Cancel all of some asset approved for delegated transfer by a third-party account."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and there must be an approval in place between signer and"]
-				#[doc = "`delegate`."]
-				#[doc = ""]
-				#[doc = "Unreserves any deposit previously reserved by `approve_transfer` for the approval."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `delegate`: The account delegated permission to transfer asset."]
-				#[doc = ""]
-				#[doc = "Emits `ApprovalCancelled` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct CancelApproval {
-					#[codec(compact)]
-					pub id: cancel_approval::Id,
-					pub delegate: cancel_approval::Delegate,
-				}
-				pub mod cancel_approval {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Delegate = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CancelApproval {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "cancel_approval";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Cancel all of some asset approved for delegated transfer by a third-party account."]
-				#[doc = ""]
-				#[doc = "Origin must be either ForceOrigin or Signed origin with the signer being the Admin"]
-				#[doc = "account of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Unreserves any deposit previously reserved by `approve_transfer` for the approval."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `delegate`: The account delegated permission to transfer asset."]
-				#[doc = ""]
-				#[doc = "Emits `ApprovalCancelled` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct ForceCancelApproval {
-					#[codec(compact)]
-					pub id: force_cancel_approval::Id,
-					pub owner: force_cancel_approval::Owner,
-					pub delegate: force_cancel_approval::Delegate,
-				}
-				pub mod force_cancel_approval {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Owner = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Delegate = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceCancelApproval {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "force_cancel_approval";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Transfer some asset balance from a previously delegated account to some third-party"]
-				#[doc = "account."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and there must be an approval in place by the `owner` to the"]
-				#[doc = "signer."]
-				#[doc = ""]
-				#[doc = "If the entire amount approved for transfer is transferred, then any deposit previously"]
-				#[doc = "reserved by `approve_transfer` is unreserved."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `owner`: The account which previously approved for a transfer of at least `amount` and"]
-				#[doc = "from which the asset balance will be withdrawn."]
-				#[doc = "- `destination`: The account to which the asset balance of `amount` will be transferred."]
-				#[doc = "- `amount`: The amount of assets to transfer."]
-				#[doc = ""]
-				#[doc = "Emits `TransferredApproved` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct TransferApproved {
-					#[codec(compact)]
-					pub id: transfer_approved::Id,
-					pub owner: transfer_approved::Owner,
-					pub destination: transfer_approved::Destination,
-					#[codec(compact)]
-					pub amount: transfer_approved::Amount,
-				}
-				pub mod transfer_approved {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Owner = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Destination = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Amount = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for TransferApproved {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "transfer_approved";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Create an asset account for non-provider assets."]
-				#[doc = ""]
-				#[doc = "A deposit will be taken from the signer account."]
-				#[doc = ""]
-				#[doc = "- `origin`: Must be Signed; the signer account must have sufficient funds for a deposit"]
-				#[doc = "  to be taken."]
-				#[doc = "- `id`: The identifier of the asset for the account to be created."]
-				#[doc = ""]
-				#[doc = "Emits `Touched` event when successful."]
-				pub struct Touch {
-					#[codec(compact)]
-					pub id: touch::Id,
-				}
-				pub mod touch {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Touch {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "touch";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Return the deposit (if any) of an asset account or a consumer reference (if any) of an"]
-				#[doc = "account."]
-				#[doc = ""]
-				#[doc = "The origin must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset for which the caller would like the deposit"]
-				#[doc = "  refunded."]
-				#[doc = "- `allow_burn`: If `true` then assets may be destroyed in order to complete the refund."]
-				#[doc = ""]
-				#[doc = "Emits `Refunded` event when successful."]
-				pub struct Refund {
-					#[codec(compact)]
-					pub id: refund::Id,
-					pub allow_burn: refund::AllowBurn,
-				}
-				pub mod refund {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type AllowBurn = ::core::primitive::bool;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Refund {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "refund";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Sets the minimum balance of an asset."]
-				#[doc = ""]
-				#[doc = "Only works if there aren't any accounts that are holding the asset or if"]
-				#[doc = "the new value of `min_balance` is less than the old one."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender has to be the Owner of the"]
-				#[doc = "asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `min_balance`: The new value of `min_balance`."]
-				#[doc = ""]
-				#[doc = "Emits `AssetMinBalanceChanged` event when successful."]
-				pub struct SetMinBalance {
-					#[codec(compact)]
-					pub id: set_min_balance::Id,
-					pub min_balance: set_min_balance::MinBalance,
-				}
-				pub mod set_min_balance {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type MinBalance = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetMinBalance {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "set_min_balance";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Create an asset account for `who`."]
-				#[doc = ""]
-				#[doc = "A deposit will be taken from the signer account."]
-				#[doc = ""]
-				#[doc = "- `origin`: Must be Signed by `Freezer` or `Admin` of the asset `id`; the signer account"]
-				#[doc = "  must have sufficient funds for a deposit to be taken."]
-				#[doc = "- `id`: The identifier of the asset for the account to be created."]
-				#[doc = "- `who`: The account to be created."]
-				#[doc = ""]
-				#[doc = "Emits `Touched` event when successful."]
-				pub struct TouchOther {
-					#[codec(compact)]
-					pub id: touch_other::Id,
-					pub who: touch_other::Who,
-				}
-				pub mod touch_other {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Who = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for TouchOther {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "touch_other";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Return the deposit (if any) of a target asset account. Useful if you are the depositor."]
-				#[doc = ""]
-				#[doc = "The origin must be Signed and either the account owner, depositor, or asset `Admin`. In"]
-				#[doc = "order to burn a non-zero balance of the asset, the caller must be the account and should"]
-				#[doc = "use `refund`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
-				#[doc = "- `who`: The account to refund."]
-				#[doc = ""]
-				#[doc = "Emits `Refunded` event when successful."]
-				pub struct RefundOther {
-					#[codec(compact)]
-					pub id: refund_other::Id,
-					pub who: refund_other::Who,
-				}
-				pub mod refund_other {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Who = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for RefundOther {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "refund_other";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Disallow further unprivileged transfers of an asset `id` to and from an account `who`."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the account's asset."]
-				#[doc = "- `who`: The account to be unblocked."]
-				#[doc = ""]
-				#[doc = "Emits `Blocked`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub struct Block {
-					#[codec(compact)]
-					pub id: block::Id,
-					pub who: block::Who,
-				}
-				pub mod block {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Who = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Block {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "block";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Transfer the entire transferable balance from the caller asset account."]
-				#[doc = ""]
-				#[doc = "NOTE: This function only attempts to transfer _transferable_ balances. This means that"]
-				#[doc = "any held, frozen, or minimum balance (when `keep_alive` is `true`), will not be"]
-				#[doc = "transferred by this function. To ensure that this function results in a killed account,"]
-				#[doc = "you might need to prepare the account by removing any reference counters, storage"]
-				#[doc = "deposits, etc..."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
-				#[doc = "- `dest`: The recipient of the transfer."]
-				#[doc = "- `keep_alive`: A boolean to determine if the `transfer_all` operation should send all"]
-				#[doc = "  of the funds the asset account has, causing the sender asset account to be killed"]
-				#[doc = "  (false), or transfer everything except at least the minimum balance, which will"]
-				#[doc = "  guarantee to keep the sender asset account alive (true)."]
-				pub struct TransferAll {
-					#[codec(compact)]
-					pub id: transfer_all::Id,
-					pub dest: transfer_all::Dest,
-					pub keep_alive: transfer_all::KeepAlive,
-				}
-				pub mod transfer_all {
-					use super::runtime_types;
-					pub type Id = ::core::primitive::u32;
-					pub type Dest = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type KeepAlive = ::core::primitive::bool;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for TransferAll {
-					const PALLET: &'static str = "Assets";
-					const CALL: &'static str = "transfer_all";
-				}
-			}
-			pub struct TransactionApi;
-			impl TransactionApi {
-				#[doc = "Issue a new class of fungible assets from a public origin."]
-				#[doc = ""]
-				#[doc = "This new asset class has no assets initially and its owner is the origin."]
-				#[doc = ""]
-				#[doc = "The origin must conform to the configured `CreateOrigin` and have sufficient funds free."]
-				#[doc = ""]
-				#[doc = "Funds of sender are reserved by `AssetDeposit`."]
-				#[doc = ""]
-				#[doc = "Parameters:"]
-				#[doc = "- `id`: The identifier of the new asset. This must not be currently in use to identify"]
-				#[doc = "an existing asset. If [`NextAssetId`] is set, then this must be equal to it."]
-				#[doc = "- `admin`: The admin of this class of assets. The admin is the initial address of each"]
-				#[doc = "member of the asset class's admin team."]
-				#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-				#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-				#[doc = ""]
-				#[doc = "Emits `Created` event when successful."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn create(
-					&self,
-					id: types::create::Id,
-					admin: types::create::Admin,
-					min_balance: types::create::MinBalance,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Create> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"create",
-						types::Create { id, admin, min_balance },
-						[
-							120u8, 25u8, 99u8, 39u8, 102u8, 201u8, 14u8, 2u8, 32u8, 139u8, 206u8,
-							218u8, 223u8, 161u8, 25u8, 98u8, 159u8, 133u8, 65u8, 105u8, 45u8, 4u8,
-							28u8, 49u8, 248u8, 147u8, 2u8, 179u8, 11u8, 195u8, 177u8, 250u8,
-						],
-					)
-				}
-				#[doc = "Issue a new class of fungible assets from a privileged origin."]
-				#[doc = ""]
-				#[doc = "This new asset class has no assets initially."]
-				#[doc = ""]
-				#[doc = "The origin must conform to `ForceOrigin`."]
-				#[doc = ""]
-				#[doc = "Unlike `create`, no funds are reserved."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the new asset. This must not be currently in use to identify"]
-				#[doc = "an existing asset. If [`NextAssetId`] is set, then this must be equal to it."]
-				#[doc = "- `owner`: The owner of this class of assets. The owner has full superuser permissions"]
-				#[doc = "over this asset, but may later change and configure the permissions using"]
-				#[doc = "`transfer_ownership` and `set_team`."]
-				#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-				#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-				#[doc = ""]
-				#[doc = "Emits `ForceCreated` event when successful."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn force_create(
-					&self,
-					id: types::force_create::Id,
-					owner: types::force_create::Owner,
-					is_sufficient: types::force_create::IsSufficient,
-					min_balance: types::force_create::MinBalance,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ForceCreate> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"force_create",
-						types::ForceCreate { id, owner, is_sufficient, min_balance },
-						[
-							149u8, 41u8, 54u8, 146u8, 18u8, 248u8, 84u8, 52u8, 202u8, 88u8, 192u8,
-							208u8, 247u8, 227u8, 254u8, 98u8, 92u8, 46u8, 164u8, 152u8, 143u8,
-							20u8, 179u8, 227u8, 197u8, 247u8, 242u8, 153u8, 142u8, 148u8, 40u8,
-							184u8,
-						],
-					)
-				}
-				#[doc = "Start the process of destroying a fungible asset class."]
-				#[doc = ""]
-				#[doc = "`start_destroy` is the first in a series of extrinsics that should be called, to allow"]
-				#[doc = "destruction of an asset class."]
-				#[doc = ""]
-				#[doc = "The origin must conform to `ForceOrigin` or must be `Signed` by the asset's `owner`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				pub fn start_destroy(
-					&self,
-					id: types::start_destroy::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::StartDestroy> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"start_destroy",
-						types::StartDestroy { id },
-						[
-							125u8, 82u8, 151u8, 106u8, 25u8, 49u8, 68u8, 203u8, 247u8, 175u8,
-							117u8, 230u8, 84u8, 98u8, 172u8, 73u8, 233u8, 218u8, 212u8, 198u8,
-							69u8, 35u8, 15u8, 179u8, 161u8, 205u8, 190u8, 109u8, 198u8, 214u8,
-							65u8, 164u8,
-						],
-					)
-				}
-				#[doc = "Destroy all accounts associated with a given asset."]
-				#[doc = ""]
-				#[doc = "`destroy_accounts` should only be called after `start_destroy` has been called, and the"]
-				#[doc = "asset is in a `Destroying` state."]
-				#[doc = ""]
-				#[doc = "Due to weight restrictions, this function may need to be called multiple times to fully"]
-				#[doc = "destroy all accounts. It will destroy `RemoveItemsLimit` accounts at a time."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				#[doc = ""]
-				#[doc = "Each call emits the `Event::DestroyedAccounts` event."]
-				pub fn destroy_accounts(
-					&self,
-					id: types::destroy_accounts::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::DestroyAccounts>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"destroy_accounts",
-						types::DestroyAccounts { id },
-						[
-							236u8, 102u8, 233u8, 170u8, 179u8, 46u8, 42u8, 29u8, 200u8, 116u8,
-							62u8, 114u8, 233u8, 59u8, 217u8, 215u8, 109u8, 232u8, 147u8, 95u8,
-							255u8, 248u8, 119u8, 222u8, 216u8, 165u8, 138u8, 47u8, 28u8, 56u8,
-							204u8, 93u8,
-						],
-					)
-				}
-				#[doc = "Destroy all approvals associated with a given asset up to the max (T::RemoveItemsLimit)."]
-				#[doc = ""]
-				#[doc = "`destroy_approvals` should only be called after `start_destroy` has been called, and the"]
-				#[doc = "asset is in a `Destroying` state."]
-				#[doc = ""]
-				#[doc = "Due to weight restrictions, this function may need to be called multiple times to fully"]
-				#[doc = "destroy all approvals. It will destroy `RemoveItemsLimit` approvals at a time."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				#[doc = ""]
-				#[doc = "Each call emits the `Event::DestroyedApprovals` event."]
-				pub fn destroy_approvals(
-					&self,
-					id: types::destroy_approvals::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::DestroyApprovals>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"destroy_approvals",
-						types::DestroyApprovals { id },
-						[
-							34u8, 35u8, 15u8, 44u8, 239u8, 232u8, 88u8, 130u8, 130u8, 87u8, 171u8,
-							255u8, 247u8, 179u8, 14u8, 35u8, 47u8, 223u8, 32u8, 232u8, 41u8, 105u8,
-							207u8, 199u8, 90u8, 136u8, 144u8, 139u8, 252u8, 76u8, 177u8, 106u8,
-						],
-					)
-				}
-				#[doc = "Complete destroying asset and unreserve currency."]
-				#[doc = ""]
-				#[doc = "`finish_destroy` should only be called after `start_destroy` has been called, and the"]
-				#[doc = "asset is in a `Destroying` state. All accounts or approvals should be destroyed before"]
-				#[doc = "hand."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-				#[doc = "  asset."]
-				#[doc = ""]
-				#[doc = "Each successful call emits the `Event::Destroyed` event."]
-				pub fn finish_destroy(
-					&self,
-					id: types::finish_destroy::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::FinishDestroy>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"finish_destroy",
-						types::FinishDestroy { id },
-						[
-							132u8, 67u8, 78u8, 84u8, 240u8, 51u8, 176u8, 119u8, 48u8, 34u8, 153u8,
-							37u8, 25u8, 171u8, 21u8, 164u8, 53u8, 214u8, 36u8, 149u8, 20u8, 240u8,
-							123u8, 195u8, 170u8, 162u8, 118u8, 81u8, 176u8, 218u8, 114u8, 113u8,
-						],
-					)
-				}
-				#[doc = "Mint assets of a particular class."]
-				#[doc = ""]
-				#[doc = "The origin must be Signed and the sender must be the Issuer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount minted."]
-				#[doc = "- `beneficiary`: The account to be credited with the minted assets."]
-				#[doc = "- `amount`: The amount of the asset to be minted."]
-				#[doc = ""]
-				#[doc = "Emits `Issued` event when successful."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`."]
-				pub fn mint(
-					&self,
-					id: types::mint::Id,
-					beneficiary: types::mint::Beneficiary,
-					amount: types::mint::Amount,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Mint> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"mint",
-						types::Mint { id, beneficiary, amount },
-						[
-							172u8, 131u8, 103u8, 81u8, 206u8, 2u8, 143u8, 114u8, 137u8, 60u8,
-							147u8, 67u8, 226u8, 64u8, 71u8, 11u8, 36u8, 145u8, 51u8, 8u8, 0u8,
-							110u8, 8u8, 195u8, 103u8, 205u8, 156u8, 43u8, 215u8, 12u8, 150u8,
-							135u8,
-						],
-					)
-				}
-				#[doc = "Reduce the balance of `who` by as much as possible up to `amount` assets of `id`."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Manager of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Bails with `NoAccount` if the `who` is already dead."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount burned."]
-				#[doc = "- `who`: The account to be debited from."]
-				#[doc = "- `amount`: The maximum amount by which `who`'s balance should be reduced."]
-				#[doc = ""]
-				#[doc = "Emits `Burned` with the actual amount burned. If this takes the balance to below the"]
-				#[doc = "minimum for the asset, then the amount burned is increased to take it to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Post-existence of `who`; Pre & post Zombie-status of `who`."]
-				pub fn burn(
-					&self,
-					id: types::burn::Id,
-					who: types::burn::Who,
-					amount: types::burn::Amount,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Burn> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"burn",
-						types::Burn { id, who, amount },
-						[
-							105u8, 133u8, 82u8, 100u8, 124u8, 65u8, 174u8, 31u8, 152u8, 45u8, 23u8,
-							200u8, 23u8, 199u8, 239u8, 8u8, 187u8, 142u8, 21u8, 192u8, 35u8, 211u8,
-							172u8, 130u8, 169u8, 74u8, 167u8, 36u8, 149u8, 7u8, 19u8, 37u8,
-						],
-					)
-				}
-				#[doc = "Move some assets from the sender account to another."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-				#[doc = "- `target`: The account to be credited."]
-				#[doc = "- `amount`: The amount by which the sender's balance of assets should be reduced and"]
-				#[doc = "`target`'s balance increased. The amount actually transferred may be slightly greater in"]
-				#[doc = "the case that the transfer would otherwise take the sender balance above zero but below"]
-				#[doc = "the minimum balance. Must be greater than zero."]
-				#[doc = ""]
-				#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-				#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-				#[doc = "to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of"]
-				#[doc = "`target`."]
-				pub fn transfer(
-					&self,
-					id: types::transfer::Id,
-					target: types::transfer::Target,
-					amount: types::transfer::Amount,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Transfer> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"transfer",
-						types::Transfer { id, target, amount },
-						[
-							126u8, 31u8, 70u8, 179u8, 222u8, 190u8, 12u8, 19u8, 94u8, 225u8, 217u8,
-							109u8, 54u8, 69u8, 124u8, 61u8, 97u8, 199u8, 193u8, 166u8, 39u8, 143u8,
-							125u8, 251u8, 87u8, 173u8, 149u8, 91u8, 182u8, 18u8, 184u8, 65u8,
-						],
-					)
-				}
-				#[doc = "Move some assets from the sender account to another, keeping the sender account alive."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-				#[doc = "- `target`: The account to be credited."]
-				#[doc = "- `amount`: The amount by which the sender's balance of assets should be reduced and"]
-				#[doc = "`target`'s balance increased. The amount actually transferred may be slightly greater in"]
-				#[doc = "the case that the transfer would otherwise take the sender balance above zero but below"]
-				#[doc = "the minimum balance. Must be greater than zero."]
-				#[doc = ""]
-				#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-				#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-				#[doc = "to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of"]
-				#[doc = "`target`."]
-				pub fn transfer_keep_alive(
-					&self,
-					id: types::transfer_keep_alive::Id,
-					target: types::transfer_keep_alive::Target,
-					amount: types::transfer_keep_alive::Amount,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::TransferKeepAlive>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"transfer_keep_alive",
-						types::TransferKeepAlive { id, target, amount },
-						[
-							99u8, 101u8, 219u8, 188u8, 238u8, 230u8, 141u8, 43u8, 38u8, 175u8,
-							46u8, 89u8, 33u8, 23u8, 223u8, 115u8, 108u8, 18u8, 190u8, 213u8, 157u8,
-							12u8, 139u8, 97u8, 7u8, 75u8, 196u8, 159u8, 122u8, 32u8, 164u8, 154u8,
-						],
-					)
-				}
-				#[doc = "Move some assets from one account to another."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-				#[doc = "- `source`: The account to be debited."]
-				#[doc = "- `dest`: The account to be credited."]
-				#[doc = "- `amount`: The amount by which the `source`'s balance of assets should be reduced and"]
-				#[doc = "`dest`'s balance increased. The amount actually transferred may be slightly greater in"]
-				#[doc = "the case that the transfer would otherwise take the `source` balance above zero but"]
-				#[doc = "below the minimum balance. Must be greater than zero."]
-				#[doc = ""]
-				#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-				#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-				#[doc = "to zero."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				#[doc = "Modes: Pre-existence of `dest`; Post-existence of `source`; Account pre-existence of"]
-				#[doc = "`dest`."]
-				pub fn force_transfer(
-					&self,
-					id: types::force_transfer::Id,
-					source: types::force_transfer::Source,
-					dest: types::force_transfer::Dest,
-					amount: types::force_transfer::Amount,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ForceTransfer>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"force_transfer",
-						types::ForceTransfer { id, source, dest, amount },
-						[
-							10u8, 210u8, 8u8, 209u8, 8u8, 78u8, 40u8, 213u8, 235u8, 176u8, 144u8,
-							145u8, 70u8, 13u8, 75u8, 72u8, 166u8, 137u8, 22u8, 191u8, 226u8, 244u8,
-							92u8, 183u8, 129u8, 212u8, 158u8, 179u8, 169u8, 232u8, 177u8, 225u8,
-						],
-					)
-				}
-				#[doc = "Disallow further unprivileged transfers of an asset `id` from an account `who`. `who`"]
-				#[doc = "must already exist as an entry in `Account`s of the asset. If you want to freeze an"]
-				#[doc = "account that does not have an entry, use `touch_other` first."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = "- `who`: The account to be frozen."]
-				#[doc = ""]
-				#[doc = "Emits `Frozen`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn freeze(
-					&self,
-					id: types::freeze::Id,
-					who: types::freeze::Who,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Freeze> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"freeze",
-						types::Freeze { id, who },
-						[
-							180u8, 124u8, 252u8, 66u8, 205u8, 23u8, 32u8, 217u8, 173u8, 10u8, 91u8,
-							57u8, 44u8, 215u8, 234u8, 152u8, 115u8, 38u8, 141u8, 212u8, 57u8,
-							217u8, 169u8, 61u8, 215u8, 130u8, 172u8, 58u8, 90u8, 193u8, 25u8,
-							249u8,
-						],
-					)
-				}
-				#[doc = "Allow unprivileged transfers to and from an account again."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = "- `who`: The account to be unfrozen."]
-				#[doc = ""]
-				#[doc = "Emits `Thawed`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn thaw(
-					&self,
-					id: types::thaw::Id,
-					who: types::thaw::Who,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Thaw> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"thaw",
-						types::Thaw { id, who },
-						[
-							187u8, 130u8, 9u8, 152u8, 231u8, 9u8, 245u8, 162u8, 115u8, 19u8, 73u8,
-							176u8, 16u8, 230u8, 30u8, 60u8, 180u8, 183u8, 154u8, 160u8, 72u8,
-							219u8, 116u8, 57u8, 140u8, 6u8, 105u8, 38u8, 98u8, 90u8, 250u8, 135u8,
-						],
-					)
-				}
-				#[doc = "Disallow further unprivileged transfers for the asset class."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = ""]
-				#[doc = "Emits `Frozen`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn freeze_asset(
-					&self,
-					id: types::freeze_asset::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::FreezeAsset> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"freeze_asset",
-						types::FreezeAsset { id },
-						[
-							75u8, 237u8, 183u8, 112u8, 112u8, 123u8, 250u8, 203u8, 169u8, 51u8,
-							218u8, 35u8, 159u8, 23u8, 21u8, 10u8, 167u8, 84u8, 161u8, 212u8, 124u8,
-							236u8, 88u8, 175u8, 48u8, 195u8, 33u8, 145u8, 141u8, 156u8, 31u8,
-							250u8,
-						],
-					)
-				}
-				#[doc = "Allow unprivileged transfers for the asset again."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be thawed."]
-				#[doc = ""]
-				#[doc = "Emits `Thawed`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn thaw_asset(
-					&self,
-					id: types::thaw_asset::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ThawAsset> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"thaw_asset",
-						types::ThawAsset { id },
-						[
-							151u8, 6u8, 170u8, 114u8, 55u8, 8u8, 5u8, 194u8, 251u8, 78u8, 232u8,
-							181u8, 157u8, 62u8, 16u8, 39u8, 79u8, 119u8, 205u8, 198u8, 199u8, 26u8,
-							92u8, 162u8, 169u8, 173u8, 93u8, 51u8, 7u8, 79u8, 198u8, 77u8,
-						],
-					)
-				}
-				#[doc = "Change the Owner of an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `owner`: The new Owner of this asset."]
-				#[doc = ""]
-				#[doc = "Emits `OwnerChanged`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn transfer_ownership(
-					&self,
-					id: types::transfer_ownership::Id,
-					owner: types::transfer_ownership::Owner,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::TransferOwnership>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"transfer_ownership",
-						types::TransferOwnership { id, owner },
-						[
-							65u8, 85u8, 40u8, 202u8, 212u8, 170u8, 130u8, 132u8, 140u8, 90u8, 68u8,
-							28u8, 101u8, 154u8, 222u8, 150u8, 244u8, 165u8, 44u8, 22u8, 225u8,
-							152u8, 7u8, 162u8, 110u8, 54u8, 173u8, 181u8, 54u8, 215u8, 105u8,
-							239u8,
-						],
-					)
-				}
-				#[doc = "Change the Issuer, Admin and Freezer of an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to be frozen."]
-				#[doc = "- `issuer`: The new Issuer of this asset."]
-				#[doc = "- `admin`: The new Admin of this asset."]
-				#[doc = "- `freezer`: The new Freezer of this asset."]
-				#[doc = ""]
-				#[doc = "Emits `TeamChanged`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn set_team(
-					&self,
-					id: types::set_team::Id,
-					issuer: types::set_team::Issuer,
-					admin: types::set_team::Admin,
-					freezer: types::set_team::Freezer,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetTeam> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"set_team",
-						types::SetTeam { id, issuer, admin, freezer },
-						[
-							52u8, 75u8, 50u8, 30u8, 164u8, 161u8, 121u8, 25u8, 135u8, 83u8, 115u8,
-							25u8, 103u8, 1u8, 124u8, 206u8, 83u8, 182u8, 41u8, 116u8, 44u8, 37u8,
-							75u8, 70u8, 252u8, 225u8, 240u8, 144u8, 96u8, 160u8, 151u8, 4u8,
-						],
-					)
-				}
-				#[doc = "Set the metadata for an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Funds of sender are reserved according to the formula:"]
-				#[doc = "`MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into"]
-				#[doc = "account any already reserved funds."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to update."]
-				#[doc = "- `name`: The user friendly name of this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `decimals`: The number of decimals this asset uses to represent one unit."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataSet`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn set_metadata(
-					&self,
-					id: types::set_metadata::Id,
-					name: types::set_metadata::Name,
-					symbol: types::set_metadata::Symbol,
-					decimals: types::set_metadata::Decimals,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetMetadata> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"set_metadata",
-						types::SetMetadata { id, name, symbol, decimals },
-						[
-							215u8, 66u8, 15u8, 17u8, 88u8, 174u8, 77u8, 75u8, 229u8, 155u8, 160u8,
-							34u8, 108u8, 194u8, 88u8, 238u8, 131u8, 97u8, 234u8, 102u8, 71u8, 56u8,
-							70u8, 248u8, 211u8, 85u8, 72u8, 92u8, 71u8, 222u8, 190u8, 91u8,
-						],
-					)
-				}
-				#[doc = "Clear the metadata for an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Any deposit is freed for the asset owner."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to clear."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataCleared`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn clear_metadata(
-					&self,
-					id: types::clear_metadata::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ClearMetadata>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"clear_metadata",
-						types::ClearMetadata { id },
-						[
-							68u8, 172u8, 6u8, 158u8, 237u8, 254u8, 22u8, 4u8, 254u8, 157u8, 179u8,
-							168u8, 105u8, 114u8, 56u8, 166u8, 213u8, 38u8, 188u8, 195u8, 99u8,
-							43u8, 142u8, 220u8, 94u8, 248u8, 51u8, 226u8, 233u8, 114u8, 86u8, 93u8,
-						],
-					)
-				}
-				#[doc = "Force the metadata for an asset to some value."]
-				#[doc = ""]
-				#[doc = "Origin must be ForceOrigin."]
-				#[doc = ""]
-				#[doc = "Any deposit is left alone."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to update."]
-				#[doc = "- `name`: The user friendly name of this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`."]
-				#[doc = "- `decimals`: The number of decimals this asset uses to represent one unit."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataSet`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(N + S)` where N and S are the length of the name and symbol respectively."]
-				pub fn force_set_metadata(
-					&self,
-					id: types::force_set_metadata::Id,
-					name: types::force_set_metadata::Name,
-					symbol: types::force_set_metadata::Symbol,
-					decimals: types::force_set_metadata::Decimals,
-					is_frozen: types::force_set_metadata::IsFrozen,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ForceSetMetadata>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"force_set_metadata",
-						types::ForceSetMetadata { id, name, symbol, decimals, is_frozen },
-						[
-							76u8, 90u8, 182u8, 13u8, 133u8, 248u8, 94u8, 136u8, 169u8, 114u8,
-							151u8, 20u8, 106u8, 89u8, 78u8, 228u8, 22u8, 29u8, 68u8, 8u8, 54u8,
-							47u8, 1u8, 186u8, 45u8, 167u8, 14u8, 112u8, 34u8, 43u8, 91u8, 140u8,
-						],
-					)
-				}
-				#[doc = "Clear the metadata for an asset."]
-				#[doc = ""]
-				#[doc = "Origin must be ForceOrigin."]
-				#[doc = ""]
-				#[doc = "Any deposit is returned."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset to clear."]
-				#[doc = ""]
-				#[doc = "Emits `MetadataCleared`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn force_clear_metadata(
-					&self,
-					id: types::force_clear_metadata::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ForceClearMetadata>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"force_clear_metadata",
-						types::ForceClearMetadata { id },
-						[
-							2u8, 224u8, 84u8, 48u8, 130u8, 132u8, 79u8, 38u8, 217u8, 17u8, 165u8,
-							139u8, 89u8, 53u8, 116u8, 184u8, 32u8, 91u8, 122u8, 39u8, 85u8, 40u8,
-							213u8, 216u8, 135u8, 171u8, 50u8, 69u8, 202u8, 28u8, 166u8, 147u8,
-						],
-					)
-				}
-				#[doc = "Alter the attributes of a given asset."]
-				#[doc = ""]
-				#[doc = "Origin must be `ForceOrigin`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `owner`: The new Owner of this asset."]
-				#[doc = "- `issuer`: The new Issuer of this asset."]
-				#[doc = "- `admin`: The new Admin of this asset."]
-				#[doc = "- `freezer`: The new Freezer of this asset."]
-				#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-				#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-				#[doc = "- `is_sufficient`: Whether a non-zero balance of this asset is deposit of sufficient"]
-				#[doc = "value to account for the state bloat associated with its balance storage. If set to"]
-				#[doc = "`true`, then non-zero balances may be stored without a `consumer` reference (and thus"]
-				#[doc = "an ED in the Balances pallet or whatever else is used to control user-account state"]
-				#[doc = "growth)."]
-				#[doc = "- `is_frozen`: Whether this asset class is frozen except for permissioned/admin"]
-				#[doc = "instructions."]
-				#[doc = ""]
-				#[doc = "Emits `AssetStatusChanged` with the identity of the asset."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn force_asset_status(
-					&self,
-					id: types::force_asset_status::Id,
-					owner: types::force_asset_status::Owner,
-					issuer: types::force_asset_status::Issuer,
-					admin: types::force_asset_status::Admin,
-					freezer: types::force_asset_status::Freezer,
-					min_balance: types::force_asset_status::MinBalance,
-					is_sufficient: types::force_asset_status::IsSufficient,
-					is_frozen: types::force_asset_status::IsFrozen,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ForceAssetStatus>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"force_asset_status",
-						types::ForceAssetStatus {
-							id,
-							owner,
-							issuer,
-							admin,
-							freezer,
-							min_balance,
-							is_sufficient,
-							is_frozen,
-						},
-						[
-							149u8, 136u8, 250u8, 33u8, 53u8, 220u8, 207u8, 187u8, 42u8, 118u8,
-							93u8, 173u8, 100u8, 243u8, 234u8, 207u8, 88u8, 45u8, 79u8, 221u8,
-							113u8, 166u8, 229u8, 171u8, 223u8, 126u8, 20u8, 67u8, 19u8, 77u8, 44u8,
-							19u8,
-						],
-					)
-				}
-				#[doc = "Approve an amount of asset for transfer by a delegated third-party account."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed."]
-				#[doc = ""]
-				#[doc = "Ensures that `ApprovalDeposit` worth of `Currency` is reserved from signing account"]
-				#[doc = "for the purpose of holding the approval. If some non-zero amount of assets is already"]
-				#[doc = "approved from signing account to `delegate`, then it is topped up or unreserved to"]
-				#[doc = "meet the right value."]
-				#[doc = ""]
-				#[doc = "NOTE: The signing account does not need to own `amount` of assets at the point of"]
-				#[doc = "making this call."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `delegate`: The account to delegate permission to transfer asset."]
-				#[doc = "- `amount`: The amount of asset that may be transferred by `delegate`. If there is"]
-				#[doc = "already an approval in place, then this acts additively."]
-				#[doc = ""]
-				#[doc = "Emits `ApprovedTransfer` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn approve_transfer(
-					&self,
-					id: types::approve_transfer::Id,
-					delegate: types::approve_transfer::Delegate,
-					amount: types::approve_transfer::Amount,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ApproveTransfer>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"approve_transfer",
-						types::ApproveTransfer { id, delegate, amount },
-						[
-							39u8, 227u8, 23u8, 143u8, 10u8, 120u8, 227u8, 1u8, 223u8, 78u8, 40u8,
-							213u8, 249u8, 175u8, 170u8, 183u8, 10u8, 244u8, 117u8, 111u8, 140u8,
-							157u8, 153u8, 212u8, 94u8, 119u8, 213u8, 44u8, 41u8, 8u8, 114u8, 200u8,
-						],
-					)
-				}
-				#[doc = "Cancel all of some asset approved for delegated transfer by a third-party account."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and there must be an approval in place between signer and"]
-				#[doc = "`delegate`."]
-				#[doc = ""]
-				#[doc = "Unreserves any deposit previously reserved by `approve_transfer` for the approval."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `delegate`: The account delegated permission to transfer asset."]
-				#[doc = ""]
-				#[doc = "Emits `ApprovalCancelled` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn cancel_approval(
-					&self,
-					id: types::cancel_approval::Id,
-					delegate: types::cancel_approval::Delegate,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::CancelApproval>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"cancel_approval",
-						types::CancelApproval { id, delegate },
-						[
-							74u8, 117u8, 101u8, 78u8, 152u8, 208u8, 16u8, 102u8, 34u8, 195u8, 61u8,
-							36u8, 85u8, 91u8, 253u8, 182u8, 61u8, 199u8, 12u8, 102u8, 149u8, 20u8,
-							238u8, 207u8, 236u8, 50u8, 63u8, 249u8, 34u8, 85u8, 88u8, 229u8,
-						],
-					)
-				}
-				#[doc = "Cancel all of some asset approved for delegated transfer by a third-party account."]
-				#[doc = ""]
-				#[doc = "Origin must be either ForceOrigin or Signed origin with the signer being the Admin"]
-				#[doc = "account of the asset `id`."]
-				#[doc = ""]
-				#[doc = "Unreserves any deposit previously reserved by `approve_transfer` for the approval."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `delegate`: The account delegated permission to transfer asset."]
-				#[doc = ""]
-				#[doc = "Emits `ApprovalCancelled` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn force_cancel_approval(
-					&self,
-					id: types::force_cancel_approval::Id,
-					owner: types::force_cancel_approval::Owner,
-					delegate: types::force_cancel_approval::Delegate,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ForceCancelApproval>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"force_cancel_approval",
-						types::ForceCancelApproval { id, owner, delegate },
-						[
-							27u8, 231u8, 85u8, 241u8, 18u8, 151u8, 64u8, 234u8, 11u8, 84u8, 252u8,
-							128u8, 44u8, 247u8, 132u8, 82u8, 34u8, 210u8, 202u8, 50u8, 158u8, 45u8,
-							239u8, 192u8, 7u8, 24u8, 39u8, 95u8, 57u8, 21u8, 178u8, 113u8,
-						],
-					)
-				}
-				#[doc = "Transfer some asset balance from a previously delegated account to some third-party"]
-				#[doc = "account."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and there must be an approval in place by the `owner` to the"]
-				#[doc = "signer."]
-				#[doc = ""]
-				#[doc = "If the entire amount approved for transfer is transferred, then any deposit previously"]
-				#[doc = "reserved by `approve_transfer` is unreserved."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `owner`: The account which previously approved for a transfer of at least `amount` and"]
-				#[doc = "from which the asset balance will be withdrawn."]
-				#[doc = "- `destination`: The account to which the asset balance of `amount` will be transferred."]
-				#[doc = "- `amount`: The amount of assets to transfer."]
-				#[doc = ""]
-				#[doc = "Emits `TransferredApproved` on success."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn transfer_approved(
-					&self,
-					id: types::transfer_approved::Id,
-					owner: types::transfer_approved::Owner,
-					destination: types::transfer_approved::Destination,
-					amount: types::transfer_approved::Amount,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::TransferApproved>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"transfer_approved",
-						types::TransferApproved { id, owner, destination, amount },
-						[
-							214u8, 51u8, 243u8, 129u8, 116u8, 233u8, 199u8, 183u8, 25u8, 5u8,
-							109u8, 85u8, 255u8, 68u8, 36u8, 99u8, 99u8, 179u8, 34u8, 66u8, 65u8,
-							82u8, 189u8, 174u8, 22u8, 100u8, 211u8, 13u8, 178u8, 19u8, 128u8,
-							177u8,
-						],
-					)
-				}
-				#[doc = "Create an asset account for non-provider assets."]
-				#[doc = ""]
-				#[doc = "A deposit will be taken from the signer account."]
-				#[doc = ""]
-				#[doc = "- `origin`: Must be Signed; the signer account must have sufficient funds for a deposit"]
-				#[doc = "  to be taken."]
-				#[doc = "- `id`: The identifier of the asset for the account to be created."]
-				#[doc = ""]
-				#[doc = "Emits `Touched` event when successful."]
-				pub fn touch(
-					&self,
-					id: types::touch::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Touch> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"touch",
-						types::Touch { id },
-						[
-							50u8, 185u8, 46u8, 134u8, 136u8, 31u8, 191u8, 34u8, 215u8, 150u8, 73u8,
-							103u8, 140u8, 36u8, 95u8, 156u8, 201u8, 152u8, 32u8, 165u8, 47u8, 86u8,
-							163u8, 255u8, 8u8, 251u8, 176u8, 138u8, 165u8, 48u8, 12u8, 27u8,
-						],
-					)
-				}
-				#[doc = "Return the deposit (if any) of an asset account or a consumer reference (if any) of an"]
-				#[doc = "account."]
-				#[doc = ""]
-				#[doc = "The origin must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset for which the caller would like the deposit"]
-				#[doc = "  refunded."]
-				#[doc = "- `allow_burn`: If `true` then assets may be destroyed in order to complete the refund."]
-				#[doc = ""]
-				#[doc = "Emits `Refunded` event when successful."]
-				pub fn refund(
-					&self,
-					id: types::refund::Id,
-					allow_burn: types::refund::AllowBurn,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Refund> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"refund",
-						types::Refund { id, allow_burn },
-						[
-							218u8, 207u8, 8u8, 41u8, 154u8, 250u8, 117u8, 174u8, 143u8, 133u8,
-							34u8, 113u8, 171u8, 18u8, 177u8, 227u8, 146u8, 92u8, 12u8, 226u8,
-							101u8, 230u8, 246u8, 162u8, 32u8, 73u8, 138u8, 158u8, 95u8, 226u8,
-							75u8, 95u8,
-						],
-					)
-				}
-				#[doc = "Sets the minimum balance of an asset."]
-				#[doc = ""]
-				#[doc = "Only works if there aren't any accounts that are holding the asset or if"]
-				#[doc = "the new value of `min_balance` is less than the old one."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender has to be the Owner of the"]
-				#[doc = "asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset."]
-				#[doc = "- `min_balance`: The new value of `min_balance`."]
-				#[doc = ""]
-				#[doc = "Emits `AssetMinBalanceChanged` event when successful."]
-				pub fn set_min_balance(
-					&self,
-					id: types::set_min_balance::Id,
-					min_balance: types::set_min_balance::MinBalance,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetMinBalance>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"set_min_balance",
-						types::SetMinBalance { id, min_balance },
-						[
-							141u8, 241u8, 137u8, 50u8, 232u8, 122u8, 252u8, 104u8, 185u8, 170u8,
-							246u8, 0u8, 20u8, 128u8, 136u8, 155u8, 62u8, 243u8, 4u8, 221u8, 42u8,
-							225u8, 16u8, 245u8, 58u8, 127u8, 84u8, 193u8, 175u8, 165u8, 35u8, 49u8,
-						],
-					)
-				}
-				#[doc = "Create an asset account for `who`."]
-				#[doc = ""]
-				#[doc = "A deposit will be taken from the signer account."]
-				#[doc = ""]
-				#[doc = "- `origin`: Must be Signed by `Freezer` or `Admin` of the asset `id`; the signer account"]
-				#[doc = "  must have sufficient funds for a deposit to be taken."]
-				#[doc = "- `id`: The identifier of the asset for the account to be created."]
-				#[doc = "- `who`: The account to be created."]
-				#[doc = ""]
-				#[doc = "Emits `Touched` event when successful."]
-				pub fn touch_other(
-					&self,
-					id: types::touch_other::Id,
-					who: types::touch_other::Who,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::TouchOther> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"touch_other",
-						types::TouchOther { id, who },
-						[
-							104u8, 85u8, 80u8, 68u8, 135u8, 149u8, 102u8, 104u8, 188u8, 79u8, 42u8,
-							34u8, 241u8, 84u8, 183u8, 176u8, 215u8, 172u8, 78u8, 196u8, 206u8,
-							214u8, 138u8, 240u8, 92u8, 65u8, 117u8, 170u8, 140u8, 120u8, 50u8,
-							166u8,
-						],
-					)
-				}
-				#[doc = "Return the deposit (if any) of a target asset account. Useful if you are the depositor."]
-				#[doc = ""]
-				#[doc = "The origin must be Signed and either the account owner, depositor, or asset `Admin`. In"]
-				#[doc = "order to burn a non-zero balance of the asset, the caller must be the account and should"]
-				#[doc = "use `refund`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
-				#[doc = "- `who`: The account to refund."]
-				#[doc = ""]
-				#[doc = "Emits `Refunded` event when successful."]
-				pub fn refund_other(
-					&self,
-					id: types::refund_other::Id,
-					who: types::refund_other::Who,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::RefundOther> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"refund_other",
-						types::RefundOther { id, who },
-						[
-							113u8, 58u8, 33u8, 109u8, 233u8, 229u8, 210u8, 40u8, 176u8, 252u8,
-							131u8, 80u8, 33u8, 132u8, 19u8, 170u8, 145u8, 146u8, 246u8, 31u8,
-							222u8, 120u8, 167u8, 187u8, 8u8, 144u8, 164u8, 251u8, 52u8, 249u8,
-							91u8, 136u8,
-						],
-					)
-				}
-				#[doc = "Disallow further unprivileged transfers of an asset `id` to and from an account `who`."]
-				#[doc = ""]
-				#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the account's asset."]
-				#[doc = "- `who`: The account to be unblocked."]
-				#[doc = ""]
-				#[doc = "Emits `Blocked`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(1)`"]
-				pub fn block(
-					&self,
-					id: types::block::Id,
-					who: types::block::Who,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Block> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"block",
-						types::Block { id, who },
-						[
-							224u8, 63u8, 26u8, 229u8, 23u8, 164u8, 212u8, 170u8, 156u8, 104u8,
-							63u8, 158u8, 53u8, 162u8, 157u8, 127u8, 183u8, 94u8, 211u8, 123u8,
-							228u8, 198u8, 47u8, 80u8, 53u8, 122u8, 46u8, 69u8, 67u8, 170u8, 193u8,
-							33u8,
-						],
-					)
-				}
-				#[doc = "Transfer the entire transferable balance from the caller asset account."]
-				#[doc = ""]
-				#[doc = "NOTE: This function only attempts to transfer _transferable_ balances. This means that"]
-				#[doc = "any held, frozen, or minimum balance (when `keep_alive` is `true`), will not be"]
-				#[doc = "transferred by this function. To ensure that this function results in a killed account,"]
-				#[doc = "you might need to prepare the account by removing any reference counters, storage"]
-				#[doc = "deposits, etc..."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be Signed."]
-				#[doc = ""]
-				#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
-				#[doc = "- `dest`: The recipient of the transfer."]
-				#[doc = "- `keep_alive`: A boolean to determine if the `transfer_all` operation should send all"]
-				#[doc = "  of the funds the asset account has, causing the sender asset account to be killed"]
-				#[doc = "  (false), or transfer everything except at least the minimum balance, which will"]
-				#[doc = "  guarantee to keep the sender asset account alive (true)."]
-				pub fn transfer_all(
-					&self,
-					id: types::transfer_all::Id,
-					dest: types::transfer_all::Dest,
-					keep_alive: types::transfer_all::KeepAlive,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::TransferAll> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Assets",
-						"transfer_all",
-						types::TransferAll { id, dest, keep_alive },
-						[
-							180u8, 161u8, 252u8, 127u8, 200u8, 117u8, 245u8, 213u8, 170u8, 169u8,
-							178u8, 115u8, 156u8, 8u8, 79u8, 50u8, 168u8, 229u8, 87u8, 33u8, 238u8,
-							124u8, 13u8, 210u8, 81u8, 132u8, 236u8, 46u8, 101u8, 18u8, 22u8, 61u8,
-						],
-					)
-				}
-			}
-		}
-		#[doc = "The `Event` enum of this pallet"]
-		pub type Event = runtime_types::pallet_assets::pallet::Event;
-		pub mod events {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some asset class was created."]
-			pub struct Created {
-				pub asset_id: created::AssetId,
-				pub creator: created::Creator,
-				pub owner: created::Owner,
-			}
-			pub mod created {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Creator = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Owner = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Created {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Created";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some assets were issued."]
-			pub struct Issued {
-				pub asset_id: issued::AssetId,
-				pub owner: issued::Owner,
-				pub amount: issued::Amount,
-			}
-			pub mod issued {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Owner = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Issued {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Issued";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some assets were transferred."]
-			pub struct Transferred {
-				pub asset_id: transferred::AssetId,
-				pub from: transferred::From,
-				pub to: transferred::To,
-				pub amount: transferred::Amount,
-			}
-			pub mod transferred {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type From = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type To = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Transferred {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Transferred";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some assets were destroyed."]
-			pub struct Burned {
-				pub asset_id: burned::AssetId,
-				pub owner: burned::Owner,
-				pub balance: burned::Balance,
-			}
-			pub mod burned {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Owner = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Balance = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Burned {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Burned";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The management team changed."]
-			pub struct TeamChanged {
-				pub asset_id: team_changed::AssetId,
-				pub issuer: team_changed::Issuer,
-				pub admin: team_changed::Admin,
-				pub freezer: team_changed::Freezer,
-			}
-			pub mod team_changed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Issuer = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Admin = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Freezer = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for TeamChanged {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "TeamChanged";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The owner changed."]
-			pub struct OwnerChanged {
-				pub asset_id: owner_changed::AssetId,
-				pub owner: owner_changed::Owner,
-			}
-			pub mod owner_changed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Owner = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for OwnerChanged {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "OwnerChanged";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some account `who` was frozen."]
-			pub struct Frozen {
-				pub asset_id: frozen::AssetId,
-				pub who: frozen::Who,
-			}
-			pub mod frozen {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Frozen {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Frozen";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some account `who` was thawed."]
-			pub struct Thawed {
-				pub asset_id: thawed::AssetId,
-				pub who: thawed::Who,
-			}
-			pub mod thawed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Thawed {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Thawed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some asset `asset_id` was frozen."]
-			pub struct AssetFrozen {
-				pub asset_id: asset_frozen::AssetId,
-			}
-			pub mod asset_frozen {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for AssetFrozen {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "AssetFrozen";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some asset `asset_id` was thawed."]
-			pub struct AssetThawed {
-				pub asset_id: asset_thawed::AssetId,
-			}
-			pub mod asset_thawed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for AssetThawed {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "AssetThawed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Accounts were destroyed for given asset."]
-			pub struct AccountsDestroyed {
-				pub asset_id: accounts_destroyed::AssetId,
-				pub accounts_destroyed: accounts_destroyed::AccountsDestroyed,
-				pub accounts_remaining: accounts_destroyed::AccountsRemaining,
-			}
-			pub mod accounts_destroyed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type AccountsDestroyed = ::core::primitive::u32;
-				pub type AccountsRemaining = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for AccountsDestroyed {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "AccountsDestroyed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Approvals were destroyed for given asset."]
-			pub struct ApprovalsDestroyed {
-				pub asset_id: approvals_destroyed::AssetId,
-				pub approvals_destroyed: approvals_destroyed::ApprovalsDestroyed,
-				pub approvals_remaining: approvals_destroyed::ApprovalsRemaining,
-			}
-			pub mod approvals_destroyed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type ApprovalsDestroyed = ::core::primitive::u32;
-				pub type ApprovalsRemaining = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ApprovalsDestroyed {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "ApprovalsDestroyed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An asset class is in the process of being destroyed."]
-			pub struct DestructionStarted {
-				pub asset_id: destruction_started::AssetId,
-			}
-			pub mod destruction_started {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for DestructionStarted {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "DestructionStarted";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An asset class was destroyed."]
-			pub struct Destroyed {
-				pub asset_id: destroyed::AssetId,
-			}
-			pub mod destroyed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Destroyed {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Destroyed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some asset class was force-created."]
-			pub struct ForceCreated {
-				pub asset_id: force_created::AssetId,
-				pub owner: force_created::Owner,
-			}
-			pub mod force_created {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Owner = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ForceCreated {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "ForceCreated";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "New metadata has been set for an asset."]
-			pub struct MetadataSet {
-				pub asset_id: metadata_set::AssetId,
-				pub name: metadata_set::Name,
-				pub symbol: metadata_set::Symbol,
-				pub decimals: metadata_set::Decimals,
-				pub is_frozen: metadata_set::IsFrozen,
-			}
-			pub mod metadata_set {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Name = ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
-				pub type Symbol = ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
-				pub type Decimals = ::core::primitive::u8;
-				pub type IsFrozen = ::core::primitive::bool;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for MetadataSet {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "MetadataSet";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Metadata has been cleared for an asset."]
-			pub struct MetadataCleared {
-				pub asset_id: metadata_cleared::AssetId,
-			}
-			pub mod metadata_cleared {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for MetadataCleared {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "MetadataCleared";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "(Additional) funds have been approved for transfer to a destination account."]
-			pub struct ApprovedTransfer {
-				pub asset_id: approved_transfer::AssetId,
-				pub source: approved_transfer::Source,
-				pub delegate: approved_transfer::Delegate,
-				pub amount: approved_transfer::Amount,
-			}
-			pub mod approved_transfer {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Source = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Delegate = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ApprovedTransfer {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "ApprovedTransfer";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An approval for account `delegate` was cancelled by `owner`."]
-			pub struct ApprovalCancelled {
-				pub asset_id: approval_cancelled::AssetId,
-				pub owner: approval_cancelled::Owner,
-				pub delegate: approval_cancelled::Delegate,
-			}
-			pub mod approval_cancelled {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Owner = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Delegate = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ApprovalCancelled {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "ApprovalCancelled";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An `amount` was transferred in its entirety from `owner` to `destination` by"]
-			#[doc = "the approved `delegate`."]
-			pub struct TransferredApproved {
-				pub asset_id: transferred_approved::AssetId,
-				pub owner: transferred_approved::Owner,
-				pub delegate: transferred_approved::Delegate,
-				pub destination: transferred_approved::Destination,
-				pub amount: transferred_approved::Amount,
-			}
-			pub mod transferred_approved {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Owner = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Delegate = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Destination = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for TransferredApproved {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "TransferredApproved";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An asset has had its attributes changed by the `Force` origin."]
-			pub struct AssetStatusChanged {
-				pub asset_id: asset_status_changed::AssetId,
-			}
-			pub mod asset_status_changed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for AssetStatusChanged {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "AssetStatusChanged";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The min_balance of an asset has been updated by the asset owner."]
-			pub struct AssetMinBalanceChanged {
-				pub asset_id: asset_min_balance_changed::AssetId,
-				pub new_min_balance: asset_min_balance_changed::NewMinBalance,
-			}
-			pub mod asset_min_balance_changed {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type NewMinBalance = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for AssetMinBalanceChanged {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "AssetMinBalanceChanged";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some account `who` was created with a deposit from `depositor`."]
-			pub struct Touched {
-				pub asset_id: touched::AssetId,
-				pub who: touched::Who,
-				pub depositor: touched::Depositor,
-			}
-			pub mod touched {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Depositor = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Touched {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Touched";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some account `who` was blocked."]
-			pub struct Blocked {
-				pub asset_id: blocked::AssetId,
-				pub who: blocked::Who,
-			}
-			pub mod blocked {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Blocked {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Blocked";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some assets were deposited (e.g. for transaction fees)."]
-			pub struct Deposited {
-				pub asset_id: deposited::AssetId,
-				pub who: deposited::Who,
-				pub amount: deposited::Amount,
-			}
-			pub mod deposited {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Deposited {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Deposited";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Some assets were withdrawn from the account (e.g. for transaction fees)."]
-			pub struct Withdrawn {
-				pub asset_id: withdrawn::AssetId,
-				pub who: withdrawn::Who,
-				pub amount: withdrawn::Amount,
-			}
-			pub mod withdrawn {
-				use super::runtime_types;
-				pub type AssetId = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Withdrawn {
-				const PALLET: &'static str = "Assets";
-				const EVENT: &'static str = "Withdrawn";
-			}
-		}
-		pub mod storage {
-			use super::runtime_types;
-			pub mod types {
-				use super::runtime_types;
-				pub mod asset {
-					use super::runtime_types;
-					pub type Asset = runtime_types::pallet_assets::types::AssetDetails<
-						::core::primitive::u128,
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u128,
-					>;
-					pub type Param0 = ::core::primitive::u32;
-				}
-				pub mod account {
-					use super::runtime_types;
-					pub type Account = runtime_types::pallet_assets::types::AssetAccount<
-						::core::primitive::u128,
-						::core::primitive::u128,
-						(),
-						::subxt::ext::subxt_core::utils::AccountId32,
-					>;
-					pub type Param0 = ::core::primitive::u32;
-					pub type Param1 = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
-				pub mod approvals {
-					use super::runtime_types;
-					pub type Approvals = runtime_types::pallet_assets::types::Approval<
-						::core::primitive::u128,
-						::core::primitive::u128,
-					>;
-					pub type Param0 = ::core::primitive::u32;
-					pub type Param1 = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type Param2 = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
-				pub mod metadata {
-					use super::runtime_types;
-					pub type Metadata = runtime_types::pallet_assets::types::AssetMetadata<
-						::core::primitive::u128,
-						runtime_types::bounded_collections::bounded_vec::BoundedVec<
-							::core::primitive::u8,
-						>,
-					>;
-					pub type Param0 = ::core::primitive::u32;
-				}
-				pub mod next_asset_id {
-					use super::runtime_types;
-					pub type NextAssetId = ::core::primitive::u32;
-				}
-			}
-			pub struct StorageApi;
-			impl StorageApi {
-				#[doc = " Details of an asset."]
-				pub fn asset_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::asset::Asset,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Asset",
-						(),
-						[
-							159u8, 234u8, 177u8, 31u8, 58u8, 51u8, 173u8, 184u8, 250u8, 169u8,
-							246u8, 122u8, 54u8, 19u8, 232u8, 60u8, 0u8, 165u8, 12u8, 101u8, 93u8,
-							169u8, 23u8, 34u8, 154u8, 44u8, 134u8, 128u8, 97u8, 71u8, 167u8, 224u8,
-						],
-					)
-				}
-				#[doc = " Details of an asset."]
-				pub fn asset(
-					&self,
-					_0: types::asset::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::asset::Param0,
-					>,
-					types::asset::Asset,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Asset",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							159u8, 234u8, 177u8, 31u8, 58u8, 51u8, 173u8, 184u8, 250u8, 169u8,
-							246u8, 122u8, 54u8, 19u8, 232u8, 60u8, 0u8, 165u8, 12u8, 101u8, 93u8,
-							169u8, 23u8, 34u8, 154u8, 44u8, 134u8, 128u8, 97u8, 71u8, 167u8, 224u8,
-						],
-					)
-				}
-				#[doc = " The holdings of a specific account for a specific asset."]
-				pub fn account_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::account::Account,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Account",
-						(),
-						[
-							188u8, 242u8, 133u8, 64u8, 0u8, 11u8, 57u8, 146u8, 60u8, 137u8, 35u8,
-							23u8, 183u8, 200u8, 242u8, 8u8, 94u8, 158u8, 218u8, 13u8, 104u8, 215u8,
-							87u8, 86u8, 69u8, 200u8, 11u8, 51u8, 6u8, 65u8, 216u8, 102u8,
-						],
-					)
-				}
-				#[doc = " The holdings of a specific account for a specific asset."]
-				pub fn account_iter1(
-					&self,
-					_0: types::account::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::account::Param0,
-					>,
-					types::account::Account,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Account",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							188u8, 242u8, 133u8, 64u8, 0u8, 11u8, 57u8, 146u8, 60u8, 137u8, 35u8,
-							23u8, 183u8, 200u8, 242u8, 8u8, 94u8, 158u8, 218u8, 13u8, 104u8, 215u8,
-							87u8, 86u8, 69u8, 200u8, 11u8, 51u8, 6u8, 65u8, 216u8, 102u8,
-						],
-					)
-				}
-				#[doc = " The holdings of a specific account for a specific asset."]
-				pub fn account(
-					&self,
-					_0: types::account::Param0,
-					_1: types::account::Param1,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::account::Param0,
-						>,
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::account::Param1,
-						>,
-					),
-					types::account::Account,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Account",
-						(
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
-						),
-						[
-							188u8, 242u8, 133u8, 64u8, 0u8, 11u8, 57u8, 146u8, 60u8, 137u8, 35u8,
-							23u8, 183u8, 200u8, 242u8, 8u8, 94u8, 158u8, 218u8, 13u8, 104u8, 215u8,
-							87u8, 86u8, 69u8, 200u8, 11u8, 51u8, 6u8, 65u8, 216u8, 102u8,
-						],
-					)
-				}
-				#[doc = " Approved balance transfers. First balance is the amount approved for transfer. Second"]
-				#[doc = " is the amount of `T::Currency` reserved for storing this."]
-				#[doc = " First key is the asset ID, second key is the owner and third key is the delegate."]
-				pub fn approvals_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::approvals::Approvals,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Approvals",
-						(),
-						[
-							122u8, 92u8, 51u8, 45u8, 200u8, 200u8, 182u8, 208u8, 18u8, 47u8, 139u8,
-							68u8, 254u8, 15u8, 152u8, 110u8, 3u8, 138u8, 13u8, 183u8, 5u8, 185u8,
-							218u8, 44u8, 93u8, 28u8, 56u8, 189u8, 125u8, 127u8, 123u8, 8u8,
-						],
-					)
-				}
-				#[doc = " Approved balance transfers. First balance is the amount approved for transfer. Second"]
-				#[doc = " is the amount of `T::Currency` reserved for storing this."]
-				#[doc = " First key is the asset ID, second key is the owner and third key is the delegate."]
-				pub fn approvals_iter1(
-					&self,
-					_0: types::approvals::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::approvals::Param0,
-					>,
-					types::approvals::Approvals,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Approvals",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							122u8, 92u8, 51u8, 45u8, 200u8, 200u8, 182u8, 208u8, 18u8, 47u8, 139u8,
-							68u8, 254u8, 15u8, 152u8, 110u8, 3u8, 138u8, 13u8, 183u8, 5u8, 185u8,
-							218u8, 44u8, 93u8, 28u8, 56u8, 189u8, 125u8, 127u8, 123u8, 8u8,
-						],
-					)
-				}
-				#[doc = " Approved balance transfers. First balance is the amount approved for transfer. Second"]
-				#[doc = " is the amount of `T::Currency` reserved for storing this."]
-				#[doc = " First key is the asset ID, second key is the owner and third key is the delegate."]
-				pub fn approvals_iter2(
-					&self,
-					_0: types::approvals::Param0,
-					_1: types::approvals::Param1,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::approvals::Param0,
-						>,
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::approvals::Param1,
-						>,
-					),
-					types::approvals::Approvals,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Approvals",
-						(
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
-						),
-						[
-							122u8, 92u8, 51u8, 45u8, 200u8, 200u8, 182u8, 208u8, 18u8, 47u8, 139u8,
-							68u8, 254u8, 15u8, 152u8, 110u8, 3u8, 138u8, 13u8, 183u8, 5u8, 185u8,
-							218u8, 44u8, 93u8, 28u8, 56u8, 189u8, 125u8, 127u8, 123u8, 8u8,
-						],
-					)
-				}
-				#[doc = " Approved balance transfers. First balance is the amount approved for transfer. Second"]
-				#[doc = " is the amount of `T::Currency` reserved for storing this."]
-				#[doc = " First key is the asset ID, second key is the owner and third key is the delegate."]
-				pub fn approvals(
-					&self,
-					_0: types::approvals::Param0,
-					_1: types::approvals::Param1,
-					_2: types::approvals::Param2,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::approvals::Param0,
-						>,
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::approvals::Param1,
-						>,
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::approvals::Param2,
-						>,
-					),
-					types::approvals::Approvals,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Approvals",
-						(
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_2),
-						),
-						[
-							122u8, 92u8, 51u8, 45u8, 200u8, 200u8, 182u8, 208u8, 18u8, 47u8, 139u8,
-							68u8, 254u8, 15u8, 152u8, 110u8, 3u8, 138u8, 13u8, 183u8, 5u8, 185u8,
-							218u8, 44u8, 93u8, 28u8, 56u8, 189u8, 125u8, 127u8, 123u8, 8u8,
-						],
-					)
-				}
-				#[doc = " Metadata of an asset."]
-				pub fn metadata_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::metadata::Metadata,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Metadata",
-						(),
-						[
-							129u8, 202u8, 244u8, 77u8, 55u8, 81u8, 86u8, 106u8, 20u8, 153u8, 209u8,
-							69u8, 199u8, 107u8, 111u8, 49u8, 88u8, 157u8, 84u8, 41u8, 198u8, 190u8,
-							234u8, 218u8, 68u8, 207u8, 87u8, 217u8, 73u8, 66u8, 211u8, 163u8,
-						],
-					)
-				}
-				#[doc = " Metadata of an asset."]
-				pub fn metadata(
-					&self,
-					_0: types::metadata::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::metadata::Param0,
-					>,
-					types::metadata::Metadata,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"Metadata",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							129u8, 202u8, 244u8, 77u8, 55u8, 81u8, 86u8, 106u8, 20u8, 153u8, 209u8,
-							69u8, 199u8, 107u8, 111u8, 49u8, 88u8, 157u8, 84u8, 41u8, 198u8, 190u8,
-							234u8, 218u8, 68u8, 207u8, 87u8, 217u8, 73u8, 66u8, 211u8, 163u8,
-						],
-					)
-				}
-				#[doc = " The asset ID enforced for the next asset creation, if any present. Otherwise, this storage"]
-				#[doc = " item has no effect."]
-				#[doc = ""]
-				#[doc = " This can be useful for setting up constraints for IDs of the new assets. For example, by"]
-				#[doc = " providing an initial [`NextAssetId`] and using the [`crate::AutoIncAssetId`] callback, an"]
-				#[doc = " auto-increment model can be applied to all new asset IDs."]
-				#[doc = ""]
-				#[doc = " The initial next asset ID can be set using the [`GenesisConfig`] or the"]
-				#[doc = " [SetNextAssetId](`migration::next_asset_id::SetNextAssetId`) migration."]
-				pub fn next_asset_id(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::next_asset_id::NextAssetId,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Assets",
-						"NextAssetId",
-						(),
-						[
-							15u8, 61u8, 40u8, 217u8, 236u8, 34u8, 95u8, 53u8, 159u8, 182u8, 70u8,
-							251u8, 234u8, 188u8, 115u8, 23u8, 199u8, 118u8, 220u8, 40u8, 147u8,
-							174u8, 247u8, 129u8, 246u8, 107u8, 178u8, 43u8, 8u8, 19u8, 74u8, 116u8,
-						],
-					)
-				}
-			}
-		}
-		pub mod constants {
-			use super::runtime_types;
-			pub struct ConstantsApi;
-			impl ConstantsApi {
-				#[doc = " Max number of items to destroy per `destroy_accounts` and `destroy_approvals` call."]
-				#[doc = ""]
-				#[doc = " Must be configured to result in a weight that makes each call fit in a block."]
-				pub fn remove_items_limit(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Assets",
-						"RemoveItemsLimit",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
-				#[doc = " The basic amount of funds that must be reserved for an asset."]
-				pub fn asset_deposit(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Assets",
-						"AssetDeposit",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " The amount of funds that must be reserved for a non-provider asset account to be"]
-				#[doc = " maintained."]
-				pub fn asset_account_deposit(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Assets",
-						"AssetAccountDeposit",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " The basic amount of funds that must be reserved when adding metadata to your asset."]
-				pub fn metadata_deposit_base(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Assets",
-						"MetadataDepositBase",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " The additional funds that must be reserved for the number of bytes you store in your"]
-				#[doc = " metadata."]
-				pub fn metadata_deposit_per_byte(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Assets",
-						"MetadataDepositPerByte",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " The amount of funds that must be reserved when creating a new approval."]
-				pub fn approval_deposit(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Assets",
-						"ApprovalDeposit",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " The maximum length of a name or symbol stored on-chain."]
-				pub fn string_limit(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Assets",
-						"StringLimit",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
-			}
-		}
-	}
 	pub mod runtime_types {
 		use super::runtime_types;
 		pub mod bounded_collections {
@@ -19082,6 +17950,8 @@ pub mod api {
 					Signed(_0),
 					#[codec(index = 2)]
 					None,
+					#[codec(index = 3)]
+					Authorized,
 				}
 			}
 			pub mod traits {
@@ -19542,6 +18412,12 @@ pub mod api {
 						code_hash: ::subxt::ext::subxt_core::utils::H256,
 						check_version: ::core::primitive::bool,
 					},
+					#[codec(index = 7)]
+					#[doc = "An invalid authorized upgrade was rejected while trying to apply it."]
+					RejectedInvalidAuthorizedUpgrade {
+						code_hash: ::subxt::ext::subxt_core::utils::H256,
+						error: runtime_types::sp_runtime::DispatchError,
+					},
 				}
 			}
 			#[derive(
@@ -19619,1170 +18495,6 @@ pub mod api {
 				Finalization,
 				#[codec(index = 2)]
 				Initialization,
-			}
-		}
-		pub mod pallet_assets {
-			use super::runtime_types;
-			pub mod pallet {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-				pub enum Call {
-					#[codec(index = 0)]
-					#[doc = "Issue a new class of fungible assets from a public origin."]
-					#[doc = ""]
-					#[doc = "This new asset class has no assets initially and its owner is the origin."]
-					#[doc = ""]
-					#[doc = "The origin must conform to the configured `CreateOrigin` and have sufficient funds free."]
-					#[doc = ""]
-					#[doc = "Funds of sender are reserved by `AssetDeposit`."]
-					#[doc = ""]
-					#[doc = "Parameters:"]
-					#[doc = "- `id`: The identifier of the new asset. This must not be currently in use to identify"]
-					#[doc = "an existing asset. If [`NextAssetId`] is set, then this must be equal to it."]
-					#[doc = "- `admin`: The admin of this class of assets. The admin is the initial address of each"]
-					#[doc = "member of the asset class's admin team."]
-					#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-					#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-					#[doc = ""]
-					#[doc = "Emits `Created` event when successful."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					create {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						admin: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						min_balance: ::core::primitive::u128,
-					},
-					#[codec(index = 1)]
-					#[doc = "Issue a new class of fungible assets from a privileged origin."]
-					#[doc = ""]
-					#[doc = "This new asset class has no assets initially."]
-					#[doc = ""]
-					#[doc = "The origin must conform to `ForceOrigin`."]
-					#[doc = ""]
-					#[doc = "Unlike `create`, no funds are reserved."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the new asset. This must not be currently in use to identify"]
-					#[doc = "an existing asset. If [`NextAssetId`] is set, then this must be equal to it."]
-					#[doc = "- `owner`: The owner of this class of assets. The owner has full superuser permissions"]
-					#[doc = "over this asset, but may later change and configure the permissions using"]
-					#[doc = "`transfer_ownership` and `set_team`."]
-					#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-					#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-					#[doc = ""]
-					#[doc = "Emits `ForceCreated` event when successful."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					force_create {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						is_sufficient: ::core::primitive::bool,
-						#[codec(compact)]
-						min_balance: ::core::primitive::u128,
-					},
-					#[codec(index = 2)]
-					#[doc = "Start the process of destroying a fungible asset class."]
-					#[doc = ""]
-					#[doc = "`start_destroy` is the first in a series of extrinsics that should be called, to allow"]
-					#[doc = "destruction of an asset class."]
-					#[doc = ""]
-					#[doc = "The origin must conform to `ForceOrigin` or must be `Signed` by the asset's `owner`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-					#[doc = "  asset."]
-					start_destroy {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 3)]
-					#[doc = "Destroy all accounts associated with a given asset."]
-					#[doc = ""]
-					#[doc = "`destroy_accounts` should only be called after `start_destroy` has been called, and the"]
-					#[doc = "asset is in a `Destroying` state."]
-					#[doc = ""]
-					#[doc = "Due to weight restrictions, this function may need to be called multiple times to fully"]
-					#[doc = "destroy all accounts. It will destroy `RemoveItemsLimit` accounts at a time."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-					#[doc = "  asset."]
-					#[doc = ""]
-					#[doc = "Each call emits the `Event::DestroyedAccounts` event."]
-					destroy_accounts {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 4)]
-					#[doc = "Destroy all approvals associated with a given asset up to the max (T::RemoveItemsLimit)."]
-					#[doc = ""]
-					#[doc = "`destroy_approvals` should only be called after `start_destroy` has been called, and the"]
-					#[doc = "asset is in a `Destroying` state."]
-					#[doc = ""]
-					#[doc = "Due to weight restrictions, this function may need to be called multiple times to fully"]
-					#[doc = "destroy all approvals. It will destroy `RemoveItemsLimit` approvals at a time."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-					#[doc = "  asset."]
-					#[doc = ""]
-					#[doc = "Each call emits the `Event::DestroyedApprovals` event."]
-					destroy_approvals {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 5)]
-					#[doc = "Complete destroying asset and unreserve currency."]
-					#[doc = ""]
-					#[doc = "`finish_destroy` should only be called after `start_destroy` has been called, and the"]
-					#[doc = "asset is in a `Destroying` state. All accounts or approvals should be destroyed before"]
-					#[doc = "hand."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
-					#[doc = "  asset."]
-					#[doc = ""]
-					#[doc = "Each successful call emits the `Event::Destroyed` event."]
-					finish_destroy {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 6)]
-					#[doc = "Mint assets of a particular class."]
-					#[doc = ""]
-					#[doc = "The origin must be Signed and the sender must be the Issuer of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to have some amount minted."]
-					#[doc = "- `beneficiary`: The account to be credited with the minted assets."]
-					#[doc = "- `amount`: The amount of the asset to be minted."]
-					#[doc = ""]
-					#[doc = "Emits `Issued` event when successful."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					#[doc = "Modes: Pre-existing balance of `beneficiary`; Account pre-existence of `beneficiary`."]
-					mint {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						beneficiary: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 7)]
-					#[doc = "Reduce the balance of `who` by as much as possible up to `amount` assets of `id`."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Manager of the asset `id`."]
-					#[doc = ""]
-					#[doc = "Bails with `NoAccount` if the `who` is already dead."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to have some amount burned."]
-					#[doc = "- `who`: The account to be debited from."]
-					#[doc = "- `amount`: The maximum amount by which `who`'s balance should be reduced."]
-					#[doc = ""]
-					#[doc = "Emits `Burned` with the actual amount burned. If this takes the balance to below the"]
-					#[doc = "minimum for the asset, then the amount burned is increased to take it to zero."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					#[doc = "Modes: Post-existence of `who`; Pre & post Zombie-status of `who`."]
-					burn {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 8)]
-					#[doc = "Move some assets from the sender account to another."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-					#[doc = "- `target`: The account to be credited."]
-					#[doc = "- `amount`: The amount by which the sender's balance of assets should be reduced and"]
-					#[doc = "`target`'s balance increased. The amount actually transferred may be slightly greater in"]
-					#[doc = "the case that the transfer would otherwise take the sender balance above zero but below"]
-					#[doc = "the minimum balance. Must be greater than zero."]
-					#[doc = ""]
-					#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-					#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-					#[doc = "to zero."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					#[doc = "Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of"]
-					#[doc = "`target`."]
-					transfer {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 9)]
-					#[doc = "Move some assets from the sender account to another, keeping the sender account alive."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-					#[doc = "- `target`: The account to be credited."]
-					#[doc = "- `amount`: The amount by which the sender's balance of assets should be reduced and"]
-					#[doc = "`target`'s balance increased. The amount actually transferred may be slightly greater in"]
-					#[doc = "the case that the transfer would otherwise take the sender balance above zero but below"]
-					#[doc = "the minimum balance. Must be greater than zero."]
-					#[doc = ""]
-					#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-					#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-					#[doc = "to zero."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					#[doc = "Modes: Pre-existence of `target`; Post-existence of sender; Account pre-existence of"]
-					#[doc = "`target`."]
-					transfer_keep_alive {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 10)]
-					#[doc = "Move some assets from one account to another."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to have some amount transferred."]
-					#[doc = "- `source`: The account to be debited."]
-					#[doc = "- `dest`: The account to be credited."]
-					#[doc = "- `amount`: The amount by which the `source`'s balance of assets should be reduced and"]
-					#[doc = "`dest`'s balance increased. The amount actually transferred may be slightly greater in"]
-					#[doc = "the case that the transfer would otherwise take the `source` balance above zero but"]
-					#[doc = "below the minimum balance. Must be greater than zero."]
-					#[doc = ""]
-					#[doc = "Emits `Transferred` with the actual amount transferred. If this takes the source balance"]
-					#[doc = "to below the minimum for the asset, then the amount transferred is increased to take it"]
-					#[doc = "to zero."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					#[doc = "Modes: Pre-existence of `dest`; Post-existence of `source`; Account pre-existence of"]
-					#[doc = "`dest`."]
-					force_transfer {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						source: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						dest: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 11)]
-					#[doc = "Disallow further unprivileged transfers of an asset `id` from an account `who`. `who`"]
-					#[doc = "must already exist as an entry in `Account`s of the asset. If you want to freeze an"]
-					#[doc = "account that does not have an entry, use `touch_other` first."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be frozen."]
-					#[doc = "- `who`: The account to be frozen."]
-					#[doc = ""]
-					#[doc = "Emits `Frozen`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					freeze {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 12)]
-					#[doc = "Allow unprivileged transfers to and from an account again."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be frozen."]
-					#[doc = "- `who`: The account to be unfrozen."]
-					#[doc = ""]
-					#[doc = "Emits `Thawed`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					thaw {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 13)]
-					#[doc = "Disallow further unprivileged transfers for the asset class."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be frozen."]
-					#[doc = ""]
-					#[doc = "Emits `Frozen`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					freeze_asset {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 14)]
-					#[doc = "Allow unprivileged transfers for the asset again."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Admin of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be thawed."]
-					#[doc = ""]
-					#[doc = "Emits `Thawed`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					thaw_asset {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 15)]
-					#[doc = "Change the Owner of an asset."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset."]
-					#[doc = "- `owner`: The new Owner of this asset."]
-					#[doc = ""]
-					#[doc = "Emits `OwnerChanged`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					transfer_ownership {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 16)]
-					#[doc = "Change the Issuer, Admin and Freezer of an asset."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to be frozen."]
-					#[doc = "- `issuer`: The new Issuer of this asset."]
-					#[doc = "- `admin`: The new Admin of this asset."]
-					#[doc = "- `freezer`: The new Freezer of this asset."]
-					#[doc = ""]
-					#[doc = "Emits `TeamChanged`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					set_team {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						issuer: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						admin: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						freezer: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 17)]
-					#[doc = "Set the metadata for an asset."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-					#[doc = ""]
-					#[doc = "Funds of sender are reserved according to the formula:"]
-					#[doc = "`MetadataDepositBase + MetadataDepositPerByte * (name.len + symbol.len)` taking into"]
-					#[doc = "account any already reserved funds."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to update."]
-					#[doc = "- `name`: The user friendly name of this asset. Limited in length by `StringLimit`."]
-					#[doc = "- `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`."]
-					#[doc = "- `decimals`: The number of decimals this asset uses to represent one unit."]
-					#[doc = ""]
-					#[doc = "Emits `MetadataSet`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					set_metadata {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						name: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
-						symbol: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
-						decimals: ::core::primitive::u8,
-					},
-					#[codec(index = 18)]
-					#[doc = "Clear the metadata for an asset."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Owner of the asset `id`."]
-					#[doc = ""]
-					#[doc = "Any deposit is freed for the asset owner."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to clear."]
-					#[doc = ""]
-					#[doc = "Emits `MetadataCleared`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					clear_metadata {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 19)]
-					#[doc = "Force the metadata for an asset to some value."]
-					#[doc = ""]
-					#[doc = "Origin must be ForceOrigin."]
-					#[doc = ""]
-					#[doc = "Any deposit is left alone."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to update."]
-					#[doc = "- `name`: The user friendly name of this asset. Limited in length by `StringLimit`."]
-					#[doc = "- `symbol`: The exchange symbol for this asset. Limited in length by `StringLimit`."]
-					#[doc = "- `decimals`: The number of decimals this asset uses to represent one unit."]
-					#[doc = ""]
-					#[doc = "Emits `MetadataSet`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(N + S)` where N and S are the length of the name and symbol respectively."]
-					force_set_metadata {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						name: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
-						symbol: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
-						decimals: ::core::primitive::u8,
-						is_frozen: ::core::primitive::bool,
-					},
-					#[codec(index = 20)]
-					#[doc = "Clear the metadata for an asset."]
-					#[doc = ""]
-					#[doc = "Origin must be ForceOrigin."]
-					#[doc = ""]
-					#[doc = "Any deposit is returned."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset to clear."]
-					#[doc = ""]
-					#[doc = "Emits `MetadataCleared`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					force_clear_metadata {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 21)]
-					#[doc = "Alter the attributes of a given asset."]
-					#[doc = ""]
-					#[doc = "Origin must be `ForceOrigin`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset."]
-					#[doc = "- `owner`: The new Owner of this asset."]
-					#[doc = "- `issuer`: The new Issuer of this asset."]
-					#[doc = "- `admin`: The new Admin of this asset."]
-					#[doc = "- `freezer`: The new Freezer of this asset."]
-					#[doc = "- `min_balance`: The minimum balance of this new asset that any single account must"]
-					#[doc = "have. If an account's balance is reduced below this, then it collapses to zero."]
-					#[doc = "- `is_sufficient`: Whether a non-zero balance of this asset is deposit of sufficient"]
-					#[doc = "value to account for the state bloat associated with its balance storage. If set to"]
-					#[doc = "`true`, then non-zero balances may be stored without a `consumer` reference (and thus"]
-					#[doc = "an ED in the Balances pallet or whatever else is used to control user-account state"]
-					#[doc = "growth)."]
-					#[doc = "- `is_frozen`: Whether this asset class is frozen except for permissioned/admin"]
-					#[doc = "instructions."]
-					#[doc = ""]
-					#[doc = "Emits `AssetStatusChanged` with the identity of the asset."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					force_asset_status {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						issuer: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						admin: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						freezer: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						min_balance: ::core::primitive::u128,
-						is_sufficient: ::core::primitive::bool,
-						is_frozen: ::core::primitive::bool,
-					},
-					#[codec(index = 22)]
-					#[doc = "Approve an amount of asset for transfer by a delegated third-party account."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed."]
-					#[doc = ""]
-					#[doc = "Ensures that `ApprovalDeposit` worth of `Currency` is reserved from signing account"]
-					#[doc = "for the purpose of holding the approval. If some non-zero amount of assets is already"]
-					#[doc = "approved from signing account to `delegate`, then it is topped up or unreserved to"]
-					#[doc = "meet the right value."]
-					#[doc = ""]
-					#[doc = "NOTE: The signing account does not need to own `amount` of assets at the point of"]
-					#[doc = "making this call."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset."]
-					#[doc = "- `delegate`: The account to delegate permission to transfer asset."]
-					#[doc = "- `amount`: The amount of asset that may be transferred by `delegate`. If there is"]
-					#[doc = "already an approval in place, then this acts additively."]
-					#[doc = ""]
-					#[doc = "Emits `ApprovedTransfer` on success."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					approve_transfer {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						delegate: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 23)]
-					#[doc = "Cancel all of some asset approved for delegated transfer by a third-party account."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and there must be an approval in place between signer and"]
-					#[doc = "`delegate`."]
-					#[doc = ""]
-					#[doc = "Unreserves any deposit previously reserved by `approve_transfer` for the approval."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset."]
-					#[doc = "- `delegate`: The account delegated permission to transfer asset."]
-					#[doc = ""]
-					#[doc = "Emits `ApprovalCancelled` on success."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					cancel_approval {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						delegate: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 24)]
-					#[doc = "Cancel all of some asset approved for delegated transfer by a third-party account."]
-					#[doc = ""]
-					#[doc = "Origin must be either ForceOrigin or Signed origin with the signer being the Admin"]
-					#[doc = "account of the asset `id`."]
-					#[doc = ""]
-					#[doc = "Unreserves any deposit previously reserved by `approve_transfer` for the approval."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset."]
-					#[doc = "- `delegate`: The account delegated permission to transfer asset."]
-					#[doc = ""]
-					#[doc = "Emits `ApprovalCancelled` on success."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					force_cancel_approval {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						delegate: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 25)]
-					#[doc = "Transfer some asset balance from a previously delegated account to some third-party"]
-					#[doc = "account."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and there must be an approval in place by the `owner` to the"]
-					#[doc = "signer."]
-					#[doc = ""]
-					#[doc = "If the entire amount approved for transfer is transferred, then any deposit previously"]
-					#[doc = "reserved by `approve_transfer` is unreserved."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset."]
-					#[doc = "- `owner`: The account which previously approved for a transfer of at least `amount` and"]
-					#[doc = "from which the asset balance will be withdrawn."]
-					#[doc = "- `destination`: The account to which the asset balance of `amount` will be transferred."]
-					#[doc = "- `amount`: The amount of assets to transfer."]
-					#[doc = ""]
-					#[doc = "Emits `TransferredApproved` on success."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					transfer_approved {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						destination: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						#[codec(compact)]
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 26)]
-					#[doc = "Create an asset account for non-provider assets."]
-					#[doc = ""]
-					#[doc = "A deposit will be taken from the signer account."]
-					#[doc = ""]
-					#[doc = "- `origin`: Must be Signed; the signer account must have sufficient funds for a deposit"]
-					#[doc = "  to be taken."]
-					#[doc = "- `id`: The identifier of the asset for the account to be created."]
-					#[doc = ""]
-					#[doc = "Emits `Touched` event when successful."]
-					touch {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-					},
-					#[codec(index = 27)]
-					#[doc = "Return the deposit (if any) of an asset account or a consumer reference (if any) of an"]
-					#[doc = "account."]
-					#[doc = ""]
-					#[doc = "The origin must be Signed."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset for which the caller would like the deposit"]
-					#[doc = "  refunded."]
-					#[doc = "- `allow_burn`: If `true` then assets may be destroyed in order to complete the refund."]
-					#[doc = ""]
-					#[doc = "Emits `Refunded` event when successful."]
-					refund {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						allow_burn: ::core::primitive::bool,
-					},
-					#[codec(index = 28)]
-					#[doc = "Sets the minimum balance of an asset."]
-					#[doc = ""]
-					#[doc = "Only works if there aren't any accounts that are holding the asset or if"]
-					#[doc = "the new value of `min_balance` is less than the old one."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender has to be the Owner of the"]
-					#[doc = "asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset."]
-					#[doc = "- `min_balance`: The new value of `min_balance`."]
-					#[doc = ""]
-					#[doc = "Emits `AssetMinBalanceChanged` event when successful."]
-					set_min_balance {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						min_balance: ::core::primitive::u128,
-					},
-					#[codec(index = 29)]
-					#[doc = "Create an asset account for `who`."]
-					#[doc = ""]
-					#[doc = "A deposit will be taken from the signer account."]
-					#[doc = ""]
-					#[doc = "- `origin`: Must be Signed by `Freezer` or `Admin` of the asset `id`; the signer account"]
-					#[doc = "  must have sufficient funds for a deposit to be taken."]
-					#[doc = "- `id`: The identifier of the asset for the account to be created."]
-					#[doc = "- `who`: The account to be created."]
-					#[doc = ""]
-					#[doc = "Emits `Touched` event when successful."]
-					touch_other {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 30)]
-					#[doc = "Return the deposit (if any) of a target asset account. Useful if you are the depositor."]
-					#[doc = ""]
-					#[doc = "The origin must be Signed and either the account owner, depositor, or asset `Admin`. In"]
-					#[doc = "order to burn a non-zero balance of the asset, the caller must be the account and should"]
-					#[doc = "use `refund`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
-					#[doc = "- `who`: The account to refund."]
-					#[doc = ""]
-					#[doc = "Emits `Refunded` event when successful."]
-					refund_other {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 31)]
-					#[doc = "Disallow further unprivileged transfers of an asset `id` to and from an account `who`."]
-					#[doc = ""]
-					#[doc = "Origin must be Signed and the sender should be the Freezer of the asset `id`."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the account's asset."]
-					#[doc = "- `who`: The account to be unblocked."]
-					#[doc = ""]
-					#[doc = "Emits `Blocked`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(1)`"]
-					block {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 32)]
-					#[doc = "Transfer the entire transferable balance from the caller asset account."]
-					#[doc = ""]
-					#[doc = "NOTE: This function only attempts to transfer _transferable_ balances. This means that"]
-					#[doc = "any held, frozen, or minimum balance (when `keep_alive` is `true`), will not be"]
-					#[doc = "transferred by this function. To ensure that this function results in a killed account,"]
-					#[doc = "you might need to prepare the account by removing any reference counters, storage"]
-					#[doc = "deposits, etc..."]
-					#[doc = ""]
-					#[doc = "The dispatch origin of this call must be Signed."]
-					#[doc = ""]
-					#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
-					#[doc = "- `dest`: The recipient of the transfer."]
-					#[doc = "- `keep_alive`: A boolean to determine if the `transfer_all` operation should send all"]
-					#[doc = "  of the funds the asset account has, causing the sender asset account to be killed"]
-					#[doc = "  (false), or transfer everything except at least the minimum balance, which will"]
-					#[doc = "  guarantee to keep the sender asset account alive (true)."]
-					transfer_all {
-						#[codec(compact)]
-						id: ::core::primitive::u32,
-						dest: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						keep_alive: ::core::primitive::bool,
-					},
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "The `Error` enum of this pallet."]
-				pub enum Error {
-					#[codec(index = 0)]
-					#[doc = "Account balance must be greater than or equal to the transfer amount."]
-					BalanceLow,
-					#[codec(index = 1)]
-					#[doc = "The account to alter does not exist."]
-					NoAccount,
-					#[codec(index = 2)]
-					#[doc = "The signing account has no permission to do the operation."]
-					NoPermission,
-					#[codec(index = 3)]
-					#[doc = "The given asset ID is unknown."]
-					Unknown,
-					#[codec(index = 4)]
-					#[doc = "The origin account is frozen."]
-					Frozen,
-					#[codec(index = 5)]
-					#[doc = "The asset ID is already taken."]
-					InUse,
-					#[codec(index = 6)]
-					#[doc = "Invalid witness data given."]
-					BadWitness,
-					#[codec(index = 7)]
-					#[doc = "Minimum balance should be non-zero."]
-					MinBalanceZero,
-					#[codec(index = 8)]
-					#[doc = "Unable to increment the consumer reference counters on the account. Either no provider"]
-					#[doc = "reference exists to allow a non-zero balance of a non-self-sufficient asset, or one"]
-					#[doc = "fewer then the maximum number of consumers has been reached."]
-					UnavailableConsumer,
-					#[codec(index = 9)]
-					#[doc = "Invalid metadata given."]
-					BadMetadata,
-					#[codec(index = 10)]
-					#[doc = "No approval exists that would allow the transfer."]
-					Unapproved,
-					#[codec(index = 11)]
-					#[doc = "The source account would not survive the transfer and it needs to stay alive."]
-					WouldDie,
-					#[codec(index = 12)]
-					#[doc = "The asset-account already exists."]
-					AlreadyExists,
-					#[codec(index = 13)]
-					#[doc = "The asset-account doesn't have an associated deposit."]
-					NoDeposit,
-					#[codec(index = 14)]
-					#[doc = "The operation would result in funds being burned."]
-					WouldBurn,
-					#[codec(index = 15)]
-					#[doc = "The asset is a live asset and is actively being used. Usually emit for operations such"]
-					#[doc = "as `start_destroy` which require the asset to be in a destroying state."]
-					LiveAsset,
-					#[codec(index = 16)]
-					#[doc = "The asset is not live, and likely being destroyed."]
-					AssetNotLive,
-					#[codec(index = 17)]
-					#[doc = "The asset status is not the expected status."]
-					IncorrectStatus,
-					#[codec(index = 18)]
-					#[doc = "The asset should be frozen before the given operation."]
-					NotFrozen,
-					#[codec(index = 19)]
-					#[doc = "Callback action resulted in error"]
-					CallbackFailed,
-					#[codec(index = 20)]
-					#[doc = "The asset ID must be equal to the [`NextAssetId`]."]
-					BadAssetId,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "The `Event` enum of this pallet"]
-				pub enum Event {
-					#[codec(index = 0)]
-					#[doc = "Some asset class was created."]
-					Created {
-						asset_id: ::core::primitive::u32,
-						creator: ::subxt::ext::subxt_core::utils::AccountId32,
-						owner: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 1)]
-					#[doc = "Some assets were issued."]
-					Issued {
-						asset_id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 2)]
-					#[doc = "Some assets were transferred."]
-					Transferred {
-						asset_id: ::core::primitive::u32,
-						from: ::subxt::ext::subxt_core::utils::AccountId32,
-						to: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 3)]
-					#[doc = "Some assets were destroyed."]
-					Burned {
-						asset_id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::AccountId32,
-						balance: ::core::primitive::u128,
-					},
-					#[codec(index = 4)]
-					#[doc = "The management team changed."]
-					TeamChanged {
-						asset_id: ::core::primitive::u32,
-						issuer: ::subxt::ext::subxt_core::utils::AccountId32,
-						admin: ::subxt::ext::subxt_core::utils::AccountId32,
-						freezer: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 5)]
-					#[doc = "The owner changed."]
-					OwnerChanged {
-						asset_id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 6)]
-					#[doc = "Some account `who` was frozen."]
-					Frozen {
-						asset_id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 7)]
-					#[doc = "Some account `who` was thawed."]
-					Thawed {
-						asset_id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 8)]
-					#[doc = "Some asset `asset_id` was frozen."]
-					AssetFrozen { asset_id: ::core::primitive::u32 },
-					#[codec(index = 9)]
-					#[doc = "Some asset `asset_id` was thawed."]
-					AssetThawed { asset_id: ::core::primitive::u32 },
-					#[codec(index = 10)]
-					#[doc = "Accounts were destroyed for given asset."]
-					AccountsDestroyed {
-						asset_id: ::core::primitive::u32,
-						accounts_destroyed: ::core::primitive::u32,
-						accounts_remaining: ::core::primitive::u32,
-					},
-					#[codec(index = 11)]
-					#[doc = "Approvals were destroyed for given asset."]
-					ApprovalsDestroyed {
-						asset_id: ::core::primitive::u32,
-						approvals_destroyed: ::core::primitive::u32,
-						approvals_remaining: ::core::primitive::u32,
-					},
-					#[codec(index = 12)]
-					#[doc = "An asset class is in the process of being destroyed."]
-					DestructionStarted { asset_id: ::core::primitive::u32 },
-					#[codec(index = 13)]
-					#[doc = "An asset class was destroyed."]
-					Destroyed { asset_id: ::core::primitive::u32 },
-					#[codec(index = 14)]
-					#[doc = "Some asset class was force-created."]
-					ForceCreated {
-						asset_id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 15)]
-					#[doc = "New metadata has been set for an asset."]
-					MetadataSet {
-						asset_id: ::core::primitive::u32,
-						name: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
-						symbol: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
-						decimals: ::core::primitive::u8,
-						is_frozen: ::core::primitive::bool,
-					},
-					#[codec(index = 16)]
-					#[doc = "Metadata has been cleared for an asset."]
-					MetadataCleared { asset_id: ::core::primitive::u32 },
-					#[codec(index = 17)]
-					#[doc = "(Additional) funds have been approved for transfer to a destination account."]
-					ApprovedTransfer {
-						asset_id: ::core::primitive::u32,
-						source: ::subxt::ext::subxt_core::utils::AccountId32,
-						delegate: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 18)]
-					#[doc = "An approval for account `delegate` was cancelled by `owner`."]
-					ApprovalCancelled {
-						asset_id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::AccountId32,
-						delegate: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 19)]
-					#[doc = "An `amount` was transferred in its entirety from `owner` to `destination` by"]
-					#[doc = "the approved `delegate`."]
-					TransferredApproved {
-						asset_id: ::core::primitive::u32,
-						owner: ::subxt::ext::subxt_core::utils::AccountId32,
-						delegate: ::subxt::ext::subxt_core::utils::AccountId32,
-						destination: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 20)]
-					#[doc = "An asset has had its attributes changed by the `Force` origin."]
-					AssetStatusChanged { asset_id: ::core::primitive::u32 },
-					#[codec(index = 21)]
-					#[doc = "The min_balance of an asset has been updated by the asset owner."]
-					AssetMinBalanceChanged {
-						asset_id: ::core::primitive::u32,
-						new_min_balance: ::core::primitive::u128,
-					},
-					#[codec(index = 22)]
-					#[doc = "Some account `who` was created with a deposit from `depositor`."]
-					Touched {
-						asset_id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						depositor: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 23)]
-					#[doc = "Some account `who` was blocked."]
-					Blocked {
-						asset_id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 24)]
-					#[doc = "Some assets were deposited (e.g. for transaction fees)."]
-					Deposited {
-						asset_id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 25)]
-					#[doc = "Some assets were withdrawn from the account (e.g. for transaction fees)."]
-					Withdrawn {
-						asset_id: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-				}
-			}
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub enum AccountStatus {
-					#[codec(index = 0)]
-					Liquid,
-					#[codec(index = 1)]
-					Frozen,
-					#[codec(index = 2)]
-					Blocked,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct Approval<_0, _1> {
-					pub amount: _0,
-					pub deposit: _1,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct AssetAccount<_0, _1, _2, _3> {
-					pub balance: _0,
-					pub status: runtime_types::pallet_assets::types::AccountStatus,
-					pub reason: runtime_types::pallet_assets::types::ExistenceReason<_0, _3>,
-					pub extra: _2,
-					#[codec(skip)]
-					pub __ignore: ::core::marker::PhantomData<_1>,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct AssetDetails<_0, _1, _2> {
-					pub owner: _1,
-					pub issuer: _1,
-					pub admin: _1,
-					pub freezer: _1,
-					pub supply: _0,
-					pub deposit: _2,
-					pub min_balance: _0,
-					pub is_sufficient: ::core::primitive::bool,
-					pub accounts: ::core::primitive::u32,
-					pub sufficients: ::core::primitive::u32,
-					pub approvals: ::core::primitive::u32,
-					pub status: runtime_types::pallet_assets::types::AssetStatus,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct AssetMetadata<_0, _1> {
-					pub deposit: _0,
-					pub name: _1,
-					pub symbol: _1,
-					pub decimals: ::core::primitive::u8,
-					pub is_frozen: ::core::primitive::bool,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub enum AssetStatus {
-					#[codec(index = 0)]
-					Live,
-					#[codec(index = 1)]
-					Frozen,
-					#[codec(index = 2)]
-					Destroying,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub enum ExistenceReason<_0, _1> {
-					#[codec(index = 0)]
-					Consumer,
-					#[codec(index = 1)]
-					Sufficient,
-					#[codec(index = 2)]
-					DepositHeld(_0),
-					#[codec(index = 3)]
-					DepositRefunded,
-					#[codec(index = 4)]
-					DepositFrom(_1, _0),
-				}
 			}
 		}
 		pub mod pallet_balances {
@@ -21491,7 +19203,7 @@ pub mod api {
 					#[doc = "An \\[account\\] has cancelled a previous delegation operation."]
 					Undelegated(::subxt::ext::subxt_core::utils::AccountId32),
 					#[codec(index = 2)]
-					#[doc = "An account that has voted"]
+					#[doc = "An account has voted"]
 					Voted {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
 						vote: runtime_types::pallet_conviction_voting::vote::AccountVote<
@@ -21499,12 +19211,18 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 3)]
-					#[doc = "A vote that been removed"]
+					#[doc = "A vote has been removed"]
 					VoteRemoved {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
 						vote: runtime_types::pallet_conviction_voting::vote::AccountVote<
 							::core::primitive::u128,
 						>,
+					},
+					#[codec(index = 4)]
+					#[doc = "The lockup period of a conviction vote expired, and the funds have been unlocked."]
+					VoteUnlocked {
+						who: ::subxt::ext::subxt_core::utils::AccountId32,
+						class: ::core::primitive::u16,
 					},
 				}
 			}
@@ -21925,7 +19643,7 @@ pub mod api {
 					#[doc = "NOTE: THIS MUST NOT BE CALLED ON `hash` MORE TIMES THAN `request_preimage`."]
 					unrequest_preimage { hash: ::subxt::ext::subxt_core::utils::H256 },
 					#[codec(index = 4)]
-					#[doc = "Ensure that the a bulk of pre-images is upgraded."]
+					#[doc = "Ensure that the bulk of pre-images is upgraded."]
 					#[doc = ""]
 					#[doc = "The caller pays no fee if at least 90% of pre-images were successfully updated."]
 					ensure_updated {
@@ -22082,7 +19800,11 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
-					ProofSubmitted { nonce: [::core::primitive::u8; 64usize] },
+					ProofSubmitted {
+						nonce: [::core::primitive::u8; 64usize],
+						difficulty: runtime_types::primitive_types::U512,
+						distance_achieved: runtime_types::primitive_types::U512,
+					},
 					#[codec(index = 1)]
 					DistanceThresholdAdjusted {
 						old_distance_threshold: runtime_types::primitive_types::U512,
@@ -22370,7 +20092,7 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 1)]
-					#[doc = "Allow ROOT to bypass the recovery process and set an a rescuer account"]
+					#[doc = "Allow ROOT to bypass the recovery process and set a rescuer account"]
 					#[doc = "for a lost account directly."]
 					#[doc = ""]
 					#[doc = "The dispatch origin for this call must be _ROOT_."]
@@ -22514,6 +20236,38 @@ pub mod api {
 							(),
 						>,
 					},
+					#[codec(index = 9)]
+					#[doc = "Poke deposits for recovery configurations and / or active recoveries."]
+					#[doc = ""]
+					#[doc = "This can be used by accounts to possibly lower their locked amount."]
+					#[doc = ""]
+					#[doc = "The dispatch origin for this call must be _Signed_."]
+					#[doc = ""]
+					#[doc = "Parameters:"]
+					#[doc = "- `maybe_account`: Optional recoverable account for which you have an active recovery"]
+					#[doc = "and want to adjust the deposit for the active recovery."]
+					#[doc = ""]
+					#[doc = "This function checks both recovery configuration deposit and active recovery deposits"]
+					#[doc = "of the caller:"]
+					#[doc = "- If the caller has created a recovery configuration, checks and adjusts its deposit"]
+					#[doc = "- If the caller has initiated any active recoveries, and provides the account in"]
+					#[doc = "`maybe_account`, checks and adjusts those deposits"]
+					#[doc = ""]
+					#[doc = "If any deposit is updated, the difference will be reserved/unreserved from the caller's"]
+					#[doc = "account."]
+					#[doc = ""]
+					#[doc = "The transaction is made free if any deposit is updated and paid otherwise."]
+					#[doc = ""]
+					#[doc = "Emits `DepositPoked` if any deposit is updated."]
+					#[doc = "Multiple events may be emitted in case both types of deposits are updated."]
+					poke_deposit {
+						maybe_account: ::core::option::Option<
+							::subxt::ext::subxt_core::utils::MultiAddress<
+								::subxt::ext::subxt_core::utils::AccountId32,
+								(),
+							>,
+						>,
+					},
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -22621,6 +20375,16 @@ pub mod api {
 					#[codec(index = 5)]
 					#[doc = "A recovery process has been removed for an account."]
 					RecoveryRemoved { lost_account: ::subxt::ext::subxt_core::utils::AccountId32 },
+					#[codec(index = 6)]
+					#[doc = "A deposit has been updated."]
+					DepositPoked {
+						who: ::subxt::ext::subxt_core::utils::AccountId32,
+						kind: runtime_types::pallet_recovery::DepositKind<
+							runtime_types::quantus_runtime::Runtime,
+						>,
+						old_deposit: ::core::primitive::u128,
+						new_deposit: ::core::primitive::u128,
+					},
 				}
 			}
 			#[derive(
@@ -22634,6 +20398,20 @@ pub mod api {
 				pub created: _0,
 				pub deposit: _1,
 				pub friends: _2,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub enum DepositKind<_0> {
+				#[codec(index = 0)]
+				RecoveryConfig,
+				#[codec(index = 1)]
+				ActiveRecoveryFor(::subxt::ext::subxt_core::utils::AccountId32),
+				__Ignore(::core::marker::PhantomData<_0>),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -23225,8 +21003,8 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				pub struct TrackInfo<_0, _1> {
-					pub name: ::subxt::ext::subxt_core::alloc::string::String,
+				pub struct TrackDetails<_0, _1, _2> {
+					pub name: _2,
 					pub max_deciding: ::core::primitive::u32,
 					pub decision_deposit: _0,
 					pub prepare_period: _1,
@@ -23361,7 +21139,8 @@ pub mod api {
 					#[doc = "Reverser is invalid"]
 					InvalidReverser,
 					#[codec(index = 14)]
-					#[doc = "Cannot schedule one time reversible transaction when account is reversible (theft deterrence)"]
+					#[doc = "Cannot schedule one time reversible transaction when account is reversible (theft"]
+					#[doc = "deterrence)"]
 					AccountAlreadyReversibleCannotScheduleOneTime,
 					#[codec(index = 15)]
 					#[doc = "The interceptor has reached the maximum number of accounts they can intercept for."]
@@ -24012,6 +21791,58 @@ pub mod api {
 					},
 				}
 			}
+			pub mod types {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct FeeDetails<_0> {
+					pub inclusion_fee: ::core::option::Option<
+						runtime_types::pallet_transaction_payment::types::InclusionFee<_0>,
+					>,
+					pub tip: _0,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct InclusionFee<_0> {
+					pub base_fee: _0,
+					pub len_fee: _0,
+					pub adjusted_weight_fee: _0,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct RuntimeDispatchInfo<_0, _1> {
+					pub weight: _1,
+					pub class: runtime_types::frame_support::dispatch::DispatchClass,
+					pub partial_fee: _0,
+				}
+			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
 				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
@@ -24497,6 +22328,52 @@ pub mod api {
 						>,
 						weight: runtime_types::sp_weights::weight_v2::Weight,
 					},
+					#[codec(index = 6)]
+					#[doc = "Dispatch a fallback call in the event the main call fails to execute."]
+					#[doc = "May be called from any origin except `None`."]
+					#[doc = ""]
+					#[doc = "This function first attempts to dispatch the `main` call."]
+					#[doc = "If the `main` call fails, the `fallback` is attemted."]
+					#[doc = "if the fallback is successfully dispatched, the weights of both calls"]
+					#[doc = "are accumulated and an event containing the main call error is deposited."]
+					#[doc = ""]
+					#[doc = "In the event of a fallback failure the whole call fails"]
+					#[doc = "with the weights returned."]
+					#[doc = ""]
+					#[doc = "- `main`: The main call to be dispatched. This is the primary action to execute."]
+					#[doc = "- `fallback`: The fallback call to be dispatched in case the `main` call fails."]
+					#[doc = ""]
+					#[doc = "## Dispatch Logic"]
+					#[doc = "- If the origin is `root`, both the main and fallback calls are executed without"]
+					#[doc = "  applying any origin filters."]
+					#[doc = "- If the origin is not `root`, the origin filter is applied to both the `main` and"]
+					#[doc = "  `fallback` calls."]
+					#[doc = ""]
+					#[doc = "## Use Case"]
+					#[doc = "- Some use cases might involve submitting a `batch` type call in either main, fallback"]
+					#[doc = "  or both."]
+					if_else {
+						main: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::RuntimeCall,
+						>,
+						fallback: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::RuntimeCall,
+						>,
+					},
+					#[codec(index = 7)]
+					#[doc = "Dispatches a function call with a provided origin."]
+					#[doc = ""]
+					#[doc = "Almost the same as [`Pallet::dispatch_as`] but forwards any error of the inner call."]
+					#[doc = ""]
+					#[doc = "The dispatch origin for this call must be _Root_."]
+					dispatch_as_fallible {
+						as_origin: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::OriginCaller,
+						>,
+						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::RuntimeCall,
+						>,
+					},
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -24553,6 +22430,12 @@ pub mod api {
 						result:
 							::core::result::Result<(), runtime_types::sp_runtime::DispatchError>,
 					},
+					#[codec(index = 6)]
+					#[doc = "Main call was dispatched."]
+					IfElseMainSuccess,
+					#[codec(index = 7)]
+					#[doc = "The fallback call was dispatched."]
+					IfElseFallbackCalled { main_error: runtime_types::sp_runtime::DispatchError },
 				}
 			}
 		}
@@ -24740,13 +22623,19 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
+					#[doc = "A vesting schedule has been created."]
+					VestingCreated {
+						account: ::subxt::ext::subxt_core::utils::AccountId32,
+						schedule_index: ::core::primitive::u32,
+					},
+					#[codec(index = 1)]
 					#[doc = "The amount vested has been updated. This could indicate a change in funds available."]
 					#[doc = "The balance given is the amount which is left unvested (and thus locked)."]
 					VestingUpdated {
 						account: ::subxt::ext::subxt_core::utils::AccountId32,
 						unvested: ::core::primitive::u128,
 					},
-					#[codec(index = 1)]
+					#[codec(index = 2)]
 					#[doc = "An \\[account\\] has become fully vested."]
 					VestingCompleted { account: ::subxt::ext::subxt_core::utils::AccountId32 },
 				}
@@ -25034,8 +22923,6 @@ pub mod api {
 				TreasuryPallet(runtime_types::pallet_treasury::pallet::Call),
 				#[codec(index = 20)]
 				Recovery(runtime_types::pallet_recovery::pallet::Call),
-				#[codec(index = 21)]
-				Assets(runtime_types::pallet_assets::pallet::Call),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -25079,8 +22966,6 @@ pub mod api {
 				TreasuryPallet(runtime_types::pallet_treasury::pallet::Error),
 				#[codec(index = 20)]
 				Recovery(runtime_types::pallet_recovery::pallet::Error),
-				#[codec(index = 21)]
-				Assets(runtime_types::pallet_assets::pallet::Error),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -25128,8 +23013,6 @@ pub mod api {
 				TreasuryPallet(runtime_types::pallet_treasury::pallet::Event),
 				#[codec(index = 20)]
 				Recovery(runtime_types::pallet_recovery::pallet::Event),
-				#[codec(index = 21)]
-				Assets(runtime_types::pallet_assets::pallet::Event),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -25225,10 +23108,84 @@ pub mod api {
 				DivisionByZero,
 			}
 		}
+		pub mod sp_core {
+			use super::runtime_types;
+			pub mod crypto {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct KeyTypeId(pub [::core::primitive::u8; 4usize]);
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct OpaqueMetadata(
+				pub ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+			);
+		}
+		pub mod sp_inherents {
+			use super::runtime_types;
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct CheckInherentsResult {
+				pub okay: ::core::primitive::bool,
+				pub fatal_error: ::core::primitive::bool,
+				pub errors: runtime_types::sp_inherents::InherentData,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct InherentData {
+				pub data: ::subxt::ext::subxt_core::utils::KeyedVec<
+					[::core::primitive::u8; 8usize],
+					::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+				>,
+			}
+		}
 		pub mod sp_runtime {
 			use super::runtime_types;
 			pub mod generic {
 				use super::runtime_types;
+				pub mod block {
+					use super::runtime_types;
+					#[derive(
+						:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+						:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+						Debug,
+					)]
+					#[decode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+					)]
+					#[encode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+					)]
+					pub struct Block<_0, _1> {
+						pub header: _0,
+						pub extrinsics: ::subxt::ext::subxt_core::alloc::vec::Vec<_1>,
+					}
+				}
 				pub mod digest {
 					use super::runtime_types;
 					#[derive(
@@ -25808,6 +23765,28 @@ pub mod api {
 						Mortal255(::core::primitive::u8),
 					}
 				}
+				pub mod header {
+					use super::runtime_types;
+					#[derive(
+						:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+						:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+						Debug,
+					)]
+					#[decode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+					)]
+					#[encode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+					)]
+					pub struct Header<_0> {
+						pub parent_hash: ::subxt::ext::subxt_core::utils::H256,
+						#[codec(compact)]
+						pub number: _0,
+						pub state_root: ::subxt::ext::subxt_core::utils::H256,
+						pub extrinsics_root: ::subxt::ext::subxt_core::utils::H256,
+						pub digest: runtime_types::sp_runtime::generic::digest::Digest,
+					}
+				}
 			}
 			pub mod proving_trie {
 				use super::runtime_types;
@@ -25851,6 +23830,125 @@ pub mod api {
 					RootMismatch,
 					#[codec(index = 13)]
 					DecodeError,
+				}
+			}
+			pub mod transaction_validity {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum InvalidTransaction {
+					#[codec(index = 0)]
+					Call,
+					#[codec(index = 1)]
+					Payment,
+					#[codec(index = 2)]
+					Future,
+					#[codec(index = 3)]
+					Stale,
+					#[codec(index = 4)]
+					BadProof,
+					#[codec(index = 5)]
+					AncientBirthBlock,
+					#[codec(index = 6)]
+					ExhaustsResources,
+					#[codec(index = 7)]
+					Custom(::core::primitive::u8),
+					#[codec(index = 8)]
+					BadMandatory,
+					#[codec(index = 9)]
+					MandatoryValidation,
+					#[codec(index = 10)]
+					BadSigner,
+					#[codec(index = 11)]
+					IndeterminateImplicit,
+					#[codec(index = 12)]
+					UnknownOrigin,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum TransactionSource {
+					#[codec(index = 0)]
+					InBlock,
+					#[codec(index = 1)]
+					Local,
+					#[codec(index = 2)]
+					External,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum TransactionValidityError {
+					#[codec(index = 0)]
+					Invalid(runtime_types::sp_runtime::transaction_validity::InvalidTransaction),
+					#[codec(index = 1)]
+					Unknown(runtime_types::sp_runtime::transaction_validity::UnknownTransaction),
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum UnknownTransaction {
+					#[codec(index = 0)]
+					CannotLookup,
+					#[codec(index = 1)]
+					NoUnsignedValidator,
+					#[codec(index = 2)]
+					Custom(::core::primitive::u8),
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ValidTransaction {
+					pub priority: ::core::primitive::u64,
+					pub requires: ::subxt::ext::subxt_core::alloc::vec::Vec<
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+					>,
+					pub provides: ::subxt::ext::subxt_core::alloc::vec::Vec<
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+					>,
+					pub longevity: ::core::primitive::u64,
+					pub propagate: ::core::primitive::bool,
 				}
 			}
 			#[derive(
@@ -25902,6 +24000,19 @@ pub mod api {
 			pub struct DispatchErrorWithPostInfo<_0> {
 				pub post_info: _0,
 				pub error: runtime_types::sp_runtime::DispatchError,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub enum ExtrinsicInclusionMode {
+				#[codec(index = 0)]
+				AllExtrinsics,
+				#[codec(index = 1)]
+				OnlyInherents,
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,

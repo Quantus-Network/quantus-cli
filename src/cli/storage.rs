@@ -103,7 +103,16 @@ pub async fn get_storage_raw(
 	// Get the latest block hash to read from the latest state (not finalized)
 	let latest_block_hash = quantus_client.get_latest_block().await?;
 
-	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+	get_storage_at_block_raw(quantus_client, key, latest_block_hash).await
+}
+
+/// Get raw storage value by key
+pub async fn get_storage_at_block_raw(
+	quantus_client: &crate::chain::client::QuantusClient,
+	key: Vec<u8>,
+	block_hash: subxt::utils::H256,
+) -> crate::error::Result<Option<Vec<u8>>> {
+	let storage_at = quantus_client.client().storage().at(block_hash);
 
 	let result = storage_at
 		.fetch_raw(key)

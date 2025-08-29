@@ -216,7 +216,8 @@ pub async fn execute_command(
 			storage::handle_storage_command(storage_cmd, node_url).await,
 		Commands::TechCollective(tech_collective_cmd) =>
 			tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await,
-		Commands::Wormhole(wormhole_cmd) => wormhole::handle_wormhole_command(wormhole_cmd).await,
+		Commands::Wormhole(wormhole_cmd) =>
+			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
 		Commands::Runtime(runtime_cmd) =>
 			runtime::handle_runtime_command(runtime_cmd, node_url).await,
 		Commands::Call {

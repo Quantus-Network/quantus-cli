@@ -5,10 +5,16 @@
 
 use crate::{error::QuantusError, log_verbose};
 use dilithium_crypto::types::DilithiumSignatureScheme;
-use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use jsonrpsee::{
+	core::{client::ClientT, traits::ToRpcParams},
+	rpc_params,
+	ws_client::{WsClient, WsClientBuilder},
+};
 use poseidon_resonance::PoseidonHasher;
-use sp_core::{crypto::AccountId32, ByteArray};
+use serde::{Deserialize, Serialize};
+use sp_core::{crypto::AccountId32, ByteArray, Bytes, H256};
 use sp_runtime::{traits::IdentifyAccount, MultiAddress};
+use sp_storage::StorageKey;
 use std::{sync::Arc, time::Duration};
 use subxt::{
 	backend::rpc::RpcClient,
@@ -42,6 +48,14 @@ impl Config for ChainConfig {
 	type Header = SubstrateHeader<u32, SubxtPoseidonHasher>;
 	type AssetId = u32;
 	type ExtrinsicParams = DefaultExtrinsicParams<Self>;
+}
+
+// Exact structure from
+// https://github.com/paritytech/substrate/blob/master/client/rpc-api/src/state/helpers.rs
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReadProof<Hash> {
+	pub at: Hash,
+	pub proof: Vec<Bytes>,
 }
 
 /// Wrapper around OnlineClient that also stores the node URL and RPC client
@@ -153,6 +167,47 @@ impl QuantusClient {
 
 		log_verbose!("📦 Latest block hash: {:?}", latest_hash);
 		Ok(latest_hash)
+	}
+
+	pub async fn get_storage_proof_by_keys(
+		&self,
+		storage_keys: Vec<StorageKey>,
+		at_block: Option<H256>,
+	) -> crate::error::Result<ReadProof<H256>> {
+		// Optional: debug the exact JSON we're sending
+		// use jsonrpsee::core::client::ClientT;
+		let params: jsonrpsee::core::params::ArrayParams = rpc_params![storage_keys, at_block];
+		let params_clone = params.clone().to_rpc_params()?;
+		println!("Sending RPC request with params: {:?}", params_clone);
+
+		let proof: ReadProof<H256> =
+			self.rpc_client.request("state_getReadProof", params).await.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to fetch storage proof: {e:?}"
+				))
+			})?;
+		Ok(proof)
+	}
+
+	pub async fn get_block_header(
+		&self,
+		block_hash: H256,
+	) -> crate::error::Result<serde_json::Value> {
+		log_verbose!("🔍 Fetching block header for block: {:?}", block_hash);
+
+		let header: serde_json::Value = self
+			.rpc_client
+			.request("chain_getHeader", rpc_params![block_hash])
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to fetch block header: {:?}",
+					e
+				))
+			})?;
+
+		log_verbose!("📦 Block header: {:?}", header);
+		Ok(header)
 	}
 
 	/// Get account nonce from the best block (latest) using direct RPC call
