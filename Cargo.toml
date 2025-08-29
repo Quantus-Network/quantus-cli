@@ -7,6 +7,10 @@ license = "Apache-2.0"
 description = "Command line interface for interacting with the Quantus Network"
 repository = "https://github.com/Quantus-Network/quantus-cli"
 
+[lib]
+name = "quantus_cli"
+path = "src/lib.rs"
+
 [[bin]]
 name = "quantus"
 path = "src/main.rs"

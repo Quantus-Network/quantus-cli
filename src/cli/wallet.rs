@@ -104,7 +104,7 @@ pub async fn get_account_nonce(
 
 	// Parse the SS58 address to AccountId32 (sp-core)
 	let account_id_sp = AccountId32::from_ss58check(account_address)
-		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {:?}", e)))?;
+		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
 
 	log_verbose!("🔍 SP Account ID: {:?}", account_id_sp);
 
@@ -123,9 +123,10 @@ pub async fn get_account_nonce(
 
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let account_info = storage_at.fetch_or_default(&storage_addr).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to fetch account info: {:?}", e))
-	})?;
+	let account_info = storage_at
+		.fetch_or_default(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}")))?;
 
 	log_verbose!("✅ Account info retrieved with storage query!");
 	log_verbose!("🔢 Nonce: {}", account_info.nonce);
@@ -156,7 +157,7 @@ pub async fn handle_wallet_command(
 					log_success!("✅ Wallet created successfully!");
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to create wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to create wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -200,7 +201,7 @@ pub async fn handle_wallet_command(
 							}
 						},
 					Err(e) => {
-						log_error!("{}", format!("❌ Failed to view wallets: {}", e).red());
+						log_error!("{}", format!("❌ Failed to view wallets: {e}").red());
 						return Err(e);
 					},
 				}
@@ -230,14 +231,14 @@ pub async fn handle_wallet_command(
 						}
 					},
 					Ok(None) => {
-						log_error!("{}", format!("❌ Wallet '{}' not found", wallet_name).red());
+						log_error!("{}", format!("❌ Wallet '{wallet_name}' not found").red());
 						log_print!(
 							"Use {} to see available wallets",
 							"quantus wallet list".bright_green()
 						);
 					},
 					Err(e) => {
-						log_error!("{}", format!("❌ Failed to view wallet: {}", e).red());
+						log_error!("{}", format!("❌ Failed to view wallet: {e}").red());
 						return Err(e);
 					},
 				}
@@ -281,7 +282,7 @@ pub async fn handle_wallet_command(
                     );
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to export wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to export wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -317,7 +318,7 @@ pub async fn handle_wallet_command(
 					log_success!("✅ Wallet imported successfully!");
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to import wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to import wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -369,7 +370,7 @@ pub async fn handle_wallet_command(
 						);
 					},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to list wallets: {}", e).red());
+					log_error!("{}", format!("❌ Failed to list wallets: {e}").red());
 					return Err(e);
 				},
 			}
@@ -422,23 +423,23 @@ pub async fn handle_wallet_command(
 							log_success!("✅ Wallet '{}' deleted successfully!", name);
 						},
 						Ok(false) => {
-							log_error!("{}", format!("❌ Wallet '{}' was not found", name).red());
+							log_error!("{}", format!("❌ Wallet '{name}' was not found").red());
 						},
 						Err(e) => {
-							log_error!("{}", format!("❌ Failed to delete wallet: {}", e).red());
+							log_error!("{}", format!("❌ Failed to delete wallet: {e}").red());
 							return Err(e);
 						},
 					}
 				},
 				Ok(None) => {
-					log_error!("{}", format!("❌ Wallet '{}' not found", name).red());
+					log_error!("{}", format!("❌ Wallet '{name}' not found").red());
 					log_print!(
 						"Use {} to see available wallets",
 						"quantus wallet list".bright_green()
 					);
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to check wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to check wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -456,7 +457,7 @@ pub async fn handle_wallet_command(
 				(Some(addr), _) => {
 					// Validate the provided address
 					AccountId32::from_ss58check(&addr)
-						.map_err(|e| QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
+						.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 					addr
 				},
 				(None, Some(wallet_name)) => {

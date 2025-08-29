@@ -27,8 +27,7 @@ pub async fn handle_events_command(
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get block hash for #{}: {:?}",
-					block_num, e
+					"Failed to get block hash for #{block_num}: {e:?}"
 				))
 			})?;
 		(hash, block_num)
@@ -37,7 +36,7 @@ pub async fn handle_events_command(
 
 		// Parse hash string
 		let hash = subxt::utils::H256::from_str(&hash_str).map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Invalid block hash: {}", e))
+			crate::error::QuantusError::NetworkError(format!("Invalid block hash: {e}"))
 		})?;
 
 		// Get block number from hash
@@ -47,8 +46,7 @@ pub async fn handle_events_command(
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get block header for hash {}: {:?}",
-					hash_str, e
+					"Failed to get block header for hash {hash_str}: {e:?}"
 				))
 			})?;
 
@@ -69,20 +67,18 @@ pub async fn handle_events_command(
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get finalized head: {:?}",
-					e
+					"Failed to get finalized head: {e:?}"
 				))
 			})?;
 
 		// Get block number from finalized head
 		let block_header: serde_json::Value = quantus_client
 			.rpc_client()
-			.request::<serde_json::Value, [String; 1]>("chain_getHeader", [format!("0x{:x}", hash)])
+			.request::<serde_json::Value, [String; 1]>("chain_getHeader", [format!("0x{hash:x}")])
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get finalized block header: {:?}",
-					e
+					"Failed to get finalized block header: {e:?}"
 				))
 			})?;
 
@@ -106,8 +102,7 @@ pub async fn handle_events_command(
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get latest block header: {:?}",
-					e
+					"Failed to get latest block header: {e:?}"
 				))
 			})?;
 
@@ -136,7 +131,7 @@ pub async fn handle_events_command(
 		event_count += 1;
 
 		let event = event.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Failed to decode event: {:?}", e))
+			crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
 		})?;
 
 		// Apply pallet filter if specified
@@ -214,7 +209,7 @@ fn decode_event_typed<T: subxt::Config>(event: &subxt::events::EventDetails<T>) 
 
 /// Format event string with SS58 addresses instead of raw AccountId32 bytes
 fn format_event_with_ss58_addresses(event: &crate::chain::quantus_subxt::api::Event) -> String {
-	let debug_str = format!("{:?}", event);
+	let debug_str = format!("{event:?}");
 
 	// Replace all AccountId32 patterns with SS58 addresses
 	let mut result = debug_str.clone();
@@ -223,7 +218,7 @@ fn format_event_with_ss58_addresses(event: &crate::chain::quantus_subxt::api::Ev
 	let mut replacements = 0;
 	while let Some(account_id) = extract_account_id_from_debug(&result) {
 		let ss58_address = format_account_id(&account_id);
-		let account_debug = format!("{:?}", account_id);
+		let account_debug = format!("{account_id:?}");
 		result = result.replace(&account_debug, &ss58_address);
 		replacements += 1;
 		if replacements > 10 {
