@@ -98,7 +98,7 @@ impl WalletService {
 		match self.perform_transfer(&request).await {
 			Ok(tx_hash) => TransferResponse {
 				success: true,
-				transaction_hash: Some(format!("{:?}", tx_hash)),
+				transaction_hash: Some(format!("{tx_hash:?}")),
 				error: None,
 			},
 			Err(e) => TransferResponse {
@@ -144,8 +144,8 @@ impl WalletService {
 		Ok(SystemInfo {
 			runtime_spec_version: runtime_version.0,
 			runtime_transaction_version: runtime_version.1,
-			latest_block: format!("{:?}", latest_block),
-			genesis_hash: format!("{:?}", genesis_hash),
+			latest_block: format!("{latest_block:?}"),
+			genesis_hash: format!("{genesis_hash:?}"),
 		})
 	}
 
@@ -158,7 +158,7 @@ impl WalletService {
 
 		// Parse recipient address
 		let to_account_id = AccountId32::from_ss58check(&request.to_address)
-			.map_err(|e| QuantusError::Generic(format!("Invalid recipient address: {}", e)))?;
+			.map_err(|e| QuantusError::Generic(format!("Invalid recipient address: {e}")))?;
 
 		// Perform the transfer
 		let client = self.client.read().await;
@@ -256,7 +256,7 @@ async fn main() -> Result<()> {
 
 	// List all wallets
 	let wallets = service.list_wallets()?;
-	println!("📋 Available wallets: {:?}", wallets);
+	println!("📋 Available wallets: {wallets:?}");
 	println!();
 
 	// Example transfer (commented out to avoid actual transfer)
@@ -281,13 +281,13 @@ async fn demonstrate_service_error_handling() -> Result<()> {
 	// Try to create wallet with invalid name
 	match service.create_wallet("", "password").await {
 		Ok(wallet) => println!("Created wallet: {}", wallet.name),
-		Err(e) => println!("❌ Failed to create wallet: {}", e),
+		Err(e) => println!("❌ Failed to create wallet: {e}"),
 	}
 
 	// Try to get balance of non-existent wallet
 	match service.get_wallet_balance("non_existent", "password").await {
-		Ok(balance) => println!("Balance: {}", balance),
-		Err(e) => println!("❌ Failed to get balance: {}", e),
+		Ok(balance) => println!("Balance: {balance}"),
+		Err(e) => println!("❌ Failed to get balance: {e}"),
 	}
 
 	// Try invalid transfer
@@ -299,7 +299,7 @@ async fn demonstrate_service_error_handling() -> Result<()> {
 	};
 
 	let result = service.transfer_tokens(invalid_transfer).await;
-	println!("Transfer result: {:?}", result);
+	println!("Transfer result: {result:?}");
 
 	Ok(())
 }
@@ -315,14 +315,14 @@ async fn demonstrate_concurrent_operations() -> Result<()> {
 	for i in 0..5 {
 		let service_clone = service.clone();
 		let handle = tokio::spawn(async move {
-			let wallet_name = format!("concurrent_wallet_{}", i);
+			let wallet_name = format!("concurrent_wallet_{i}");
 			match service_clone.create_wallet(&wallet_name, "concurrent_password").await {
 				Ok(wallet) => {
 					println!("✅ Created wallet: {}", wallet.name);
 					Ok(wallet)
 				},
 				Err(e) => {
-					println!("❌ Failed to create wallet {}: {}", wallet_name, e);
+					println!("❌ Failed to create wallet {wallet_name}: {e}");
 					Err(e)
 				},
 			}

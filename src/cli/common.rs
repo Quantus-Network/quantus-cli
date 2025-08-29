@@ -283,8 +283,7 @@ where
 		Err(e) => {
 			log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
 			Err(crate::error::QuantusError::NetworkError(format!(
-				"Failed to submit transaction with nonce {}: {e:?}",
-				nonce
+				"Failed to submit transaction with nonce {nonce}: {e:?}"
 			)))
 		},
 	}

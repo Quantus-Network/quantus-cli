@@ -27,10 +27,10 @@ async fn main() -> Result<()> {
 	println!("🔧 Runtime version: spec={}, tx={}", runtime_version.0, runtime_version.1);
 
 	let latest_block = client.get_latest_block().await?;
-	println!("📦 Latest block: {:?}", latest_block);
+	println!("📦 Latest block: {latest_block:?}");
 
 	let genesis_hash = client.get_genesis_hash().await?;
-	println!("🧬 Genesis hash: {:?}", genesis_hash);
+	println!("🧬 Genesis hash: {genesis_hash:?}");
 
 	// 5. Create a new wallet if none exist
 	if wallets.is_empty() {

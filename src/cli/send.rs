@@ -274,8 +274,7 @@ pub async fn batch_transfer(
 		// Parse the destination address
 		let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
 			crate::error::QuantusError::NetworkError(format!(
-				"Invalid destination address {}: {e:?}",
-				resolved_address
+				"Invalid destination address {resolved_address}: {e:?}"
 			))
 		})?;
 

@@ -77,15 +77,15 @@ impl QuantusApp {
 
 		// Parse recipient address
 		let to_account_id = AccountId32::from_ss58check(to_address)
-			.map_err(|e| QuantusError::Generic(format!("Invalid recipient address: {}", e)))?;
+			.map_err(|e| QuantusError::Generic(format!("Invalid recipient address: {e}")))?;
 
 		// Perform the transfer
 		let tx_hash = self.transfer_tokens(&keypair, &to_account_id, amount).await?;
 
 		println!("✅ Transfer successful!");
-		println!("🔗 Transaction hash: {:?}", tx_hash);
+		println!("🔗 Transaction hash: {tx_hash:?}");
 
-		Ok(format!("{:?}", tx_hash))
+		Ok(format!("{tx_hash:?}"))
 	}
 
 	/// List all available wallets
@@ -109,8 +109,8 @@ impl QuantusApp {
 
 		println!("🔧 System Information:");
 		println!("   Runtime version: spec={}, tx={}", runtime_version.0, runtime_version.1);
-		println!("   Latest block: {:?}", latest_block);
-		println!("   Genesis hash: {:?}", genesis_hash);
+		println!("   Latest block: {latest_block:?}");
+		println!("   Genesis hash: {genesis_hash:?}");
 
 		Ok(())
 	}
@@ -186,13 +186,13 @@ async fn main() -> Result<()> {
 	if existing_wallets.is_empty() {
 		println!("📝 Creating a new wallet...");
 		let address = app.create_wallet("my_wallet", "secure_password").await?;
-		println!("✅ Wallet created with address: {}", address);
+		println!("✅ Wallet created with address: {address}");
 	} else {
 		println!("📋 Using existing wallet: {}", existing_wallets[0]);
 
 		// Get balance of first wallet
 		let balance = app.get_balance(&existing_wallets[0], "").await?;
-		println!("💰 Balance: {} DEV", balance);
+		println!("💰 Balance: {balance} DEV");
 
 		// Example: Send tokens to another address (uncomment to test)
 		// let tx_hash = app.send_tokens(
@@ -214,23 +214,23 @@ async fn demonstrate_error_handling() -> Result<()> {
 
 	// Try to get balance of non-existent wallet
 	match app.get_balance("non_existent_wallet", "password").await {
-		Ok(balance) => println!("Balance: {}", balance),
+		Ok(balance) => println!("Balance: {balance}"),
 		Err(QuantusError::Wallet(quantus_cli::error::WalletError::NotFound)) => {
 			println!("❌ Wallet not found");
 		},
 		Err(e) => {
-			println!("❌ Other error: {}", e);
+			println!("❌ Other error: {e}");
 		},
 	}
 
 	// Try to send tokens with invalid address
 	match app.send_tokens("my_wallet", "password", "invalid_address", 1000).await {
-		Ok(tx_hash) => println!("Transfer successful: {}", tx_hash),
+		Ok(tx_hash) => println!("Transfer successful: {tx_hash}"),
 		Err(QuantusError::Generic(msg)) => {
-			println!("❌ Invalid address: {}", msg);
+			println!("❌ Invalid address: {msg}");
 		},
 		Err(e) => {
-			println!("❌ Other error: {}", e);
+			println!("❌ Other error: {e}");
 		},
 	}
 
@@ -250,22 +250,22 @@ async fn demonstrate_batch_operations() -> Result<()> {
 		match app.create_wallet(name, "batch_password").await {
 			Ok(address) => {
 				addresses.push(address);
-				println!("✅ Created {}", name);
+				println!("✅ Created {name}");
 			},
 			Err(QuantusError::Wallet(quantus_cli::error::WalletError::AlreadyExists)) => {
-				println!("⚠️  Wallet {} already exists", name);
+				println!("⚠️  Wallet {name} already exists");
 			},
 			Err(e) => {
-				println!("❌ Failed to create {}: {}", name, e);
+				println!("❌ Failed to create {name}: {e}");
 			},
 		}
 	}
 
 	// Get balances for all wallets
-	for (_i, name) in wallet_names.iter().enumerate() {
+	for name in wallet_names.iter() {
 		match app.get_balance(name, "batch_password").await {
-			Ok(balance) => println!("💰 {} balance: {} DEV", name, balance),
-			Err(e) => println!("❌ Failed to get balance for {}: {}", name, e),
+			Ok(balance) => println!("💰 {name} balance: {balance} DEV"),
+			Err(e) => println!("❌ Failed to get balance for {name}: {e}"),
 		}
 	}
 

@@ -367,12 +367,10 @@ async fn show_extrinsic_details(
 					quantus_client.client().blocks().at(block_hash).await?.events().await?;
 				let mut events_by_ex_idx: std::collections::BTreeMap<usize, Vec<String>> =
 					std::collections::BTreeMap::new();
-				for ev in events.iter() {
-					if let Ok(ev) = ev {
-						if let subxt::events::Phase::ApplyExtrinsic(ex_idx) = ev.phase() {
-							let msg = format_event_details(&ev);
-							events_by_ex_idx.entry(ex_idx as usize).or_default().push(msg);
-						}
+				for ev in events.iter().flatten() {
+					if let subxt::events::Phase::ApplyExtrinsic(ex_idx) = ev.phase() {
+						let msg = format_event_details(&ev);
+						events_by_ex_idx.entry(ex_idx as usize).or_default().push(msg);
 					}
 				}
 
@@ -385,7 +383,7 @@ async fn show_extrinsic_details(
 					use jsonrpsee::core::client::ClientT;
 					let header: serde_json::Value = quantus_client
 						.rpc_client()
-						.request("chain_getHeader", [format!("{:#x}", block_hash)])
+						.request("chain_getHeader", [format!("{block_hash:#x}")])
 						.await
 						.map_err(|e| {
 							crate::error::QuantusError::NetworkError(format!(
@@ -557,12 +555,10 @@ async fn show_all_extrinsic_details(
 					quantus_client.client().blocks().at(block_hash).await?.events().await?;
 				let mut events_by_ex_idx: std::collections::BTreeMap<usize, Vec<String>> =
 					std::collections::BTreeMap::new();
-				for ev in events.iter() {
-					if let Ok(ev) = ev {
-						if let subxt::events::Phase::ApplyExtrinsic(ex_idx) = ev.phase() {
-							let msg = format_event_details(&ev);
-							events_by_ex_idx.entry(ex_idx as usize).or_default().push(msg);
-						}
+				for ev in events.iter().flatten() {
+					if let subxt::events::Phase::ApplyExtrinsic(ex_idx) = ev.phase() {
+						let msg = format_event_details(&ev);
+						events_by_ex_idx.entry(ex_idx as usize).or_default().push(msg);
 					}
 				}
 
@@ -575,7 +571,7 @@ async fn show_all_extrinsic_details(
 					use jsonrpsee::core::client::ClientT;
 					let header: serde_json::Value = quantus_client
 						.rpc_client()
-						.request("chain_getHeader", [format!("{:#x}", block_hash)])
+						.request("chain_getHeader", [format!("{block_hash:#x}")])
 						.await
 						.map_err(|e| {
 							crate::error::QuantusError::NetworkError(format!(
@@ -710,7 +706,7 @@ fn summarize_extrinsic(ext_hex: &str) -> (usize, String, String) {
 
 	// Compute extrinsic hash using Poseidon (chain hasher)
 	let h = <PoseidonHasher as sp_runtime::traits::Hash>::hash(&bytes);
-	let hash_hex = format!("{:#x}", h);
+	let hash_hex = format!("{h:#x}");
 
 	let preview = if ext_str.len() > 20 { ext_str[..20].to_string() } else { ext_str.to_string() };
 	(size_bytes, preview, hash_hex)
@@ -731,7 +727,7 @@ fn format_event_with_ss58_addresses(event: &crate::chain::quantus_subxt::api::Ev
 	let mut attempts = 0;
 	while let Some(account_id) = extract_account_id_from_debug(&result) {
 		let ss58_address = format_account_id(&account_id);
-		let account_debug = format!("{:?}", account_id);
+		let account_debug = format!("{account_id:?}");
 		result = result.replace(&account_debug, &ss58_address);
 		attempts += 1;
 		if attempts > 10 {

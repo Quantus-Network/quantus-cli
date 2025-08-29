@@ -295,21 +295,21 @@ The library is designed to be thread-safe:
 
 See the `examples/` directory for complete working examples:
 
-- `examples/lib_usage.rs` - Basic library usage
-- `examples/wallet_operations.rs` - Advanced wallet operations
-- `examples/service_example.rs` - Service architecture example
+- `examples/basic_usage.rs` - Basic library usage
+- `examples/wallet_ops.rs` - Advanced wallet operations
+- `examples/service.rs` - Service architecture example
 
 ## Running Examples
 
 ```bash
 # Run basic usage example
-cargo run --example lib_usage
+cargo run --example basic_usage
 
 # Run wallet operations example
-cargo run --example wallet_operations
+cargo run --example wallet_ops
 
 # Run service example
-cargo run --example service_example
+cargo run --example service
 ```
 
 ## Key Features

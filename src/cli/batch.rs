@@ -154,8 +154,7 @@ async fn handle_batch_send_command(
 		)
 		.await?;
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Insufficient balance. Have: {}, Need: {} (including estimated fees)",
-			formatted_balance, formatted_needed
+			"Insufficient balance. Have: {formatted_balance}, Need: {formatted_needed} (including estimated fees)"
 		)));
 	}
 

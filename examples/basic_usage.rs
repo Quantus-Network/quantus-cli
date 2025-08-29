@@ -41,7 +41,7 @@ async fn main() -> Result<()> {
 	// 5. Get account balance
 	let account_id = keypair.to_account_id_32();
 	let balance = get_account_balance(&client, &account_id).await?;
-	println!("💰 Balance: {} DEV", balance);
+	println!("💰 Balance: {balance} DEV");
 
 	// 6. Example: Send tokens (if you have another wallet)
 	// This would require another wallet with funds
@@ -53,7 +53,7 @@ async fn main() -> Result<()> {
 
 	// 8. Get latest block
 	let latest_block = client.get_latest_block().await?;
-	println!("📦 Latest block: {:?}", latest_block);
+	println!("📦 Latest block: {latest_block:?}");
 
 	Ok(())
 }
@@ -86,9 +86,8 @@ async fn send_tokens(
 	use quantus_cli::chain::quantus_subxt::api;
 
 	// Parse recipient address
-	let to_account_id = AccountId32::from_ss58check(to_address).map_err(|e| {
-		quantus_cli::error::QuantusError::Generic(format!("Invalid address: {}", e))
-	})?;
+	let to_account_id = AccountId32::from_ss58check(to_address)
+		.map_err(|e| quantus_cli::error::QuantusError::Generic(format!("Invalid address: {e}")))?;
 	let to_account_bytes: [u8; 32] = *to_account_id.as_ref();
 	let to_subxt_account_id = subxt::utils::AccountId32::from(to_account_bytes);
 
