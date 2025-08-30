@@ -108,7 +108,7 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 			log_print!("Generating new wormhole address...");
 
 			let wormhole_pair = WormholePair::generate_new().map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Wormhole generation error: {:?}", e))
+				crate::error::QuantusError::Generic(format!("Wormhole generation error: {e:?}"))
 			})?;
 
 			// The on-chain address for funding MUST be the unspendable account derived
@@ -189,7 +189,7 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 			log_print!("Generating new transfer proof...");
 			let secret_bytes: [u8; 32] = hex::decode(secret.trim_start_matches("0x"))
 				.map_err(|e| {
-					crate::error::QuantusError::Generic(format!("Hex decode error: {:?}", e))
+					crate::error::QuantusError::Generic(format!("Hex decode error: {e:?}"))
 				})?
 				.try_into()
 				.map_err(|_| {
@@ -335,14 +335,12 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 					},
 					other =>
 						return Err(crate::error::QuantusError::Generic(format!(
-							"Unexpected proof map result: {:?}",
-							other
+							"Unexpected proof map result: {other:?}"
 						))),
 				},
 				Err(e) =>
 					return Err(crate::error::QuantusError::Generic(format!(
-						"Failed to check proof: {:?}",
-						e
+						"Failed to check proof: {e:?}"
 					))),
 			}
 		},

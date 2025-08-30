@@ -175,7 +175,7 @@ impl QuantusClient {
 		// use jsonrpsee::core::client::ClientT;
 		let params: jsonrpsee::core::params::ArrayParams = rpc_params![storage_keys, at_block];
 		let params_clone = params.clone().to_rpc_params()?;
-		println!("Sending RPC request with params: {:?}", params_clone);
+		println!("Sending RPC request with params: {params_clone:?}");
 
 		let proof: ReadProof<H256> =
 			self.rpc_client.request("state_getReadProof", params).await.map_err(|e| {
@@ -198,8 +198,7 @@ impl QuantusClient {
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch block header: {:?}",
-					e
+					"Failed to fetch block header: {e:?}"
 				))
 			})?;
 
