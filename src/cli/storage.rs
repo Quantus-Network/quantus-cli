@@ -62,11 +62,11 @@ pub enum StorageCommands {
 	/// If --block is specified, queries storage at that specific block instead of latest.
 	/// If no --key is provided, automatically counts all entries in the storage map.
 	Get {
-		/// The name of the pallet (e.g., "System"). Required unless --storage-key is used.
+		/// The name of the pallet (e.g., "System").
 		#[arg(long, required_unless_present = "storage_key")]
 		pallet: Option<String>,
 
-		/// The name of the storage item (e.g., "Account"). Required unless --storage-key is used.
+		/// The name of the storage item (e.g., "Account").
 		#[arg(long, required_unless_present = "storage_key")]
 		name: Option<String>,
 
@@ -74,23 +74,23 @@ pub enum StorageCommands {
 		#[arg(long)]
 		block: Option<String>,
 
-		/// Attempt to decode the value as a specific type (e.g., "u64", "accountinfo").
+		/// Attempt to decode the value as a specific type (e.g., "u64", "accoundid", "accountinfo").
 		#[arg(long)]
 		decode_as: Option<String>,
 
-		/// The key component to be appended to the storage prefix (e.g., an AccountId for System::Account).
+		/// Storage key parameter (e.g., AccountId for System::Account)
 		#[arg(long, conflicts_with = "storage_key")]
 		key: Option<String>,
 
-		/// Type of the key component (e.g., "accountid", "u64"). Requires --key.
+		/// Type of the key component (e.g., "accountid", "u64").
 		#[arg(long, requires("key"))]
 		key_type: Option<String>,
 
-		/// Count all entries in a storage map. Incompatible with --storage-key.
+		/// Force counting all entries even when --key is provided (useful for debugging)
 		#[arg(long, conflicts_with = "storage_key")]
 		count: bool,
 
-		/// The full, final, hex-encoded storage key, as seen in `iterate`.
+		/// The full, final, hex-encoded storage key, as returned by `iterate` etc
 		#[arg(long, conflicts_with_all = &["pallet", "name", "key", "count"])]
 		storage_key: Option<String>,
 	},
@@ -668,8 +668,7 @@ async fn get_storage_by_storage_key(
 	block: Option<String>,
 	decode_as: Option<String>,
 ) -> crate::error::Result<()> {
-	log_print!("🔎 Getting storage...");
-	log_print!("🔑 With storage key: {}", storage_key.bright_yellow());
+	log_print!("🗄️  Storage");
 
 	let encoded_storage_key = encode_storage_key(&storage_key, "raw")?;
 
