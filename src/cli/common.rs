@@ -7,7 +7,7 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 /// If it's already an SS58 address, return it as is
 pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
     // First, try to parse as SS58 address
-    if let Ok(_) = AccountId32::from_ss58check(address_or_wallet_name) {
+    if AccountId32::from_ss58check(address_or_wallet_name).is_ok() {
         // It's a valid SS58 address, return as is
         return Ok(address_or_wallet_name.to_string());
     }

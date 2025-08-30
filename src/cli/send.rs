@@ -64,7 +64,7 @@ pub async fn get_chain_properties(quantus_client: &QuantusClient) -> Result<(Str
         }
         Err(e) => {
             log_verbose!("❌ ChainHead API failed: {:?}", e);
-            Err(e.into())
+            Err(e)
         }
     }
 }
@@ -111,7 +111,7 @@ pub async fn parse_amount(quantus_client: &QuantusClient, amount_str: &str) -> R
 
 /// Parse amount string with specific decimals
 pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128> {
-    let amount_part = amount_str.trim().split_whitespace().next().unwrap_or("");
+    let amount_part = amount_str.split_whitespace().next().unwrap_or("");
 
     if amount_part.is_empty() {
         return Err(crate::error::QuantusError::Generic(
@@ -218,7 +218,7 @@ pub async fn transfer(
         .await
         {
             Ok(hash) => break hash,
-            Err(e) => return Err(e),
+            Err(e) => { log_verbose!("Transfer failed: {:?}", e)}
         }
     };
 

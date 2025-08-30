@@ -5,6 +5,7 @@ use jsonrpsee::core::client::ClientT;
 use sp_core::crypto::Ss58Codec;
 use std::str::FromStr;
 
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_events_command(
     block: Option<u32>,
     block_hash: Option<String>,

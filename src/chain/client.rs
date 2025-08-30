@@ -301,13 +301,11 @@ impl QuantusClient {
 impl subxt::tx::Signer<ChainConfig> for dilithium_crypto::types::DilithiumPair {
     fn account_id(&self) -> <ChainConfig as Config>::AccountId {
         let resonance_public =
-            dilithium_crypto::types::DilithiumPublic::from_slice(&self.public.as_slice())
+            dilithium_crypto::types::DilithiumPublic::from_slice(self.public.as_slice())
                 .expect("Invalid public key");
-        let account_id =
-            <dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
-                resonance_public,
-            );
-        account_id
+        <dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
+            resonance_public,
+        )
     }
 
     fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {

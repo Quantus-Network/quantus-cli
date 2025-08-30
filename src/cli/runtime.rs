@@ -285,14 +285,18 @@ pub async fn handle_runtime_command(
                             current_version.spec_version.to_string().bright_yellow()
                         );
 
-                        if wasm_version == current_version.spec_version {
-                            log_success!("✅ Versions match! The WASM file is compatible with the current runtime.");
-                        } else if wasm_version > current_version.spec_version {
-                            log_print!("🔄 The WASM file is newer than the current runtime.");
-                            log_print!("   • This would be an upgrade");
-                        } else {
-                            log_print!("⚠️  The WASM file is older than the current runtime.");
-                            log_print!("   • This would be a downgrade");
+                        match wasm_version.cmp(&current_version.spec_version) {
+                            std::cmp::Ordering::Less => {
+                                log_print!("⚠️  The WASM file is older than the current runtime.");
+                                log_print!("   • This would be a downgrade");
+                            },
+                            std::cmp::Ordering::Greater => {
+                                log_print!("🔄 The WASM file is newer than the current runtime.");
+                                log_print!("   • This would be an upgrade");
+                            },
+                            std::cmp::Ordering::Equal => {
+                                log_success!("✅ Versions match! The WASM file is compatible with the current runtime.");
+                            },
                         }
                     } else {
                         log_print!("⚠️  Could not parse version number from filename");

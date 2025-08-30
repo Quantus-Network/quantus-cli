@@ -304,6 +304,7 @@ pub async fn execute_command(
 }
 
 /// Handle generic extrinsic call command
+#[allow(clippy::too_many_arguments)]
 async fn handle_generic_call_command(
     pallet: String,
     call: String,
