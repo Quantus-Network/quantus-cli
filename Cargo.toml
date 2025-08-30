@@ -17,35 +17,35 @@ path = "src/main.rs"
 
 [dependencies]
 # CLI and async runtime
-clap = { version = "4.5", features = ["derive"] }
-tokio = { version = "1.46", features = ["full"] }
+clap = { version = "=4.5", features = ["derive"] }
+tokio = { version = "=1.46", features = ["full"] }
 
 # Serialization and configuration
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-toml = "0.9"
+serde = { version = "=1.0", features = ["derive"] }
+serde_json = "=1.0"
+toml = "=0.9"
 
 # Error handling
-thiserror = "2.0"
+thiserror = "=2.0"
 
 # Terminal UI
-colored = "3.0"
+colored = "=3.0"
 
 # Additional utilities
-sha2 = "0.10"
-hex = "0.4"
-chrono = { version = "0.4", features = ["serde"] }
-dirs = "6.0"
-rpassword = "7.4"
+sha2 = "=0.10"
+hex = "=0.4"
+chrono = { version = "=0.4", features = ["serde"] }
+dirs = "=6.0"
+rpassword = "=7.4"
 
 # Quantum-Safe Encryption
-argon2 = "0.5"   # Password-based key derivation (quantum-safe)
-rand = "0.9"
-aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
+argon2 = "=0.5"   # Password-based key derivation (quantum-safe)
+rand = "=0.9"
+aes-gcm = "=0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 
-rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/rusty-crystals.git", branch = "injective-felt-embeddings", package = "rusty-crystals-dilithium" }
-rusty-crystals-hdwallet = { git = "https://github.com/Quantus-Network/rusty-crystals.git", branch = "injective-felt-embeddings", package = "rusty-crystals-hdwallet" }
-poseidon-resonance = { git = "https://github.com/Quantus-Network/poseidon-resonance", branch = "injective-felt-embeddings", features = [
+rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/rusty-crystals.git", package = "rusty-crystals-dilithium" }
+rusty-crystals-hdwallet = { git = "https://github.com/Quantus-Network/rusty-crystals.git", package = "rusty-crystals-hdwallet" }
+poseidon-resonance = { git = "https://github.com/Quantus-Network/poseidon-resonance", features = [
 	"serde",
 ] }
 dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package = "dilithium-crypto" }
@@ -53,7 +53,7 @@ dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package =
 # Wormhole and zk-circuits
 wormhole-circuit = { git = "https://github.com/Quantus-Network/zk-circuits", package = "wormhole-circuit" }
 zk-circuits-common = { git = "https://github.com/Quantus-Network/zk-circuits", package = "zk-circuits-common" }
-trie-db = { version = "0.29.1", default-features = false }
+trie-db = { version = "=0.29.1", default-features = false }
 sp-trie = { git = "https://github.com/Quantus-Network/zk-trie" }
 
 # Blockchain and RPC client
