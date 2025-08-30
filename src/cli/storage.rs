@@ -70,6 +70,10 @@ pub enum StorageCommands {
 		/// Force counting all entries even when --key is provided (useful for debugging)
 		#[arg(long)]
 		count: bool,
+
+		/// Use the provided --key as a raw, full storage key (hex-encoded)
+		#[arg(long)]
+		raw: bool,
 	},
 	/// List all storage items in a pallet.
 	///
@@ -644,7 +648,7 @@ pub async fn handle_storage_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		StorageCommands::Get { pallet, name, block, decode_as, key, key_type, count } => {
+		StorageCommands::Get { pallet, name, block, decode_as, key, key_type, count, raw } => {
 			// Make copies to avoid borrowing issues
 			let key_copy = key.clone();
 			let key_type_copy = key_type.clone();
@@ -716,23 +720,39 @@ pub async fn handle_storage_command(
 				);
 			} else {
 				// Get specific storage value - we need to construct storage key here
-				let mut storage_key_for_get = twox_128(pallet.as_bytes()).to_vec();
-				storage_key_for_get.extend(&twox_128(name.as_bytes()));
-
-				// Add key parameter if provided or if this is a storage map
-				if let Some(key_value) = &key_copy {
-					if let Some(key_type_str) = &key_type_copy {
-						let key_bytes = encode_storage_key(key_value, key_type_str)?;
-						storage_key_for_get.extend(key_bytes);
+				let storage_key_for_get = if raw {
+					// Raw key mode: use the --key directly after hex decoding
+					if let Some(key_value) = &key_copy {
+						log_verbose!("🔧 Using raw key mode. Decoding key directly.");
+						// Use "raw" type for encode_storage_key to just hex-decode
+						encode_storage_key(key_value, "raw")?
 					} else {
-						log_error!("Key type (--key-type) is required when using --key parameter");
+						log_error!("--key must be provided when using the --raw flag.");
 						return Ok(());
 					}
-				} else if !is_storage_value {
-					// For storage maps without key, we need to count entries
-					log_print!("🔢 This is a storage map with {} entries. Use --key to get specific value or omit --key to count all entries.", entry_count);
-					return Ok(());
-				}
+				} else {
+					// Default mode: construct key from pallet, name, and optional key part
+					let mut storage_key = twox_128(pallet.as_bytes()).to_vec();
+					storage_key.extend(&twox_128(name.as_bytes()));
+
+					// Add key parameter if provided
+					if let Some(key_value) = &key_copy {
+						if let Some(key_type_str) = &key_type_copy {
+							let key_bytes = encode_storage_key(key_value, key_type_str)?;
+							storage_key.extend(key_bytes);
+						} else {
+							log_error!(
+								"Key type (--key-type) is required when using --key parameter"
+							);
+							return Ok(());
+						}
+					} else if !is_storage_value {
+						// For storage maps without a key, we should have counted already
+						log_print!("🔢 This is a storage map with {} entries. Use --key to get a specific value or omit --key to count all entries.", entry_count);
+						return Ok(());
+					}
+					storage_key
+				};
 
 				let result = if let Some(block_value) = &block_copy {
 					let block_hash = resolve_block_hash(&quantus_client, block_value).await?;
