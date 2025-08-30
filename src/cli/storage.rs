@@ -9,12 +9,32 @@ use crate::{
 use clap::Subcommand;
 use codec::{Decode, Encode};
 use colored::Colorize;
+use serde::Deserialize;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
 	twox_128,
 };
 use std::{collections::BTreeMap, str::FromStr};
 use subxt::OnlineClient;
+
+/// The `AccountData` struct, used in `AccountInfo`.
+#[derive(Decode, Debug, Deserialize, Clone, PartialEq, Eq)]
+pub struct AccountData {
+	pub free: u128,
+	pub reserved: u128,
+	pub frozen: u128,
+	pub flags: u128,
+}
+
+/// The `AccountInfo` struct, reflecting the chain's state.
+#[derive(Decode, Debug, Deserialize, Clone, PartialEq, Eq)]
+pub struct AccountInfo {
+	pub nonce: u32,
+	pub consumers: u32,
+	pub providers: u32,
+	pub sufficients: u32,
+	pub data: AccountData,
+}
 
 /// Validate that a pallet exists in the chain metadata
 fn validate_pallet_exists(
@@ -42,38 +62,37 @@ pub enum StorageCommands {
 	/// If --block is specified, queries storage at that specific block instead of latest.
 	/// If no --key is provided, automatically counts all entries in the storage map.
 	Get {
-		/// The name of the pallet (e.g., "Scheduler")
-		#[arg(long)]
-		pallet: String,
+		/// The name of the pallet (e.g., "System"). Required unless --storage-key is used.
+		#[arg(long, required_unless_present = "storage_key")]
+		pallet: Option<String>,
 
-		/// The name of the storage item (e.g., "LastProcessedTimestamp")
-		#[arg(long)]
-		name: String,
+		/// The name of the storage item (e.g., "Account"). Required unless --storage-key is used.
+		#[arg(long, required_unless_present = "storage_key")]
+		name: Option<String>,
 
-		/// Block number to query (preferred) or block hash (0x...) - if not specified, uses latest
-		/// block
+		/// Block number to query at a specific state.
 		#[arg(long)]
 		block: Option<String>,
 
-		/// Attempt to decode the value as a specific type (e.g., "u64", "AccountId")
+		/// Attempt to decode the value as a specific type (e.g., "u64", "accountinfo").
 		#[arg(long)]
 		decode_as: Option<String>,
 
-		/// Storage key parameter (e.g., AccountId for System::Account)
-		#[arg(long)]
+		/// The key component to be appended to the storage prefix (e.g., an AccountId for System::Account).
+		#[arg(long, conflicts_with = "storage_key")]
 		key: Option<String>,
 
-		/// Type of the key parameter (e.g., "accountid", "u64")
-		#[arg(long)]
+		/// Type of the key component (e.g., "accountid", "u64"). Requires --key.
+		#[arg(long, requires("key"))]
 		key_type: Option<String>,
 
-		/// Force counting all entries even when --key is provided (useful for debugging)
-		#[arg(long)]
+		/// Count all entries in a storage map. Incompatible with --storage-key.
+		#[arg(long, conflicts_with = "storage_key")]
 		count: bool,
 
-		/// Use the provided --key as a raw, full storage key (hex-encoded)
-		#[arg(long)]
-		raw: bool,
+		/// The full, final, hex-encoded storage key, as seen in `iterate`.
+		#[arg(long, conflicts_with_all = &["pallet", "name", "key", "count"])]
+		storage_key: Option<String>,
 	},
 	/// List all storage items in a pallet.
 	///
@@ -632,10 +651,149 @@ fn decode_storage_value(value_bytes: &[u8], type_str: &str) -> crate::error::Res
 			Ok(account_id) => Ok(account_id.to_ss58check()),
 			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as AccountId32: {e}"))),
 		},
+		"accountinfo" => match AccountInfo::decode(&mut &value_bytes[..]) {
+			Ok(account_info) => Ok(format!("{:#?}", account_info)),
+			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as AccountInfo: {e}"))),
+		},
 		_ => Err(QuantusError::Generic(format!(
-			"Unsupported type for decoding: {type_str}. Supported types: u32, u64, moment, u128, balance, accountid"
+			"Unsupported type for decoding: {type_str}. Supported types: u32, u64, moment, u128, balance, accountid, accountinfo"
 		))),
 	}
+}
+
+/// Get storage by a full, hex-encoded storage key.
+async fn get_storage_by_storage_key(
+	quantus_client: &crate::chain::client::QuantusClient,
+	storage_key: String,
+	block: Option<String>,
+	decode_as: Option<String>,
+) -> crate::error::Result<()> {
+	log_print!("🔎 Getting storage...");
+	log_print!("🔑 With storage key: {}", storage_key.bright_yellow());
+
+	let encoded_storage_key = encode_storage_key(&storage_key, "raw")?;
+
+	let result = if let Some(block_id) = block {
+		let block_hash = resolve_block_hash(quantus_client, &block_id).await?;
+		get_storage_raw_at_block(quantus_client, encoded_storage_key, block_hash).await?
+	} else {
+		get_storage_raw(quantus_client, encoded_storage_key).await?
+	};
+
+	if let Some(value_bytes) = result {
+		log_success!("Raw Value: 0x{}", hex::encode(&value_bytes).bright_yellow());
+		if let Some(type_str) = decode_as {
+			log_print!("Attempting to decode as {}...", type_str.bright_cyan());
+			match decode_storage_value(&value_bytes, &type_str) {
+				Ok(decoded_value) => log_success!("Decoded Value: {}", decoded_value.bright_green()),
+				Err(e) => log_error!("{}", e),
+			}
+		}
+	} else {
+		log_print!("{}", "No value found at this storage location.".dimmed());
+	}
+
+	Ok(())
+}
+
+/// Get storage by providing its pallet, name, and optional key component.
+async fn get_storage_by_parts(
+	quantus_client: &crate::chain::client::QuantusClient,
+	pallet: String,
+	name: String,
+	key: Option<String>,
+	key_type: Option<String>,
+	block: Option<String>,
+	decode_as: Option<String>,
+	count: bool,
+) -> crate::error::Result<()> {
+	if let Some(block_value) = &block {
+		log_print!(
+			"🔎 Getting storage for {}::{} at block {}",
+			pallet.bright_green(),
+			name.bright_cyan(),
+			block_value.bright_yellow()
+		);
+	} else {
+		log_print!(
+			"🔎 Getting storage for {}::{} (latest block)",
+			pallet.bright_green(),
+			name.bright_cyan()
+		);
+	}
+
+	if let Some(key_value) = &key {
+		log_print!("🔑 With key: {}", key_value.bright_yellow());
+	}
+
+	validate_pallet_exists(quantus_client.client(), &pallet)?;
+
+	let block_hash = if let Some(block_id) = &block {
+		resolve_block_hash(quantus_client, block_id).await?
+	} else {
+		quantus_client.get_latest_block().await?
+	};
+
+	let entry_count =
+		count_storage_entries(quantus_client, &pallet, &name, block_hash).await?;
+	let is_storage_value = entry_count == 1;
+
+	let should_count = count || (key.is_none() && !is_storage_value);
+
+	if should_count {
+		log_print!(
+			"🔢 Counting all entries in {}::{}",
+			pallet.bright_green(),
+			name.bright_cyan()
+		);
+
+		let block_display = if let Some(ref block_id) = block {
+			format!(" at block {}", block_id.bright_yellow())
+		} else {
+			" (latest)".to_string()
+		};
+
+		log_success!(
+			"👥 Total entries{}: {}",
+			block_display,
+			entry_count.to_string().bright_green().bold()
+		);
+	} else {
+		let mut storage_key = twox_128(pallet.as_bytes()).to_vec();
+		storage_key.extend(&twox_128(name.as_bytes()));
+
+		if let Some(key_value) = &key {
+			if let Some(key_type_str) = &key_type {
+				let key_bytes = encode_storage_key(key_value, key_type_str)?;
+				storage_key.extend(key_bytes);
+			} else {
+				log_error!("Key type (--key-type) is required when using --key parameter");
+				return Ok(());
+			}
+		} else if !is_storage_value {
+			log_print!("🔢 This is a storage map with {} entries. Use --key to get a specific value or omit --key to count all entries.", entry_count);
+			return Ok(());
+		}
+
+		let result = get_storage_raw_at_block(quantus_client, storage_key, block_hash).await?;
+
+		if let Some(value_bytes) = result {
+			log_success!("Raw Value: 0x{}", hex::encode(&value_bytes).bright_yellow());
+
+			if let Some(type_str) = decode_as {
+				log_print!("Attempting to decode as {}...", type_str.bright_cyan());
+				match decode_storage_value(&value_bytes, &type_str) {
+					Ok(decoded_value) =>
+						log_success!("Decoded Value: {}", decoded_value.bright_green()),
+					Err(e) => log_error!("{}", e),
+				}
+			}
+		} else {
+			log_print!("{}", "No value found at this storage location.".dimmed());
+		}
+	}
+
+	Ok(())
 }
 
 /// Handle storage subxt commands
@@ -648,137 +806,23 @@ pub async fn handle_storage_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		StorageCommands::Get { pallet, name, block, decode_as, key, key_type, count, raw } => {
-			// Make copies to avoid borrowing issues
-			let key_copy = key.clone();
-			let key_type_copy = key_type.clone();
-			let block_copy = block.clone();
-
-			if let Some(block_value) = &block_copy {
-				log_print!(
-					"🔎 Getting storage for {}::{} at block {}",
-					pallet.bright_green(),
-					name.bright_cyan(),
-					block_value.bright_yellow()
-				);
+		StorageCommands::Get { pallet, name, block, decode_as, key, key_type, count, storage_key } => {
+			if let Some(s_key) = storage_key {
+				get_storage_by_storage_key(&quantus_client, s_key, block, decode_as).await
 			} else {
-				log_print!(
-					"🔎 Getting storage for {}::{} (latest block)",
-					pallet.bright_green(),
-					name.bright_cyan()
-				);
+				// Clap ensures that pallet and name are present if `storage_key` is None
+				get_storage_by_parts(
+					&quantus_client,
+					pallet.unwrap(),
+					name.unwrap(),
+					key,
+					key_type,
+					block,
+					decode_as,
+					count,
+				)
+				.await
 			}
-
-			if let Some(key_value) = &key_copy {
-				log_print!("🔑 With key: {}", key_value.bright_yellow());
-			}
-
-			// Validate pallet exists
-			validate_pallet_exists(quantus_client.client(), &pallet)?;
-
-			// Check if this is a storage value (1 entry) or storage map (multiple entries)
-			let block_hash = if let Some(block_value) = &block_copy {
-				resolve_block_hash(&quantus_client, block_value).await?
-			} else {
-				quantus_client.get_latest_block().await?
-			};
-
-			let entry_count =
-				count_storage_entries(&quantus_client, &pallet, &name, block_hash).await?;
-			let is_storage_value = entry_count == 1;
-
-			// Determine if we should count entries or get specific value
-			let should_count = count || (key_copy.is_none() && !is_storage_value);
-
-			if should_count {
-				// Count all entries in the storage map
-				log_print!(
-					"🔢 Counting all entries in {}::{}",
-					pallet.bright_green(),
-					name.bright_cyan()
-				);
-
-				let block_hash = if let Some(block_value) = &block_copy {
-					resolve_block_hash(&quantus_client, block_value).await?
-				} else {
-					quantus_client.get_latest_block().await?
-				};
-
-				let total_count =
-					count_storage_entries(&quantus_client, &pallet, &name, block_hash).await?;
-
-				let block_display = if let Some(ref block_id) = block_copy {
-					format!(" at block {}", block_id.bright_yellow())
-				} else {
-					" (latest)".to_string()
-				};
-
-				log_success!(
-					"👥 Total entries{}: {}",
-					block_display,
-					total_count.to_string().bright_green().bold()
-				);
-			} else {
-				// Get specific storage value - we need to construct storage key here
-				let storage_key_for_get = if raw {
-					// Raw key mode: use the --key directly after hex decoding
-					if let Some(key_value) = &key_copy {
-						log_verbose!("🔧 Using raw key mode. Decoding key directly.");
-						// Use "raw" type for encode_storage_key to just hex-decode
-						encode_storage_key(key_value, "raw")?
-					} else {
-						log_error!("--key must be provided when using the --raw flag.");
-						return Ok(());
-					}
-				} else {
-					// Default mode: construct key from pallet, name, and optional key part
-					let mut storage_key = twox_128(pallet.as_bytes()).to_vec();
-					storage_key.extend(&twox_128(name.as_bytes()));
-
-					// Add key parameter if provided
-					if let Some(key_value) = &key_copy {
-						if let Some(key_type_str) = &key_type_copy {
-							let key_bytes = encode_storage_key(key_value, key_type_str)?;
-							storage_key.extend(key_bytes);
-						} else {
-							log_error!(
-								"Key type (--key-type) is required when using --key parameter"
-							);
-							return Ok(());
-						}
-					} else if !is_storage_value {
-						// For storage maps without a key, we should have counted already
-						log_print!("🔢 This is a storage map with {} entries. Use --key to get a specific value or omit --key to count all entries.", entry_count);
-						return Ok(());
-					}
-					storage_key
-				};
-
-				let result = if let Some(block_value) = &block_copy {
-					let block_hash = resolve_block_hash(&quantus_client, block_value).await?;
-					get_storage_raw_at_block(&quantus_client, storage_key_for_get, block_hash)
-						.await?
-				} else {
-					get_storage_raw(&quantus_client, storage_key_for_get).await?
-				};
-
-				if let Some(value_bytes) = result {
-					log_success!("Raw Value: 0x{}", hex::encode(&value_bytes).bright_yellow());
-
-					if let Some(type_str) = decode_as {
-						log_print!("Attempting to decode as {}...", type_str.bright_cyan());
-						match decode_storage_value(&value_bytes, &type_str) {
-							Ok(decoded_value) =>
-								log_success!("Decoded Value: {}", decoded_value.bright_green()),
-							Err(e) => log_error!("{}", e),
-						}
-					}
-				} else {
-					log_print!("{}", "No value found at this storage location.".dimmed());
-				}
-			}
-
-			Ok(())
 		},
 		StorageCommands::List { pallet, names_only } =>
 			list_storage_items(&quantus_client, &pallet, names_only).await,
