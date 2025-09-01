@@ -17,6 +17,7 @@ pub mod storage;
 pub mod system;
 pub mod tech_collective;
 pub mod wallet;
+pub mod wormhole;
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
@@ -75,6 +76,10 @@ pub enum Commands {
 	/// Tech Collective management commands
 	#[command(subcommand)]
 	TechCollective(tech_collective::TechCollectiveCommands),
+
+	/// Wormhole commands
+	#[command(subcommand)]
+	Wormhole(wormhole::WormholeCommands),
 
 	/// Runtime management commands (requires root/sudo permissions)
 	#[command(subcommand)]
@@ -239,6 +244,8 @@ pub async fn execute_command(
 			storage::handle_storage_command(storage_cmd, node_url).await,
 		Commands::TechCollective(tech_collective_cmd) =>
 			tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await,
+		Commands::Wormhole(wormhole_cmd) =>
+			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
 		Commands::Runtime(runtime_cmd) =>
 			runtime::handle_runtime_command(runtime_cmd, node_url).await,
 		Commands::Call {

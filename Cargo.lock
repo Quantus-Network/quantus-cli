@@ -1326,17 +1326,16 @@ dependencies = [
 [[package]]
 name = "dilithium-crypto"
 version = "0.1.0"
-source = "git+https://github.com/Quantus-Network/chain?tag=v0.1.6#98ceb8de72a8eea0a5d1db2da4793c3331ef07c1"
+source = "git+https://github.com/Quantus-Network/chain#baeb1928f1ea443f781f5825dd1b77d8b88e9985"
 dependencies = [
  "log",
  "parity-scale-codec",
- "poseidon-resonance 0.9.0 (git+https://github.com/Quantus-Network/poseidon-resonance)",
+ "poseidon-resonance",
  "rusty-crystals-dilithium",
  "scale-info",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-io",
  "sp-runtime",
- "sp-runtime-interface 29.0.1",
  "thiserror 1.0.69",
 ]
 
@@ -1404,6 +1403,27 @@ name = "downcast-rs"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75b325c5dbd37f80359721ad39aca5a29fb04c89279657cffdda8736d0c0b9d2"
+
+[[package]]
+name = "dyn-clonable"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a36efbb9bfd58e1723780aa04b61aba95ace6a05d9ffabfdb0b43672552f0805"
+dependencies = [
+ "dyn-clonable-impl",
+ "dyn-clone",
+]
+
+[[package]]
+name = "dyn-clonable-impl"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7e8671d54058979a37a26f3511fbf8d198ba1aa35ffb202c42587d918d77213a"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.106",
+]
 
 [[package]]
 name = "dyn-clone"
@@ -2165,7 +2185,7 @@ dependencies = [
  "hyper",
  "libc",
  "pin-project-lite",
- "socket2",
+ "socket2 0.6.0",
  "tokio",
  "tower-service",
  "tracing",
@@ -2751,11 +2771,11 @@ dependencies = [
 
 [[package]]
 name = "matchers"
-version = "0.1.0"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8263075bb86c5a1b1427b5ae862e8889656f126e9f77c484496e8b47cf5c5558"
+checksum = "d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9"
 dependencies = [
- "regex-automata 0.1.10",
+ "regex-automata",
 ]
 
 [[package]]
@@ -2763,6 +2783,15 @@ name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a282da65faaf38286cf3be983213fcf1d2e2a58700e808f83f4ea9a4804bc0"
+
+[[package]]
+name = "memory-db"
+version = "0.32.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "808b50db46293432a45e63bc15ea51e0ab4c0a1647b8eb114e31a3e698dd6fbe"
+dependencies = [
+ "hash-db",
+]
 
 [[package]]
 name = "memory-db"
@@ -2855,12 +2884,11 @@ dependencies = [
 
 [[package]]
 name = "nu-ansi-term"
-version = "0.46.0"
+version = "0.50.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77a8165726e8236064dbb45459242600304b42a5ea24ee2948e18e023bf7ba84"
+checksum = "d4a28e057d01f97e61255210fcff094d74ed0466038633e95017f5beb68e4399"
 dependencies = [
- "overload",
- "winapi",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3002,12 +3030,6 @@ name = "option-ext"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
-
-[[package]]
-name = "overload"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b15813163c1d831bf4a13c3610c05c0d03b39feb07f7e09fa234dac9b15aaf39"
 
 [[package]]
 name = "parity-bip39"
@@ -3335,33 +3357,17 @@ dependencies = [
 [[package]]
 name = "poseidon-resonance"
 version = "0.9.0"
-source = "git+https://github.com/Quantus-Network/poseidon-resonance?branch=main#c37290f40cd821970c00844663cf22c7408457b7"
+source = "git+https://github.com/Quantus-Network/poseidon-resonance#4d44267446406243e336bc7966d20452686f8347"
 dependencies = [
  "log",
  "parity-scale-codec",
  "plonky2",
  "scale-info",
  "serde",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-runtime",
  "sp-storage",
- "sp-trie",
-]
-
-[[package]]
-name = "poseidon-resonance"
-version = "0.9.0"
-source = "git+https://github.com/Quantus-Network/poseidon-resonance#c37290f40cd821970c00844663cf22c7408457b7"
-dependencies = [
- "log",
- "parity-scale-codec",
- "plonky2",
- "scale-info",
- "serde",
- "sp-core",
- "sp-runtime",
- "sp-storage",
- "sp-trie",
+ "sp-trie 40.0.0",
 ]
 
 [[package]]
@@ -3490,7 +3496,7 @@ dependencies = [
  "hex",
  "jsonrpsee",
  "parity-scale-codec",
- "poseidon-resonance 0.9.0 (git+https://github.com/Quantus-Network/poseidon-resonance?branch=main)",
+ "poseidon-resonance",
  "rand 0.9.2",
  "rpassword",
  "rusty-crystals-dilithium",
@@ -3498,14 +3504,20 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-runtime",
+ "sp-state-machine 0.44.0",
+ "sp-storage",
+ "sp-trie 38.0.0",
  "subxt",
  "subxt-metadata",
  "tempfile",
  "thiserror 2.0.16",
  "tokio",
  "toml 0.9.5",
+ "trie-db 0.29.1",
+ "wormhole-circuit",
+ "zk-circuits-common",
 ]
 
 [[package]]
@@ -3677,17 +3689,8 @@ checksum = "23d7fd106d8c02486a8d64e778353d1cffe08ce79ac2e82f540c86d0facf6912"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-automata 0.4.10",
- "regex-syntax 0.8.6",
-]
-
-[[package]]
-name = "regex-automata"
-version = "0.1.10"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c230d73fb8d8c1b9c0b3135c5142a8acee3a0558fb8db5cf1cb65f8d7862132"
-dependencies = [
- "regex-syntax 0.6.29",
+ "regex-automata",
+ "regex-syntax",
 ]
 
 [[package]]
@@ -3698,14 +3701,8 @@ checksum = "6b9458fa0bfeeac22b5ca447c63aaf45f28439a709ccd244698632f9aa6394d6"
 dependencies = [
  "aho-corasick",
  "memchr",
- "regex-syntax 0.8.6",
+ "regex-syntax",
 ]
-
-[[package]]
-name = "regex-syntax"
-version = "0.6.29"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f162c6dd7b008981e4d40210aca20b4bd0f9b60ca9271061b07f78537722f2e1"
 
 [[package]]
 name = "regex-syntax"
@@ -3881,7 +3878,7 @@ checksum = "b39cdef0fa800fc44525c84ccb54a029961a8215f9619753635a9c0d2538d46d"
 [[package]]
 name = "rusty-crystals-dilithium"
 version = "1.0.0"
-source = "git+https://github.com/Quantus-Network/rusty-crystals.git#e78049a3d391446d8366b12db733ecaf5acd78eb"
+source = "git+https://github.com/Quantus-Network/rusty-crystals.git#a067d74cd1e196e44dffe845310fa6e6c55f5aaa"
 dependencies = [
  "rand 0.7.3",
  "sha2 0.10.9",
@@ -3890,14 +3887,14 @@ dependencies = [
 [[package]]
 name = "rusty-crystals-hdwallet"
 version = "0.1.1"
-source = "git+https://github.com/Quantus-Network/rusty-crystals.git#e78049a3d391446d8366b12db733ecaf5acd78eb"
+source = "git+https://github.com/Quantus-Network/rusty-crystals.git#a067d74cd1e196e44dffe845310fa6e6c55f5aaa"
 dependencies = [
  "bip39",
  "hex",
  "hex-literal",
  "hmac 0.12.1",
  "nam-tiny-hderive",
- "poseidon-resonance 0.9.0 (git+https://github.com/Quantus-Network/poseidon-resonance)",
+ "poseidon-resonance",
  "rand 0.8.5",
  "rand_chacha 0.9.0",
  "rand_core 0.6.4",
@@ -3905,7 +3902,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "sp-core",
+ "sp-core 37.0.0",
  "thiserror 2.0.16",
 ]
 
@@ -4468,6 +4465,16 @@ dependencies = [
 
 [[package]]
 name = "socket2"
+version = "0.5.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e22376abed350d73dd1cd119b57ffccad95b4e585a7cda43e286245ce23c0678"
+dependencies = [
+ "libc",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
+name = "socket2"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "233504af464074f9d066d7b5416c5f9b894a5862a6506e306f7b816cdd6f1807"
@@ -4500,7 +4507,7 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "serde",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-io",
 ]
 
@@ -4517,6 +4524,53 @@ dependencies = [
  "scale-info",
  "serde",
  "static_assertions",
+]
+
+[[package]]
+name = "sp-core"
+version = "35.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4532774405a712a366a98080cbb4daa28c38ddff0ec595902ad6ee6a78a809f8"
+dependencies = [
+ "array-bytes",
+ "bitflags 1.3.2",
+ "blake2",
+ "bounded-collections",
+ "bs58",
+ "dyn-clonable",
+ "ed25519-zebra",
+ "futures",
+ "hash-db",
+ "hash256-std-hasher",
+ "impl-serde",
+ "itertools 0.11.0",
+ "k256",
+ "libsecp256k1",
+ "log",
+ "merlin",
+ "parity-bip39",
+ "parity-scale-codec",
+ "parking_lot",
+ "paste",
+ "primitive-types 0.13.1",
+ "rand 0.8.5",
+ "scale-info",
+ "schnorrkel",
+ "secp256k1",
+ "secrecy",
+ "serde",
+ "sp-crypto-hashing",
+ "sp-debug-derive",
+ "sp-externalities",
+ "sp-runtime-interface 29.0.1",
+ "sp-std",
+ "sp-storage",
+ "ss58-registry",
+ "substrate-bip39",
+ "thiserror 1.0.69",
+ "tracing",
+ "w3f-bls",
+ "zeroize",
 ]
 
 [[package]]
@@ -4619,14 +4673,14 @@ dependencies = [
  "polkavm-derive 0.24.0",
  "rustversion",
  "secp256k1",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-crypto-hashing",
  "sp-externalities",
  "sp-keystore",
  "sp-runtime-interface 30.0.0",
- "sp-state-machine",
+ "sp-state-machine 0.46.0",
  "sp-tracing",
- "sp-trie",
+ "sp-trie 40.0.0",
  "tracing",
  "tracing-core",
 ]
@@ -4639,7 +4693,7 @@ checksum = "269d0ee360f6d072f9203485afea35583ac151521a525cc48b2a107fc576c2d9"
 dependencies = [
  "parity-scale-codec",
  "parking_lot",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-externalities",
 ]
 
@@ -4674,10 +4728,10 @@ dependencies = [
  "simple-mermaid",
  "sp-application-crypto",
  "sp-arithmetic",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-io",
  "sp-std",
- "sp-trie",
+ "sp-trie 40.0.0",
  "sp-weights",
  "tracing",
  "tuplex",
@@ -4753,6 +4807,26 @@ dependencies = [
 
 [[package]]
 name = "sp-state-machine"
+version = "0.44.0"
+source = "git+https://github.com/Quantus-Network/zk-state-machine#06d1e9545428b57aa56e8997c7bf24eaeb48a103"
+dependencies = [
+ "hash-db",
+ "log",
+ "parity-scale-codec",
+ "parking_lot",
+ "rand 0.8.5",
+ "smallvec",
+ "sp-core 35.0.0",
+ "sp-externalities",
+ "sp-panic-handler",
+ "sp-trie 38.0.0",
+ "thiserror 1.0.69",
+ "tracing",
+ "trie-db 0.29.1",
+]
+
+[[package]]
+name = "sp-state-machine"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "483422b016ee9ddba949db6d3092961ed58526520f0586df74dc07defd922a58"
@@ -4763,13 +4837,13 @@ dependencies = [
  "parking_lot",
  "rand 0.8.5",
  "smallvec",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-externalities",
  "sp-panic-handler",
- "sp-trie",
+ "sp-trie 40.0.0",
  "thiserror 1.0.69",
  "tracing",
- "trie-db",
+ "trie-db 0.30.0",
 ]
 
 [[package]]
@@ -4805,6 +4879,29 @@ dependencies = [
 
 [[package]]
 name = "sp-trie"
+version = "38.0.0"
+source = "git+https://github.com/Quantus-Network/zk-trie#bb1c142115ef1c7cae9378dd438b179d113d29cb"
+dependencies = [
+ "ahash",
+ "hash-db",
+ "log",
+ "memory-db 0.32.0",
+ "nohash-hasher",
+ "parity-scale-codec",
+ "parking_lot",
+ "rand 0.8.5",
+ "scale-info",
+ "schnellru",
+ "sp-core 35.0.0",
+ "sp-externalities",
+ "thiserror 1.0.69",
+ "tracing",
+ "trie-db 0.29.1",
+ "trie-root",
+]
+
+[[package]]
+name = "sp-trie"
 version = "40.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6b2e157c9cf44a1a9d20f3c69322e302db70399bf3f218211387fe009dd4041c"
@@ -4813,19 +4910,19 @@ dependencies = [
  "foldhash",
  "hash-db",
  "hashbrown 0.15.5",
- "memory-db",
+ "memory-db 0.34.0",
  "nohash-hasher",
  "parity-scale-codec",
  "parking_lot",
  "rand 0.8.5",
  "scale-info",
  "schnellru",
- "sp-core",
+ "sp-core 37.0.0",
  "sp-externalities",
  "substrate-prometheus-endpoint",
  "thiserror 1.0.69",
  "tracing",
- "trie-db",
+ "trie-db 0.30.0",
  "trie-root",
 ]
 
@@ -5296,9 +5393,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.47.1"
+version = "1.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89e49afdadebb872d3145a5638b59eb0691ea23e46ca484037cfab3b76b95038"
+checksum = "0cc3a2344dafbe23a245241fe8b09735b521110d30fcefbbd5feb1797ca35d17"
 dependencies = [
  "backtrace",
  "bytes",
@@ -5309,9 +5406,9 @@ dependencies = [
  "pin-project-lite",
  "signal-hook-registry",
  "slab",
- "socket2",
+ "socket2 0.5.10",
  "tokio-macros",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5513,14 +5610,14 @@ dependencies = [
 
 [[package]]
 name = "tracing-subscriber"
-version = "0.3.19"
+version = "0.3.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8189decb5ac0fa7bc8b96b7cb9b2701d60d48805aca84a238004d665fcc4008"
+checksum = "2054a14f5307d601f88daf0553e1cbf472acc4f2c51afab632431cdcd72124d5"
 dependencies = [
  "matchers",
  "nu-ansi-term",
  "once_cell",
- "regex",
+ "regex-automata",
  "sharded-slab",
  "smallvec",
  "thread_local",
@@ -5528,6 +5625,18 @@ dependencies = [
  "tracing",
  "tracing-core",
  "tracing-log",
+]
+
+[[package]]
+name = "trie-db"
+version = "0.29.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c992b4f40c234a074d48a757efeabb1a6be88af84c0c23f7ca158950cb0ae7f"
+dependencies = [
+ "hash-db",
+ "log",
+ "rustc-hex",
+ "smallvec",
 ]
 
 [[package]]
@@ -6295,6 +6404,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "052283831dbae3d879dc7f51f3d92703a316ca49f91540417d38591826127814"
 
 [[package]]
+name = "wormhole-circuit"
+version = "0.1.0"
+source = "git+https://github.com/Quantus-Network/zk-circuits#a4a549389ba326e9aadc9bc6b9f8efa6129a5a54"
+dependencies = [
+ "anyhow",
+ "hex",
+ "plonky2",
+ "zk-circuits-common",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6443,4 +6563,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.106",
+]
+
+[[package]]
+name = "zk-circuits-common"
+version = "0.1.0"
+source = "git+https://github.com/Quantus-Network/zk-circuits#a4a549389ba326e9aadc9bc6b9f8efa6129a5a54"
+dependencies = [
+ "anyhow",
+ "plonky2",
+ "serde",
 ]
