@@ -74,7 +74,8 @@ pub enum StorageCommands {
 		#[arg(long)]
 		block: Option<String>,
 
-		/// Attempt to decode the value as a specific type (e.g., "u64", "accoundid", "accountinfo").
+		/// Attempt to decode the value as a specific type (e.g., "u64", "accoundid",
+		/// "accountinfo").
 		#[arg(long)]
 		decode_as: Option<String>,
 
@@ -652,7 +653,7 @@ fn decode_storage_value(value_bytes: &[u8], type_str: &str) -> crate::error::Res
 			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as AccountId32: {e}"))),
 		},
 		"accountinfo" => match AccountInfo::decode(&mut &value_bytes[..]) {
-			Ok(account_info) => Ok(format!("{:#?}", account_info)),
+			Ok(account_info) => Ok(format!("{account_info:#?}")),
 			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as AccountInfo: {e}"))),
 		},
 		_ => Err(QuantusError::Generic(format!(
@@ -684,7 +685,8 @@ async fn get_storage_by_storage_key(
 		if let Some(type_str) = decode_as {
 			log_print!("Attempting to decode as {}...", type_str.bright_cyan());
 			match decode_storage_value(&value_bytes, &type_str) {
-				Ok(decoded_value) => log_success!("Decoded Value: {}", decoded_value.bright_green()),
+				Ok(decoded_value) =>
+					log_success!("Decoded Value: {}", decoded_value.bright_green()),
 				Err(e) => log_error!("{}", e),
 			}
 		}
@@ -733,18 +735,13 @@ async fn get_storage_by_parts(
 		quantus_client.get_latest_block().await?
 	};
 
-	let entry_count =
-		count_storage_entries(quantus_client, &pallet, &name, block_hash).await?;
+	let entry_count = count_storage_entries(quantus_client, &pallet, &name, block_hash).await?;
 	let is_storage_value = entry_count == 1;
 
 	let should_count = count || (key.is_none() && !is_storage_value);
 
 	if should_count {
-		log_print!(
-			"🔢 Counting all entries in {}::{}",
-			pallet.bright_green(),
-			name.bright_cyan()
-		);
+		log_print!("🔢 Counting all entries in {}::{}", pallet.bright_green(), name.bright_cyan());
 
 		let block_display = if let Some(ref block_id) = block {
 			format!(" at block {}", block_id.bright_yellow())
@@ -805,7 +802,16 @@ pub async fn handle_storage_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		StorageCommands::Get { pallet, name, block, decode_as, key, key_type, count, storage_key } => {
+		StorageCommands::Get {
+			pallet,
+			name,
+			block,
+			decode_as,
+			key,
+			key_type,
+			count,
+			storage_key,
+		} => {
 			if let Some(s_key) = storage_key {
 				get_storage_by_storage_key(&quantus_client, s_key, block, decode_as).await
 			} else {
