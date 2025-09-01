@@ -826,6 +826,8 @@ async fn list_blocks_in_range(
 	let mut total_extrinsics = 0;
 	let mut total_events = 0;
 	let mut total_size = 0;
+	let mut tps_values = Vec::new();
+	let mut previous_timestamp: Option<u64> = None;
 
 	// Progress indicator
 	log_print!("📊 Processing {} blocks...", ((end - start) / step + 1).to_string().bright_cyan());
@@ -833,20 +835,22 @@ async fn list_blocks_in_range(
 	// Print table header
 	log_print!("");
 	log_print!(
-		"{:<20} {:<20} {:<12} {:<10} {:<8}",
+		"{:<20} {:<20} {:<12} {:<10} {:<8} {:<8}",
 		"Block".bright_green().bold(),
 		"Time".bright_cyan().bold(),
 		"Extrinsics".bright_blue().bold(),
 		"Events".bright_yellow().bold(),
-		"Size".bright_magenta().bold()
+		"Size".bright_magenta().bold(),
+		"TPS".bright_red().bold()
 	);
 	log_print!(
-		"{:<20} {:<20} {:<12} {:<10} {:<8}",
+		"{:<20} {:<20} {:<12} {:<10} {:<8} {:<8}",
 		"────────────────────".bright_green(),
 		"────────────────────".bright_cyan(),
 		"────────────".bright_blue(),
 		"──────────".bright_yellow(),
-		"──────".bright_magenta()
+		"──────".bright_magenta(),
+		"──────".bright_red()
 	);
 
 	for block_num in (start..=end).step_by(step as usize) {
@@ -938,6 +942,25 @@ async fn list_blocks_in_range(
 		total_events += event_count;
 		total_size += block_size_bytes;
 
+		// Calculate TPS (Transactions Per Second)
+		let tps_str = if let Some(ts) = timestamp {
+			if let Some(prev_ts) = previous_timestamp {
+				let time_diff_ms = ts.saturating_sub(prev_ts);
+				if time_diff_ms > 0 {
+					let time_diff_secs = time_diff_ms as f64 / 1000.0;
+					let tps = extrinsics_count as f64 / time_diff_secs;
+					tps_values.push(tps);
+					format!("{tps:.1}")
+				} else {
+					"N/A".to_string()
+				}
+			} else {
+				"N/A".to_string() // First block, no previous timestamp
+			}
+		} else {
+			"N/A".to_string()
+		};
+
 		// Display block info - always show full date
 		let time_str = if let Some(ts) = timestamp {
 			let timestamp_secs = ts / 1000;
@@ -952,13 +975,19 @@ async fn list_blocks_in_range(
 		};
 
 		log_print!(
-			"📦 {:<18} {:<20} {:<12} {:<10} {:<8}",
+			"📦 {:<18} {:<20} {:<12} {:<10} {:<8} {:<8}",
 			format!("#{block_num}").bright_green(),
 			time_str.bright_cyan(),
 			extrinsics_count.to_string().bright_blue(),
 			event_count.to_string().bright_yellow(),
-			format!("{block_size_kb:.1}K").bright_magenta()
+			format!("{block_size_kb:.1}K").bright_magenta(),
+			tps_str.bright_red()
 		);
+
+		// Update previous timestamp for next iteration
+		if timestamp.is_some() {
+			previous_timestamp = timestamp;
+		}
 	}
 
 	// Summary
@@ -979,6 +1008,25 @@ async fn list_blocks_in_range(
 		"   • Average events per block: {}",
 		format!("{:.1}", total_events as f64 / block_count as f64).bright_cyan()
 	);
+
+	// TPS Statistics
+	if !tps_values.is_empty() {
+		let max_tps = tps_values.iter().fold(f64::NEG_INFINITY, |a, &b| a.max(b));
+		let min_tps = tps_values.iter().fold(f64::INFINITY, |a, &b| a.min(b));
+		let avg_tps = tps_values.iter().sum::<f64>() / tps_values.len() as f64;
+
+		log_print!("");
+		log_print!("🚀 TPS Statistics:");
+		log_print!("   • MAX TPS: {}", format!("{max_tps:.1}").bright_green().bold());
+		log_print!("   • MIN TPS: {}", format!("{min_tps:.1}").bright_yellow().bold());
+		log_print!("   • AVG TPS: {}", format!("{avg_tps:.1}").bright_cyan().bold());
+		log_print!("   • TPS samples: {}", tps_values.len().to_string().bright_magenta());
+	} else {
+		log_print!("");
+		log_print!(
+			"🚀 TPS Statistics: No TPS data available (need at least 2 blocks with timestamps)"
+		);
+	}
 
 	Ok(())
 }
