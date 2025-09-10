@@ -954,10 +954,9 @@ async fn list_blocks_in_range(
 				} else {
 					"N/A".to_string()
 				}
-			}
+			},
 			_ => "N/A".to_string(),
 		};
-
 
 		// Display block info - always show full date
 		let time_str = if let Some(ts) = timestamp {
