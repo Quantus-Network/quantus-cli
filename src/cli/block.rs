@@ -943,23 +943,21 @@ async fn list_blocks_in_range(
 		total_size += block_size_bytes;
 
 		// Calculate TPS (Transactions Per Second)
-		let tps_str = if let Some(ts) = timestamp {
-			if let Some(prev_ts) = previous_timestamp {
+		let tps_str = match (timestamp, previous_timestamp) {
+			(Some(ts), Some(prev_ts)) => {
 				let time_diff_ms = ts.saturating_sub(prev_ts);
 				if time_diff_ms > 0 {
 					let time_diff_secs = time_diff_ms as f64 / 1000.0;
 					let tps = extrinsics_count as f64 / time_diff_secs;
 					tps_values.push(tps);
-					format!("{tps:.1}")
+					format!("{:.1}", tps)
 				} else {
 					"N/A".to_string()
 				}
-			} else {
-				"N/A".to_string() // First block, no previous timestamp
 			}
-		} else {
-			"N/A".to_string()
+			_ => "N/A".to_string(),
 		};
+
 
 		// Display block info - always show full date
 		let time_str = if let Some(ts) = timestamp {
@@ -985,9 +983,7 @@ async fn list_blocks_in_range(
 		);
 
 		// Update previous timestamp for next iteration
-		if timestamp.is_some() {
-			previous_timestamp = timestamp;
-		}
+		previous_timestamp = timestamp.or(previous_timestamp);
 	}
 
 	// Summary
