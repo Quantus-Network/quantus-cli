@@ -38,7 +38,7 @@ jobs:
       - name: Run format checks
         run: |
           taplo format --check --config taplo.toml
-          cargo +nightlyfmt --all -- --check
+          cargo +nightly fmt --all -- --check
 
   build-and-test-matrix:
     name: 🛠️ Build & Test Matrix
