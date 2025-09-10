@@ -5,7 +5,7 @@
 /// - Loading and decrypting wallet data with post-quantum cryptography
 /// - Managing wallet files on disk with quantum-resistant security
 use crate::error::{Result, WalletError};
-use rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
+use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
@@ -272,7 +272,7 @@ impl Keystore {
 mod tests {
 	use super::*;
 	use dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
-	use rusty_crystals_dilithium::ml_dsa_87::Keypair;
+	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
 	use tempfile::TempDir;
 
 	#[test]
