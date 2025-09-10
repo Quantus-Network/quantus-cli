@@ -950,7 +950,7 @@ async fn list_blocks_in_range(
 					let time_diff_secs = time_diff_ms as f64 / 1000.0;
 					let tps = extrinsics_count as f64 / time_diff_secs;
 					tps_values.push(tps);
-					format!("{:.1}", tps)
+					format!("{tps:.1}")
 				} else {
 					"N/A".to_string()
 				}
