@@ -7,8 +7,10 @@ pub mod block;
 pub mod common;
 pub mod events;
 pub mod generic_call;
+pub mod high_security;
 pub mod metadata;
 pub mod progress_spinner;
+pub mod recovery;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
@@ -63,6 +65,14 @@ pub enum Commands {
 	/// Reversible transfer commands
 	#[command(subcommand)]
 	Reversible(reversible::ReversibleCommands),
+
+	/// High-Security commands (reversible account settings)
+	#[command(subcommand)]
+	HighSecurity(high_security::HighSecurityCommands),
+
+	/// Recovery commands
+	#[command(subcommand)]
+	Recovery(recovery::RecoveryCommands),
 
 	/// Scheduler commands
 	#[command(subcommand)]
@@ -233,6 +243,10 @@ pub async fn execute_command(
 		Commands::Batch(batch_cmd) => batch::handle_batch_command(batch_cmd, node_url).await,
 		Commands::Reversible(reversible_cmd) =>
 			reversible::handle_reversible_command(reversible_cmd, node_url).await,
+		Commands::HighSecurity(hs_cmd) =>
+			high_security::handle_high_security_command(hs_cmd, node_url).await,
+		Commands::Recovery(recovery_cmd) =>
+			recovery::handle_recovery_command(recovery_cmd, node_url).await,
 		Commands::Scheduler(scheduler_cmd) =>
 			scheduler::handle_scheduler_command(scheduler_cmd, node_url).await,
 		Commands::Storage(storage_cmd) =>
