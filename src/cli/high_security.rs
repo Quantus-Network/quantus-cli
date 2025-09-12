@@ -22,13 +22,13 @@ pub enum HighSecurityCommands {
 		#[arg(long)]
 		interceptor: String,
 
-		/// Delay in blocks (mutually exclusive with --delay-ms)
-		#[arg(long, conflicts_with = "delay_ms")]
+		/// Delay in blocks (mutually exclusive with --delay-seconds)
+		#[arg(long, conflicts_with = "delay_seconds")]
 		delay_blocks: Option<u32>,
 
-		/// Delay in milliseconds (mutually exclusive with --delay-blocks)
+		/// Delay in seconds (mutually exclusive with --delay-blocks)
 		#[arg(long, conflicts_with = "delay_blocks")]
-		delay_ms: Option<u64>,
+		delay_seconds: Option<u64>,
 
 		/// Wallet name to sign with
 		#[arg(short, long)]
@@ -93,7 +93,7 @@ pub async fn handle_high_security_command(
 					},
 					quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp::Timestamp(ms) => {
 						let seconds = ms / 1000;
-						log_print!("⏱️  Delay: {} ms (~{} seconds)", ms.to_string().bright_yellow(), seconds.to_string().bright_yellow());
+						log_print!("⏱️  Delay: {} seconds", seconds.to_string().bright_yellow());
 					},
 				}
 			} else {
@@ -107,7 +107,7 @@ pub async fn handle_high_security_command(
 		HighSecurityCommands::Set {
 			interceptor,
 			delay_blocks,
-			delay_ms,
+			delay_seconds,
 			from,
 			password,
 			password_file,
@@ -130,11 +130,11 @@ pub async fn handle_high_security_command(
 
 			// Build delay enum for set_high_security
 			use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay as HsDelay;
-			let delay_value = match (delay_blocks, delay_ms) {
+			let delay_value = match (delay_blocks, delay_seconds) {
 				(Some(blocks), None) => HsDelay::BlockNumber(blocks),
-				(None, Some(ms)) => HsDelay::Timestamp(ms),
+				(None, Some(seconds)) => HsDelay::Timestamp(seconds * 1000), // Convert seconds to milliseconds
 				(None, None) => {
-					log_error!("❌ You must specify either --delay-blocks or --delay-ms");
+					log_error!("❌ You must specify either --delay-blocks or --delay-seconds");
 					return Err(crate::error::QuantusError::Generic(
 						"Missing delay parameter".to_string(),
 					));
