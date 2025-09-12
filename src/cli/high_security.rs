@@ -1,5 +1,5 @@
 use crate::{
-	chain::quantus_subxt, cli::progress_spinner::wait_for_tx_confirmation, log_error, log_print,
+	chain::quantus_subxt, cli::{address_format::QuantusSS58, progress_spinner::wait_for_tx_confirmation}, log_error, log_print,
 	log_success, log_verbose,
 };
 use clap::Subcommand;
@@ -65,10 +65,8 @@ pub async fn handle_high_security_command(
 			let account_id_bytes: [u8; 32] = *account_id_sp.as_ref();
 			let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_id_bytes);
 
-			// Convert account to Quantus SS58 format (version 189) first
-			let account_bytes: [u8; 32] = *account_id.as_ref();
-			let account_id_sp = sp_core::crypto::AccountId32::from(account_bytes);
-			let account_ss58 = account_id_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+			// Convert account to Quantus SS58 format
+			let account_ss58 = account_id.to_quantus_ss58();
 
 			// Query storage
 			let storage_addr = quantus_subxt::api::storage()
@@ -90,10 +88,8 @@ pub async fn handle_high_security_command(
 			if let Some(high_security_data) = value {
 				log_success!("✅ High Security: ENABLED");
 
-				// Convert AccountId32 to Quantus SS58 format (version 189)
-				let interceptor_bytes: [u8; 32] = *high_security_data.interceptor.as_ref();
-				let interceptor_account_id = sp_core::crypto::AccountId32::from(interceptor_bytes);
-				let interceptor_ss58 = interceptor_account_id.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+				// Convert interceptor to Quantus SS58 format
+				let interceptor_ss58 = high_security_data.interceptor.to_quantus_ss58();
 
 				log_print!("🛡️  Guardian/Interceptor: {}", interceptor_ss58.bright_green());
 

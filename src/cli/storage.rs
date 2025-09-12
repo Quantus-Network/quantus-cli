@@ -2,7 +2,7 @@
 
 use crate::{
 	chain::{client::ChainConfig, quantus_subxt},
-	cli::progress_spinner::wait_for_tx_confirmation,
+	cli::{address_format::QuantusSS58, progress_spinner::wait_for_tx_confirmation},
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 };
@@ -649,7 +649,7 @@ fn decode_storage_value(value_bytes: &[u8], type_str: &str) -> crate::error::Res
 			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as u128: {e}"))),
 		},
 		"accountid" | "accountid32" => match AccountId32::decode(&mut &value_bytes[..]) {
-			Ok(account_id) => Ok(account_id.to_ss58check()),
+			Ok(account_id) => Ok(account_id.to_quantus_ss58()),
 			Err(e) => Err(QuantusError::Generic(format!("Failed to decode as AccountId32: {e}"))),
 		},
 		"accountinfo" => match AccountInfo::decode(&mut &value_bytes[..]) {

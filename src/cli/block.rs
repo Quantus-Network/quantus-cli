@@ -1,6 +1,6 @@
 //! `quantus block` subcommand - detailed block analysis
 use crate::{
-	chain::client::QuantusClient, cli::storage, error::QuantusError, log_error, log_print,
+	chain::client::QuantusClient, cli::{address_format::QuantusSS58, storage}, error::QuantusError, log_error, log_print,
 	log_success,
 };
 use clap::Subcommand;
@@ -757,9 +757,7 @@ fn extract_account_id_from_debug(debug_str: &str) -> Option<subxt::utils::Accoun
 }
 
 fn format_account_id(account_id: &subxt::utils::AccountId32) -> String {
-	let bytes: [u8; 32] = account_id.0;
-	let sp_account_id = sp_core::crypto::AccountId32::from(bytes);
-	sp_account_id.to_ss58check()
+	account_id.to_quantus_ss58()
 }
 
 /// Get account nonce at specific block

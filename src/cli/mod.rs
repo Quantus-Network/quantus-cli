@@ -2,6 +2,7 @@ use crate::{log_error, log_print, log_success, log_verbose};
 use clap::Subcommand;
 use colored::Colorize;
 
+pub mod address_format;
 pub mod batch;
 pub mod block;
 pub mod common;
