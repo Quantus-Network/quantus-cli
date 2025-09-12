@@ -1,7 +1,7 @@
 //! `quantus tech-collective` subcommand - tech collective management
 use crate::{
 	chain::quantus_subxt,
-	cli::{common::resolve_address, progress_spinner::wait_for_tx_confirmation},
+	cli::{address_format::QuantusSS58, common::resolve_address, progress_spinner::wait_for_tx_confirmation},
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 };
@@ -287,7 +287,7 @@ pub async fn get_member_list(
 					let account_bytes: [u8; 32] =
 						key[key.len() - 32..].try_into().unwrap_or([0u8; 32]);
 					let sp_account = AccountId32::from(account_bytes);
-					log_verbose!("Found member: {}", sp_account.to_ss58check());
+					log_verbose!("Found member: {}", sp_account.to_quantus_ss58());
 					members.push(sp_account);
 				}
 			},
@@ -451,7 +451,7 @@ pub async fn handle_tech_collective_command(
 							log_print!(
 								"{}. {}",
 								(index + 1).to_string().bright_blue(),
-								member.to_ss58check().bright_green()
+								member.to_quantus_ss58().bright_green()
 							);
 						}
 					},
@@ -512,7 +512,7 @@ pub async fn handle_tech_collective_command(
 
 			match get_sudo_account(&quantus_client).await? {
 				Some(sudo_account) => {
-					let sudo_address = sudo_account.to_ss58check();
+					let sudo_address = sudo_account.to_quantus_ss58();
 					log_verbose!("🔍 Found sudo account: {}", sudo_address);
 					log_success!("✅ Found sudo account: {}", sudo_address.bright_green());
 

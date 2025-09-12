@@ -1730,10 +1730,10 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							137u8, 213u8, 145u8, 74u8, 243u8, 30u8, 225u8, 181u8, 84u8, 222u8,
-							242u8, 134u8, 217u8, 218u8, 177u8, 114u8, 170u8, 117u8, 198u8, 36u8,
-							95u8, 74u8, 139u8, 114u8, 200u8, 128u8, 88u8, 95u8, 202u8, 132u8, 54u8,
-							110u8,
+							148u8, 128u8, 119u8, 67u8, 237u8, 151u8, 224u8, 163u8, 125u8, 21u8,
+							226u8, 226u8, 187u8, 223u8, 84u8, 42u8, 77u8, 71u8, 127u8, 73u8, 180u8,
+							253u8, 21u8, 52u8, 65u8, 82u8, 161u8, 192u8, 199u8, 133u8, 160u8,
+							117u8,
 						],
 					)
 				}
@@ -1751,9 +1751,10 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							186u8, 20u8, 221u8, 69u8, 0u8, 177u8, 162u8, 164u8, 64u8, 67u8, 14u8,
-							41u8, 60u8, 200u8, 55u8, 223u8, 35u8, 255u8, 96u8, 173u8, 29u8, 211u8,
-							90u8, 140u8, 122u8, 108u8, 249u8, 199u8, 22u8, 52u8, 226u8, 124u8,
+							43u8, 173u8, 253u8, 181u8, 107u8, 160u8, 168u8, 209u8, 78u8, 22u8,
+							229u8, 97u8, 8u8, 136u8, 41u8, 219u8, 71u8, 13u8, 21u8, 214u8, 1u8,
+							249u8, 159u8, 250u8, 154u8, 75u8, 15u8, 250u8, 236u8, 14u8, 211u8,
+							123u8,
 						],
 					)
 				}
@@ -2252,9 +2253,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				240u8, 112u8, 102u8, 204u8, 216u8, 190u8, 219u8, 229u8, 197u8, 118u8, 25u8, 7u8,
-				73u8, 111u8, 144u8, 131u8, 85u8, 15u8, 151u8, 63u8, 213u8, 167u8, 202u8, 109u8,
-				233u8, 27u8, 76u8, 131u8, 173u8, 48u8, 182u8, 159u8,
+				157u8, 155u8, 114u8, 204u8, 148u8, 96u8, 131u8, 139u8, 202u8, 79u8, 247u8, 156u8,
+				184u8, 178u8, 178u8, 170u8, 46u8, 42u8, 245u8, 21u8, 255u8, 201u8, 150u8, 11u8,
+				132u8, 69u8, 181u8, 62u8, 127u8, 83u8, 48u8, 230u8,
 			]
 	}
 	pub mod system {
@@ -3353,10 +3354,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							213u8, 39u8, 192u8, 125u8, 137u8, 244u8, 247u8, 215u8, 104u8, 155u8,
-							36u8, 12u8, 160u8, 64u8, 31u8, 103u8, 172u8, 115u8, 193u8, 199u8,
-							246u8, 157u8, 255u8, 138u8, 9u8, 166u8, 97u8, 147u8, 65u8, 72u8, 222u8,
-							117u8,
+							247u8, 113u8, 206u8, 36u8, 120u8, 159u8, 199u8, 114u8, 139u8, 213u8,
+							233u8, 3u8, 45u8, 108u8, 1u8, 57u8, 21u8, 248u8, 251u8, 33u8, 53u8,
+							239u8, 202u8, 118u8, 254u8, 168u8, 223u8, 3u8, 58u8, 212u8, 160u8,
+							106u8,
 						],
 					)
 				}
@@ -5718,9 +5719,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							87u8, 23u8, 4u8, 4u8, 159u8, 106u8, 223u8, 190u8, 133u8, 103u8, 103u8,
-							160u8, 232u8, 245u8, 96u8, 170u8, 192u8, 161u8, 52u8, 60u8, 226u8, 3u8,
-							183u8, 40u8, 122u8, 117u8, 19u8, 237u8, 41u8, 230u8, 159u8, 79u8,
+							226u8, 13u8, 120u8, 131u8, 148u8, 75u8, 28u8, 201u8, 23u8, 105u8,
+							162u8, 50u8, 130u8, 0u8, 90u8, 154u8, 92u8, 255u8, 56u8, 74u8, 131u8,
+							20u8, 147u8, 15u8, 68u8, 25u8, 87u8, 96u8, 82u8, 253u8, 126u8, 137u8,
 						],
 					)
 				}
@@ -5743,10 +5744,9 @@ pub mod api {
 							weight,
 						},
 						[
-							72u8, 236u8, 99u8, 180u8, 204u8, 84u8, 167u8, 177u8, 89u8, 249u8,
-							181u8, 211u8, 177u8, 64u8, 167u8, 164u8, 254u8, 237u8, 247u8, 109u8,
-							194u8, 194u8, 174u8, 134u8, 252u8, 112u8, 68u8, 160u8, 240u8, 228u8,
-							195u8, 117u8,
+							3u8, 29u8, 145u8, 217u8, 139u8, 99u8, 189u8, 227u8, 29u8, 208u8, 41u8,
+							95u8, 160u8, 161u8, 245u8, 92u8, 8u8, 101u8, 132u8, 102u8, 92u8, 181u8,
+							251u8, 214u8, 240u8, 227u8, 0u8, 146u8, 127u8, 251u8, 129u8, 111u8,
 						],
 					)
 				}
@@ -5784,9 +5784,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							149u8, 140u8, 96u8, 188u8, 16u8, 180u8, 19u8, 117u8, 237u8, 4u8, 72u8,
-							145u8, 88u8, 188u8, 167u8, 117u8, 240u8, 63u8, 242u8, 55u8, 53u8,
-							226u8, 7u8, 46u8, 116u8, 200u8, 216u8, 196u8, 183u8, 20u8, 49u8, 127u8,
+							53u8, 107u8, 54u8, 177u8, 231u8, 29u8, 253u8, 33u8, 192u8, 62u8, 101u8,
+							94u8, 31u8, 165u8, 94u8, 24u8, 171u8, 201u8, 98u8, 116u8, 183u8, 43u8,
+							141u8, 174u8, 30u8, 238u8, 102u8, 185u8, 47u8, 93u8, 21u8, 69u8,
 						],
 					)
 				}
@@ -8215,10 +8215,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							216u8, 88u8, 145u8, 193u8, 191u8, 130u8, 243u8, 81u8, 132u8, 179u8,
-							170u8, 148u8, 127u8, 79u8, 183u8, 62u8, 168u8, 91u8, 241u8, 9u8, 155u8,
-							82u8, 12u8, 34u8, 194u8, 188u8, 108u8, 147u8, 205u8, 133u8, 97u8,
-							246u8,
+							194u8, 5u8, 9u8, 214u8, 152u8, 152u8, 73u8, 196u8, 61u8, 76u8, 101u8,
+							85u8, 216u8, 10u8, 40u8, 112u8, 113u8, 29u8, 48u8, 3u8, 202u8, 8u8,
+							201u8, 182u8, 110u8, 160u8, 146u8, 148u8, 162u8, 144u8, 11u8, 113u8,
 						],
 					)
 				}
@@ -8260,10 +8259,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							6u8, 221u8, 216u8, 145u8, 84u8, 222u8, 174u8, 166u8, 197u8, 130u8,
-							223u8, 50u8, 208u8, 143u8, 3u8, 159u8, 116u8, 11u8, 159u8, 171u8,
-							144u8, 7u8, 221u8, 184u8, 84u8, 43u8, 46u8, 113u8, 23u8, 35u8, 212u8,
-							120u8,
+							206u8, 123u8, 136u8, 68u8, 23u8, 17u8, 237u8, 5u8, 64u8, 1u8, 217u8,
+							33u8, 184u8, 27u8, 210u8, 126u8, 141u8, 227u8, 187u8, 47u8, 203u8,
+							113u8, 212u8, 127u8, 46u8, 176u8, 117u8, 103u8, 213u8, 237u8, 121u8,
+							187u8,
 						],
 					)
 				}
@@ -8302,10 +8301,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							239u8, 195u8, 20u8, 34u8, 177u8, 205u8, 131u8, 51u8, 116u8, 199u8,
-							94u8, 248u8, 35u8, 183u8, 134u8, 253u8, 193u8, 74u8, 218u8, 106u8,
-							231u8, 225u8, 166u8, 157u8, 216u8, 15u8, 110u8, 24u8, 28u8, 67u8, 1u8,
-							160u8,
+							50u8, 250u8, 128u8, 55u8, 8u8, 69u8, 136u8, 110u8, 240u8, 28u8, 34u8,
+							118u8, 216u8, 6u8, 17u8, 200u8, 242u8, 75u8, 59u8, 174u8, 223u8, 131u8,
+							81u8, 31u8, 173u8, 106u8, 110u8, 100u8, 102u8, 177u8, 4u8, 171u8,
 						],
 					)
 				}
@@ -8330,9 +8328,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							107u8, 174u8, 73u8, 0u8, 141u8, 214u8, 253u8, 93u8, 53u8, 22u8, 203u8,
-							101u8, 77u8, 245u8, 67u8, 214u8, 219u8, 150u8, 90u8, 21u8, 211u8,
-							179u8, 195u8, 194u8, 111u8, 49u8, 85u8, 67u8, 246u8, 9u8, 165u8, 251u8,
+							87u8, 169u8, 152u8, 52u8, 117u8, 15u8, 166u8, 36u8, 128u8, 119u8,
+							111u8, 113u8, 199u8, 89u8, 186u8, 195u8, 212u8, 14u8, 78u8, 238u8,
+							48u8, 143u8, 82u8, 183u8, 215u8, 71u8, 63u8, 225u8, 103u8, 235u8,
+							247u8, 151u8,
 						],
 					)
 				}
@@ -9360,10 +9359,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							95u8, 49u8, 63u8, 6u8, 99u8, 141u8, 102u8, 196u8, 12u8, 24u8, 80u8,
-							166u8, 12u8, 184u8, 52u8, 205u8, 241u8, 116u8, 122u8, 20u8, 172u8,
-							197u8, 253u8, 63u8, 171u8, 19u8, 58u8, 121u8, 104u8, 55u8, 146u8,
-							123u8,
+							199u8, 107u8, 4u8, 184u8, 37u8, 208u8, 138u8, 138u8, 72u8, 80u8, 69u8,
+							33u8, 68u8, 104u8, 89u8, 106u8, 26u8, 212u8, 101u8, 77u8, 43u8, 64u8,
+							105u8, 187u8, 65u8, 195u8, 179u8, 63u8, 150u8, 242u8, 147u8, 102u8,
 						],
 					)
 				}
@@ -9393,10 +9391,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							0u8, 169u8, 255u8, 58u8, 170u8, 161u8, 177u8, 170u8, 78u8, 235u8,
-							115u8, 55u8, 145u8, 164u8, 214u8, 14u8, 4u8, 26u8, 175u8, 195u8, 145u8,
-							25u8, 233u8, 162u8, 234u8, 135u8, 156u8, 250u8, 140u8, 45u8, 139u8,
-							50u8,
+							255u8, 148u8, 192u8, 241u8, 50u8, 58u8, 115u8, 72u8, 226u8, 159u8,
+							65u8, 246u8, 183u8, 252u8, 180u8, 175u8, 170u8, 83u8, 88u8, 44u8, 20u8,
+							216u8, 212u8, 54u8, 231u8, 42u8, 140u8, 122u8, 120u8, 240u8, 177u8,
+							89u8,
 						],
 					)
 				}
@@ -9422,9 +9420,10 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							211u8, 135u8, 169u8, 155u8, 41u8, 244u8, 13u8, 144u8, 165u8, 230u8,
-							142u8, 34u8, 10u8, 93u8, 240u8, 61u8, 32u8, 143u8, 186u8, 191u8, 151u8,
-							52u8, 129u8, 33u8, 110u8, 88u8, 43u8, 156u8, 130u8, 143u8, 19u8, 121u8,
+							80u8, 2u8, 212u8, 226u8, 168u8, 219u8, 189u8, 151u8, 171u8, 238u8,
+							36u8, 22u8, 214u8, 80u8, 60u8, 134u8, 110u8, 74u8, 127u8, 101u8, 195u8,
+							100u8, 149u8, 41u8, 116u8, 208u8, 137u8, 173u8, 134u8, 127u8, 202u8,
+							212u8,
 						],
 					)
 				}
@@ -9447,9 +9446,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							219u8, 206u8, 50u8, 176u8, 112u8, 195u8, 114u8, 10u8, 1u8, 242u8, 71u8,
-							206u8, 56u8, 67u8, 180u8, 7u8, 15u8, 69u8, 186u8, 118u8, 156u8, 241u8,
-							254u8, 210u8, 189u8, 106u8, 142u8, 12u8, 224u8, 119u8, 92u8, 177u8,
+							64u8, 139u8, 112u8, 32u8, 214u8, 116u8, 71u8, 50u8, 4u8, 61u8, 185u8,
+							230u8, 92u8, 127u8, 63u8, 124u8, 62u8, 42u8, 210u8, 137u8, 155u8,
+							160u8, 7u8, 117u8, 83u8, 229u8, 49u8, 140u8, 243u8, 158u8, 143u8,
+							125u8,
 						],
 					)
 				}
@@ -9475,9 +9475,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							77u8, 186u8, 47u8, 91u8, 16u8, 107u8, 105u8, 61u8, 244u8, 114u8, 50u8,
-							239u8, 239u8, 218u8, 166u8, 191u8, 240u8, 255u8, 211u8, 248u8, 82u8,
-							10u8, 133u8, 108u8, 40u8, 181u8, 146u8, 19u8, 152u8, 45u8, 12u8, 176u8,
+							178u8, 11u8, 46u8, 170u8, 80u8, 28u8, 31u8, 82u8, 113u8, 185u8, 152u8,
+							72u8, 51u8, 133u8, 251u8, 231u8, 255u8, 24u8, 80u8, 31u8, 52u8, 151u8,
+							157u8, 123u8, 132u8, 210u8, 143u8, 150u8, 244u8, 163u8, 169u8, 119u8,
 						],
 					)
 				}
@@ -9500,10 +9500,10 @@ pub mod api {
 							weight,
 						},
 						[
-							199u8, 132u8, 168u8, 103u8, 83u8, 203u8, 42u8, 197u8, 2u8, 67u8, 107u8,
-							242u8, 123u8, 62u8, 62u8, 206u8, 239u8, 210u8, 63u8, 234u8, 127u8,
-							18u8, 177u8, 42u8, 200u8, 101u8, 101u8, 242u8, 98u8, 228u8, 227u8,
-							85u8,
+							148u8, 144u8, 13u8, 219u8, 41u8, 23u8, 240u8, 185u8, 172u8, 80u8,
+							120u8, 153u8, 253u8, 249u8, 208u8, 88u8, 150u8, 132u8, 94u8, 53u8,
+							199u8, 177u8, 20u8, 117u8, 115u8, 225u8, 36u8, 149u8, 130u8, 161u8,
+							213u8, 14u8,
 						],
 					)
 				}
@@ -9543,9 +9543,10 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							4u8, 167u8, 93u8, 56u8, 207u8, 104u8, 113u8, 182u8, 74u8, 2u8, 167u8,
-							104u8, 247u8, 231u8, 148u8, 50u8, 180u8, 121u8, 72u8, 181u8, 154u8,
-							188u8, 73u8, 171u8, 73u8, 18u8, 12u8, 248u8, 12u8, 45u8, 234u8, 106u8,
+							0u8, 27u8, 171u8, 182u8, 168u8, 222u8, 131u8, 139u8, 212u8, 81u8,
+							244u8, 248u8, 235u8, 235u8, 183u8, 40u8, 200u8, 142u8, 120u8, 206u8,
+							220u8, 48u8, 168u8, 132u8, 197u8, 162u8, 5u8, 216u8, 217u8, 8u8, 7u8,
+							212u8,
 						],
 					)
 				}
@@ -9568,9 +9569,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							34u8, 70u8, 71u8, 147u8, 94u8, 186u8, 226u8, 233u8, 176u8, 83u8, 76u8,
-							44u8, 6u8, 137u8, 81u8, 142u8, 229u8, 190u8, 17u8, 110u8, 106u8, 155u8,
-							32u8, 0u8, 166u8, 90u8, 226u8, 239u8, 42u8, 155u8, 223u8, 195u8,
+							161u8, 156u8, 154u8, 193u8, 234u8, 76u8, 172u8, 105u8, 176u8, 172u8,
+							253u8, 121u8, 19u8, 99u8, 16u8, 232u8, 253u8, 12u8, 33u8, 11u8, 97u8,
+							64u8, 49u8, 6u8, 4u8, 120u8, 4u8, 175u8, 39u8, 232u8, 129u8, 51u8,
 						],
 					)
 				}
@@ -11009,13 +11010,24 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Enable high-security for the calling account with a specified delay"]
+				#[doc = "Enable high-security for the calling account with a specified"]
+				#[doc = "reversibility delay."]
 				#[doc = ""]
-				#[doc = "- `delay`: The time (in milliseconds) after submission before the transaction executes."]
+				#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
+				#[doc = "different accounts."]
+				#[doc = ""]
+				#[doc = "Once an account is set as high security it can only make reversible"]
+				#[doc = "transfers. It is not allowed any other calls."]
+				#[doc = ""]
+				#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
+				#[doc = "security account."]
+				#[doc = "- interceptor: The account that can intercept transctions from the"]
+				#[doc = "high security account."]
+				#[doc = "- recoverer: Account that can recover (act as proxy to) the high security"]
+				#[doc = "account"]
 				pub struct SetHighSecurity {
 					pub delay: set_high_security::Delay,
 					pub interceptor: set_high_security::Interceptor,
-					pub recoverer: set_high_security::Recoverer,
 				}
 				pub mod set_high_security {
 					use super::runtime_types;
@@ -11024,7 +11036,6 @@ pub mod api {
 						::core::primitive::u64,
 					>;
 					pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type Recoverer = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetHighSecurity {
 					const PALLET: &'static str = "ReversibleTransfers";
@@ -11149,24 +11160,35 @@ pub mod api {
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Enable high-security for the calling account with a specified delay"]
+				#[doc = "Enable high-security for the calling account with a specified"]
+				#[doc = "reversibility delay."]
 				#[doc = ""]
-				#[doc = "- `delay`: The time (in milliseconds) after submission before the transaction executes."]
+				#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
+				#[doc = "different accounts."]
+				#[doc = ""]
+				#[doc = "Once an account is set as high security it can only make reversible"]
+				#[doc = "transfers. It is not allowed any other calls."]
+				#[doc = ""]
+				#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
+				#[doc = "security account."]
+				#[doc = "- interceptor: The account that can intercept transctions from the"]
+				#[doc = "high security account."]
+				#[doc = "- recoverer: Account that can recover (act as proxy to) the high security"]
+				#[doc = "account"]
 				pub fn set_high_security(
 					&self,
 					delay: types::set_high_security::Delay,
 					interceptor: types::set_high_security::Interceptor,
-					recoverer: types::set_high_security::Recoverer,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetHighSecurity>
 				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"ReversibleTransfers",
 						"set_high_security",
-						types::SetHighSecurity { delay, interceptor, recoverer },
+						types::SetHighSecurity { delay, interceptor },
 						[
-							84u8, 79u8, 110u8, 9u8, 173u8, 78u8, 144u8, 58u8, 220u8, 161u8, 42u8,
-							121u8, 88u8, 168u8, 178u8, 42u8, 29u8, 253u8, 161u8, 83u8, 45u8, 204u8,
-							155u8, 136u8, 209u8, 33u8, 200u8, 13u8, 46u8, 162u8, 223u8, 171u8,
+							202u8, 17u8, 43u8, 37u8, 215u8, 198u8, 42u8, 183u8, 53u8, 124u8, 140u8,
+							34u8, 112u8, 230u8, 55u8, 168u8, 242u8, 249u8, 91u8, 185u8, 244u8,
+							81u8, 40u8, 231u8, 121u8, 155u8, 202u8, 76u8, 137u8, 7u8, 225u8, 184u8,
 						],
 					)
 				}
@@ -11271,14 +11293,12 @@ pub mod api {
 			pub struct HighSecuritySet {
 				pub who: high_security_set::Who,
 				pub interceptor: high_security_set::Interceptor,
-				pub recoverer: high_security_set::Recoverer,
 				pub delay: high_security_set::Delay,
 			}
 			pub mod high_security_set {
 				use super::runtime_types;
 				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Recoverer = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Delay = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 					::core::primitive::u32,
 					::core::primitive::u64,
@@ -11452,10 +11472,10 @@ pub mod api {
 						"HighSecurityAccounts",
 						(),
 						[
-							246u8, 192u8, 145u8, 222u8, 167u8, 131u8, 248u8, 22u8, 219u8, 213u8,
-							41u8, 3u8, 152u8, 132u8, 180u8, 251u8, 193u8, 91u8, 139u8, 164u8,
-							142u8, 208u8, 122u8, 16u8, 40u8, 140u8, 15u8, 38u8, 145u8, 193u8, 77u8,
-							165u8,
+							11u8, 143u8, 95u8, 23u8, 55u8, 163u8, 22u8, 238u8, 88u8, 24u8, 50u8,
+							162u8, 72u8, 98u8, 32u8, 219u8, 231u8, 199u8, 118u8, 150u8, 84u8,
+							126u8, 225u8, 88u8, 129u8, 200u8, 236u8, 214u8, 187u8, 8u8, 252u8,
+							120u8,
 						],
 					)
 				}
@@ -11478,10 +11498,10 @@ pub mod api {
 						"HighSecurityAccounts",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							246u8, 192u8, 145u8, 222u8, 167u8, 131u8, 248u8, 22u8, 219u8, 213u8,
-							41u8, 3u8, 152u8, 132u8, 180u8, 251u8, 193u8, 91u8, 139u8, 164u8,
-							142u8, 208u8, 122u8, 16u8, 40u8, 140u8, 15u8, 38u8, 145u8, 193u8, 77u8,
-							165u8,
+							11u8, 143u8, 95u8, 23u8, 55u8, 163u8, 22u8, 238u8, 88u8, 24u8, 50u8,
+							162u8, 72u8, 98u8, 32u8, 219u8, 231u8, 199u8, 118u8, 150u8, 84u8,
+							126u8, 225u8, 88u8, 129u8, 200u8, 236u8, 214u8, 187u8, 8u8, 252u8,
+							120u8,
 						],
 					)
 				}
@@ -17032,9 +17052,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							231u8, 130u8, 246u8, 209u8, 160u8, 0u8, 86u8, 24u8, 13u8, 132u8, 210u8,
-							234u8, 145u8, 137u8, 200u8, 207u8, 165u8, 168u8, 232u8, 129u8, 181u8,
-							63u8, 61u8, 47u8, 72u8, 255u8, 11u8, 90u8, 174u8, 216u8, 132u8, 30u8,
+							45u8, 40u8, 208u8, 166u8, 146u8, 29u8, 213u8, 156u8, 75u8, 53u8, 244u8,
+							220u8, 122u8, 44u8, 151u8, 109u8, 175u8, 181u8, 66u8, 52u8, 25u8,
+							157u8, 43u8, 168u8, 32u8, 222u8, 85u8, 64u8, 68u8, 52u8, 22u8, 224u8,
 						],
 					)
 				}
@@ -21034,16 +21054,27 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
-					#[doc = "Enable high-security for the calling account with a specified delay"]
+					#[doc = "Enable high-security for the calling account with a specified"]
+					#[doc = "reversibility delay."]
 					#[doc = ""]
-					#[doc = "- `delay`: The time (in milliseconds) after submission before the transaction executes."]
+					#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
+					#[doc = "different accounts."]
+					#[doc = ""]
+					#[doc = "Once an account is set as high security it can only make reversible"]
+					#[doc = "transfers. It is not allowed any other calls."]
+					#[doc = ""]
+					#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
+					#[doc = "security account."]
+					#[doc = "- interceptor: The account that can intercept transctions from the"]
+					#[doc = "high security account."]
+					#[doc = "- recoverer: Account that can recover (act as proxy to) the high security"]
+					#[doc = "account"]
 					set_high_security {
 						delay: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
 						>,
 						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
-						recoverer: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 1)]
 					#[doc = "Cancel a pending reversible transaction scheduled by the caller."]
@@ -21165,7 +21196,6 @@ pub mod api {
 					HighSecuritySet {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
 						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
-						recoverer: ::subxt::ext::subxt_core::utils::AccountId32,
 						delay: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
@@ -21230,7 +21260,6 @@ pub mod api {
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub struct HighSecurityAccountData<_0, _1> {
 				pub interceptor: _0,
-				pub recoverer: _0,
 				pub delay: _1,
 			}
 			#[derive(

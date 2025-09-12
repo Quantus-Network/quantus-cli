@@ -1,7 +1,6 @@
-use crate::{chain::client::QuantusClient, log_print, log_verbose};
+use crate::{chain::client::QuantusClient, cli::address_format::QuantusSS58, log_print, log_verbose};
 use colored::Colorize;
 use jsonrpsee::core::client::ClientT;
-use sp_core::crypto::Ss58Codec;
 use std::str::FromStr;
 
 pub async fn handle_events_command(
@@ -254,10 +253,5 @@ fn extract_account_id_from_debug(debug_str: &str) -> Option<subxt::utils::Accoun
 
 /// Convert AccountId32 to SS58 address for better readability
 fn format_account_id(account_id: &subxt::utils::AccountId32) -> String {
-	// Convert subxt::utils::AccountId32 to sp_core::AccountId32
-	let bytes: [u8; 32] = account_id.0;
-	let sp_account_id = sp_core::crypto::AccountId32::from(bytes);
-
-	// Convert to SS58 format
-	sp_account_id.to_ss58check()
+	account_id.to_quantus_ss58()
 }
