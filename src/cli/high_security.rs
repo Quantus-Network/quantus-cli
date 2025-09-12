@@ -9,6 +9,13 @@ use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 /// High-Security (Reversible) commands
 #[derive(Subcommand, Debug)]
 pub enum HighSecurityCommands {
+	/// Check High-Security status for an account
+	Status {
+		/// Account address to check (SS58 or wallet name)
+		#[arg(long)]
+		account: String,
+	},
+
 	/// Set High-Security (reversibility) for an account
 	Set {
 		/// Interceptor account (SS58 or wallet name)
@@ -45,6 +52,58 @@ pub async fn handle_high_security_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
+		HighSecurityCommands::Status { account } => {
+			log_print!("🔍 Checking High Security Status");
+
+			// Resolve account address
+			let resolved_account = crate::cli::common::resolve_address(&account)?;
+			let account_id_sp = SpAccountId32::from_ss58check(&resolved_account).map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Invalid account address '{resolved_account}': {e:?}"
+				))
+			})?;
+			let account_id_bytes: [u8; 32] = *account_id_sp.as_ref();
+			let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_id_bytes);
+
+			// Query storage
+			let storage_addr = quantus_subxt::api::storage()
+				.reversible_transfers()
+				.high_security_accounts(account_id);
+			let latest = quantus_client.get_latest_block().await?;
+			let value = quantus_client
+				.client()
+				.storage()
+				.at(latest)
+				.fetch(&storage_addr)
+				.await
+				.map_err(|e| {
+					crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
+				})?;
+
+			log_print!("📋 Account: {}", resolved_account.bright_cyan());
+
+			if let Some(high_security_data) = value {
+				log_success!("✅ High Security: ENABLED");
+				log_print!("🛡️  Guardian/Interceptor: {}", format!("{}", high_security_data.interceptor).bright_green());
+
+				// Format delay display
+				match high_security_data.delay {
+					quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp::BlockNumber(blocks) => {
+						log_print!("⏱️  Delay: {} blocks", blocks.to_string().bright_yellow());
+					},
+					quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp::Timestamp(ms) => {
+						let seconds = ms / 1000;
+						log_print!("⏱️  Delay: {} ms (~{} seconds)", ms.to_string().bright_yellow(), seconds.to_string().bright_yellow());
+					},
+				}
+			} else {
+				log_print!("❌ High Security: DISABLED");
+				log_print!("💡 This account does not have high-security reversibility enabled.");
+			}
+
+			Ok(())
+		},
+
 		HighSecurityCommands::Set {
 			interceptor,
 			delay_blocks,
