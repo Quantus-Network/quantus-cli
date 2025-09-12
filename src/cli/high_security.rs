@@ -86,11 +86,9 @@ pub async fn handle_high_security_command(
 
 			log_verbose!("✍️  Creating set_high_security extrinsic...");
 
-			// Current generated metadata expects (delay, interceptor, recoverer).
-			// Use recoverer = interceptor for zero-delay self-recovery flow.
+			// Current generated metadata expects (delay, interceptor).
 			let tx_call = quantus_subxt::api::tx().reversible_transfers().set_high_security(
 				delay_value,
-				interceptor_subxt.clone(),
 				interceptor_subxt,
 			);
 
