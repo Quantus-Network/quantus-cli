@@ -65,6 +65,11 @@ pub async fn handle_high_security_command(
 			let account_id_bytes: [u8; 32] = *account_id_sp.as_ref();
 			let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_id_bytes);
 
+			// Convert account to Quantus SS58 format (version 189) first
+			let account_bytes: [u8; 32] = *account_id.as_ref();
+			let account_id_sp = sp_core::crypto::AccountId32::from(account_bytes);
+			let account_ss58 = account_id_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
 			// Query storage
 			let storage_addr = quantus_subxt::api::storage()
 				.reversible_transfers()
@@ -80,11 +85,17 @@ pub async fn handle_high_security_command(
 					crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
 				})?;
 
-			log_print!("📋 Account: {}", resolved_account.bright_cyan());
+			log_print!("📋 Account: {}", account_ss58.bright_cyan());
 
 			if let Some(high_security_data) = value {
 				log_success!("✅ High Security: ENABLED");
-				log_print!("🛡️  Guardian/Interceptor: {}", format!("{}", high_security_data.interceptor).bright_green());
+
+				// Convert AccountId32 to Quantus SS58 format (version 189)
+				let interceptor_bytes: [u8; 32] = *high_security_data.interceptor.as_ref();
+				let interceptor_account_id = sp_core::crypto::AccountId32::from(interceptor_bytes);
+				let interceptor_ss58 = interceptor_account_id.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+				log_print!("🛡️  Guardian/Interceptor: {}", interceptor_ss58.bright_green());
 
 				// Format delay display
 				match high_security_data.delay {
