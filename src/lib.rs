@@ -18,7 +18,7 @@ pub use error::{QuantusError as Error, Result};
 pub use chain::client::{ChainConfig, QuantusClient};
 
 // Re-export dilithium crypto
-pub use dilithium_crypto;
+pub use qp_dilithium_crypto;
 
 // Re-export commonly used types from sp_core and sp_runtime
 pub use sp_core::crypto::AccountId32;

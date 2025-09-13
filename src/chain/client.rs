@@ -4,8 +4,8 @@
 //! across all CLI modules.
 
 use crate::{error::QuantusError, log_verbose};
-use dilithium_crypto::types::DilithiumSignatureScheme;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use qp_dilithium_crypto::types::DilithiumSignatureScheme;
 use qp_poseidon::PoseidonHasher;
 use sp_core::{crypto::AccountId32, ByteArray};
 use sp_runtime::{traits::IdentifyAccount, MultiAddress};
@@ -262,12 +262,12 @@ impl QuantusClient {
 }
 
 // Implement subxt::tx::Signer for ResonancePair
-impl subxt::tx::Signer<ChainConfig> for dilithium_crypto::types::DilithiumPair {
+impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::DilithiumPair {
 	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
 		let resonance_public =
-			dilithium_crypto::types::DilithiumPublic::from_slice(self.public.as_slice())
+			qp_dilithium_crypto::types::DilithiumPublic::from_slice(self.public.as_slice())
 				.expect("Invalid public key");
-		<dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
+		<qp_dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
 			resonance_public,
 		)
 	}
@@ -277,7 +277,10 @@ impl subxt::tx::Signer<ChainConfig> for dilithium_crypto::types::DilithiumPair {
 		// sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in
 		// ResonanceSignatureScheme
 		let signature_with_public =
-			<dilithium_crypto::types::DilithiumPair as sp_core::Pair>::sign(self, signer_payload);
-		dilithium_crypto::types::DilithiumSignatureScheme::Dilithium(signature_with_public)
+			<qp_dilithium_crypto::types::DilithiumPair as sp_core::Pair>::sign(
+				self,
+				signer_payload,
+			);
+		qp_dilithium_crypto::types::DilithiumSignatureScheme::Dilithium(signature_with_public)
 	}
 }

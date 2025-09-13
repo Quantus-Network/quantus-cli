@@ -1318,22 +1318,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dilithium-crypto"
-version = "0.1.0"
-source = "git+https://github.com/Quantus-Network/chain#e9fc9b903078f99ba12c4bbebfc03102414a9f91"
-dependencies = [
- "log",
- "parity-scale-codec",
- "qp-poseidon",
- "qp-rusty-crystals-dilithium",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "thiserror 1.0.69",
-]
-
-[[package]]
 name = "dirs"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3366,6 +3350,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "qp-dilithium-crypto"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "31cad62a788f96acbe9267982dec7fef080c3d5eb905e4a8c1a6d35909129fd4"
+dependencies = [
+ "log",
+ "parity-scale-codec",
+ "qp-poseidon",
+ "qp-rusty-crystals-dilithium",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "qp-plonky2"
 version = "1.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3462,11 +3463,11 @@ dependencies = [
  "chrono",
  "clap",
  "colored",
- "dilithium-crypto",
  "dirs",
  "hex",
  "jsonrpsee",
  "parity-scale-codec",
+ "qp-dilithium-crypto",
  "qp-poseidon",
  "qp-rusty-crystals-dilithium",
  "qp-rusty-crystals-hdwallet",

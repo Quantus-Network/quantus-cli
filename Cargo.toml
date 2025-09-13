@@ -49,7 +49,7 @@ qp-rusty-crystals-hdwallet = { version = "0.1.2" }
 qp-poseidon = { version = "0.9.1", features = [
 	"serde",
 ] }
-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", package = "dilithium-crypto" }
+qp-dilithium-crypto = { version = "0.1.1" }
 
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [

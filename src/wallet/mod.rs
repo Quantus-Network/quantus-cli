@@ -92,9 +92,9 @@ impl WalletManager {
 
 		// Generate the appropriate test keypair
 		let resonance_pair = match name {
-			"crystal_alice" => dilithium_crypto::crystal_alice(),
-			"crystal_bob" => dilithium_crypto::dilithium_bob(),
-			"crystal_charlie" => dilithium_crypto::crystal_charlie(),
+			"crystal_alice" => qp_dilithium_crypto::crystal_alice(),
+			"crystal_bob" => qp_dilithium_crypto::dilithium_bob(),
+			"crystal_charlie" => qp_dilithium_crypto::crystal_charlie(),
 			_ => return Err(WalletError::KeyGeneration.into()),
 		};
 

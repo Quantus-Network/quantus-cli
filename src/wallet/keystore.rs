@@ -22,7 +22,7 @@ use rand::{rng, RngCore};
 
 use std::path::Path;
 
-use dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
+use qp_dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
 use sp_runtime::traits::IdentifyAccount;
 
 /// Quantum-safe key pair using Dilithium post-quantum signatures
@@ -84,7 +84,7 @@ impl QuantumKeyPair {
 	}
 
 	/// Convert to subxt Signer for use
-	pub fn to_subxt_signer(&self) -> Result<dilithium_crypto::types::DilithiumPair> {
+	pub fn to_subxt_signer(&self) -> Result<qp_dilithium_crypto::types::DilithiumPair> {
 		// Convert to DilithiumPair first - now it implements subxt::tx::Signer<ChainConfig>
 		let resonance_pair = self.to_resonance_pair()?;
 
@@ -271,7 +271,7 @@ impl Keystore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
+	use qp_dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
 	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
 	use tempfile::TempDir;
 
