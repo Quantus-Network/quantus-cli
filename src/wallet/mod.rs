@@ -10,7 +10,7 @@ pub mod password;
 
 use crate::error::{Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
-use rusty_crystals_hdwallet::{generate_mnemonic, HDLattice};
+use qp_rusty_crystals_hdwallet::{generate_mnemonic, HDLattice};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::Ss58Codec;
 use sp_runtime::traits::IdentifyAccount;
@@ -92,9 +92,9 @@ impl WalletManager {
 
 		// Generate the appropriate test keypair
 		let resonance_pair = match name {
-			"crystal_alice" => dilithium_crypto::crystal_alice(),
-			"crystal_bob" => dilithium_crypto::dilithium_bob(),
-			"crystal_charlie" => dilithium_crypto::crystal_charlie(),
+			"crystal_alice" => qp_dilithium_crypto::crystal_alice(),
+			"crystal_bob" => qp_dilithium_crypto::dilithium_bob(),
+			"crystal_charlie" => qp_dilithium_crypto::crystal_charlie(),
 			_ => return Err(WalletError::KeyGeneration.into()),
 		};
 
@@ -377,7 +377,7 @@ mod tests {
 		// Create test wallet data
 		let entropy = [1u8; 32]; // Use fixed entropy for deterministic tests
 		let dilithium_keypair =
-			rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
+			qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		let mut metadata = std::collections::HashMap::new();
@@ -427,7 +427,7 @@ mod tests {
 		// Generate keypair
 		let entropy = [2u8; 32]; // Use different entropy for variety
 		let dilithium_keypair =
-			rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
+			qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Test address generation
@@ -452,7 +452,7 @@ mod tests {
 		// Create and encrypt wallet data
 		let entropy = [3u8; 32]; // Use different entropy for each test
 		let dilithium_keypair =
-			rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
+			qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		let wallet_data = keystore::WalletData {
