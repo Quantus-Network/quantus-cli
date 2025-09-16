@@ -1,8 +1,7 @@
 use crate::{
 	chain::quantus_subxt,
 	cli::{common::resolve_address, progress_spinner::wait_for_tx_confirmation},
-
-    log_error, log_print, log_success,
+	log_error, log_print, log_success,
 };
 use clap::Subcommand;
 // no colored output needed here
@@ -64,8 +63,6 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 	},
-
-
 
 	/// Close an active recovery (lost account stops a malicious attempt)
 	Close {
@@ -205,7 +202,8 @@ pub async fn handle_recovery_command(
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ Initiate recovery submitted successfully");
 
-			let confirmation_result = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
+			let confirmation_result =
+				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
 			match confirmation_result {
 				Ok(true) => {
 					log_success!("✅ Transaction confirmed");
@@ -218,7 +216,7 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to confirm transaction: {e}");
 					Err(e)
-				}
+				},
 			}
 		},
 
@@ -253,7 +251,8 @@ pub async fn handle_recovery_command(
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ Vouch submitted successfully");
 
-			let confirmation_result = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
+			let confirmation_result =
+				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
 			match confirmation_result {
 				Ok(true) => {
 					log_success!("✅ Transaction confirmed");
@@ -266,7 +265,7 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to confirm transaction: {e}");
 					Err(e)
-				}
+				},
 			}
 		},
 
@@ -294,7 +293,8 @@ pub async fn handle_recovery_command(
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ Claim submitted successfully");
 
-			let confirmation_result = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
+			let confirmation_result =
+				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
 			match confirmation_result {
 				Ok(true) => {
 					log_success!("✅ Transaction confirmed");
@@ -307,13 +307,18 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to confirm transaction: {e}");
 					Err(e)
-				}
+				},
 			}
 		},
 
-
-
-		RecoveryCommands::RecoverAll { rescuer, lost, dest, keep_alive, password, password_file } => {
+		RecoveryCommands::RecoverAll {
+			rescuer,
+			lost,
+			dest,
+			keep_alive,
+			password,
+			password_file,
+		} => {
 			use quantus_subxt::api::runtime_types::pallet_balances::pallet::Call as BalancesCall;
 
 			let rescuer_key =
@@ -342,40 +347,51 @@ pub async fn handle_recovery_command(
 
 			// Check proxy mapping for rescuer
 			let rescuer_sp = SpAccountId32::from_ss58check(&rescuer_addr).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid rescuer address from wallet: {e:?}"))
+				crate::error::QuantusError::Generic(format!(
+					"Invalid rescuer address from wallet: {e:?}"
+				))
 			})?;
 			let rescuer_id_bytes: [u8; 32] = *rescuer_sp.as_ref();
 			let rescuer_id = subxt::ext::subxt_core::utils::AccountId32::from(rescuer_id_bytes);
 			let proxy_storage = quantus_subxt::api::storage().recovery().proxy(rescuer_id);
 			let latest = quantus_client.get_latest_block().await?;
-			let proxy_result = quantus_client.client().storage().at(latest).fetch(&proxy_storage).await;
+			let proxy_result =
+				quantus_client.client().storage().at(latest).fetch(&proxy_storage).await;
 			let proxy_of = match proxy_result {
 				Ok(Some(proxy)) => {
 					log_print!("🧩 Proxy mapping: rescuer proxies -> {}", format!("{}", proxy));
 					Some(proxy)
 				},
 				Ok(None) => {
-					log_error!("❌ No proxy mapping found for rescuer - recovery not set up properly");
+					log_error!(
+						"❌ No proxy mapping found for rescuer - recovery not set up properly"
+					);
 					return Err(crate::error::QuantusError::Generic(
 						"Rescuer has no proxy mapping. Recovery process may not be properly set up.".to_string()
 					));
 				},
 				Err(e) => {
 					log_error!("❌ Proxy mapping fetch error: {:?}", e);
-					return Err(crate::error::QuantusError::NetworkError(
-						format!("Failed to check proxy mapping: {:?}", e)
-					));
-				}
+					return Err(crate::error::QuantusError::NetworkError(format!(
+						"Failed to check proxy mapping: {:?}",
+						e
+					)));
+				},
 			};
 
 			// Validate that the proxy points to the correct lost account
 			if let Some(proxy) = proxy_of {
 				let proxy_addr = format!("{}", proxy);
 				if proxy_addr != lost_resolved {
-					log_error!("❌ Proxy mismatch! Rescuer proxies {} but we're trying to recover {}", proxy_addr, lost_resolved);
-					return Err(crate::error::QuantusError::Generic(
-						format!("Proxy mismatch: rescuer proxies {} but target is {}", proxy_addr, lost_resolved)
-					));
+					log_error!(
+						"❌ Proxy mismatch! Rescuer proxies {} but we're trying to recover {}",
+						proxy_addr,
+						lost_resolved
+					);
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Proxy mismatch: rescuer proxies {} but target is {}",
+						proxy_addr, lost_resolved
+					)));
 				}
 				log_print!("✅ Proxy validation successful");
 			}
@@ -388,20 +404,28 @@ pub async fn handle_recovery_command(
 
 			let call = quantus_subxt::api::tx()
 				.recovery()
-				.as_recovered(
-					subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id),
-					inner_call,
-				);
+				.as_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id), inner_call);
 
-			let tx_hash = match crate::cli::common::submit_transaction(&quantus_client, &rescuer_key, call, None).await {
+			let tx_hash = match crate::cli::common::submit_transaction(
+				&quantus_client,
+				&rescuer_key,
+				call,
+				None,
+			)
+			.await
+			{
 				Ok(h) => h,
-				Err(e) => { log_error!("❌ Submit error (recover_all): {:?}", e); return Err(e); }
+				Err(e) => {
+					log_error!("❌ Submit error (recover_all): {:?}", e);
+					return Err(e);
+				},
 			};
 
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ recover_all submitted successfully");
 
-			let confirmation_result = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
+			let confirmation_result =
+				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
 			match confirmation_result {
 				Ok(true) => {
 					log_success!("✅ Transaction confirmed");
@@ -414,7 +438,7 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to confirm transaction: {e}");
 					Err(e)
-				}
+				},
 			}
 		},
 
@@ -462,60 +486,77 @@ pub async fn handle_recovery_command(
 
 			// Check account balance before attempting transfer
 			log_print!("💰 Checking lost account balance...");
-			let balance_result = quantus_client.client().storage().at(latest).fetch(
-				&quantus_subxt::api::storage().system().account(lost_id.clone())
-			).await;
+			let balance_result = quantus_client
+				.client()
+				.storage()
+				.at(latest)
+				.fetch(&quantus_subxt::api::storage().system().account(lost_id.clone()))
+				.await;
 
 			let account_info = match balance_result {
 				Ok(Some(info)) => info,
 				Ok(None) => {
 					log_error!("❌ Lost account not found in storage");
 					return Err(crate::error::QuantusError::Generic(
-						"Lost account not found in storage".to_string()
+						"Lost account not found in storage".to_string(),
 					));
 				},
 				Err(e) => {
 					log_error!("❌ Failed to fetch account balance: {:?}", e);
-					return Err(crate::error::QuantusError::NetworkError(
-						format!("Failed to fetch account balance: {:?}", e)
-					));
-				}
+					return Err(crate::error::QuantusError::NetworkError(format!(
+						"Failed to fetch account balance: {:?}",
+						e
+					)));
+				},
 			};
 
 			let available_balance = account_info.data.free;
 			log_print!("💰 Available balance: {} plancks", available_balance);
 
 			if available_balance < amount_plancks {
-				log_error!("❌ Insufficient funds! Account has {} plancks but needs {} plancks", available_balance, amount_plancks);
-				return Err(crate::error::QuantusError::Generic(
-					format!("Insufficient funds: account has {} plancks but transfer requires {} plancks",
-						available_balance, amount_plancks)
-				));
+				log_error!(
+					"❌ Insufficient funds! Account has {} plancks but needs {} plancks",
+					available_balance,
+					amount_plancks
+				);
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Insufficient funds: account has {} plancks but transfer requires {} plancks",
+					available_balance, amount_plancks
+				)));
 			}
 
 			log_print!("✅ Balance validation successful - sufficient funds available");
 
-			let inner_call = quantus_subxt::api::Call::Balances(BalancesCall::transfer_keep_alive {
-				dest: subxt::ext::subxt_core::utils::MultiAddress::Id(dest_id),
-				value: amount_plancks,
-			});
+			let inner_call =
+				quantus_subxt::api::Call::Balances(BalancesCall::transfer_keep_alive {
+					dest: subxt::ext::subxt_core::utils::MultiAddress::Id(dest_id),
+					value: amount_plancks,
+				});
 
 			let call = quantus_subxt::api::tx()
 				.recovery()
-				.as_recovered(
-					subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id),
-					inner_call,
-				);
+				.as_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id), inner_call);
 
-			let tx_hash = match crate::cli::common::submit_transaction(&quantus_client, &rescuer_key, call, None).await {
+			let tx_hash = match crate::cli::common::submit_transaction(
+				&quantus_client,
+				&rescuer_key,
+				call,
+				None,
+			)
+			.await
+			{
 				Ok(h) => h,
-				Err(e) => { log_error!("❌ Submit error (recover_amount): {:?}", e); return Err(e); }
+				Err(e) => {
+					log_error!("❌ Submit error (recover_amount): {:?}", e);
+					return Err(e);
+				},
 			};
 
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ recover_amount submitted successfully");
 
-			let confirmation_result = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
+			let confirmation_result =
+				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
 			match confirmation_result {
 				Ok(true) => {
 					log_success!("✅ Transaction confirmed");
@@ -528,7 +569,7 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to confirm transaction: {e}");
 					Err(e)
-				}
+				},
 			}
 		},
 
@@ -555,7 +596,8 @@ pub async fn handle_recovery_command(
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ close_recovery submitted successfully");
 
-			let confirmation_result = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
+			let confirmation_result =
+				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
 			match confirmation_result {
 				Ok(true) => {
 					log_success!("✅ Transaction confirmed");
@@ -568,7 +610,7 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to confirm transaction: {e}");
 					Err(e)
-				}
+				},
 			}
 		},
 
@@ -596,7 +638,8 @@ pub async fn handle_recovery_command(
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ cancel_recovered submitted successfully");
 
-			let confirmation_result = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
+			let confirmation_result =
+				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
 			match confirmation_result {
 				Ok(true) => {
 					log_success!("✅ Transaction confirmed");
@@ -609,7 +652,7 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to confirm transaction: {e}");
 					Err(e)
-				}
+				},
 			}
 		},
 

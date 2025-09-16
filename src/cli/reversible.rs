@@ -1,6 +1,9 @@
 use crate::{
 	chain::quantus_subxt,
-	cli::{address_format::QuantusSS58, common::resolve_address, progress_spinner::wait_for_tx_confirmation},
+	cli::{
+		address_format::QuantusSS58, common::resolve_address,
+		progress_spinner::wait_for_tx_confirmation,
+	},
 	error::Result,
 	log_error, log_info, log_print, log_success, log_verbose,
 };
@@ -485,10 +488,7 @@ async fn list_pending_transactions(
 						crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
 					}) {
 					let formatted_amount = format_amount(transfer_details.amount);
-					log_print!(
-						"      👤 To: {}",
-						transfer_details.to.to_quantus_ss58()
-					);
+					log_print!("      👤 To: {}", transfer_details.to.to_quantus_ss58());
 					log_print!("      💰 Amount: {}", formatted_amount);
 					log_print!(
 						"      🔄 Interceptor: {}",
@@ -525,10 +525,7 @@ async fn list_pending_transactions(
 						crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
 					}) {
 					let formatted_amount = format_amount(transfer_details.amount);
-					log_print!(
-						"      👤 From: {}",
-						transfer_details.from.to_quantus_ss58()
-					);
+					log_print!("      👤 From: {}", transfer_details.from.to_quantus_ss58());
 					log_print!("      💰 Amount: {}", formatted_amount);
 					log_print!(
 						"      🔄 Interceptor: {}",
@@ -549,7 +546,6 @@ async fn list_pending_transactions(
 
 	Ok(())
 }
-
 
 /// Helper function to format amount with QUAN units
 fn format_amount(amount: u128) -> String {

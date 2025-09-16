@@ -1,7 +1,9 @@
 //! `quantus block` subcommand - detailed block analysis
 use crate::{
-	chain::client::QuantusClient, cli::{address_format::QuantusSS58, storage}, error::QuantusError, log_error, log_print,
-	log_success,
+	chain::client::QuantusClient,
+	cli::{address_format::QuantusSS58, storage},
+	error::QuantusError,
+	log_error, log_print, log_success,
 };
 use clap::Subcommand;
 use colored::Colorize;

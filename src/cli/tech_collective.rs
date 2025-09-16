@@ -1,7 +1,10 @@
 //! `quantus tech-collective` subcommand - tech collective management
 use crate::{
 	chain::quantus_subxt,
-	cli::{address_format::QuantusSS58, common::resolve_address, progress_spinner::wait_for_tx_confirmation},
+	cli::{
+		address_format::QuantusSS58, common::resolve_address,
+		progress_spinner::wait_for_tx_confirmation,
+	},
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 };

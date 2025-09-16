@@ -1,6 +1,7 @@
 use crate::{
-	chain::quantus_subxt, cli::{address_format::QuantusSS58, progress_spinner::wait_for_tx_confirmation}, log_error, log_print,
-	log_success, log_verbose,
+	chain::quantus_subxt,
+	cli::{address_format::QuantusSS58, progress_spinner::wait_for_tx_confirmation},
+	log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -139,7 +140,8 @@ pub async fn handle_high_security_command(
 			use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay as HsDelay;
 			let delay_value = match (delay_blocks, delay_seconds) {
 				(Some(blocks), None) => HsDelay::BlockNumber(blocks),
-				(None, Some(seconds)) => HsDelay::Timestamp(seconds * 1000), // Convert seconds to milliseconds
+				(None, Some(seconds)) => HsDelay::Timestamp(seconds * 1000), /* Convert seconds */
+				// to milliseconds
 				(None, None) => {
 					log_error!("❌ You must specify either --delay-blocks or --delay-seconds");
 					return Err(crate::error::QuantusError::Generic(
@@ -153,10 +155,9 @@ pub async fn handle_high_security_command(
 			log_verbose!("✍️  Creating set_high_security extrinsic...");
 
 			// Current generated metadata expects (delay, interceptor).
-			let tx_call = quantus_subxt::api::tx().reversible_transfers().set_high_security(
-				delay_value,
-				interceptor_subxt,
-			);
+			let tx_call = quantus_subxt::api::tx()
+				.reversible_transfers()
+				.set_high_security(delay_value, interceptor_subxt);
 
 			let tx_hash =
 				crate::cli::common::submit_transaction(&quantus_client, &keypair, tx_call, None)

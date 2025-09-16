@@ -1,4 +1,6 @@
-use crate::{chain::client::QuantusClient, cli::address_format::QuantusSS58, log_print, log_verbose};
+use crate::{
+	chain::client::QuantusClient, cli::address_format::QuantusSS58, log_print, log_verbose,
+};
 use colored::Colorize;
 use jsonrpsee::core::client::ClientT;
 use std::str::FromStr;
