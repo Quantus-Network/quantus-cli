@@ -8,10 +8,9 @@ use crate::error::{Result, WalletError};
 use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 use sp_core::{
-	crypto::{AccountId32, Ss58Codec},
+	crypto::{AccountId32, Ss58Codec, Ss58AddressFormat},
 	ByteArray,
 };
-
 // Quantum-safe encryption imports
 use aes_gcm::{
 	aead::{Aead, AeadCore, KeyInit, OsRng as AesOsRng},
@@ -80,7 +79,7 @@ impl QuantumKeyPair {
 
 	pub fn to_account_id_ss58check(&self) -> String {
 		let account = self.to_account_id_32();
-		account.to_ss58check()
+		account.to_ss58check_with_version(Ss58AddressFormat::custom(189))
 	}
 
 	/// Convert to subxt Signer for use

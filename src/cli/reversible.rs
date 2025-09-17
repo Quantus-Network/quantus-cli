@@ -121,7 +121,7 @@ pub async fn schedule_transfer(
 	log_verbose!("   Amount: {}", amount);
 
 	// Parse the destination address
-	let to_account_id_sp = SpAccountId32::from_ss58check(to_address).map_err(|e| {
+	let (to_account_id_sp, _version) = SpAccountId32::from_ss58check_with_version(to_address).map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
 	})?;
 
