@@ -373,15 +373,14 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Proxy mapping fetch error: {:?}", e);
 					return Err(crate::error::QuantusError::NetworkError(format!(
-						"Failed to check proxy mapping: {:?}",
-						e
+						"Failed to check proxy mapping: {e:?}"
 					)));
 				},
 			};
 
 			// Validate that the proxy points to the correct lost account
 			if let Some(proxy) = proxy_of {
-				let proxy_addr = format!("{}", proxy);
+				let proxy_addr = format!("{proxy}");
 				if proxy_addr != lost_resolved {
 					log_error!(
 						"❌ Proxy mismatch! Rescuer proxies {} but we're trying to recover {}",
@@ -389,8 +388,7 @@ pub async fn handle_recovery_command(
 						lost_resolved
 					);
 					return Err(crate::error::QuantusError::Generic(format!(
-						"Proxy mismatch: rescuer proxies {} but target is {}",
-						proxy_addr, lost_resolved
+						"Proxy mismatch: rescuer proxies {proxy_addr} but target is {lost_resolved}"
 					)));
 				}
 				log_print!("✅ Proxy validation successful");
@@ -504,8 +502,7 @@ pub async fn handle_recovery_command(
 				Err(e) => {
 					log_error!("❌ Failed to fetch account balance: {:?}", e);
 					return Err(crate::error::QuantusError::NetworkError(format!(
-						"Failed to fetch account balance: {:?}",
-						e
+						"Failed to fetch account balance: {e:?}"
 					)));
 				},
 			};
@@ -520,8 +517,7 @@ pub async fn handle_recovery_command(
 					amount_plancks
 				);
 				return Err(crate::error::QuantusError::Generic(format!(
-					"Insufficient funds: account has {} plancks but transfer requires {} plancks",
-					available_balance, amount_plancks
+					"Insufficient funds: account has {available_balance} plancks but transfer requires {amount_plancks} plancks"
 				)));
 			}
 
@@ -746,7 +742,7 @@ pub async fn handle_recovery_command(
 					serde_json::json!({
 						"delay_period": cfg.delay_period,
 						"deposit": cfg.deposit,
-						"friends": cfg.friends.0.iter().map(|f| format!("{}", f)).collect::<Vec<_>>(),
+						"friends": cfg.friends.0.iter().map(|f| format!("{f}")).collect::<Vec<_>>(),
 						"threshold": cfg.threshold,
 					})
 				);
