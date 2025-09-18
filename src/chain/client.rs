@@ -250,8 +250,8 @@ impl QuantusClient {
 						}
 					}
 				},
-				Err(e) => {
-					log_verbose!("❌ {} failed: {:?}", call_name, e);
+				Err(_e) => {
+					log_verbose!("❌ {} failed: {:?}", call_name, _e);
 				},
 			}
 		}
