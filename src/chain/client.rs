@@ -189,10 +189,10 @@ impl QuantusClient {
 	pub async fn get_block_header(
 		&self,
 		block_hash: H256,
-	) -> crate::error::Result<serde_json::Value> {
+	) -> crate::error::Result<SubstrateHeader<u32, SubxtPoseidonHasher>> {
 		log_verbose!("🔍 Fetching block header for block: {:?}", block_hash);
 
-		let header: serde_json::Value = self
+		let header: SubstrateHeader<u32, SubxtPoseidonHasher> = self
 			.rpc_client
 			.request("chain_getHeader", rpc_params![block_hash])
 			.await

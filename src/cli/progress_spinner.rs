@@ -1,7 +1,8 @@
 use crate::{chain::client::ChainConfig, error::Result};
 use colored::Colorize;
+use rand::rand_core::block;
 use std::io::{self, Write};
-use subxt::OnlineClient;
+use subxt::{blocks, OnlineClient};
 use tokio::time::Instant;
 
 /// Simple progress spinner for showing waiting status
@@ -43,7 +44,7 @@ pub async fn wait_for_tx_confirmation(
 	let mut spinner = ProgressSpinner::new();
 
 	// For now, we use a simple delay approach similar to substrate-api-client
-	for _ in 0..10 {
+	for _ in 0..30 {
 		spinner.tick();
 		tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 	}
@@ -52,6 +53,6 @@ pub async fn wait_for_tx_confirmation(
 	println!();
 
 	use crate::log_verbose;
-	log_verbose!("✅ Transaction likely finalized (after 6s delay)");
+	log_verbose!("✅ Transaction likely finalized (after 30s delay)");
 	Ok(true)
 }

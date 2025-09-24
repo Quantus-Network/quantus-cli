@@ -234,7 +234,7 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 			let transfer_count_previous =
 				get_transfer_count(&quantus_client, &storage_key, &latest_block_hash).await?;
 
-			// Submit the transaction and wait for finalization
+			// Submit the transaction
 			let hash = crate::cli::common::submit_transaction(
 				&quantus_client,
 				&keypair,
@@ -295,13 +295,7 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 			log_verbose!("🍀 Leaf check: {check_string}");
 			tree_structure_check(&proof_as_u8)?;
 			let header = quantus_client.get_block_header(tx_block_hash).await?;
-			let state_root = header["stateRoot"].as_str().unwrap();
-			// remove the 0x prefix
-			let state_root = &state_root[2..];
-			let state_root_bytes = hex::decode(state_root).unwrap();
-			let state_root_array: [u8; 32] =
-				state_root_bytes.try_into().expect("State root must be 32 bytes");
-			let state_root: subxt::utils::H256 = state_root_array.into();
+			let state_root = header.state_root;
 
 			// Build the vectors used in-circuit and capture indices
 			let (storage_proof, indices) =
