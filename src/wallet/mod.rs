@@ -548,7 +548,7 @@ mod tests {
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
 		let expected_address = "qzpKnCCUvfXQdanRBkoPVDxcXbLja9JkYzv26hTQwP9C5mZWP";
-		
+
 		let imported_wallet = wallet_manager
 			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))
 			.await
@@ -556,9 +556,7 @@ mod tests {
 
 		// qzoYcXrTfvjpK1yn3fVAXktWQ6QLJ2ke7gLXyqadre8xxaQ5G
 		assert_eq!(imported_wallet.address, expected_address);
-
 	}
-
 
 	#[tokio::test]
 	async fn test_wallet_import_invalid_mnemonic() {
