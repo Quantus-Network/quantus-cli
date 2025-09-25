@@ -55,7 +55,7 @@ qp-poseidon = { version = "0.9.5", features = [
 	"serde",
 ] }
 # qp-dilithium-crypto = { version = "0.1.2" } # not published yet, using github dependency
-qp-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain.git", version = "0.1.2", features = ["serde"]}
+qp-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain.git", version = "0.1.2", features = ["serde"] }
 
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
