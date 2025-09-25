@@ -1,6 +1,6 @@
 [package]
 name = "quantus-cli"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["Quantus Network"]
 license = "Apache-2.0"
@@ -49,12 +49,13 @@ rand = "0.9"
 aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 
 # Quantus crypto dependencies
-qp-rusty-crystals-dilithium = { version = "1.0.1" }
-qp-rusty-crystals-hdwallet = { version = "0.1.2" }
-qp-poseidon = { version = "0.9.1", features = [
+qp-rusty-crystals-dilithium = { version = "1.0.3" }
+qp-rusty-crystals-hdwallet = { version = "0.1.4" }
+qp-poseidon = { version = "0.9.5", features = [
 	"serde",
 ] }
-qp-dilithium-crypto = { version = "0.1.1" }
+# qp-dilithium-crypto = { version = "0.1.2" } # not published yet, using github dependency
+qp-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain.git", version = "0.1.2", features = ["serde"]}
 
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
