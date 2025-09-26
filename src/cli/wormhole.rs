@@ -14,10 +14,11 @@ use crate::{
 use clap::Subcommand;
 use codec::{Decode, Encode};
 use colored::Colorize;
-use dilithium_crypto::traits::WormholeAddress;
 use hex;
-use poseidon_resonance::PoseidonHasher;
-use rusty_crystals_hdwallet::wormhole::WormholePair;
+use qp_dilithium_crypto::traits::WormholeAddress;
+use qp_poseidon::PoseidonHasher;
+use qp_rusty_crystals_hdwallet::wormhole::WormholePair;
+use rand::Rng;
 use serde::Serialize;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
@@ -107,13 +108,16 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 		WormholeCommands::GenerateAddress => {
 			log_print!("Generating new wormhole address...");
 
-			let wormhole_pair = WormholePair::generate_new().map_err(|e| {
+			let mut seed = [0u8; 32];
+			rand::rng().fill(&mut seed); // TODO replace this with a source of randomness with a higher source of entropy
+
+			let wormhole_pair = WormholePair::generate_new(seed).map_err(|e| {
 				crate::error::QuantusError::Generic(format!("Wormhole generation error: {e:?}"))
 			})?;
 
 			// The on-chain address for funding MUST be the unspendable account derived
 			// from the secret key. The ZK proof verifies transfers to this address.
-			let wormhole_address = WormholeAddress(wormhole_pair.address);
+			let wormhole_address = WormholeAddress(sp_core::H256(wormhole_pair.address));
 			let unspendable_account: AccountId32 = wormhole_address.into_account();
 
 			log_print!("{}", "XXXXXXXXXXXXXXX Quantus Wormhole Details XXXXXXXXXXXXXXXXX".yellow());
@@ -196,7 +200,7 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 					crate::error::QuantusError::Generic("Secret must be 32 bytes".to_string())
 				})?;
 			let wormhole_pair = WormholePair::generate_pair_from_secret(&secret_bytes);
-			let wormhole_address = WormholeAddress(wormhole_pair.address);
+			let wormhole_address = WormholeAddress(sp_core::H256(wormhole_pair.address));
 			let unspendable_account = wormhole_address.into_account();
 			log_print!(
 				"Derived unspendable account address (bytes): {:?}",
@@ -295,6 +299,10 @@ pub async fn handle_wormhole_command(command: WormholeCommands, node_url: &str) 
 			log_verbose!("🍀 Leaf check: {check_string}");
 			tree_structure_check(&proof_as_u8)?;
 			let header = quantus_client.get_block_header(tx_block_hash).await?;
+			// encode the header
+			let encoded_header = header.encode();
+			// log the encoded header as hex
+			log_verbose!("Encoded header: 0x{}", hex::encode(&encoded_header));
 			let state_root = header.state_root;
 
 			// Build the vectors used in-circuit and capture indices

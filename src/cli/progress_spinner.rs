@@ -1,8 +1,7 @@
 use crate::{chain::client::ChainConfig, error::Result};
 use colored::Colorize;
-use rand::rand_core::block;
 use std::io::{self, Write};
-use subxt::{blocks, OnlineClient};
+use subxt::OnlineClient;
 use tokio::time::Instant;
 
 /// Simple progress spinner for showing waiting status
@@ -42,6 +41,13 @@ pub async fn wait_for_tx_confirmation(
 ) -> Result<bool> {
 	// Use ProgressSpinner to show waiting progress
 	let mut spinner = ProgressSpinner::new();
+	// let mut blocks_sub = client.blocks().subscribe_finalized().await?;
+
+	// while let Some(bloock) = blocks_sub.next().await {
+	// 	log_verbose!("New finalized block received");
+	// 	spinner.tick();
+	// 	break;
+	// }
 
 	// For now, we use a simple delay approach similar to substrate-api-client
 	for _ in 0..30 {

@@ -10,7 +10,8 @@ pub mod password;
 
 use crate::error::{Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
-use rusty_crystals_hdwallet::{generate_mnemonic, HDLattice};
+use qp_rusty_crystals_hdwallet::{generate_mnemonic, HDLattice};
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::Ss58Codec;
 use sp_runtime::traits::IdentifyAccount;
@@ -49,9 +50,11 @@ impl WalletManager {
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
+		let mut seed = [0u8; 32];
+		rand::rng().fill(&mut seed); // TODO replace this with a source of randomness with a higher source of entropy
 
 		// Generate a new Dilithium keypair'
-		let mnemonic = generate_mnemonic(24).map_err(|_| WalletError::KeyGeneration)?;
+		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
 		let lattice =
 			HDLattice::from_mnemonic(&mnemonic, None).expect("Failed to generate lattice");
 		let dilithium_keypair = lattice.generate_keys();
@@ -92,9 +95,9 @@ impl WalletManager {
 
 		// Generate the appropriate test keypair
 		let resonance_pair = match name {
-			"crystal_alice" => dilithium_crypto::crystal_alice(),
-			"crystal_bob" => dilithium_crypto::dilithium_bob(),
-			"crystal_charlie" => dilithium_crypto::crystal_charlie(),
+			"crystal_alice" => qp_dilithium_crypto::crystal_alice(),
+			"crystal_bob" => qp_dilithium_crypto::dilithium_bob(),
+			"crystal_charlie" => qp_dilithium_crypto::crystal_charlie(),
 			_ => return Err(WalletError::KeyGeneration.into()),
 		};
 
