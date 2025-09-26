@@ -11,6 +11,7 @@ pub mod password;
 use crate::error::{Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
 use qp_rusty_crystals_hdwallet::{generate_mnemonic, HDLattice};
+use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::Ss58Codec;
 use sp_runtime::traits::IdentifyAccount;
@@ -51,7 +52,9 @@ impl WalletManager {
 		}
 
 		// Generate a new Dilithium keypair'
-		let mnemonic = generate_mnemonic(24).map_err(|_| WalletError::KeyGeneration)?;
+		let mut seed = [0u8; 32];
+		rng().fill_bytes(&mut seed);
+		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
 		let lattice =
 			HDLattice::from_mnemonic(&mnemonic, None).expect("Failed to generate lattice");
 		let dilithium_keypair = lattice.generate_keys();
@@ -325,7 +328,7 @@ mod tests {
 
 		// Verify wallet info
 		assert_eq!(wallet_info.name, "test-wallet");
-		assert!(wallet_info.address.starts_with("5")); // SS58 addresses start with 5
+		assert!(wallet_info.address.starts_with("qz")); // SS58 addresses start with 5
 		assert_eq!(wallet_info.key_type, "Dilithium ML-DSA-87");
 		assert!(wallet_info.created_at <= chrono::Utc::now());
 	}
@@ -435,7 +438,7 @@ mod tests {
 		let ss58_address = quantum_keypair.to_account_id_ss58check();
 
 		// Verify SS58 address format
-		assert!(ss58_address.starts_with("5"), "SS58 address should start with 5");
+		assert!(ss58_address.starts_with("qz"), "SS58 address should start with 5");
 		assert!(ss58_address.len() >= 47, "SS58 address should be at least 47 characters");
 
 		// Test round-trip conversion
@@ -507,8 +510,8 @@ mod tests {
 		assert_ne!(wallet1.address, wallet2.address);
 
 		// Both should be valid SS58 addresses
-		assert!(wallet1.address.starts_with("5"));
-		assert!(wallet2.address.starts_with("5"));
+		assert!(wallet1.address.starts_with("qz"));
+		assert!(wallet2.address.starts_with("qz"));
 	}
 
 	#[tokio::test]
@@ -526,7 +529,7 @@ mod tests {
 
 		// Verify wallet info
 		assert_eq!(imported_wallet.name, "imported-test-wallet");
-		assert!(imported_wallet.address.starts_with("5"));
+		assert!(imported_wallet.address.starts_with("qz"));
 		assert_eq!(imported_wallet.key_type, "Dilithium ML-DSA-87");
 
 		// Import the same mnemonic again should create the same address
@@ -536,6 +539,23 @@ mod tests {
 			.expect("Failed to import wallet again");
 
 		assert_eq!(imported_wallet.address, imported_wallet2.address);
+	}
+
+	#[tokio::test]
+	async fn test_known_values() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
+		let expected_address = "qzpKnCCUvfXQdanRBkoPVDxcXbLja9JkYzv26hTQwP9C5mZWP";
+
+		let imported_wallet = wallet_manager
+			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))
+			.await
+			.expect("Failed to import wallet");
+
+		// qzoYcXrTfvjpK1yn3fVAXktWQ6QLJ2ke7gLXyqadre8xxaQ5G
+		assert_eq!(imported_wallet.address, expected_address);
 	}
 
 	#[tokio::test]
@@ -616,7 +636,7 @@ mod tests {
 
 		// Check that addresses are real addresses (now stored unencrypted)
 		for wallet in &wallets {
-			assert!(wallet.address.starts_with("5")); // Real SS58 addresses start with 5
+			assert!(wallet.address.starts_with("qz")); // Real SS58 addresses start with 5
 			assert_eq!(wallet.key_type, "Dilithium ML-DSA-87");
 		}
 
@@ -663,7 +683,7 @@ mod tests {
 
 		assert_eq!(wallet_info.name, "test-get-wallet");
 		assert_eq!(wallet_info.address, created_wallet.address);
-		assert!(wallet_info.address.starts_with("5"));
+		assert!(wallet_info.address.starts_with("qz"));
 
 		// Test getting non-existent wallet
 		let result = wallet_manager
