@@ -114,7 +114,7 @@ pub async fn add_member(
 	log_verbose!("   Member: {}", who_address.bright_cyan());
 
 	// Parse the member address
-	let member_account_sp = AccountId32::from_ss58check(who_address)
+	let (member_account_sp, _) = AccountId32::from_ss58check_with_version(who_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
@@ -152,7 +152,7 @@ pub async fn remove_member(
 	log_verbose!("   Member: {}", who_address.bright_cyan());
 
 	// Parse the member address
-	let member_account_sp = AccountId32::from_ss58check(who_address)
+	let (member_account_sp, _) = AccountId32::from_ss58check_with_version(who_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
@@ -215,7 +215,7 @@ pub async fn is_member(
 	log_verbose!("   Address: {}", address.bright_cyan());
 
 	// Parse the address
-	let account_sp = AccountId32::from_ss58check(address)
+	let (account_sp, _) = AccountId32::from_ss58check_with_version(address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
