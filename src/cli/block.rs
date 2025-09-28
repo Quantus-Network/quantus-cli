@@ -769,8 +769,9 @@ async fn get_account_nonce_at_block(
 	block_hash: subxt::utils::H256,
 ) -> crate::error::Result<u32> {
 	// Parse the SS58 address to AccountId32 (sp-core)
-	let (account_id_sp, _) = sp_core::crypto::AccountId32::from_ss58check_with_version(account_address)
-		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
+	let (account_id_sp, _) =
+		sp_core::crypto::AccountId32::from_ss58check_with_version(account_address)
+			.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32 for storage query
 	let account_bytes: [u8; 32] = *account_id_sp.as_ref();

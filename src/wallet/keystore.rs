@@ -8,7 +8,7 @@ use crate::error::{Result, WalletError};
 use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 use sp_core::{
-	crypto::{AccountId32, Ss58Codec, Ss58AddressFormat},
+	crypto::{AccountId32, Ss58AddressFormat, Ss58Codec},
 	ByteArray,
 };
 // Quantum-safe encryption imports
