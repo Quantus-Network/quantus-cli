@@ -215,6 +215,78 @@ impl WalletManager {
 		})
 	}
 
+	/// Create wallet from 32-byte seed
+	pub async fn create_wallet_from_seed(
+		&self,
+		name: &str,
+		seed_hex: &str,
+		password: Option<&str>,
+	) -> Result<WalletInfo> {
+		// Check if wallet already exists
+		let keystore = Keystore::new(&self.wallets_dir);
+		if keystore.load_wallet(name)?.is_some() {
+			return Err(WalletError::AlreadyExists.into());
+		}
+
+		// Validate seed hex format (should be 64 hex characters for 32 bytes)
+		if seed_hex.len() != 64 {
+			return Err(WalletError::InvalidMnemonic.into()); // Reusing error type
+		}
+
+		// Convert hex to bytes
+		let seed_bytes = hex::decode(seed_hex).map_err(|_| WalletError::InvalidMnemonic)?;
+		if seed_bytes.len() != 32 {
+			return Err(WalletError::InvalidMnemonic.into());
+		}
+
+		// Create DilithiumPair from seed
+		let seed_array: [u8; 32] =
+			seed_bytes.try_into().map_err(|_| WalletError::InvalidMnemonic)?;
+
+		println!("Debug: seed_array length: {}", seed_array.len());
+		println!("Debug: seed_hex: {}", seed_hex);
+		println!("Debug: calling DilithiumPair::from_seed");
+
+		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_array)
+			.map_err(|e| {
+				println!("Debug: DilithiumPair::from_seed failed with error: {:?}", e);
+				WalletError::InvalidMnemonic
+			})?;
+
+		println!("Debug: DilithiumPair created successfully");
+
+		// Convert to QuantumKeyPair
+		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
+
+		// Create wallet data
+		let mut metadata = std::collections::HashMap::new();
+		metadata.insert("version".to_string(), "1.0.0".to_string());
+		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("from_seed".to_string(), "true".to_string());
+
+		// Generate address from public key
+		let address = quantum_keypair.to_account_id_ss58check();
+
+		let wallet_data = WalletData {
+			name: name.to_string(),
+			keypair: quantum_keypair,
+			mnemonic: None, // No mnemonic for seed-based wallets
+			metadata,
+		};
+
+		// Encrypt and save the wallet
+		let password = password.unwrap_or(""); // Use empty password if none provided
+		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
+		keystore.save_wallet(&encrypted_wallet)?;
+
+		Ok(WalletInfo {
+			name: name.to_string(),
+			address,
+			created_at: encrypted_wallet.created_at,
+			key_type: "Dilithium ML-DSA-87".to_string(),
+		})
+	}
+
 	/// Get wallet by name with password for decryption
 	pub fn get_wallet(&self, name: &str, password: Option<&str>) -> Result<Option<WalletInfo>> {
 		let keystore = Keystore::new(&self.wallets_dir);

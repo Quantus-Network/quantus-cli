@@ -7,7 +7,7 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 /// If it's already an SS58 address, return it as is
 pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
 	// First, try to parse as SS58 address
-	if AccountId32::from_ss58check(address_or_wallet_name).is_ok() {
+	if AccountId32::from_ss58check_with_version(address_or_wallet_name).is_ok() {
 		// It's a valid SS58 address, return as is
 		return Ok(address_or_wallet_name.to_string());
 	}
@@ -36,10 +36,10 @@ pub async fn get_fresh_nonce_with_client(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 ) -> Result<u64> {
-	let from_account_id = AccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
-		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}"))
-		})?;
+	let (from_account_id, _version) =
+		AccountId32::from_ss58check_with_version(&from_keypair.to_account_id_ss58check()).map_err(
+			|e| crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}")),
+		)?;
 
 	// Get nonce from the latest block (best block)
 	let latest_nonce = quantus_client
@@ -83,10 +83,10 @@ pub async fn get_incremented_nonce_with_client(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	base_nonce: u64,
 ) -> Result<u64> {
-	let from_account_id = AccountId32::from_ss58check(&from_keypair.to_account_id_ss58check())
-		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}"))
-		})?;
+	let (from_account_id, _version) =
+		AccountId32::from_ss58check_with_version(&from_keypair.to_account_id_ss58check()).map_err(
+			|e| crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}")),
+		)?;
 
 	// Get current nonce from the latest block
 	let current_nonce = quantus_client

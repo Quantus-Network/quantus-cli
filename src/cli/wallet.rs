@@ -65,6 +65,21 @@ pub enum WalletCommands {
 		password: Option<String>,
 	},
 
+	/// Create wallet from 32-byte seed
+	FromSeed {
+		/// Wallet name
+		#[arg(short, long)]
+		name: String,
+
+		/// 32-byte seed in hex format (64 hex characters)
+		#[arg(short, long)]
+		seed: String,
+
+		/// Password to encrypt the wallet (optional, will prompt if not provided)
+		#[arg(short, long)]
+		password: Option<String>,
+	},
+
 	/// List all wallets
 	List,
 
@@ -103,7 +118,7 @@ pub async fn get_account_nonce(
 	log_verbose!("#️⃣ Querying nonce for account: {}", account_address.bright_green());
 
 	// Parse the SS58 address to AccountId32 (sp-core)
-	let account_id_sp = AccountId32::from_ss58check(account_address)
+	let (account_id_sp, _) = AccountId32::from_ss58check_with_version(account_address)
 		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
 
 	log_verbose!("🔍 SP Account ID: {:?}", account_id_sp);
@@ -319,6 +334,38 @@ pub async fn handle_wallet_command(
 				},
 				Err(e) => {
 					log_error!("{}", format!("❌ Failed to import wallet: {e}").red());
+					return Err(e);
+				},
+			}
+
+			Ok(())
+		},
+
+		WalletCommands::FromSeed { name, seed, password } => {
+			log_print!("🌱 Creating wallet from seed...");
+
+			let wallet_manager = WalletManager::new()?;
+
+			// Get password from user if not provided
+			let final_password =
+				crate::wallet::password::get_wallet_password(&name, password, None)?;
+
+			match wallet_manager
+				.create_wallet_from_seed(&name, &seed, Some(&final_password))
+				.await
+			{
+				Ok(wallet_info) => {
+					log_success!("Wallet name: {}", name.bright_green());
+					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
+					log_success!(
+						"Created: {}",
+						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
+					);
+					log_success!("✅ Wallet created from seed successfully!");
+				},
+				Err(e) => {
+					log_error!("{}", format!("❌ Failed to create wallet from seed: {e}").red());
 					return Err(e);
 				},
 			}
