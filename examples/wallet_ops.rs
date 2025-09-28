@@ -76,7 +76,7 @@ impl QuantusApp {
 		let keypair = wallet_data.keypair;
 
 		// Parse recipient address
-		let to_account_id = AccountId32::from_ss58check(to_address)
+		let (to_account_id, _) = AccountId32::from_ss58check_with_version(to_address)
 			.map_err(|e| QuantusError::Generic(format!("Invalid recipient address: {e}")))?;
 
 		// Perform the transfer

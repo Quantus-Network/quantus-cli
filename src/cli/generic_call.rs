@@ -132,7 +132,7 @@ async fn submit_balance_transfer(
 	})?;
 
 	// Convert to AccountId32
-	let to_account_id = AccountId32::from_ss58check(to_address)
+	let (to_account_id, _) = AccountId32::from_ss58check_with_version(to_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid to_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
@@ -209,7 +209,7 @@ async fn submit_tech_collective_add_member(
 		QuantusError::Generic("Argument must be a string (member_address)".to_string())
 	})?;
 
-	let member_account_id = AccountId32::from_ss58check(member_address)
+	let (member_account_id, _) = AccountId32::from_ss58check_with_version(member_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid member_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
@@ -243,7 +243,7 @@ async fn submit_tech_collective_remove_member(
 		QuantusError::Generic("Argument must be a string (member_address)".to_string())
 	})?;
 
-	let member_account_id = AccountId32::from_ss58check(member_address)
+	let (member_account_id, _) = AccountId32::from_ss58check_with_version(member_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid member_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
@@ -303,7 +303,7 @@ async fn submit_reversible_transfer(
 		QuantusError::Generic("Second argument must be a number (amount)".to_string())
 	})?;
 
-	let to_account_id = AccountId32::from_ss58check(to_address)
+	let (to_account_id, _) = AccountId32::from_ss58check_with_version(to_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid to_address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32

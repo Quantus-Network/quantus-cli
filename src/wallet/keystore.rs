@@ -95,7 +95,7 @@ impl QuantumKeyPair {
 		// from_ss58check returns a Result, we unwrap it to panic on invalid input.
 		// We then convert the AccountId32 struct to a Vec<u8> to be compatible with Polkadart's
 		// typedef.
-		AsRef::<[u8]>::as_ref(&AccountId32::from_ss58check(s).unwrap()).to_vec()
+		AsRef::<[u8]>::as_ref(&AccountId32::from_ss58check_with_version(s).unwrap().0).to_vec()
 	}
 }
 

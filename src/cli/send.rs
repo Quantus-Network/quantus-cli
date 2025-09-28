@@ -14,7 +14,7 @@ pub async fn get_balance(quantus_client: &QuantusClient, account_address: &str) 
 	log_verbose!("💰 Querying balance for account: {}", account_address.bright_green());
 
 	// Decode the SS58 address into `AccountId32` (sp-core) first …
-	let account_id_sp = SpAccountId32::from_ss58check(account_address).map_err(|e| {
+	let (account_id_sp, _) = SpAccountId32::from_ss58check_with_version(account_address).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Invalid account address '{account_address}': {e:?}"
 		))
@@ -178,7 +178,7 @@ pub async fn transfer_with_nonce(
 	log_verbose!("   Resolved to: {}", resolved_address.bright_green());
 
 	// Parse the destination address
-	let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
+	let (to_account_id_sp, _) = SpAccountId32::from_ss58check_with_version(&resolved_address).map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
 	})?;
 

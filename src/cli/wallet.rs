@@ -118,7 +118,7 @@ pub async fn get_account_nonce(
 	log_verbose!("#️⃣ Querying nonce for account: {}", account_address.bright_green());
 
 	// Parse the SS58 address to AccountId32 (sp-core)
-	let account_id_sp = AccountId32::from_ss58check(account_address)
+	let (account_id_sp, _) = AccountId32::from_ss58check_with_version(account_address)
 		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
 
 	log_verbose!("🔍 SP Account ID: {:?}", account_id_sp);
