@@ -307,7 +307,7 @@ async fn demonstrate_service_error_handling() -> Result<()> {
 /// Example of concurrent operations
 #[allow(dead_code)]
 async fn demonstrate_concurrent_operations() -> Result<()> {
-	let service = Arc::new(WalletService::new("ws://127.0.0.1:9944").await?);
+	let service: Arc<WalletService> = Arc::new(WalletService::new("ws://127.0.0.1:9944").await?);
 
 	// Create multiple wallets concurrently
 	let mut handles = Vec::new();

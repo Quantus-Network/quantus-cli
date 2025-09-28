@@ -330,6 +330,7 @@ mod tests {
 
 	#[test]
 	fn test_quantum_keypair_address_generation() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 		// Test with known test keypairs
 		let test_pairs = vec![
 			("crystal_alice", crystal_alice()),
@@ -345,7 +346,7 @@ mod tests {
 			let ss58_address = quantum_keypair.to_account_id_ss58check();
 
 			// Verify address format
-			assert!(ss58_address.starts_with("5"), "SS58 address for {name} should start with 5");
+			assert!(ss58_address.starts_with("qz"), "SS58 address for {name} should start with 5");
 			assert!(
 				ss58_address.len() >= 47,
 				"SS58 address for {name} should be at least 47 characters"
@@ -369,6 +370,7 @@ mod tests {
 
 	#[test]
 	fn test_ss58_to_account_id_conversion() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 		// Test with known addresses
 		let test_cases = vec![
 			crystal_alice().public().into_account().to_ss58check(),
@@ -397,6 +399,8 @@ mod tests {
 	#[test]
 	fn test_address_consistency_across_conversions() {
 		// Start with a Dilithium keypair
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
 		let entropy = [3u8; 32];
 		let dilithium_keypair = Keypair::generate(Some(&entropy));
 
@@ -418,6 +422,7 @@ mod tests {
 	#[test]
 	fn test_known_test_wallet_addresses() {
 		// Test that our test wallets generate expected addresses
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 		let alice_pair = crystal_alice();
 		let bob_pair = dilithium_bob();
 		let charlie_pair = crystal_charlie();
@@ -436,9 +441,9 @@ mod tests {
 		assert_ne!(alice_addr, charlie_addr, "Alice and Charlie should have different addresses");
 
 		// All should be valid SS58 addresses
-		assert!(alice_addr.starts_with("5"), "Alice address should be valid SS58");
-		assert!(bob_addr.starts_with("5"), "Bob address should be valid SS58");
-		assert!(charlie_addr.starts_with("5"), "Charlie address should be valid SS58");
+		assert!(alice_addr.starts_with("qz"), "Alice address should be valid SS58");
+		assert!(bob_addr.starts_with("qz"), "Bob address should be valid SS58");
+		assert!(charlie_addr.starts_with("qz"), "Charlie address should be valid SS58");
 
 		println!("Test wallet addresses:");
 		println!("  Alice:   {alice_addr}");
@@ -465,6 +470,8 @@ mod tests {
 
 	#[test]
 	fn test_stored_wallet_address_generation() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
 		// This test reproduces the error that occurs when loading a wallet from disk
 		// and trying to generate its address - simulating the real-world scenario
 
