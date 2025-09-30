@@ -26,6 +26,10 @@ pub enum WalletCommands {
 		/// Derivation path (default: m/44'/189189'/0'/0/0)
 		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
 		derivation_path: String,
+
+		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
+		#[arg(long)]
+		no_derivation: bool,
 	},
 
 	/// View wallet information
@@ -71,6 +75,10 @@ pub enum WalletCommands {
 		/// Derivation path (default: m/44'/189189'/0'/0/0)
 		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
 		derivation_path: String,
+
+		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
+		#[arg(long)]
+		no_derivation: bool,
 	},
 
 	/// Create wallet from 32-byte seed
@@ -163,13 +171,16 @@ pub async fn handle_wallet_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WalletCommands::Create { name, password, derivation_path } => {
+		WalletCommands::Create { name, password, derivation_path, no_derivation } => {
 			log_print!("🔐 Creating new quantum wallet...");
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Use simple create_wallet if using default derivation path, otherwise use custom path
-			let result = if derivation_path == DEFAULT_DERIVATION_PATH {
+			// Choose creation method based on flags
+			let result = if no_derivation {
+				// Use master seed directly (like quantus-node --no-derivation)
+				wallet_manager.create_wallet_no_derivation(&name, password.as_deref()).await
+			} else if derivation_path == DEFAULT_DERIVATION_PATH {
 				wallet_manager.create_wallet(&name, password.as_deref()).await
 			} else {
 				wallet_manager
@@ -213,7 +224,7 @@ pub async fn handle_wallet_command(
 			if all {
 				// Show all wallets (same as list command but with different header)
 				match wallet_manager.list_wallets() {
-					Ok(wallets) => {
+					Ok(wallets) =>
 						if wallets.is_empty() {
 							log_print!("{}", "No wallets found.".dimmed());
 						} else {
@@ -243,8 +254,7 @@ pub async fn handle_wallet_command(
 									log_print!();
 								}
 							}
-						}
-					},
+						},
 					Err(e) => {
 						log_error!("{}", format!("❌ Failed to view wallets: {e}").red());
 						return Err(e);
@@ -339,7 +349,7 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Import { name, mnemonic, password, derivation_path } => {
+		WalletCommands::Import { name, mnemonic, password, derivation_path, no_derivation } => {
 			log_print!("📥 Importing wallet...");
 
 			let wallet_manager = WalletManager::new()?;
@@ -352,8 +362,13 @@ pub async fn handle_wallet_command(
 			let final_password =
 				crate::wallet::password::get_wallet_password(&name, password, None)?;
 
-			// Use simple import_wallet if using default derivation path, otherwise use custom path
-			let result = if derivation_path == DEFAULT_DERIVATION_PATH {
+			// Choose import method based on flags
+			let result = if no_derivation {
+				// Use master seed directly (like quantus-node --no-derivation)
+				wallet_manager
+					.import_wallet_no_derivation(&name, &mnemonic_phrase, Some(&final_password))
+					.await
+			} else if derivation_path == DEFAULT_DERIVATION_PATH {
 				wallet_manager
 					.import_wallet(&name, &mnemonic_phrase, Some(&final_password))
 					.await
@@ -430,7 +445,7 @@ pub async fn handle_wallet_command(
 			let wallet_manager = WalletManager::new()?;
 
 			match wallet_manager.list_wallets() {
-				Ok(wallets) => {
+				Ok(wallets) =>
 					if wallets.is_empty() {
 						log_print!("{}", "No wallets found.".dimmed());
 						log_print!(
@@ -466,8 +481,7 @@ pub async fn handle_wallet_command(
 							"💡 Use 'quantus wallet view --name <wallet>' to see full details"
 								.dimmed()
 						);
-					}
-				},
+					},
 				Err(e) => {
 					log_error!("{}", format!("❌ Failed to list wallets: {e}").red());
 					return Err(e);
