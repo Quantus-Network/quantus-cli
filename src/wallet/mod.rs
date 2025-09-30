@@ -770,7 +770,7 @@ mod tests {
 
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
-		let expected_address = "qzjtZjisjHH71BBCzoPV2taXyanMqzXQSZsi9kVpDBRkEGL24"; // Updated for new default derivation path m/44'/189189'/0'/0/0
+		let expected_address = "qzjtZjisjHH71BBCzoPV2taXyanMqzXQSZsi9kVpDBRkEGL24";
 
 		let imported_wallet = wallet_manager
 			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))
