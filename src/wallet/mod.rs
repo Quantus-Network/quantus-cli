@@ -15,6 +15,10 @@ use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::Ss58Codec;
 use sp_runtime::traits::IdentifyAccount;
+
+/// Default derivation path for Quantus wallets: m/44'/189189'/0'/0/0
+pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0/0";
+
 /// Wallet information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletInfo {
@@ -22,6 +26,7 @@ pub struct WalletInfo {
 	pub address: String,
 	pub created_at: chrono::DateTime<chrono::Utc>,
 	pub key_type: String,
+	pub derivation_path: String,
 }
 
 /// Main wallet manager
@@ -45,25 +50,39 @@ impl WalletManager {
 
 	/// Create a new wallet
 	pub async fn create_wallet(&self, name: &str, password: Option<&str>) -> Result<WalletInfo> {
+		self.create_wallet_with_derivation_path(name, password, DEFAULT_DERIVATION_PATH)
+			.await
+	}
+
+	/// Create a new wallet with custom derivation path
+	pub async fn create_wallet_with_derivation_path(
+		&self,
+		name: &str,
+		password: Option<&str>,
+		derivation_path: &str,
+	) -> Result<WalletInfo> {
 		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Generate a new Dilithium keypair'
+		// Generate a new Dilithium keypair using derivation path
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
 		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
 		let lattice =
 			HDLattice::from_mnemonic(&mnemonic, None).expect("Failed to generate lattice");
-		let dilithium_keypair = lattice.generate_keys();
+		let dilithium_keypair = lattice
+			.generate_derived_keys(derivation_path)
+			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
 		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("derivation_path".to_string(), derivation_path.to_string());
 
 		// Generate address from public key (simplified version)
 		let address = quantum_keypair.to_account_id_ss58check();
@@ -72,6 +91,7 @@ impl WalletManager {
 			name: name.to_string(),
 			keypair: quantum_keypair,
 			mnemonic: Some(mnemonic.clone()),
+			derivation_path: derivation_path.to_string(),
 			metadata,
 		};
 
@@ -85,6 +105,7 @@ impl WalletManager {
 			address,
 			created_at: encrypted_wallet.created_at,
 			key_type: "Dilithium ML-DSA-87".to_string(),
+			derivation_path: derivation_path.to_string(),
 		})
 	}
 
@@ -118,7 +139,8 @@ impl WalletManager {
 		let wallet_data = WalletData {
 			name: name.to_string(),
 			keypair: quantum_keypair,
-			mnemonic: None, // Test wallets don't have mnemonics
+			mnemonic: None,                    // Test wallets don't have mnemonics
+			derivation_path: "m/".to_string(), // Developer wallets use root path
 			metadata,
 		};
 
@@ -131,6 +153,7 @@ impl WalletManager {
 			address,
 			created_at: encrypted_wallet.created_at,
 			key_type: "Dilithium ML-DSA-87".to_string(),
+			derivation_path: "m/".to_string(),
 		})
 	}
 
@@ -157,6 +180,7 @@ impl WalletManager {
 					address: encrypted_wallet.address, // Address is stored unencrypted
 					created_at: encrypted_wallet.created_at,
 					key_type: "Dilithium ML-DSA-87".to_string(),
+					derivation_path: "[Encrypted]".to_string(), // Derivation path is encrypted
 				};
 				wallets.push(wallet_info);
 			}
@@ -174,16 +198,30 @@ impl WalletManager {
 		mnemonic: &str,
 		password: Option<&str>,
 	) -> Result<WalletInfo> {
+		self.import_wallet_with_derivation_path(name, mnemonic, password, DEFAULT_DERIVATION_PATH)
+			.await
+	}
+
+	/// Import wallet from mnemonic phrase with custom derivation path
+	pub async fn import_wallet_with_derivation_path(
+		&self,
+		name: &str,
+		mnemonic: &str,
+		password: Option<&str>,
+		derivation_path: &str,
+	) -> Result<WalletInfo> {
 		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Validate and import from mnemonic
+		// Validate and import from mnemonic using derivation path
 		let lattice =
 			HDLattice::from_mnemonic(mnemonic, None).map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_keypair = lattice.generate_keys();
+		let dilithium_keypair = lattice
+			.generate_derived_keys(derivation_path)
+			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data
@@ -191,6 +229,7 @@ impl WalletManager {
 		metadata.insert("version".to_string(), "1.0.0".to_string());
 		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
 		metadata.insert("imported".to_string(), "true".to_string());
+		metadata.insert("derivation_path".to_string(), derivation_path.to_string());
 
 		// Generate address from public key
 		let address = quantum_keypair.to_account_id_ss58check();
@@ -199,6 +238,7 @@ impl WalletManager {
 			name: name.to_string(),
 			keypair: quantum_keypair,
 			mnemonic: Some(mnemonic.to_string()),
+			derivation_path: derivation_path.to_string(),
 			metadata,
 		};
 
@@ -212,6 +252,7 @@ impl WalletManager {
 			address,
 			created_at: encrypted_wallet.created_at,
 			key_type: "Dilithium ML-DSA-87".to_string(),
+			derivation_path: derivation_path.to_string(),
 		})
 	}
 
@@ -270,7 +311,8 @@ impl WalletManager {
 		let wallet_data = WalletData {
 			name: name.to_string(),
 			keypair: quantum_keypair,
-			mnemonic: None, // No mnemonic for seed-based wallets
+			mnemonic: None,                    // No mnemonic for seed-based wallets
+			derivation_path: "m/".to_string(), // Seed-based wallets use root path
 			metadata,
 		};
 
@@ -284,6 +326,7 @@ impl WalletManager {
 			address,
 			created_at: encrypted_wallet.created_at,
 			key_type: "Dilithium ML-DSA-87".to_string(),
+			derivation_path: "m/".to_string(),
 		})
 	}
 
@@ -302,6 +345,7 @@ impl WalletManager {
 							address,
 							created_at: encrypted_wallet.created_at,
 							key_type: "Dilithium ML-DSA-87".to_string(),
+							derivation_path: wallet_data.derivation_path,
 						}))
 					},
 					Err(_) => {
@@ -311,6 +355,7 @@ impl WalletManager {
 							address: "[Wrong password]".to_string(),
 							created_at: encrypted_wallet.created_at,
 							key_type: "Dilithium ML-DSA-87".to_string(),
+							derivation_path: "[Wrong password]".to_string(),
 						}))
 					},
 				}
@@ -321,6 +366,7 @@ impl WalletManager {
 					address: encrypted_wallet.address, // Address is public
 					created_at: encrypted_wallet.created_at,
 					key_type: "Dilithium ML-DSA-87".to_string(),
+					derivation_path: "[Encrypted]".to_string(), // Derivation path is encrypted
 				}))
 			}
 		} else {
@@ -465,6 +511,7 @@ mod tests {
 				"test mnemonic phrase with twenty four words here for testing purposes only"
 					.to_string(),
 			),
+			derivation_path: DEFAULT_DERIVATION_PATH.to_string(),
 			metadata,
 		};
 
@@ -534,6 +581,7 @@ mod tests {
 			name: "save-load-test".to_string(),
 			keypair: quantum_keypair,
 			mnemonic: Some("save load test mnemonic phrase".to_string()),
+			derivation_path: DEFAULT_DERIVATION_PATH.to_string(),
 			metadata: std::collections::HashMap::new(),
 		};
 

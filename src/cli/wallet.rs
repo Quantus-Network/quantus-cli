@@ -3,7 +3,7 @@ use crate::{
 	chain::quantus_subxt,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
-	wallet::{password::get_mnemonic_from_user, WalletManager},
+	wallet::{password::get_mnemonic_from_user, WalletManager, DEFAULT_DERIVATION_PATH},
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -22,6 +22,10 @@ pub enum WalletCommands {
 		/// Password to encrypt the wallet (optional, will prompt if not provided)
 		#[arg(short, long)]
 		password: Option<String>,
+
+		/// Derivation path (default: m/44'/189189'/0'/0/0)
+		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
+		derivation_path: String,
 	},
 
 	/// View wallet information
@@ -63,6 +67,10 @@ pub enum WalletCommands {
 		/// Password to encrypt the wallet (optional, will prompt if not provided)
 		#[arg(short, long)]
 		password: Option<String>,
+
+		/// Derivation path (default: m/44'/189189'/0'/0/0)
+		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
+		derivation_path: String,
 	},
 
 	/// Create wallet from 32-byte seed
@@ -155,16 +163,33 @@ pub async fn handle_wallet_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WalletCommands::Create { name, password } => {
+		WalletCommands::Create { name, password, derivation_path } => {
 			log_print!("🔐 Creating new quantum wallet...");
 
 			let wallet_manager = WalletManager::new()?;
 
-			match wallet_manager.create_wallet(&name, password.as_deref()).await {
+			// Use simple create_wallet if using default derivation path, otherwise use custom path
+			let result = if derivation_path == DEFAULT_DERIVATION_PATH {
+				wallet_manager.create_wallet(&name, password.as_deref()).await
+			} else {
+				wallet_manager
+					.create_wallet_with_derivation_path(
+						&name,
+						password.as_deref(),
+						&derivation_path,
+					)
+					.await
+			};
+
+			match result {
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
+					log_success!(
+						"Derivation path: {}",
+						wallet_info.derivation_path.bright_magenta()
+					);
 					log_success!(
 						"Created: {}",
 						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
@@ -203,6 +228,10 @@ pub async fn handle_wallet_command(
 								log_print!("   Address: {}", wallet.address.bright_cyan());
 								log_print!("   Type: {}", wallet.key_type.bright_yellow());
 								log_print!(
+									"   Derivation Path: {}",
+									wallet.derivation_path.bright_magenta()
+								);
+								log_print!(
 									"   Created: {}",
 									wallet
 										.created_at
@@ -228,6 +257,10 @@ pub async fn handle_wallet_command(
 						log_print!("Name: {}", wallet_info.name.bright_green());
 						log_print!("Address: {}", wallet_info.address.bright_cyan());
 						log_print!("Key Type: {}", wallet_info.key_type.bright_yellow());
+						log_print!(
+							"Derivation Path: {}",
+							wallet_info.derivation_path.bright_magenta()
+						);
 						log_print!(
 							"Created: {}",
 							wallet_info
@@ -305,7 +338,7 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Import { name, mnemonic, password } => {
+		WalletCommands::Import { name, mnemonic, password, derivation_path } => {
 			log_print!("📥 Importing wallet...");
 
 			let wallet_manager = WalletManager::new()?;
@@ -318,14 +351,31 @@ pub async fn handle_wallet_command(
 			let final_password =
 				crate::wallet::password::get_wallet_password(&name, password, None)?;
 
-			match wallet_manager
-				.import_wallet(&name, &mnemonic_phrase, Some(&final_password))
-				.await
-			{
+			// Use simple import_wallet if using default derivation path, otherwise use custom path
+			let result = if derivation_path == DEFAULT_DERIVATION_PATH {
+				wallet_manager
+					.import_wallet(&name, &mnemonic_phrase, Some(&final_password))
+					.await
+			} else {
+				wallet_manager
+					.import_wallet_with_derivation_path(
+						&name,
+						&mnemonic_phrase,
+						Some(&final_password),
+						&derivation_path,
+					)
+					.await
+			};
+
+			match result {
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
+					log_success!(
+						"Derivation path: {}",
+						wallet_info.derivation_path.bright_magenta()
+					);
 					log_success!(
 						"Imported: {}",
 						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
