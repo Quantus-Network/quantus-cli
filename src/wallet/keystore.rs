@@ -120,6 +120,7 @@ pub struct WalletData {
 	pub name: String,
 	pub keypair: QuantumKeyPair,
 	pub mnemonic: Option<String>,
+	pub derivation_path: String,
 	pub metadata: std::collections::HashMap<String, String>,
 }
 
@@ -489,6 +490,7 @@ mod tests {
 			name: "test_crystal_alice".to_string(),
 			keypair: quantum_keypair.clone(),
 			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
@@ -529,6 +531,7 @@ mod tests {
 			name: "test_crystal_alice".to_string(),
 			keypair: quantum_keypair,
 			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
@@ -587,6 +590,7 @@ mod tests {
 			name: "crystal_alice".to_string(),
 			keypair: quantum_keypair,
 			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
