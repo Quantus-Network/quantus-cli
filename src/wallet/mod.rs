@@ -215,13 +215,11 @@ impl WalletManager {
 		}
 
 		// Generate new mnemonic and use master seed directly
-		use rand::RngCore;
-		let mut entropy = [0u8; 32]; // 32 bytes = 256 bits for 24 words
-		rand::rng().fill_bytes(&mut entropy);
-		let mnemonic =
-			bip39::Mnemonic::from_entropy(&entropy).map_err(|_| WalletError::KeyGeneration)?;
-		let lattice = HDLattice::from_mnemonic(&mnemonic.to_string(), None)
-			.map_err(|_| WalletError::KeyGeneration)?;
+		let mut seed = [0u8; 32];
+		rng().fill_bytes(&mut seed);
+		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
+		let lattice =
+			HDLattice::from_mnemonic(&mnemonic, None).map_err(|_| WalletError::KeyGeneration)?;
 		let dilithium_keypair = lattice.generate_keys();
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
@@ -237,7 +235,7 @@ impl WalletManager {
 		let wallet_data = WalletData {
 			name: name.to_string(),
 			keypair: quantum_keypair,
-			mnemonic: Some(mnemonic.to_string()),
+			mnemonic: Some(mnemonic),
 			derivation_path: "master".to_string(),
 			metadata,
 		};

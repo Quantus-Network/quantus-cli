@@ -698,8 +698,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "43d193de1f7487df1914d3a568b772458861d33f9c54249612cc2893d6915054"
 dependencies = [
  "bitcoin_hashes",
- "serde",
- "unicode-normalization",
 ]
 
 [[package]]
@@ -3454,7 +3452,6 @@ version = "0.2.1"
 dependencies = [
  "aes-gcm",
  "argon2",
- "bip39",
  "chrono",
  "clap",
  "colored",
