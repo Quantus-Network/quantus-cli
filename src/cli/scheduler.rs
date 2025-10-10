@@ -43,8 +43,7 @@ pub async fn get_last_processed_timestamp(
 
 	let timestamp = storage_at.fetch(&storage_addr).await.map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!(
-			"Failed to fetch last processed timestamp: {:?}",
-			e
+			"Failed to fetch last processed timestamp: {e:?}"
 		))
 	})?;
 

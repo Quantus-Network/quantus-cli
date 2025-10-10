@@ -29,16 +29,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
       - name: Install required components
-        run: rustup component add rustfmt
+        run: rustup component add rustfmt --toolchain nightly
       - name: Install taplo
         run: cargo install taplo-cli --locked
       - name: Run format checks
         run: |
           taplo format --check --config taplo.toml
-          cargo fmt --all -- --check
+          cargo +nightly fmt --all -- --check
 
   build-and-test-matrix:
     name: 🛠️ Build & Test Matrix
@@ -50,10 +48,14 @@ jobs:
         os:
           - ubuntu-latest
           - macos-latest
+        rust:
+          - stable
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust ${{ matrix.rust }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -65,10 +67,12 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: |
           brew install protobuf
-      - name: Build
-        run: cargo build --locked --release
-      - name: Test
-        run: cargo test --locked --release
+      - name: Build (all targets)
+        run: cargo build --locked
+      - name: Build (library only)
+        run: cargo build --lib --locked
+      - name: Test (all targets)
+        run: cargo test --locked
 
   analysis:
     name: 🤖 Analysis (Clippy & Doc)
@@ -76,17 +80,57 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rust-src
       - name: Install dependencies
         run: |
           sudo apt-get update -yqq
           sudo apt-get install -yqq --no-install-recommends \
             libclang-dev \
             protobuf-compiler
-      - name: Install required components
-        run: rustup component add rust-src clippy
-      - name: Run clippy
-        run: cargo clippy --locked -- -D warnings
-      - name: Run doc
+      - name: Run clippy (all targets)
+        run: cargo clippy --all-targets --locked -- -D warnings
+      - name: Run clippy (library only)
+        run: cargo clippy --lib --locked -- -D warnings
+      - name: Generate documentation
         run: cargo doc --locked --no-deps
+      - name: Check documentation (with private items)
+        run: cargo doc --locked --no-deps --document-private-items
+
+  security-audit:
+    name: 🔒 Security Audit
+    needs: fast-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: Run security audit
+        run: cargo audit
+
+  examples:
+    name: 📚 Examples
+    needs: fast-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -yqq
+          sudo apt-get install -yqq --no-install-recommends \
+            libclang-dev \
+            protobuf-compiler
+      - name: Build examples
+        run: |
+          cargo build --examples --locked
+      - name: Check example compilation
+        run: |
+          for example in examples/*.rs; do
+            example_name=$(basename "$example" .rs)
+            echo "Checking example: $example_name"
+            cargo check --example "$example_name" --locked
+          done

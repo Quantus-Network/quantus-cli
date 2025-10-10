@@ -21,7 +21,7 @@ use error::QuantusError;
 #[derive(Parser)]
 #[command(name = "quantus")]
 #[command(author = "Quantus Network")]
-#[command(version = "0.1.0")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Command line interface for the Quantus Network", long_about = None)]
 #[command(arg_required_else_help = true)]
 struct Cli {

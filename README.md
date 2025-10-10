@@ -21,13 +21,38 @@ A modern command line interface for interacting with the Quantus Network, featur
 
 ### Installation
 
+#### From crates.io
+
+```bash
+# Install the CLI tool
+cargo install quantus-cli
+
+# The binary will be available as `quantus`
+quantus --help
+```
+
+#### From source
+
 ```bash
 # Clone and build
-git clone <repository-url>
+git clone https://github.com/Quantus-Network/quantus-cli
 cd quantus-cli
 cargo build --release
 
 # The binary will be available as `quantus`
+```
+
+#### As a library
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+# Full functionality (CLI + library)
+quantus-cli = "0.1.0"
+
+# Library only (smaller dependencies)
+quantus-cli = { version = "0.1.0", default-features = false }
 ```
 
 ### First Steps

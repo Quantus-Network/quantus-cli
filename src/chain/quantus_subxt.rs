@@ -13,7 +13,6 @@ pub mod api {
 		"TransactionPayment",
 		"Sudo",
 		"QPoW",
-		"Wormhole",
 		"MiningRewards",
 		"Vesting",
 		"Preimage",
@@ -29,8 +28,21 @@ pub mod api {
 		"Origins",
 		"Recovery",
 		"Assets",
+		"AssetsHolder",
 	];
-	pub static RUNTIME_APIS: [&str; 0usize] = [];
+	pub static RUNTIME_APIS: [&str; 11usize] = [
+		"Core",
+		"Metadata",
+		"BlockBuilder",
+		"TaggedTransactionQueue",
+		"OffchainWorkerApi",
+		"SessionKeys",
+		"QPoWApi",
+		"AccountNonceApi",
+		"TransactionPaymentApi",
+		"TransactionPaymentCallApi",
+		"GenesisBuilder",
+	];
 	#[doc = r" The error type that is returned when there is a runtime issue."]
 	pub type DispatchError = runtime_types::sp_runtime::DispatchError;
 	#[doc = r" The outer event enum."]
@@ -55,7 +67,1875 @@ pub mod api {
 		use super::{root_mod, runtime_types};
 		use ::subxt::ext::subxt_core::ext::codec::Encode;
 		pub struct RuntimeApi;
-		impl RuntimeApi {}
+		impl RuntimeApi {
+			pub fn core(&self) -> core::Core {
+				core::Core
+			}
+			pub fn metadata(&self) -> metadata::Metadata {
+				metadata::Metadata
+			}
+			pub fn block_builder(&self) -> block_builder::BlockBuilder {
+				block_builder::BlockBuilder
+			}
+			pub fn tagged_transaction_queue(
+				&self,
+			) -> tagged_transaction_queue::TaggedTransactionQueue {
+				tagged_transaction_queue::TaggedTransactionQueue
+			}
+			pub fn offchain_worker_api(&self) -> offchain_worker_api::OffchainWorkerApi {
+				offchain_worker_api::OffchainWorkerApi
+			}
+			pub fn session_keys(&self) -> session_keys::SessionKeys {
+				session_keys::SessionKeys
+			}
+			pub fn q_po_w_api(&self) -> q_po_w_api::QPoWApi {
+				q_po_w_api::QPoWApi
+			}
+			pub fn account_nonce_api(&self) -> account_nonce_api::AccountNonceApi {
+				account_nonce_api::AccountNonceApi
+			}
+			pub fn transaction_payment_api(
+				&self,
+			) -> transaction_payment_api::TransactionPaymentApi {
+				transaction_payment_api::TransactionPaymentApi
+			}
+			pub fn transaction_payment_call_api(
+				&self,
+			) -> transaction_payment_call_api::TransactionPaymentCallApi {
+				transaction_payment_call_api::TransactionPaymentCallApi
+			}
+			pub fn genesis_builder(&self) -> genesis_builder::GenesisBuilder {
+				genesis_builder::GenesisBuilder
+			}
+		}
+		pub mod core {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `Core` runtime api that every Substrate runtime needs to implement."]
+			pub struct Core;
+			impl Core {
+				#[doc = " Returns the version of the runtime."]
+				pub fn version(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::Version,
+					types::version::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Core",
+						"version",
+						types::Version {},
+						[
+							79u8, 22u8, 137u8, 4u8, 40u8, 64u8, 30u8, 180u8, 49u8, 222u8, 114u8,
+							125u8, 44u8, 25u8, 33u8, 152u8, 98u8, 42u8, 72u8, 178u8, 240u8, 103u8,
+							34u8, 187u8, 81u8, 161u8, 183u8, 6u8, 120u8, 2u8, 146u8, 0u8,
+						],
+					)
+				}
+				#[doc = " Execute the given block."]
+				pub fn execute_block(
+					&self,
+					block: types::execute_block::Block,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::ExecuteBlock,
+					types::execute_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Core",
+						"execute_block",
+						types::ExecuteBlock { block },
+						[
+							133u8, 135u8, 228u8, 65u8, 106u8, 27u8, 85u8, 158u8, 112u8, 254u8,
+							93u8, 26u8, 102u8, 201u8, 118u8, 216u8, 249u8, 247u8, 91u8, 74u8, 56u8,
+							208u8, 231u8, 115u8, 131u8, 29u8, 209u8, 6u8, 65u8, 57u8, 214u8, 125u8,
+						],
+					)
+				}
+				#[doc = " Initialize a block with the given header and return the runtime executive mode."]
+				pub fn initialize_block(
+					&self,
+					header: types::initialize_block::Header,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::InitializeBlock,
+					types::initialize_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Core",
+						"initialize_block",
+						types::InitializeBlock { header },
+						[
+							132u8, 169u8, 113u8, 112u8, 80u8, 139u8, 113u8, 35u8, 41u8, 81u8, 36u8,
+							35u8, 37u8, 202u8, 29u8, 207u8, 205u8, 229u8, 145u8, 7u8, 133u8, 94u8,
+							25u8, 108u8, 233u8, 86u8, 234u8, 29u8, 236u8, 57u8, 56u8, 186u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod version {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_version::RuntimeVersion;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct Version {}
+				pub mod execute_block {
+					use super::runtime_types;
+					pub type Block = runtime_types :: sp_runtime :: generic :: block :: Block < runtime_types :: sp_runtime :: generic :: header :: Header < :: core :: primitive :: u32 > , :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: qp_dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > > ;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ();
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ExecuteBlock {
+					pub block: execute_block::Block,
+				}
+				pub mod initialize_block {
+					use super::runtime_types;
+					pub type Header =
+						runtime_types::sp_runtime::generic::header::Header<::core::primitive::u32>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_runtime::ExtrinsicInclusionMode;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct InitializeBlock {
+					pub header: initialize_block::Header,
+				}
+			}
+		}
+		pub mod metadata {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `Metadata` api trait that returns metadata for the runtime."]
+			pub struct Metadata;
+			impl Metadata {
+				#[doc = " Returns the metadata of a runtime."]
+				pub fn metadata(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::Metadata,
+					types::metadata::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Metadata",
+						"metadata",
+						types::Metadata {},
+						[
+							231u8, 24u8, 67u8, 152u8, 23u8, 26u8, 188u8, 82u8, 229u8, 6u8, 185u8,
+							27u8, 175u8, 68u8, 83u8, 122u8, 69u8, 89u8, 185u8, 74u8, 248u8, 87u8,
+							217u8, 124u8, 193u8, 252u8, 199u8, 186u8, 196u8, 179u8, 179u8, 96u8,
+						],
+					)
+				}
+				#[doc = " Returns the metadata at a given version."]
+				#[doc = ""]
+				#[doc = " If the given `version` isn't supported, this will return `None`."]
+				#[doc = " Use [`Self::metadata_versions`] to find out about supported metadata version of the runtime."]
+				pub fn metadata_at_version(
+					&self,
+					version: types::metadata_at_version::Version,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::MetadataAtVersion,
+					types::metadata_at_version::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Metadata",
+						"metadata_at_version",
+						types::MetadataAtVersion { version },
+						[
+							131u8, 53u8, 212u8, 234u8, 16u8, 25u8, 120u8, 252u8, 153u8, 153u8,
+							216u8, 28u8, 54u8, 113u8, 52u8, 236u8, 146u8, 68u8, 142u8, 8u8, 10u8,
+							169u8, 131u8, 142u8, 204u8, 38u8, 48u8, 108u8, 134u8, 86u8, 226u8,
+							61u8,
+						],
+					)
+				}
+				#[doc = " Returns the supported metadata versions."]
+				#[doc = ""]
+				#[doc = " This can be used to call `metadata_at_version`."]
+				pub fn metadata_versions(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::MetadataVersions,
+					types::metadata_versions::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"Metadata",
+						"metadata_versions",
+						types::MetadataVersions {},
+						[
+							23u8, 144u8, 137u8, 91u8, 188u8, 39u8, 231u8, 208u8, 252u8, 218u8,
+							224u8, 176u8, 77u8, 32u8, 130u8, 212u8, 223u8, 76u8, 100u8, 190u8,
+							82u8, 94u8, 190u8, 8u8, 82u8, 244u8, 225u8, 179u8, 85u8, 176u8, 56u8,
+							16u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod metadata {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_core::OpaqueMetadata;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct Metadata {}
+				pub mod metadata_at_version {
+					use super::runtime_types;
+					pub type Version = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::core::option::Option<runtime_types::sp_core::OpaqueMetadata>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct MetadataAtVersion {
+					pub version: metadata_at_version::Version,
+				}
+				pub mod metadata_versions {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u32>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct MetadataVersions {}
+			}
+		}
+		pub mod block_builder {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `BlockBuilder` api trait that provides the required functionality for building a block."]
+			pub struct BlockBuilder;
+			impl BlockBuilder {
+				#[doc = " Apply the given extrinsic."]
+				#[doc = ""]
+				#[doc = " Returns an inclusion outcome which specifies if this extrinsic is included in"]
+				#[doc = " this block or not."]
+				pub fn apply_extrinsic(
+					&self,
+					extrinsic: types::apply_extrinsic::Extrinsic,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::ApplyExtrinsic,
+					types::apply_extrinsic::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"apply_extrinsic",
+						types::ApplyExtrinsic { extrinsic },
+						[
+							192u8, 184u8, 199u8, 4u8, 85u8, 136u8, 214u8, 205u8, 29u8, 29u8, 98u8,
+							145u8, 172u8, 92u8, 168u8, 161u8, 150u8, 133u8, 100u8, 243u8, 100u8,
+							100u8, 118u8, 28u8, 104u8, 82u8, 93u8, 63u8, 79u8, 36u8, 149u8, 144u8,
+						],
+					)
+				}
+				#[doc = " Finish the current block."]
+				pub fn finalize_block(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::FinalizeBlock,
+					types::finalize_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"finalize_block",
+						types::FinalizeBlock {},
+						[
+							244u8, 207u8, 24u8, 33u8, 13u8, 69u8, 9u8, 249u8, 145u8, 143u8, 122u8,
+							96u8, 197u8, 55u8, 64u8, 111u8, 238u8, 224u8, 34u8, 201u8, 27u8, 146u8,
+							232u8, 99u8, 191u8, 30u8, 114u8, 16u8, 32u8, 220u8, 58u8, 62u8,
+						],
+					)
+				}
+				#[doc = " Generate inherent extrinsics. The inherent data will vary from chain to chain."]
+				pub fn inherent_extrinsics(
+					&self,
+					inherent: types::inherent_extrinsics::Inherent,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::InherentExtrinsics,
+					types::inherent_extrinsics::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"inherent_extrinsics",
+						types::InherentExtrinsics { inherent },
+						[
+							254u8, 110u8, 245u8, 201u8, 250u8, 192u8, 27u8, 228u8, 151u8, 213u8,
+							166u8, 89u8, 94u8, 81u8, 189u8, 234u8, 64u8, 18u8, 245u8, 80u8, 29u8,
+							18u8, 140u8, 129u8, 113u8, 236u8, 135u8, 55u8, 79u8, 159u8, 175u8,
+							183u8,
+						],
+					)
+				}
+				#[doc = " Check that the inherents are valid. The inherent data will vary from chain to chain."]
+				pub fn check_inherents(
+					&self,
+					block: types::check_inherents::Block,
+					data: types::check_inherents::Data,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::CheckInherents,
+					types::check_inherents::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"BlockBuilder",
+						"check_inherents",
+						types::CheckInherents { block, data },
+						[
+							153u8, 134u8, 1u8, 215u8, 139u8, 11u8, 53u8, 51u8, 210u8, 175u8, 197u8,
+							28u8, 38u8, 209u8, 175u8, 247u8, 142u8, 157u8, 50u8, 151u8, 164u8,
+							191u8, 181u8, 118u8, 80u8, 97u8, 160u8, 248u8, 110u8, 217u8, 181u8,
+							234u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod apply_extrinsic {
+					use super::runtime_types;
+					pub type Extrinsic = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: qp_dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = :: core :: result :: Result < :: core :: result :: Result < () , runtime_types :: sp_runtime :: DispatchError > , runtime_types :: sp_runtime :: transaction_validity :: TransactionValidityError > ;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ApplyExtrinsic {
+					pub extrinsic: apply_extrinsic::Extrinsic,
+				}
+				pub mod finalize_block {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_runtime::generic::header::Header<
+							::core::primitive::u32,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct FinalizeBlock {}
+				pub mod inherent_extrinsics {
+					use super::runtime_types;
+					pub type Inherent = runtime_types::sp_inherents::InherentData;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = :: subxt :: ext :: subxt_core :: alloc :: vec :: Vec < :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: qp_dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > > ;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct InherentExtrinsics {
+					pub inherent: inherent_extrinsics::Inherent,
+				}
+				pub mod check_inherents {
+					use super::runtime_types;
+					pub type Block = runtime_types :: sp_runtime :: generic :: block :: Block < runtime_types :: sp_runtime :: generic :: header :: Header < :: core :: primitive :: u32 > , :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: qp_dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > > ;
+					pub type Data = runtime_types::sp_inherents::InherentData;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::sp_inherents::CheckInherentsResult;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct CheckInherents {
+					pub block: check_inherents::Block,
+					pub data: check_inherents::Data,
+				}
+			}
+		}
+		pub mod tagged_transaction_queue {
+			use super::{root_mod, runtime_types};
+			#[doc = " The `TaggedTransactionQueue` api trait for interfering with the transaction queue."]
+			pub struct TaggedTransactionQueue;
+			impl TaggedTransactionQueue {
+				#[doc = " Validate the transaction."]
+				#[doc = ""]
+				#[doc = " This method is invoked by the transaction pool to learn details about given transaction."]
+				#[doc = " The implementation should make sure to verify the correctness of the transaction"]
+				#[doc = " against current state. The given `block_hash` corresponds to the hash of the block"]
+				#[doc = " that is used as current state."]
+				#[doc = ""]
+				#[doc = " Note that this call may be performed by the pool multiple times and transactions"]
+				#[doc = " might be verified in any possible order."]
+				pub fn validate_transaction(
+					&self,
+					source: types::validate_transaction::Source,
+					tx: types::validate_transaction::Tx,
+					block_hash: types::validate_transaction::BlockHash,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::ValidateTransaction,
+					types::validate_transaction::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TaggedTransactionQueue",
+						"validate_transaction",
+						types::ValidateTransaction { source, tx, block_hash },
+						[
+							19u8, 53u8, 170u8, 115u8, 75u8, 121u8, 231u8, 50u8, 199u8, 181u8,
+							243u8, 170u8, 163u8, 224u8, 213u8, 134u8, 206u8, 207u8, 88u8, 242u8,
+							80u8, 139u8, 233u8, 87u8, 175u8, 249u8, 178u8, 169u8, 255u8, 171u8,
+							4u8, 125u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod validate_transaction {
+					use super::runtime_types;
+					pub type Source =
+						runtime_types::sp_runtime::transaction_validity::TransactionSource;
+					pub type Tx = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: qp_dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub type BlockHash = ::subxt::ext::subxt_core::utils::H256;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = :: core :: result :: Result < runtime_types :: sp_runtime :: transaction_validity :: ValidTransaction , runtime_types :: sp_runtime :: transaction_validity :: TransactionValidityError > ;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ValidateTransaction {
+					pub source: validate_transaction::Source,
+					pub tx: validate_transaction::Tx,
+					pub block_hash: validate_transaction::BlockHash,
+				}
+			}
+		}
+		pub mod offchain_worker_api {
+			use super::{root_mod, runtime_types};
+			#[doc = " The offchain worker api."]
+			pub struct OffchainWorkerApi;
+			impl OffchainWorkerApi {
+				#[doc = " Starts the off-chain task for given block header."]
+				pub fn offchain_worker(
+					&self,
+					header: types::offchain_worker::Header,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::OffchainWorker,
+					types::offchain_worker::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"OffchainWorkerApi",
+						"offchain_worker",
+						types::OffchainWorker { header },
+						[
+							10u8, 135u8, 19u8, 153u8, 33u8, 216u8, 18u8, 242u8, 33u8, 140u8, 4u8,
+							223u8, 200u8, 130u8, 103u8, 118u8, 137u8, 24u8, 19u8, 127u8, 161u8,
+							29u8, 184u8, 111u8, 222u8, 111u8, 253u8, 73u8, 45u8, 31u8, 79u8, 60u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod offchain_worker {
+					use super::runtime_types;
+					pub type Header =
+						runtime_types::sp_runtime::generic::header::Header<::core::primitive::u32>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ();
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct OffchainWorker {
+					pub header: offchain_worker::Header,
+				}
+			}
+		}
+		pub mod session_keys {
+			use super::{root_mod, runtime_types};
+			#[doc = " Session keys runtime api."]
+			pub struct SessionKeys;
+			impl SessionKeys {
+				#[doc = " Generate a set of session keys with optionally using the given seed."]
+				#[doc = " The keys should be stored within the keystore exposed via runtime"]
+				#[doc = " externalities."]
+				#[doc = ""]
+				#[doc = " The seed needs to be a valid `utf8` string."]
+				#[doc = ""]
+				#[doc = " Returns the concatenated SCALE encoded public keys."]
+				pub fn generate_session_keys(
+					&self,
+					seed: types::generate_session_keys::Seed,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GenerateSessionKeys,
+					types::generate_session_keys::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"SessionKeys",
+						"generate_session_keys",
+						types::GenerateSessionKeys { seed },
+						[
+							96u8, 171u8, 164u8, 166u8, 175u8, 102u8, 101u8, 47u8, 133u8, 95u8,
+							102u8, 202u8, 83u8, 26u8, 238u8, 47u8, 126u8, 132u8, 22u8, 11u8, 33u8,
+							190u8, 175u8, 94u8, 58u8, 245u8, 46u8, 80u8, 195u8, 184u8, 107u8, 65u8,
+						],
+					)
+				}
+				#[doc = " Decode the given public session keys."]
+				#[doc = ""]
+				#[doc = " Returns the list of public raw public keys + key type."]
+				pub fn decode_session_keys(
+					&self,
+					encoded: types::decode_session_keys::Encoded,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::DecodeSessionKeys,
+					types::decode_session_keys::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"SessionKeys",
+						"decode_session_keys",
+						types::DecodeSessionKeys { encoded },
+						[
+							57u8, 242u8, 18u8, 51u8, 132u8, 110u8, 238u8, 255u8, 39u8, 194u8, 8u8,
+							54u8, 198u8, 178u8, 75u8, 151u8, 148u8, 176u8, 144u8, 197u8, 87u8,
+							29u8, 179u8, 235u8, 176u8, 78u8, 252u8, 103u8, 72u8, 203u8, 151u8,
+							248u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod generate_session_keys {
+					use super::runtime_types;
+					pub type Seed = ::core::option::Option<
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+					>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GenerateSessionKeys {
+					pub seed: generate_session_keys::Seed,
+				}
+				pub mod decode_session_keys {
+					use super::runtime_types;
+					pub type Encoded =
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::option::Option<
+							::subxt::ext::subxt_core::alloc::vec::Vec<(
+								::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+								runtime_types::sp_core::crypto::KeyTypeId,
+							)>,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct DecodeSessionKeys {
+					pub encoded: decode_session_keys::Encoded,
+				}
+			}
+		}
+		pub mod q_po_w_api {
+			use super::{root_mod, runtime_types};
+			pub struct QPoWApi;
+			impl QPoWApi {
+				#[doc = " calculate distance header with nonce to with nonce"]
+				pub fn get_nonce_distance(
+					&self,
+					block_hash: types::get_nonce_distance::BlockHash,
+					nonce: types::get_nonce_distance::Nonce,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetNonceDistance,
+					types::get_nonce_distance::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_nonce_distance",
+						types::GetNonceDistance { block_hash, nonce },
+						[
+							129u8, 114u8, 220u8, 23u8, 229u8, 124u8, 105u8, 65u8, 77u8, 91u8, 9u8,
+							2u8, 2u8, 177u8, 124u8, 108u8, 143u8, 100u8, 174u8, 61u8, 29u8, 55u8,
+							166u8, 162u8, 16u8, 61u8, 75u8, 213u8, 182u8, 125u8, 7u8, 120u8,
+						],
+					)
+				}
+				#[doc = " Get the max possible reorg depth"]
+				pub fn get_max_reorg_depth(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetMaxReorgDepth,
+					types::get_max_reorg_depth::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_max_reorg_depth",
+						types::GetMaxReorgDepth {},
+						[
+							95u8, 253u8, 190u8, 31u8, 75u8, 182u8, 224u8, 166u8, 3u8, 9u8, 29u8,
+							200u8, 89u8, 143u8, 104u8, 126u8, 178u8, 83u8, 156u8, 109u8, 140u8,
+							177u8, 70u8, 113u8, 23u8, 182u8, 236u8, 236u8, 111u8, 145u8, 237u8,
+							148u8,
+						],
+					)
+				}
+				#[doc = " Get the max possible distance_threshold for work calculation"]
+				pub fn get_max_distance(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetMaxDistance,
+					types::get_max_distance::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_max_distance",
+						types::GetMaxDistance {},
+						[
+							228u8, 221u8, 157u8, 71u8, 206u8, 66u8, 16u8, 79u8, 17u8, 1u8, 0u8,
+							134u8, 36u8, 195u8, 232u8, 254u8, 165u8, 162u8, 169u8, 184u8, 85u8,
+							136u8, 11u8, 10u8, 40u8, 197u8, 225u8, 249u8, 240u8, 43u8, 120u8, 45u8,
+						],
+					)
+				}
+				#[doc = " Get the current difficulty (max_distance / distance_threshold)"]
+				pub fn get_difficulty(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetDifficulty,
+					types::get_difficulty::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_difficulty",
+						types::GetDifficulty {},
+						[
+							180u8, 101u8, 92u8, 73u8, 15u8, 146u8, 167u8, 45u8, 127u8, 230u8,
+							148u8, 6u8, 174u8, 121u8, 38u8, 103u8, 46u8, 5u8, 235u8, 20u8, 133u8,
+							207u8, 67u8, 211u8, 25u8, 112u8, 83u8, 196u8, 118u8, 66u8, 118u8,
+							179u8,
+						],
+					)
+				}
+				#[doc = " Get the current distance_threshold target for proof generation"]
+				pub fn get_distance_threshold(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetDistanceThreshold,
+					types::get_distance_threshold::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_distance_threshold",
+						types::GetDistanceThreshold {},
+						[
+							84u8, 236u8, 60u8, 104u8, 10u8, 61u8, 150u8, 165u8, 61u8, 214u8, 204u8,
+							210u8, 47u8, 211u8, 67u8, 136u8, 243u8, 72u8, 252u8, 132u8, 128u8,
+							28u8, 166u8, 87u8, 131u8, 48u8, 61u8, 109u8, 115u8, 66u8, 190u8, 201u8,
+						],
+					)
+				}
+				#[doc = " Get total work"]
+				pub fn get_total_work(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetTotalWork,
+					types::get_total_work::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_total_work",
+						types::GetTotalWork {},
+						[
+							1u8, 91u8, 59u8, 140u8, 203u8, 250u8, 8u8, 65u8, 208u8, 35u8, 187u8,
+							190u8, 255u8, 125u8, 190u8, 111u8, 216u8, 168u8, 83u8, 32u8, 37u8,
+							203u8, 102u8, 226u8, 88u8, 207u8, 253u8, 59u8, 86u8, 72u8, 30u8, 171u8,
+						],
+					)
+				}
+				#[doc = " Get block ema"]
+				pub fn get_block_time_ema(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetBlockTimeEma,
+					types::get_block_time_ema::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_block_time_ema",
+						types::GetBlockTimeEma {},
+						[
+							250u8, 101u8, 7u8, 92u8, 2u8, 209u8, 35u8, 184u8, 188u8, 152u8, 196u8,
+							182u8, 14u8, 245u8, 245u8, 243u8, 55u8, 180u8, 6u8, 36u8, 123u8, 95u8,
+							19u8, 102u8, 37u8, 142u8, 238u8, 97u8, 63u8, 133u8, 233u8, 6u8,
+						],
+					)
+				}
+				#[doc = " Get last block timestamp"]
+				pub fn get_last_block_time(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetLastBlockTime,
+					types::get_last_block_time::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_last_block_time",
+						types::GetLastBlockTime {},
+						[
+							207u8, 192u8, 227u8, 7u8, 154u8, 92u8, 133u8, 111u8, 21u8, 9u8, 21u8,
+							171u8, 235u8, 117u8, 143u8, 199u8, 19u8, 67u8, 76u8, 35u8, 220u8, 32u8,
+							221u8, 166u8, 0u8, 234u8, 107u8, 217u8, 122u8, 89u8, 91u8, 144u8,
+						],
+					)
+				}
+				pub fn get_last_block_duration(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetLastBlockDuration,
+					types::get_last_block_duration::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_last_block_duration",
+						types::GetLastBlockDuration {},
+						[
+							103u8, 98u8, 123u8, 21u8, 125u8, 171u8, 88u8, 46u8, 187u8, 94u8, 96u8,
+							238u8, 16u8, 122u8, 81u8, 108u8, 157u8, 204u8, 79u8, 43u8, 170u8,
+							235u8, 176u8, 238u8, 174u8, 235u8, 47u8, 152u8, 167u8, 245u8, 243u8,
+							157u8,
+						],
+					)
+				}
+				pub fn get_chain_height(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetChainHeight,
+					types::get_chain_height::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_chain_height",
+						types::GetChainHeight {},
+						[
+							249u8, 203u8, 37u8, 234u8, 170u8, 203u8, 200u8, 147u8, 30u8, 193u8,
+							91u8, 97u8, 96u8, 104u8, 39u8, 96u8, 171u8, 69u8, 119u8, 30u8, 112u8,
+							81u8, 132u8, 33u8, 69u8, 168u8, 70u8, 33u8, 196u8, 16u8, 215u8, 113u8,
+						],
+					)
+				}
+				pub fn get_random_rsa(
+					&self,
+					block_hash: types::get_random_rsa::BlockHash,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetRandomRsa,
+					types::get_random_rsa::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"get_random_rsa",
+						types::GetRandomRsa { block_hash },
+						[
+							179u8, 195u8, 121u8, 252u8, 235u8, 176u8, 160u8, 58u8, 188u8, 236u8,
+							106u8, 222u8, 47u8, 7u8, 73u8, 89u8, 186u8, 175u8, 25u8, 77u8, 196u8,
+							68u8, 111u8, 186u8, 181u8, 178u8, 2u8, 205u8, 215u8, 142u8, 157u8,
+							160u8,
+						],
+					)
+				}
+				pub fn hash_to_group_bigint(
+					&self,
+					h: types::hash_to_group_bigint::H,
+					m: types::hash_to_group_bigint::M,
+					n: types::hash_to_group_bigint::N,
+					solution: types::hash_to_group_bigint::Solution,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::HashToGroupBigint,
+					types::hash_to_group_bigint::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"hash_to_group_bigint",
+						types::HashToGroupBigint { h, m, n, solution },
+						[
+							117u8, 71u8, 148u8, 115u8, 194u8, 210u8, 59u8, 139u8, 102u8, 255u8,
+							55u8, 207u8, 118u8, 114u8, 98u8, 151u8, 147u8, 99u8, 142u8, 158u8,
+							185u8, 151u8, 118u8, 31u8, 192u8, 26u8, 63u8, 150u8, 50u8, 123u8, 40u8,
+							163u8,
+						],
+					)
+				}
+				pub fn verify_nonce_on_import_block(
+					&self,
+					block_hash: types::verify_nonce_on_import_block::BlockHash,
+					nonce: types::verify_nonce_on_import_block::Nonce,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::VerifyNonceOnImportBlock,
+					types::verify_nonce_on_import_block::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"verify_nonce_on_import_block",
+						types::VerifyNonceOnImportBlock { block_hash, nonce },
+						[
+							178u8, 216u8, 20u8, 254u8, 253u8, 202u8, 63u8, 238u8, 164u8, 135u8,
+							163u8, 28u8, 170u8, 44u8, 183u8, 157u8, 211u8, 62u8, 4u8, 77u8, 30u8,
+							32u8, 68u8, 166u8, 42u8, 161u8, 111u8, 79u8, 54u8, 54u8, 40u8, 15u8,
+						],
+					)
+				}
+				pub fn verify_nonce_local_mining(
+					&self,
+					block_hash: types::verify_nonce_local_mining::BlockHash,
+					nonce: types::verify_nonce_local_mining::Nonce,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::VerifyNonceLocalMining,
+					types::verify_nonce_local_mining::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"verify_nonce_local_mining",
+						types::VerifyNonceLocalMining { block_hash, nonce },
+						[
+							10u8, 191u8, 243u8, 4u8, 31u8, 132u8, 202u8, 157u8, 183u8, 189u8, 49u8,
+							76u8, 201u8, 182u8, 52u8, 197u8, 34u8, 248u8, 253u8, 226u8, 64u8,
+							100u8, 108u8, 2u8, 119u8, 85u8, 184u8, 96u8, 25u8, 156u8, 108u8, 240u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod get_nonce_distance {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetNonceDistance {
+					pub block_hash: get_nonce_distance::BlockHash,
+					pub nonce: get_nonce_distance::Nonce,
+				}
+				pub mod get_max_reorg_depth {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u32;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetMaxReorgDepth {}
+				pub mod get_max_distance {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetMaxDistance {}
+				pub mod get_difficulty {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetDifficulty {}
+				pub mod get_distance_threshold {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetDistanceThreshold {}
+				pub mod get_total_work {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetTotalWork {}
+				pub mod get_block_time_ema {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetBlockTimeEma {}
+				pub mod get_last_block_time {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetLastBlockTime {}
+				pub mod get_last_block_duration {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetLastBlockDuration {}
+				pub mod get_chain_height {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u32;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetChainHeight {}
+				pub mod get_random_rsa {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = (
+							runtime_types::primitive_types::U512,
+							runtime_types::primitive_types::U512,
+						);
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetRandomRsa {
+					pub block_hash: get_random_rsa::BlockHash,
+				}
+				pub mod hash_to_group_bigint {
+					use super::runtime_types;
+					pub type H = runtime_types::primitive_types::U512;
+					pub type M = runtime_types::primitive_types::U512;
+					pub type N = runtime_types::primitive_types::U512;
+					pub type Solution = runtime_types::primitive_types::U512;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = runtime_types::primitive_types::U512;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct HashToGroupBigint {
+					pub h: hash_to_group_bigint::H,
+					pub m: hash_to_group_bigint::M,
+					pub n: hash_to_group_bigint::N,
+					pub solution: hash_to_group_bigint::Solution,
+				}
+				pub mod verify_nonce_on_import_block {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::bool;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct VerifyNonceOnImportBlock {
+					pub block_hash: verify_nonce_on_import_block::BlockHash,
+					pub nonce: verify_nonce_on_import_block::Nonce,
+				}
+				pub mod verify_nonce_local_mining {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::bool;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct VerifyNonceLocalMining {
+					pub block_hash: verify_nonce_local_mining::BlockHash,
+					pub nonce: verify_nonce_local_mining::Nonce,
+				}
+			}
+		}
+		pub mod account_nonce_api {
+			use super::{root_mod, runtime_types};
+			#[doc = " The API to query account nonce."]
+			pub struct AccountNonceApi;
+			impl AccountNonceApi {
+				#[doc = " Get current account nonce of given `AccountId`."]
+				pub fn account_nonce(
+					&self,
+					account: types::account_nonce::Account,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::AccountNonce,
+					types::account_nonce::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"AccountNonceApi",
+						"account_nonce",
+						types::AccountNonce { account },
+						[
+							231u8, 82u8, 7u8, 227u8, 131u8, 2u8, 215u8, 252u8, 173u8, 82u8, 11u8,
+							103u8, 200u8, 25u8, 114u8, 116u8, 79u8, 229u8, 152u8, 150u8, 236u8,
+							37u8, 101u8, 26u8, 220u8, 146u8, 182u8, 101u8, 73u8, 55u8, 191u8,
+							171u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod account_nonce {
+					use super::runtime_types;
+					pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u32;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct AccountNonce {
+					pub account: account_nonce::Account,
+				}
+			}
+		}
+		pub mod transaction_payment_api {
+			use super::{root_mod, runtime_types};
+			pub struct TransactionPaymentApi;
+			impl TransactionPaymentApi {
+				pub fn query_info(
+					&self,
+					uxt: types::query_info::Uxt,
+					len: types::query_info::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryInfo,
+					types::query_info::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_info",
+						types::QueryInfo { uxt, len },
+						[
+							56u8, 30u8, 174u8, 34u8, 202u8, 24u8, 177u8, 189u8, 145u8, 36u8, 1u8,
+							156u8, 98u8, 209u8, 178u8, 49u8, 198u8, 23u8, 150u8, 173u8, 35u8,
+							205u8, 147u8, 129u8, 42u8, 22u8, 69u8, 3u8, 129u8, 8u8, 196u8, 139u8,
+						],
+					)
+				}
+				pub fn query_fee_details(
+					&self,
+					uxt: types::query_fee_details::Uxt,
+					len: types::query_fee_details::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryFeeDetails,
+					types::query_fee_details::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_fee_details",
+						types::QueryFeeDetails { uxt, len },
+						[
+							117u8, 60u8, 137u8, 159u8, 237u8, 252u8, 216u8, 238u8, 232u8, 1u8,
+							100u8, 152u8, 26u8, 185u8, 145u8, 125u8, 68u8, 189u8, 4u8, 30u8, 125u8,
+							7u8, 196u8, 153u8, 235u8, 51u8, 219u8, 108u8, 185u8, 254u8, 100u8,
+							201u8,
+						],
+					)
+				}
+				pub fn query_weight_to_fee(
+					&self,
+					weight: types::query_weight_to_fee::Weight,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryWeightToFee,
+					types::query_weight_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_weight_to_fee",
+						types::QueryWeightToFee { weight },
+						[
+							206u8, 243u8, 189u8, 83u8, 231u8, 244u8, 247u8, 52u8, 126u8, 208u8,
+							224u8, 5u8, 163u8, 108u8, 254u8, 114u8, 214u8, 156u8, 227u8, 217u8,
+							211u8, 198u8, 121u8, 164u8, 110u8, 54u8, 181u8, 146u8, 50u8, 146u8,
+							146u8, 23u8,
+						],
+					)
+				}
+				pub fn query_length_to_fee(
+					&self,
+					length: types::query_length_to_fee::Length,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryLengthToFee,
+					types::query_length_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentApi",
+						"query_length_to_fee",
+						types::QueryLengthToFee { length },
+						[
+							92u8, 132u8, 29u8, 119u8, 66u8, 11u8, 196u8, 224u8, 129u8, 23u8, 249u8,
+							12u8, 32u8, 28u8, 92u8, 50u8, 188u8, 101u8, 203u8, 229u8, 248u8, 216u8,
+							130u8, 150u8, 212u8, 161u8, 81u8, 254u8, 116u8, 89u8, 162u8, 48u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod query_info {
+					use super::runtime_types;
+					pub type Uxt = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: qp_dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::RuntimeDispatchInfo<
+								::core::primitive::u128,
+								runtime_types::sp_weights::weight_v2::Weight,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryInfo {
+					pub uxt: query_info::Uxt,
+					pub len: query_info::Len,
+				}
+				pub mod query_fee_details {
+					use super::runtime_types;
+					pub type Uxt = :: subxt :: ext :: subxt_core :: utils :: UncheckedExtrinsic < :: subxt :: ext :: subxt_core :: utils :: MultiAddress < :: subxt :: ext :: subxt_core :: utils :: AccountId32 , () > , runtime_types :: quantus_runtime :: RuntimeCall , runtime_types :: qp_dilithium_crypto :: types :: DilithiumSignatureScheme , (runtime_types :: frame_system :: extensions :: check_non_zero_sender :: CheckNonZeroSender , runtime_types :: frame_system :: extensions :: check_spec_version :: CheckSpecVersion , runtime_types :: frame_system :: extensions :: check_tx_version :: CheckTxVersion , runtime_types :: frame_system :: extensions :: check_genesis :: CheckGenesis , runtime_types :: frame_system :: extensions :: check_mortality :: CheckMortality , runtime_types :: frame_system :: extensions :: check_nonce :: CheckNonce , runtime_types :: frame_system :: extensions :: check_weight :: CheckWeight , runtime_types :: pallet_transaction_payment :: ChargeTransactionPayment , runtime_types :: frame_metadata_hash_extension :: CheckMetadataHash , runtime_types :: quantus_runtime :: transaction_extensions :: ReversibleTransactionExtension ,) > ;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::FeeDetails<
+								::core::primitive::u128,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryFeeDetails {
+					pub uxt: query_fee_details::Uxt,
+					pub len: query_fee_details::Len,
+				}
+				pub mod query_weight_to_fee {
+					use super::runtime_types;
+					pub type Weight = runtime_types::sp_weights::weight_v2::Weight;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryWeightToFee {
+					pub weight: query_weight_to_fee::Weight,
+				}
+				pub mod query_length_to_fee {
+					use super::runtime_types;
+					pub type Length = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryLengthToFee {
+					pub length: query_length_to_fee::Length,
+				}
+			}
+		}
+		pub mod transaction_payment_call_api {
+			use super::{root_mod, runtime_types};
+			pub struct TransactionPaymentCallApi;
+			impl TransactionPaymentCallApi {
+				#[doc = " Query information of a dispatch class, weight, and fee of a given encoded `Call`."]
+				pub fn query_call_info(
+					&self,
+					call: types::query_call_info::Call,
+					len: types::query_call_info::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryCallInfo,
+					types::query_call_info::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_call_info",
+						types::QueryCallInfo { call, len },
+						[
+							166u8, 173u8, 176u8, 212u8, 240u8, 248u8, 215u8, 188u8, 215u8, 21u8,
+							209u8, 116u8, 183u8, 186u8, 201u8, 229u8, 28u8, 26u8, 218u8, 247u8,
+							99u8, 59u8, 155u8, 235u8, 205u8, 76u8, 165u8, 181u8, 148u8, 21u8,
+							122u8, 86u8,
+						],
+					)
+				}
+				#[doc = " Query fee details of a given encoded `Call`."]
+				pub fn query_call_fee_details(
+					&self,
+					call: types::query_call_fee_details::Call,
+					len: types::query_call_fee_details::Len,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryCallFeeDetails,
+					types::query_call_fee_details::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_call_fee_details",
+						types::QueryCallFeeDetails { call, len },
+						[
+							18u8, 80u8, 212u8, 196u8, 230u8, 162u8, 108u8, 100u8, 130u8, 14u8,
+							44u8, 76u8, 26u8, 143u8, 202u8, 61u8, 26u8, 132u8, 34u8, 112u8, 49u8,
+							183u8, 31u8, 51u8, 122u8, 49u8, 37u8, 229u8, 87u8, 43u8, 107u8, 82u8,
+						],
+					)
+				}
+				#[doc = " Query the output of the current `WeightToFee` given some input."]
+				pub fn query_weight_to_fee(
+					&self,
+					weight: types::query_weight_to_fee::Weight,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryWeightToFee,
+					types::query_weight_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_weight_to_fee",
+						types::QueryWeightToFee { weight },
+						[
+							117u8, 91u8, 94u8, 22u8, 248u8, 212u8, 15u8, 23u8, 97u8, 116u8, 64u8,
+							228u8, 83u8, 123u8, 87u8, 77u8, 97u8, 7u8, 98u8, 181u8, 6u8, 165u8,
+							114u8, 141u8, 164u8, 113u8, 126u8, 88u8, 174u8, 171u8, 224u8, 35u8,
+						],
+					)
+				}
+				#[doc = " Query the output of the current `LengthToFee` given some input."]
+				pub fn query_length_to_fee(
+					&self,
+					length: types::query_length_to_fee::Length,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::QueryLengthToFee,
+					types::query_length_to_fee::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"TransactionPaymentCallApi",
+						"query_length_to_fee",
+						types::QueryLengthToFee { length },
+						[
+							246u8, 40u8, 4u8, 160u8, 152u8, 94u8, 170u8, 53u8, 205u8, 122u8, 5u8,
+							69u8, 70u8, 25u8, 128u8, 156u8, 119u8, 134u8, 116u8, 147u8, 14u8,
+							164u8, 65u8, 140u8, 86u8, 13u8, 250u8, 218u8, 89u8, 95u8, 234u8, 228u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod query_call_info {
+					use super::runtime_types;
+					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::RuntimeDispatchInfo<
+								::core::primitive::u128,
+								runtime_types::sp_weights::weight_v2::Weight,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryCallInfo {
+					pub call: query_call_info::Call,
+					pub len: query_call_info::Len,
+				}
+				pub mod query_call_fee_details {
+					use super::runtime_types;
+					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
+					pub type Len = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							runtime_types::pallet_transaction_payment::types::FeeDetails<
+								::core::primitive::u128,
+							>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryCallFeeDetails {
+					pub call: query_call_fee_details::Call,
+					pub len: query_call_fee_details::Len,
+				}
+				pub mod query_weight_to_fee {
+					use super::runtime_types;
+					pub type Weight = runtime_types::sp_weights::weight_v2::Weight;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryWeightToFee {
+					pub weight: query_weight_to_fee::Weight,
+				}
+				pub mod query_length_to_fee {
+					use super::runtime_types;
+					pub type Length = ::core::primitive::u32;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u128;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct QueryLengthToFee {
+					pub length: query_length_to_fee::Length,
+				}
+			}
+		}
+		pub mod genesis_builder {
+			use super::{root_mod, runtime_types};
+			#[doc = " API to interact with `RuntimeGenesisConfig` for the runtime"]
+			pub struct GenesisBuilder;
+			impl GenesisBuilder {
+				#[doc = " Build `RuntimeGenesisConfig` from a JSON blob not using any defaults and store it in the"]
+				#[doc = " storage."]
+				#[doc = ""]
+				#[doc = " In the case of a FRAME-based runtime, this function deserializes the full"]
+				#[doc = " `RuntimeGenesisConfig` from the given JSON blob and puts it into the storage. If the"]
+				#[doc = " provided JSON blob is incorrect or incomplete or the deserialization fails, an error"]
+				#[doc = " is returned."]
+				#[doc = ""]
+				#[doc = " Please note that provided JSON blob must contain all `RuntimeGenesisConfig` fields, no"]
+				#[doc = " defaults will be used."]
+				pub fn build_state(
+					&self,
+					json: types::build_state::Json,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::BuildState,
+					types::build_state::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"GenesisBuilder",
+						"build_state",
+						types::BuildState { json },
+						[
+							203u8, 233u8, 104u8, 116u8, 111u8, 131u8, 201u8, 235u8, 117u8, 116u8,
+							140u8, 185u8, 93u8, 25u8, 155u8, 210u8, 56u8, 49u8, 23u8, 32u8, 253u8,
+							92u8, 149u8, 241u8, 85u8, 245u8, 137u8, 45u8, 209u8, 189u8, 81u8, 2u8,
+						],
+					)
+				}
+				#[doc = " Returns a JSON blob representation of the built-in `RuntimeGenesisConfig` identified by"]
+				#[doc = " `id`."]
+				#[doc = ""]
+				#[doc = " If `id` is `None` the function should return JSON blob representation of the default"]
+				#[doc = " `RuntimeGenesisConfig` struct of the runtime. Implementation must provide default"]
+				#[doc = " `RuntimeGenesisConfig`."]
+				#[doc = ""]
+				#[doc = " Otherwise function returns a JSON representation of the built-in, named"]
+				#[doc = " `RuntimeGenesisConfig` preset identified by `id`, or `None` if such preset does not"]
+				#[doc = " exist. Returned `Vec<u8>` contains bytes of JSON blob (patch) which comprises a list of"]
+				#[doc = " (potentially nested) key-value pairs that are intended for customizing the default"]
+				#[doc = " runtime genesis config. The patch shall be merged (rfc7386) with the JSON representation"]
+				#[doc = " of the default `RuntimeGenesisConfig` to create a comprehensive genesis config that can"]
+				#[doc = " be used in `build_state` method."]
+				pub fn get_preset(
+					&self,
+					id: types::get_preset::Id,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetPreset,
+					types::get_preset::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"GenesisBuilder",
+						"get_preset",
+						types::GetPreset { id },
+						[
+							43u8, 153u8, 23u8, 52u8, 113u8, 161u8, 227u8, 122u8, 169u8, 135u8,
+							119u8, 8u8, 128u8, 33u8, 143u8, 235u8, 13u8, 173u8, 58u8, 121u8, 178u8,
+							223u8, 66u8, 217u8, 22u8, 244u8, 168u8, 113u8, 202u8, 186u8, 241u8,
+							124u8,
+						],
+					)
+				}
+				#[doc = " Returns a list of identifiers for available builtin `RuntimeGenesisConfig` presets."]
+				#[doc = ""]
+				#[doc = " The presets from the list can be queried with [`GenesisBuilder::get_preset`] method. If"]
+				#[doc = " no named presets are provided by the runtime the list is empty."]
+				pub fn preset_names(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::PresetNames,
+					types::preset_names::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"GenesisBuilder",
+						"preset_names",
+						types::PresetNames {},
+						[
+							150u8, 117u8, 54u8, 129u8, 221u8, 130u8, 186u8, 71u8, 13u8, 140u8,
+							77u8, 180u8, 141u8, 37u8, 22u8, 219u8, 149u8, 218u8, 186u8, 206u8,
+							80u8, 42u8, 165u8, 41u8, 99u8, 184u8, 73u8, 37u8, 125u8, 188u8, 167u8,
+							122u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod build_state {
+					use super::runtime_types;
+					pub type Json =
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::result::Result<
+							(),
+							::subxt::ext::subxt_core::alloc::string::String,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct BuildState {
+					pub json: build_state::Json,
+				}
+				pub mod get_preset {
+					use super::runtime_types;
+					pub type Id =
+						::core::option::Option<::subxt::ext::subxt_core::alloc::string::String>;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::option::Option<
+							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetPreset {
+					pub id: get_preset::Id,
+				}
+				pub mod preset_names {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::subxt::ext::subxt_core::alloc::vec::Vec<
+							::subxt::ext::subxt_core::alloc::string::String,
+						>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct PresetNames {}
+			}
+		}
 	}
 	pub fn view_functions() -> ViewFunctionsApi {
 		ViewFunctionsApi
@@ -81,9 +1961,6 @@ pub mod api {
 		}
 		pub fn q_po_w(&self) -> q_po_w::constants::ConstantsApi {
 			q_po_w::constants::ConstantsApi
-		}
-		pub fn wormhole(&self) -> wormhole::constants::ConstantsApi {
-			wormhole::constants::ConstantsApi
 		}
 		pub fn mining_rewards(&self) -> mining_rewards::constants::ConstantsApi {
 			mining_rewards::constants::ConstantsApi
@@ -142,9 +2019,6 @@ pub mod api {
 		pub fn q_po_w(&self) -> q_po_w::storage::StorageApi {
 			q_po_w::storage::StorageApi
 		}
-		pub fn wormhole(&self) -> wormhole::storage::StorageApi {
-			wormhole::storage::StorageApi
-		}
 		pub fn mining_rewards(&self) -> mining_rewards::storage::StorageApi {
 			mining_rewards::storage::StorageApi
 		}
@@ -184,6 +2058,9 @@ pub mod api {
 		pub fn assets(&self) -> assets::storage::StorageApi {
 			assets::storage::StorageApi
 		}
+		pub fn assets_holder(&self) -> assets_holder::storage::StorageApi {
+			assets_holder::storage::StorageApi
+		}
 	}
 	pub struct TransactionApi;
 	impl TransactionApi {
@@ -198,9 +2075,6 @@ pub mod api {
 		}
 		pub fn sudo(&self) -> sudo::calls::TransactionApi {
 			sudo::calls::TransactionApi
-		}
-		pub fn wormhole(&self) -> wormhole::calls::TransactionApi {
-			wormhole::calls::TransactionApi
 		}
 		pub fn vesting(&self) -> vesting::calls::TransactionApi {
 			vesting::calls::TransactionApi
@@ -253,9 +2127,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				194u8, 234u8, 109u8, 25u8, 240u8, 103u8, 143u8, 152u8, 152u8, 123u8, 135u8, 34u8,
-				95u8, 169u8, 221u8, 115u8, 28u8, 211u8, 56u8, 222u8, 194u8, 231u8, 21u8, 105u8,
-				64u8, 35u8, 195u8, 72u8, 212u8, 35u8, 16u8, 95u8,
+				233u8, 139u8, 33u8, 121u8, 216u8, 140u8, 113u8, 170u8, 4u8, 134u8, 193u8, 169u8,
+				110u8, 254u8, 201u8, 203u8, 231u8, 65u8, 233u8, 128u8, 43u8, 145u8, 115u8, 113u8,
+				30u8, 109u8, 204u8, 62u8, 103u8, 201u8, 165u8, 102u8,
 			]
 	}
 	pub mod system {
@@ -921,6 +2795,27 @@ pub mod api {
 				const PALLET: &'static str = "System";
 				const EVENT: &'static str = "UpgradeAuthorized";
 			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "An invalid authorized upgrade was rejected while trying to apply it."]
+			pub struct RejectedInvalidAuthorizedUpgrade {
+				pub code_hash: rejected_invalid_authorized_upgrade::CodeHash,
+				pub error: rejected_invalid_authorized_upgrade::Error,
+			}
+			pub mod rejected_invalid_authorized_upgrade {
+				use super::runtime_types;
+				pub type CodeHash = ::subxt::ext::subxt_core::utils::H256;
+				pub type Error = runtime_types::sp_runtime::DispatchError;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for RejectedInvalidAuthorizedUpgrade {
+				const PALLET: &'static str = "System";
+				const EVENT: &'static str = "RejectedInvalidAuthorizedUpgrade";
+			}
 		}
 		pub mod storage {
 			use super::runtime_types;
@@ -1017,6 +2912,11 @@ pub mod api {
 					use super::runtime_types;
 					pub type AuthorizedUpgrade =
 						runtime_types::frame_system::CodeUpgradeAuthorization;
+				}
+				pub mod extrinsic_weight_reclaimed {
+					use super::runtime_types;
+					pub type ExtrinsicWeightReclaimed =
+						runtime_types::sp_weights::weight_v2::Weight;
 				}
 			}
 			pub struct StorageApi;
@@ -1328,10 +3228,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							95u8, 60u8, 238u8, 49u8, 111u8, 173u8, 121u8, 142u8, 243u8, 9u8, 153u8,
-							23u8, 166u8, 110u8, 208u8, 76u8, 235u8, 221u8, 246u8, 174u8, 90u8,
-							109u8, 149u8, 184u8, 200u8, 47u8, 95u8, 75u8, 180u8, 130u8, 124u8,
-							112u8,
+							207u8, 151u8, 186u8, 46u8, 5u8, 145u8, 47u8, 183u8, 65u8, 63u8, 69u8,
+							242u8, 0u8, 124u8, 212u8, 46u8, 191u8, 190u8, 44u8, 102u8, 148u8, 97u8,
+							2u8, 120u8, 238u8, 231u8, 7u8, 101u8, 157u8, 45u8, 72u8, 226u8,
 						],
 					)
 				}
@@ -1525,6 +3424,34 @@ pub mod api {
 							165u8, 97u8, 27u8, 138u8, 2u8, 28u8, 55u8, 92u8, 96u8, 96u8, 168u8,
 							169u8, 55u8, 178u8, 44u8, 127u8, 58u8, 140u8, 206u8, 178u8, 1u8, 37u8,
 							214u8, 213u8, 251u8, 123u8, 5u8, 111u8, 90u8, 148u8, 217u8, 135u8,
+						],
+					)
+				}
+				#[doc = " The weight reclaimed for the extrinsic."]
+				#[doc = ""]
+				#[doc = " This information is available until the end of the extrinsic execution."]
+				#[doc = " More precisely this information is removed in `note_applied_extrinsic`."]
+				#[doc = ""]
+				#[doc = " Logic doing some post dispatch weight reduction must update this storage to avoid duplicate"]
+				#[doc = " reduction."]
+				pub fn extrinsic_weight_reclaimed(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::extrinsic_weight_reclaimed::ExtrinsicWeightReclaimed,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"System",
+						"ExtrinsicWeightReclaimed",
+						(),
+						[
+							195u8, 143u8, 164u8, 84u8, 225u8, 194u8, 227u8, 128u8, 196u8, 241u8,
+							188u8, 159u8, 59u8, 197u8, 11u8, 12u8, 119u8, 164u8, 46u8, 229u8, 92u8,
+							212u8, 236u8, 255u8, 238u8, 54u8, 105u8, 200u8, 229u8, 191u8, 221u8,
+							202u8,
 						],
 					)
 				}
@@ -3665,10 +5592,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							198u8, 228u8, 153u8, 119u8, 75u8, 89u8, 206u8, 201u8, 30u8, 105u8,
-							148u8, 23u8, 81u8, 60u8, 167u8, 228u8, 76u8, 253u8, 232u8, 81u8, 65u8,
-							133u8, 196u8, 146u8, 244u8, 80u8, 222u8, 43u8, 218u8, 248u8, 169u8,
-							232u8,
+							35u8, 97u8, 151u8, 80u8, 160u8, 5u8, 249u8, 161u8, 124u8, 31u8, 46u8,
+							45u8, 205u8, 88u8, 85u8, 115u8, 98u8, 172u8, 229u8, 119u8, 45u8, 74u8,
+							176u8, 35u8, 216u8, 58u8, 23u8, 103u8, 209u8, 201u8, 15u8, 61u8,
 						],
 					)
 				}
@@ -3691,9 +5617,10 @@ pub mod api {
 							weight,
 						},
 						[
-							91u8, 102u8, 107u8, 163u8, 3u8, 40u8, 188u8, 236u8, 128u8, 119u8, 31u8,
-							122u8, 179u8, 114u8, 93u8, 83u8, 63u8, 62u8, 88u8, 200u8, 159u8, 160u8,
-							168u8, 129u8, 8u8, 151u8, 35u8, 4u8, 111u8, 248u8, 133u8, 185u8,
+							129u8, 254u8, 188u8, 113u8, 132u8, 176u8, 63u8, 138u8, 200u8, 84u8,
+							62u8, 198u8, 140u8, 161u8, 52u8, 222u8, 184u8, 140u8, 204u8, 144u8,
+							247u8, 118u8, 46u8, 126u8, 211u8, 117u8, 140u8, 227u8, 105u8, 74u8,
+							162u8, 225u8,
 						],
 					)
 				}
@@ -3731,9 +5658,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							133u8, 191u8, 77u8, 51u8, 251u8, 26u8, 250u8, 53u8, 47u8, 122u8, 117u8,
-							43u8, 29u8, 57u8, 45u8, 132u8, 170u8, 47u8, 28u8, 203u8, 203u8, 31u8,
-							59u8, 99u8, 192u8, 114u8, 198u8, 126u8, 222u8, 244u8, 206u8, 229u8,
+							174u8, 114u8, 45u8, 150u8, 219u8, 165u8, 118u8, 166u8, 250u8, 85u8,
+							15u8, 165u8, 148u8, 17u8, 160u8, 123u8, 198u8, 241u8, 78u8, 198u8,
+							206u8, 131u8, 9u8, 107u8, 172u8, 188u8, 83u8, 6u8, 234u8, 14u8, 211u8,
+							76u8,
 						],
 					)
 				}
@@ -3888,10 +5816,14 @@ pub mod api {
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub struct ProofSubmitted {
 				pub nonce: proof_submitted::Nonce,
+				pub difficulty: proof_submitted::Difficulty,
+				pub distance_achieved: proof_submitted::DistanceAchieved,
 			}
 			pub mod proof_submitted {
 				use super::runtime_types;
 				pub type Nonce = [::core::primitive::u8; 64usize];
+				pub type Difficulty = runtime_types::primitive_types::U512;
+				pub type DistanceAchieved = runtime_types::primitive_types::U512;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProofSubmitted {
 				const PALLET: &'static str = "QPoW";
@@ -3924,15 +5856,6 @@ pub mod api {
 			use super::runtime_types;
 			pub mod types {
 				use super::runtime_types;
-				pub mod block_distance_thresholds {
-					use super::runtime_types;
-					pub type BlockDistanceThresholds = runtime_types::primitive_types::U512;
-					pub type Param0 = ::core::primitive::u32;
-				}
-				pub mod latest_nonce {
-					use super::runtime_types;
-					pub type LatestNonce = [::core::primitive::u8; 64usize];
-				}
 				pub mod last_block_time {
 					use super::runtime_types;
 					pub type LastBlockTime = ::core::primitive::u64;
@@ -3962,78 +5885,13 @@ pub mod api {
 					use super::runtime_types;
 					pub type HistoryIndex = ::core::primitive::u32;
 				}
-				pub mod history_size {
+				pub mod block_time_ema {
 					use super::runtime_types;
-					pub type HistorySize = ::core::primitive::u32;
+					pub type BlockTimeEma = ::core::primitive::u64;
 				}
 			}
 			pub struct StorageApi;
 			impl StorageApi {
-				pub fn block_distance_thresholds_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::block_distance_thresholds::BlockDistanceThresholds,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"BlockDistanceThresholds",
-						(),
-						[
-							245u8, 88u8, 219u8, 50u8, 137u8, 246u8, 187u8, 252u8, 181u8, 133u8,
-							227u8, 54u8, 166u8, 201u8, 139u8, 81u8, 223u8, 125u8, 243u8, 78u8, 5u8,
-							216u8, 42u8, 222u8, 152u8, 140u8, 234u8, 243u8, 47u8, 240u8, 251u8,
-							220u8,
-						],
-					)
-				}
-				pub fn block_distance_thresholds(
-					&self,
-					_0: types::block_distance_thresholds::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::block_distance_thresholds::Param0,
-					>,
-					types::block_distance_thresholds::BlockDistanceThresholds,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"BlockDistanceThresholds",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							245u8, 88u8, 219u8, 50u8, 137u8, 246u8, 187u8, 252u8, 181u8, 133u8,
-							227u8, 54u8, 166u8, 201u8, 139u8, 81u8, 223u8, 125u8, 243u8, 78u8, 5u8,
-							216u8, 42u8, 222u8, 152u8, 140u8, 234u8, 243u8, 47u8, 240u8, 251u8,
-							220u8,
-						],
-					)
-				}
-				pub fn latest_nonce(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::latest_nonce::LatestNonce,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"LatestNonce",
-						(),
-						[
-							117u8, 69u8, 169u8, 11u8, 105u8, 55u8, 185u8, 77u8, 68u8, 196u8, 128u8,
-							128u8, 81u8, 145u8, 22u8, 154u8, 249u8, 226u8, 39u8, 6u8, 5u8, 205u8,
-							220u8, 88u8, 67u8, 72u8, 38u8, 82u8, 60u8, 81u8, 167u8, 242u8,
-						],
-					)
-				}
 				pub fn last_block_time(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -4203,23 +6061,23 @@ pub mod api {
 						],
 					)
 				}
-				pub fn history_size(
+				pub fn block_time_ema(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					(),
-					types::history_size::HistorySize,
+					types::block_time_ema::BlockTimeEma,
 					::subxt::ext::subxt_core::utils::Yes,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"QPoW",
-						"HistorySize",
+						"BlockTimeEma",
 						(),
 						[
-							77u8, 208u8, 178u8, 115u8, 101u8, 133u8, 140u8, 3u8, 76u8, 240u8,
-							162u8, 223u8, 90u8, 131u8, 243u8, 231u8, 54u8, 101u8, 3u8, 25u8, 126u8,
-							93u8, 42u8, 4u8, 82u8, 198u8, 226u8, 198u8, 59u8, 74u8, 205u8, 218u8,
+							43u8, 90u8, 42u8, 54u8, 219u8, 225u8, 181u8, 63u8, 6u8, 66u8, 120u8,
+							166u8, 146u8, 52u8, 10u8, 83u8, 54u8, 4u8, 163u8, 40u8, 46u8, 174u8,
+							210u8, 217u8, 140u8, 56u8, 194u8, 245u8, 40u8, 164u8, 225u8, 206u8,
 						],
 					)
 				}
@@ -4278,30 +6136,15 @@ pub mod api {
 						],
 					)
 				}
-				pub fn adjustment_period(
+				#[doc = " EMA smoothing factor (0-1000, where 1000 = 1.0)"]
+				pub fn ema_alpha(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
 					::core::primitive::u32,
 				> {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"QPoW",
-						"AdjustmentPeriod",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
-				pub fn block_time_history_size(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"QPoW",
-						"BlockTimeHistorySize",
+						"EmaAlpha",
 						[
 							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
 							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
@@ -4356,171 +6199,6 @@ pub mod api {
 							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
 							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
 							145u8,
-						],
-					)
-				}
-			}
-		}
-	}
-	pub mod wormhole {
-		use super::{root_mod, runtime_types};
-		#[doc = "The `Error` enum of this pallet."]
-		pub type Error = runtime_types::pallet_wormhole::pallet::Error;
-		#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-		pub type Call = runtime_types::pallet_wormhole::pallet::Call;
-		pub mod calls {
-			use super::{root_mod, runtime_types};
-			type DispatchError = runtime_types::sp_runtime::DispatchError;
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct VerifyWormholeProof {
-					pub proof_bytes: verify_wormhole_proof::ProofBytes,
-					pub block_number: verify_wormhole_proof::BlockNumber,
-				}
-				pub mod verify_wormhole_proof {
-					use super::runtime_types;
-					pub type ProofBytes =
-						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
-					pub type BlockNumber = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VerifyWormholeProof {
-					const PALLET: &'static str = "Wormhole";
-					const CALL: &'static str = "verify_wormhole_proof";
-				}
-			}
-			pub struct TransactionApi;
-			impl TransactionApi {
-				pub fn verify_wormhole_proof(
-					&self,
-					proof_bytes: types::verify_wormhole_proof::ProofBytes,
-					block_number: types::verify_wormhole_proof::BlockNumber,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::VerifyWormholeProof>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Wormhole",
-						"verify_wormhole_proof",
-						types::VerifyWormholeProof { proof_bytes, block_number },
-						[
-							243u8, 243u8, 212u8, 153u8, 44u8, 36u8, 106u8, 182u8, 177u8, 104u8,
-							202u8, 172u8, 53u8, 111u8, 255u8, 121u8, 131u8, 84u8, 224u8, 250u8,
-							104u8, 52u8, 241u8, 228u8, 51u8, 63u8, 233u8, 191u8, 215u8, 100u8,
-							166u8, 76u8,
-						],
-					)
-				}
-			}
-		}
-		#[doc = "The `Event` enum of this pallet"]
-		pub type Event = runtime_types::pallet_wormhole::pallet::Event;
-		pub mod events {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct ProofVerified {
-				pub exit_amount: proof_verified::ExitAmount,
-			}
-			pub mod proof_verified {
-				use super::runtime_types;
-				pub type ExitAmount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ProofVerified {
-				const PALLET: &'static str = "Wormhole";
-				const EVENT: &'static str = "ProofVerified";
-			}
-		}
-		pub mod storage {
-			use super::runtime_types;
-			pub mod types {
-				use super::runtime_types;
-				pub mod used_nullifiers {
-					use super::runtime_types;
-					pub type UsedNullifiers = ::core::primitive::bool;
-					pub type Param0 = [::core::primitive::u8; 32usize];
-				}
-			}
-			pub struct StorageApi;
-			impl StorageApi {
-				pub fn used_nullifiers_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::used_nullifiers::UsedNullifiers,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Wormhole",
-						"UsedNullifiers",
-						(),
-						[
-							111u8, 222u8, 249u8, 87u8, 31u8, 249u8, 120u8, 32u8, 221u8, 33u8, 86u8,
-							103u8, 116u8, 235u8, 16u8, 191u8, 73u8, 183u8, 183u8, 77u8, 229u8,
-							255u8, 221u8, 186u8, 29u8, 179u8, 110u8, 138u8, 146u8, 113u8, 241u8,
-							222u8,
-						],
-					)
-				}
-				pub fn used_nullifiers(
-					&self,
-					_0: types::used_nullifiers::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::used_nullifiers::Param0,
-					>,
-					types::used_nullifiers::UsedNullifiers,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Wormhole",
-						"UsedNullifiers",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							111u8, 222u8, 249u8, 87u8, 31u8, 249u8, 120u8, 32u8, 221u8, 33u8, 86u8,
-							103u8, 116u8, 235u8, 16u8, 191u8, 73u8, 183u8, 183u8, 77u8, 229u8,
-							255u8, 221u8, 186u8, 29u8, 179u8, 110u8, 138u8, 146u8, 113u8, 241u8,
-							222u8,
-						],
-					)
-				}
-			}
-		}
-		pub mod constants {
-			use super::runtime_types;
-			pub struct ConstantsApi;
-			impl ConstantsApi {
-				#[doc = " Account ID used as the \"from\" account when creating transfer proofs for minted tokens"]
-				pub fn minting_account(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::subxt::ext::subxt_core::utils::AccountId32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Wormhole",
-						"MintingAccount",
-						[
-							115u8, 233u8, 13u8, 223u8, 88u8, 20u8, 202u8, 139u8, 153u8, 28u8,
-							155u8, 157u8, 224u8, 66u8, 3u8, 250u8, 23u8, 53u8, 88u8, 168u8, 211u8,
-							204u8, 122u8, 166u8, 248u8, 23u8, 174u8, 225u8, 99u8, 108u8, 89u8,
-							135u8,
 						],
 					)
 				}
@@ -5133,6 +6811,27 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A vesting schedule has been created."]
+			pub struct VestingCreated {
+				pub account: vesting_created::Account,
+				pub schedule_index: vesting_created::ScheduleIndex,
+			}
+			pub mod vesting_created {
+				use super::runtime_types;
+				pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type ScheduleIndex = ::core::primitive::u32;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingCreated {
+				const PALLET: &'static str = "Vesting";
+				const EVENT: &'static str = "VestingCreated";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			#[doc = "The amount vested has been updated. This could indicate a change in funds available."]
 			#[doc = "The balance given is the amount which is left unvested (and thus locked)."]
 			pub struct VestingUpdated {
@@ -5428,7 +7127,7 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Ensure that the a bulk of pre-images is upgraded."]
+				#[doc = "Ensure that the bulk of pre-images is upgraded."]
 				#[doc = ""]
 				#[doc = "The caller pays no fee if at least 90% of pre-images were successfully updated."]
 				pub struct EnsureUpdated {
@@ -5529,7 +7228,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Ensure that the a bulk of pre-images is upgraded."]
+				#[doc = "Ensure that the bulk of pre-images is upgraded."]
 				#[doc = ""]
 				#[doc = "The caller pays no fee if at least 90% of pre-images were successfully updated."]
 				pub fn ensure_updated(
@@ -6161,10 +7860,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							47u8, 177u8, 243u8, 244u8, 65u8, 140u8, 198u8, 118u8, 141u8, 171u8,
-							97u8, 208u8, 200u8, 86u8, 90u8, 129u8, 54u8, 225u8, 118u8, 107u8, 45u8,
-							183u8, 0u8, 129u8, 122u8, 99u8, 169u8, 214u8, 239u8, 187u8, 173u8,
-							112u8,
+							171u8, 151u8, 176u8, 198u8, 154u8, 6u8, 181u8, 56u8, 10u8, 6u8, 38u8,
+							136u8, 64u8, 214u8, 145u8, 96u8, 121u8, 125u8, 161u8, 234u8, 247u8,
+							156u8, 152u8, 119u8, 122u8, 165u8, 125u8, 238u8, 12u8, 214u8, 135u8,
+							21u8,
 						],
 					)
 				}
@@ -6206,9 +7905,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							221u8, 20u8, 219u8, 119u8, 223u8, 96u8, 88u8, 226u8, 245u8, 137u8, 9u8,
-							127u8, 51u8, 199u8, 95u8, 80u8, 228u8, 156u8, 102u8, 239u8, 165u8,
-							28u8, 41u8, 17u8, 139u8, 211u8, 23u8, 170u8, 97u8, 163u8, 57u8, 102u8,
+							99u8, 222u8, 117u8, 153u8, 121u8, 239u8, 26u8, 216u8, 66u8, 132u8,
+							220u8, 8u8, 92u8, 137u8, 253u8, 47u8, 9u8, 8u8, 103u8, 1u8, 116u8,
+							133u8, 237u8, 51u8, 73u8, 145u8, 141u8, 64u8, 210u8, 10u8, 74u8, 191u8,
 						],
 					)
 				}
@@ -6247,10 +7946,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							98u8, 112u8, 95u8, 200u8, 64u8, 199u8, 162u8, 207u8, 168u8, 219u8,
-							235u8, 78u8, 224u8, 210u8, 130u8, 195u8, 135u8, 253u8, 67u8, 48u8,
-							39u8, 19u8, 94u8, 184u8, 195u8, 52u8, 47u8, 35u8, 101u8, 202u8, 121u8,
-							165u8,
+							236u8, 32u8, 229u8, 48u8, 43u8, 173u8, 230u8, 106u8, 109u8, 188u8,
+							137u8, 151u8, 188u8, 102u8, 252u8, 210u8, 87u8, 146u8, 152u8, 251u8,
+							128u8, 10u8, 230u8, 228u8, 168u8, 203u8, 77u8, 24u8, 125u8, 18u8, 52u8,
+							201u8,
 						],
 					)
 				}
@@ -6275,10 +7974,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							30u8, 107u8, 131u8, 175u8, 133u8, 185u8, 140u8, 81u8, 238u8, 253u8,
-							141u8, 65u8, 91u8, 29u8, 190u8, 234u8, 191u8, 130u8, 183u8, 43u8,
-							131u8, 159u8, 248u8, 86u8, 204u8, 26u8, 81u8, 88u8, 34u8, 99u8, 69u8,
-							209u8,
+							120u8, 118u8, 201u8, 138u8, 43u8, 75u8, 89u8, 65u8, 107u8, 106u8, 41u8,
+							229u8, 55u8, 6u8, 141u8, 24u8, 116u8, 214u8, 215u8, 1u8, 209u8, 67u8,
+							157u8, 238u8, 147u8, 31u8, 188u8, 133u8, 21u8, 7u8, 199u8, 202u8,
 						],
 					)
 				}
@@ -6655,7 +8353,7 @@ pub mod api {
 								[::core::primitive::u8; 32usize],
 								runtime_types::frame_support::traits::preimages::Bounded<
 									runtime_types::quantus_runtime::RuntimeCall,
-									runtime_types::poseidon_resonance::PoseidonHasher,
+									runtime_types::qp_poseidon::PoseidonHasher,
 								>,
 								::core::primitive::u32,
 								runtime_types::quantus_runtime::OriginCaller,
@@ -6779,10 +8477,9 @@ pub mod api {
 						"Agenda",
 						(),
 						[
-							40u8, 202u8, 246u8, 38u8, 132u8, 7u8, 46u8, 62u8, 12u8, 89u8, 165u8,
-							174u8, 22u8, 19u8, 15u8, 179u8, 152u8, 131u8, 221u8, 249u8, 122u8,
-							142u8, 58u8, 183u8, 157u8, 17u8, 63u8, 243u8, 101u8, 160u8, 200u8,
-							96u8,
+							188u8, 177u8, 84u8, 167u8, 206u8, 4u8, 136u8, 133u8, 67u8, 121u8,
+							247u8, 186u8, 6u8, 46u8, 115u8, 104u8, 239u8, 41u8, 75u8, 143u8, 24u8,
+							155u8, 212u8, 196u8, 166u8, 82u8, 63u8, 39u8, 104u8, 21u8, 19u8, 93u8,
 						],
 					)
 				}
@@ -6804,10 +8501,9 @@ pub mod api {
 						"Agenda",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							40u8, 202u8, 246u8, 38u8, 132u8, 7u8, 46u8, 62u8, 12u8, 89u8, 165u8,
-							174u8, 22u8, 19u8, 15u8, 179u8, 152u8, 131u8, 221u8, 249u8, 122u8,
-							142u8, 58u8, 183u8, 157u8, 17u8, 63u8, 243u8, 101u8, 160u8, 200u8,
-							96u8,
+							188u8, 177u8, 84u8, 167u8, 206u8, 4u8, 136u8, 133u8, 67u8, 121u8,
+							247u8, 186u8, 6u8, 46u8, 115u8, 104u8, 239u8, 41u8, 75u8, 143u8, 24u8,
+							155u8, 212u8, 196u8, 166u8, 82u8, 63u8, 39u8, 104u8, 21u8, 19u8, 93u8,
 						],
 					)
 				}
@@ -7200,6 +8896,84 @@ pub mod api {
 					const PALLET: &'static str = "Utility";
 					const CALL: &'static str = "with_weight";
 				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Dispatch a fallback call in the event the main call fails to execute."]
+				#[doc = "May be called from any origin except `None`."]
+				#[doc = ""]
+				#[doc = "This function first attempts to dispatch the `main` call."]
+				#[doc = "If the `main` call fails, the `fallback` is attemted."]
+				#[doc = "if the fallback is successfully dispatched, the weights of both calls"]
+				#[doc = "are accumulated and an event containing the main call error is deposited."]
+				#[doc = ""]
+				#[doc = "In the event of a fallback failure the whole call fails"]
+				#[doc = "with the weights returned."]
+				#[doc = ""]
+				#[doc = "- `main`: The main call to be dispatched. This is the primary action to execute."]
+				#[doc = "- `fallback`: The fallback call to be dispatched in case the `main` call fails."]
+				#[doc = ""]
+				#[doc = "## Dispatch Logic"]
+				#[doc = "- If the origin is `root`, both the main and fallback calls are executed without"]
+				#[doc = "  applying any origin filters."]
+				#[doc = "- If the origin is not `root`, the origin filter is applied to both the `main` and"]
+				#[doc = "  `fallback` calls."]
+				#[doc = ""]
+				#[doc = "## Use Case"]
+				#[doc = "- Some use cases might involve submitting a `batch` type call in either main, fallback"]
+				#[doc = "  or both."]
+				pub struct IfElse {
+					pub main: ::subxt::ext::subxt_core::alloc::boxed::Box<if_else::Main>,
+					pub fallback: ::subxt::ext::subxt_core::alloc::boxed::Box<if_else::Fallback>,
+				}
+				pub mod if_else {
+					use super::runtime_types;
+					pub type Main = runtime_types::quantus_runtime::RuntimeCall;
+					pub type Fallback = runtime_types::quantus_runtime::RuntimeCall;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for IfElse {
+					const PALLET: &'static str = "Utility";
+					const CALL: &'static str = "if_else";
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Dispatches a function call with a provided origin."]
+				#[doc = ""]
+				#[doc = "Almost the same as [`Pallet::dispatch_as`] but forwards any error of the inner call."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Root_."]
+				pub struct DispatchAsFallible {
+					pub as_origin:
+						::subxt::ext::subxt_core::alloc::boxed::Box<dispatch_as_fallible::AsOrigin>,
+					pub call:
+						::subxt::ext::subxt_core::alloc::boxed::Box<dispatch_as_fallible::Call>,
+				}
+				pub mod dispatch_as_fallible {
+					use super::runtime_types;
+					pub type AsOrigin = runtime_types::quantus_runtime::OriginCaller;
+					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for DispatchAsFallible {
+					const PALLET: &'static str = "Utility";
+					const CALL: &'static str = "dispatch_as_fallible";
+				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
@@ -7230,10 +9004,10 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							19u8, 206u8, 118u8, 149u8, 51u8, 183u8, 56u8, 103u8, 145u8, 193u8,
-							181u8, 39u8, 61u8, 254u8, 153u8, 220u8, 111u8, 101u8, 210u8, 167u8,
-							130u8, 15u8, 179u8, 34u8, 118u8, 49u8, 254u8, 143u8, 99u8, 232u8,
-							249u8, 59u8,
+							135u8, 106u8, 152u8, 39u8, 199u8, 163u8, 145u8, 186u8, 129u8, 115u8,
+							214u8, 162u8, 12u8, 85u8, 57u8, 122u8, 211u8, 240u8, 143u8, 159u8,
+							138u8, 37u8, 114u8, 8u8, 8u8, 236u8, 197u8, 23u8, 114u8, 2u8, 105u8,
+							174u8,
 						],
 					)
 				}
@@ -7263,9 +9037,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							125u8, 52u8, 89u8, 91u8, 77u8, 219u8, 217u8, 39u8, 39u8, 253u8, 115u8,
-							163u8, 228u8, 120u8, 15u8, 130u8, 192u8, 253u8, 79u8, 167u8, 198u8,
-							207u8, 90u8, 233u8, 246u8, 39u8, 165u8, 47u8, 68u8, 200u8, 33u8, 175u8,
+							3u8, 102u8, 237u8, 140u8, 8u8, 207u8, 27u8, 204u8, 155u8, 162u8, 124u8,
+							141u8, 172u8, 210u8, 89u8, 239u8, 113u8, 175u8, 41u8, 9u8, 150u8,
+							130u8, 205u8, 125u8, 205u8, 199u8, 174u8, 85u8, 24u8, 13u8, 57u8, 19u8,
 						],
 					)
 				}
@@ -7291,10 +9065,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							253u8, 128u8, 115u8, 70u8, 86u8, 186u8, 16u8, 72u8, 37u8, 159u8, 23u8,
-							253u8, 105u8, 138u8, 186u8, 196u8, 108u8, 126u8, 4u8, 239u8, 11u8,
-							47u8, 125u8, 85u8, 222u8, 195u8, 135u8, 98u8, 163u8, 242u8, 181u8,
-							161u8,
+							76u8, 242u8, 205u8, 32u8, 158u8, 24u8, 255u8, 12u8, 97u8, 24u8, 211u8,
+							63u8, 119u8, 183u8, 165u8, 217u8, 17u8, 178u8, 254u8, 230u8, 119u8,
+							207u8, 207u8, 103u8, 39u8, 226u8, 55u8, 73u8, 233u8, 79u8, 60u8, 218u8,
 						],
 					)
 				}
@@ -7317,9 +9090,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							166u8, 235u8, 27u8, 28u8, 121u8, 227u8, 130u8, 155u8, 124u8, 143u8,
-							89u8, 234u8, 97u8, 80u8, 76u8, 5u8, 198u8, 66u8, 189u8, 134u8, 78u8,
-							36u8, 179u8, 47u8, 210u8, 56u8, 104u8, 170u8, 60u8, 8u8, 31u8, 103u8,
+							32u8, 108u8, 91u8, 136u8, 200u8, 228u8, 95u8, 44u8, 22u8, 92u8, 34u8,
+							234u8, 170u8, 201u8, 4u8, 248u8, 16u8, 209u8, 103u8, 201u8, 207u8,
+							160u8, 165u8, 231u8, 152u8, 222u8, 112u8, 63u8, 133u8, 61u8, 220u8,
+							24u8,
 						],
 					)
 				}
@@ -7345,10 +9119,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							122u8, 151u8, 216u8, 201u8, 80u8, 153u8, 253u8, 115u8, 15u8, 11u8,
-							58u8, 182u8, 48u8, 133u8, 2u8, 107u8, 202u8, 249u8, 2u8, 135u8, 135u8,
-							253u8, 150u8, 165u8, 152u8, 135u8, 136u8, 191u8, 37u8, 155u8, 37u8,
-							243u8,
+							26u8, 82u8, 61u8, 185u8, 19u8, 29u8, 151u8, 192u8, 24u8, 41u8, 115u8,
+							237u8, 7u8, 38u8, 68u8, 5u8, 159u8, 117u8, 47u8, 138u8, 101u8, 126u8,
+							255u8, 137u8, 144u8, 51u8, 244u8, 145u8, 113u8, 21u8, 123u8, 79u8,
 						],
 					)
 				}
@@ -7371,9 +9144,78 @@ pub mod api {
 							weight,
 						},
 						[
-							21u8, 81u8, 80u8, 83u8, 118u8, 162u8, 108u8, 192u8, 200u8, 210u8, 62u8,
-							7u8, 18u8, 76u8, 102u8, 77u8, 122u8, 52u8, 182u8, 146u8, 145u8, 243u8,
-							231u8, 141u8, 89u8, 165u8, 39u8, 32u8, 8u8, 63u8, 1u8, 28u8,
+							131u8, 134u8, 250u8, 73u8, 141u8, 137u8, 137u8, 15u8, 206u8, 215u8,
+							199u8, 239u8, 24u8, 84u8, 247u8, 50u8, 135u8, 223u8, 110u8, 205u8,
+							96u8, 170u8, 74u8, 232u8, 152u8, 135u8, 235u8, 62u8, 110u8, 230u8,
+							172u8, 229u8,
+						],
+					)
+				}
+				#[doc = "Dispatch a fallback call in the event the main call fails to execute."]
+				#[doc = "May be called from any origin except `None`."]
+				#[doc = ""]
+				#[doc = "This function first attempts to dispatch the `main` call."]
+				#[doc = "If the `main` call fails, the `fallback` is attemted."]
+				#[doc = "if the fallback is successfully dispatched, the weights of both calls"]
+				#[doc = "are accumulated and an event containing the main call error is deposited."]
+				#[doc = ""]
+				#[doc = "In the event of a fallback failure the whole call fails"]
+				#[doc = "with the weights returned."]
+				#[doc = ""]
+				#[doc = "- `main`: The main call to be dispatched. This is the primary action to execute."]
+				#[doc = "- `fallback`: The fallback call to be dispatched in case the `main` call fails."]
+				#[doc = ""]
+				#[doc = "## Dispatch Logic"]
+				#[doc = "- If the origin is `root`, both the main and fallback calls are executed without"]
+				#[doc = "  applying any origin filters."]
+				#[doc = "- If the origin is not `root`, the origin filter is applied to both the `main` and"]
+				#[doc = "  `fallback` calls."]
+				#[doc = ""]
+				#[doc = "## Use Case"]
+				#[doc = "- Some use cases might involve submitting a `batch` type call in either main, fallback"]
+				#[doc = "  or both."]
+				pub fn if_else(
+					&self,
+					main: types::if_else::Main,
+					fallback: types::if_else::Fallback,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::IfElse> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Utility",
+						"if_else",
+						types::IfElse {
+							main: ::subxt::ext::subxt_core::alloc::boxed::Box::new(main),
+							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
+						},
+						[
+							195u8, 146u8, 198u8, 20u8, 96u8, 236u8, 218u8, 101u8, 252u8, 17u8,
+							41u8, 246u8, 142u8, 116u8, 243u8, 198u8, 237u8, 168u8, 11u8, 211u8,
+							236u8, 184u8, 71u8, 173u8, 211u8, 0u8, 129u8, 231u8, 99u8, 189u8,
+							229u8, 34u8,
+						],
+					)
+				}
+				#[doc = "Dispatches a function call with a provided origin."]
+				#[doc = ""]
+				#[doc = "Almost the same as [`Pallet::dispatch_as`] but forwards any error of the inner call."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Root_."]
+				pub fn dispatch_as_fallible(
+					&self,
+					as_origin: types::dispatch_as_fallible::AsOrigin,
+					call: types::dispatch_as_fallible::Call,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::DispatchAsFallible>
+				{
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Utility",
+						"dispatch_as_fallible",
+						types::DispatchAsFallible {
+							as_origin: ::subxt::ext::subxt_core::alloc::boxed::Box::new(as_origin),
+							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
+						},
+						[
+							52u8, 4u8, 122u8, 93u8, 231u8, 186u8, 88u8, 129u8, 36u8, 245u8, 176u8,
+							117u8, 22u8, 203u8, 94u8, 115u8, 19u8, 27u8, 141u8, 63u8, 184u8, 171u8,
+							146u8, 63u8, 124u8, 225u8, 135u8, 73u8, 51u8, 20u8, 60u8, 199u8,
 						],
 					)
 				}
@@ -7483,6 +9325,38 @@ pub mod api {
 				const PALLET: &'static str = "Utility";
 				const EVENT: &'static str = "DispatchedAs";
 			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Main call was dispatched."]
+			pub struct IfElseMainSuccess;
+			impl ::subxt::ext::subxt_core::events::StaticEvent for IfElseMainSuccess {
+				const PALLET: &'static str = "Utility";
+				const EVENT: &'static str = "IfElseMainSuccess";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The fallback call was dispatched."]
+			pub struct IfElseFallbackCalled {
+				pub main_error: if_else_fallback_called::MainError,
+			}
+			pub mod if_else_fallback_called {
+				use super::runtime_types;
+				pub type MainError = runtime_types::sp_runtime::DispatchError;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for IfElseFallbackCalled {
+				const PALLET: &'static str = "Utility";
+				const EVENT: &'static str = "IfElseFallbackCalled";
+			}
 		}
 		pub mod constants {
 			use super::runtime_types;
@@ -7550,7 +9424,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::poseidon_resonance::PoseidonHasher,
+						runtime_types::qp_poseidon::PoseidonHasher,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -7823,10 +9697,9 @@ pub mod api {
 							enactment_moment,
 						},
 						[
-							140u8, 121u8, 244u8, 4u8, 5u8, 245u8, 133u8, 203u8, 193u8, 24u8, 133u8,
-							222u8, 208u8, 74u8, 248u8, 59u8, 153u8, 154u8, 194u8, 226u8, 101u8,
-							232u8, 174u8, 79u8, 177u8, 183u8, 39u8, 178u8, 178u8, 229u8, 0u8,
-							188u8,
+							30u8, 232u8, 132u8, 0u8, 199u8, 166u8, 49u8, 94u8, 238u8, 61u8, 236u8,
+							207u8, 2u8, 136u8, 37u8, 81u8, 67u8, 133u8, 2u8, 147u8, 177u8, 176u8,
+							178u8, 113u8, 155u8, 180u8, 104u8, 176u8, 215u8, 255u8, 240u8, 100u8,
 						],
 					)
 				}
@@ -8042,7 +9915,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::poseidon_resonance::PoseidonHasher,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -8136,7 +10009,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::poseidon_resonance::PoseidonHasher,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 				pub type Tally =
 					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
@@ -8393,7 +10266,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::poseidon_resonance::PoseidonHasher,
+								runtime_types::qp_poseidon::PoseidonHasher,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_conviction_voting::types::Tally<
@@ -8469,10 +10342,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						(),
 						[
-							150u8, 135u8, 148u8, 14u8, 234u8, 44u8, 147u8, 114u8, 210u8, 214u8,
-							53u8, 21u8, 27u8, 74u8, 105u8, 144u8, 164u8, 60u8, 59u8, 206u8, 51u8,
-							137u8, 152u8, 240u8, 99u8, 171u8, 224u8, 210u8, 109u8, 85u8, 243u8,
-							89u8,
+							141u8, 184u8, 126u8, 61u8, 215u8, 190u8, 148u8, 93u8, 186u8, 72u8,
+							110u8, 37u8, 82u8, 237u8, 65u8, 197u8, 69u8, 83u8, 173u8, 114u8, 117u8,
+							72u8, 146u8, 28u8, 235u8, 60u8, 188u8, 247u8, 80u8, 240u8, 16u8, 194u8,
 						],
 					)
 				}
@@ -8494,10 +10366,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							150u8, 135u8, 148u8, 14u8, 234u8, 44u8, 147u8, 114u8, 210u8, 214u8,
-							53u8, 21u8, 27u8, 74u8, 105u8, 144u8, 164u8, 60u8, 59u8, 206u8, 51u8,
-							137u8, 152u8, 240u8, 99u8, 171u8, 224u8, 210u8, 109u8, 85u8, 243u8,
-							89u8,
+							141u8, 184u8, 126u8, 61u8, 215u8, 190u8, 148u8, 93u8, 186u8, 72u8,
+							110u8, 37u8, 82u8, 237u8, 65u8, 197u8, 69u8, 83u8, 173u8, 114u8, 117u8,
+							72u8, 146u8, 28u8, 235u8, 60u8, 188u8, 247u8, 80u8, 240u8, 16u8, 194u8,
 						],
 					)
 				}
@@ -8732,15 +10603,18 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Information concerning the different referendum tracks."]
+				#[doc = " A list of tracks."]
+				#[doc = ""]
+				#[doc = " Note: if the tracks are dynamic, the value in the static metadata might be inaccurate."]
 				pub fn tracks(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
 					::subxt::ext::subxt_core::alloc::vec::Vec<(
 						::core::primitive::u16,
-						runtime_types::pallet_referenda::types::TrackInfo<
+						runtime_types::pallet_referenda::types::TrackDetails<
 							::core::primitive::u128,
 							::core::primitive::u32,
+							::subxt::ext::subxt_core::alloc::string::String,
 						>,
 					)>,
 				> {
@@ -8780,13 +10654,22 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Enable high-security for the calling account with a specified delay"]
+				#[doc = "Enable high-security for the calling account with a specified"]
+				#[doc = "reversibility delay."]
 				#[doc = ""]
-				#[doc = "- `delay`: The time (in milliseconds) after submission before the transaction executes."]
+				#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
+				#[doc = "different accounts."]
+				#[doc = ""]
+				#[doc = "Once an account is set as high security it can only make reversible"]
+				#[doc = "transfers. It is not allowed any other calls."]
+				#[doc = ""]
+				#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
+				#[doc = "security account."]
+				#[doc = "- interceptor: The account that can intercept transctions from the"]
+				#[doc = "high security account."]
 				pub struct SetHighSecurity {
 					pub delay: set_high_security::Delay,
 					pub interceptor: set_high_security::Interceptor,
-					pub recoverer: set_high_security::Recoverer,
 				}
 				pub mod set_high_security {
 					use super::runtime_types;
@@ -8795,7 +10678,6 @@ pub mod api {
 						::core::primitive::u64,
 					>;
 					pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type Recoverer = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetHighSecurity {
 					const PALLET: &'static str = "ReversibleTransfers";
@@ -8893,7 +10775,7 @@ pub mod api {
 				#[doc = "Schedule a transaction for delayed execution with a custom, one-time delay."]
 				#[doc = ""]
 				#[doc = "This can only be used by accounts that have *not* set up a persistent"]
-				#[doc = "reversibility configuration with `set_reversibility`."]
+				#[doc = "reversibility configuration with `set_high_security`."]
 				#[doc = ""]
 				#[doc = "- `delay`: The time (in blocks or milliseconds) before the transaction executes."]
 				pub struct ScheduleTransferWithDelay {
@@ -8917,27 +10799,102 @@ pub mod api {
 					const PALLET: &'static str = "ReversibleTransfers";
 					const CALL: &'static str = "schedule_transfer_with_delay";
 				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Schedule an asset transfer (pallet-assets) for delayed execution using the configured"]
+				#[doc = "delay."]
+				pub struct ScheduleAssetTransfer {
+					pub asset_id: schedule_asset_transfer::AssetId,
+					pub dest: schedule_asset_transfer::Dest,
+					pub amount: schedule_asset_transfer::Amount,
+				}
+				pub mod schedule_asset_transfer {
+					use super::runtime_types;
+					pub type AssetId = ::core::primitive::u32;
+					pub type Dest = ::subxt::ext::subxt_core::utils::MultiAddress<
+						::subxt::ext::subxt_core::utils::AccountId32,
+						(),
+					>;
+					pub type Amount = ::core::primitive::u128;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ScheduleAssetTransfer {
+					const PALLET: &'static str = "ReversibleTransfers";
+					const CALL: &'static str = "schedule_asset_transfer";
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Schedule an asset transfer (pallet-assets) with a custom one-time delay."]
+				pub struct ScheduleAssetTransferWithDelay {
+					pub asset_id: schedule_asset_transfer_with_delay::AssetId,
+					pub dest: schedule_asset_transfer_with_delay::Dest,
+					pub amount: schedule_asset_transfer_with_delay::Amount,
+					pub delay: schedule_asset_transfer_with_delay::Delay,
+				}
+				pub mod schedule_asset_transfer_with_delay {
+					use super::runtime_types;
+					pub type AssetId = ::core::primitive::u32;
+					pub type Dest = ::subxt::ext::subxt_core::utils::MultiAddress<
+						::subxt::ext::subxt_core::utils::AccountId32,
+						(),
+					>;
+					pub type Amount = ::core::primitive::u128;
+					pub type Delay = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
+						::core::primitive::u32,
+						::core::primitive::u64,
+					>;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ScheduleAssetTransferWithDelay {
+					const PALLET: &'static str = "ReversibleTransfers";
+					const CALL: &'static str = "schedule_asset_transfer_with_delay";
+				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Enable high-security for the calling account with a specified delay"]
+				#[doc = "Enable high-security for the calling account with a specified"]
+				#[doc = "reversibility delay."]
 				#[doc = ""]
-				#[doc = "- `delay`: The time (in milliseconds) after submission before the transaction executes."]
+				#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
+				#[doc = "different accounts."]
+				#[doc = ""]
+				#[doc = "Once an account is set as high security it can only make reversible"]
+				#[doc = "transfers. It is not allowed any other calls."]
+				#[doc = ""]
+				#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
+				#[doc = "security account."]
+				#[doc = "- interceptor: The account that can intercept transctions from the"]
+				#[doc = "high security account."]
 				pub fn set_high_security(
 					&self,
 					delay: types::set_high_security::Delay,
 					interceptor: types::set_high_security::Interceptor,
-					recoverer: types::set_high_security::Recoverer,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetHighSecurity>
 				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"ReversibleTransfers",
 						"set_high_security",
-						types::SetHighSecurity { delay, interceptor, recoverer },
+						types::SetHighSecurity { delay, interceptor },
 						[
-							84u8, 79u8, 110u8, 9u8, 173u8, 78u8, 144u8, 58u8, 220u8, 161u8, 42u8,
-							121u8, 88u8, 168u8, 178u8, 42u8, 29u8, 253u8, 161u8, 83u8, 45u8, 204u8,
-							155u8, 136u8, 209u8, 33u8, 200u8, 13u8, 46u8, 162u8, 223u8, 171u8,
+							202u8, 17u8, 43u8, 37u8, 215u8, 198u8, 42u8, 183u8, 53u8, 124u8, 140u8,
+							34u8, 112u8, 230u8, 55u8, 168u8, 242u8, 249u8, 91u8, 185u8, 244u8,
+							81u8, 40u8, 231u8, 121u8, 155u8, 202u8, 76u8, 137u8, 7u8, 225u8, 184u8,
 						],
 					)
 				}
@@ -9001,7 +10958,7 @@ pub mod api {
 				#[doc = "Schedule a transaction for delayed execution with a custom, one-time delay."]
 				#[doc = ""]
 				#[doc = "This can only be used by accounts that have *not* set up a persistent"]
-				#[doc = "reversibility configuration with `set_reversibility`."]
+				#[doc = "reversibility configuration with `set_high_security`."]
 				#[doc = ""]
 				#[doc = "- `delay`: The time (in blocks or milliseconds) before the transaction executes."]
 				pub fn schedule_transfer_with_delay(
@@ -9024,6 +10981,49 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = "Schedule an asset transfer (pallet-assets) for delayed execution using the configured"]
+				#[doc = "delay."]
+				pub fn schedule_asset_transfer(
+					&self,
+					asset_id: types::schedule_asset_transfer::AssetId,
+					dest: types::schedule_asset_transfer::Dest,
+					amount: types::schedule_asset_transfer::Amount,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
+					types::ScheduleAssetTransfer,
+				> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"ReversibleTransfers",
+						"schedule_asset_transfer",
+						types::ScheduleAssetTransfer { asset_id, dest, amount },
+						[
+							125u8, 51u8, 89u8, 31u8, 247u8, 200u8, 156u8, 209u8, 28u8, 170u8,
+							203u8, 254u8, 40u8, 131u8, 155u8, 166u8, 65u8, 152u8, 101u8, 198u8,
+							70u8, 129u8, 5u8, 89u8, 220u8, 189u8, 255u8, 87u8, 58u8, 24u8, 234u8,
+							42u8,
+						],
+					)
+				}
+				#[doc = "Schedule an asset transfer (pallet-assets) with a custom one-time delay."]
+				pub fn schedule_asset_transfer_with_delay(
+					&self,
+					asset_id: types::schedule_asset_transfer_with_delay::AssetId,
+					dest: types::schedule_asset_transfer_with_delay::Dest,
+					amount: types::schedule_asset_transfer_with_delay::Amount,
+					delay: types::schedule_asset_transfer_with_delay::Delay,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
+					types::ScheduleAssetTransferWithDelay,
+				> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"ReversibleTransfers",
+						"schedule_asset_transfer_with_delay",
+						types::ScheduleAssetTransferWithDelay { asset_id, dest, amount, delay },
+						[
+							249u8, 59u8, 121u8, 27u8, 78u8, 202u8, 252u8, 120u8, 76u8, 102u8, 33u8,
+							232u8, 185u8, 78u8, 8u8, 157u8, 139u8, 72u8, 110u8, 91u8, 170u8, 179u8,
+							89u8, 250u8, 77u8, 26u8, 160u8, 252u8, 62u8, 179u8, 128u8, 216u8,
+						],
+					)
+				}
 			}
 		}
 		#[doc = "The `Event` enum of this pallet"]
@@ -9042,14 +11042,12 @@ pub mod api {
 			pub struct HighSecuritySet {
 				pub who: high_security_set::Who,
 				pub interceptor: high_security_set::Interceptor,
-				pub recoverer: high_security_set::Recoverer,
 				pub delay: high_security_set::Delay,
 			}
 			pub mod high_security_set {
 				use super::runtime_types;
 				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Recoverer = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Delay = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 					::core::primitive::u32,
 					::core::primitive::u64,
@@ -9072,6 +11070,7 @@ pub mod api {
 				pub from: transaction_scheduled::From,
 				pub to: transaction_scheduled::To,
 				pub interceptor: transaction_scheduled::Interceptor,
+				pub asset_id: transaction_scheduled::AssetId,
 				pub amount: transaction_scheduled::Amount,
 				pub tx_id: transaction_scheduled::TxId,
 				pub execute_at: transaction_scheduled::ExecuteAt,
@@ -9081,6 +11080,7 @@ pub mod api {
 				pub type From = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type To = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type AssetId = ::core::option::Option<::core::primitive::u32>;
 				pub type Amount = ::core::primitive::u128;
 				pub type TxId = ::subxt::ext::subxt_core::utils::H256;
 				pub type ExecuteAt = runtime_types::qp_scheduler::DispatchTime<
@@ -9166,7 +11166,7 @@ pub mod api {
 							::core::primitive::u128,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::poseidon_resonance::PoseidonHasher,
+								runtime_types::qp_poseidon::PoseidonHasher,
 							>,
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::H256;
@@ -9223,10 +11223,10 @@ pub mod api {
 						"HighSecurityAccounts",
 						(),
 						[
-							246u8, 192u8, 145u8, 222u8, 167u8, 131u8, 248u8, 22u8, 219u8, 213u8,
-							41u8, 3u8, 152u8, 132u8, 180u8, 251u8, 193u8, 91u8, 139u8, 164u8,
-							142u8, 208u8, 122u8, 16u8, 40u8, 140u8, 15u8, 38u8, 145u8, 193u8, 77u8,
-							165u8,
+							11u8, 143u8, 95u8, 23u8, 55u8, 163u8, 22u8, 238u8, 88u8, 24u8, 50u8,
+							162u8, 72u8, 98u8, 32u8, 219u8, 231u8, 199u8, 118u8, 150u8, 84u8,
+							126u8, 225u8, 88u8, 129u8, 200u8, 236u8, 214u8, 187u8, 8u8, 252u8,
+							120u8,
 						],
 					)
 				}
@@ -9249,10 +11249,10 @@ pub mod api {
 						"HighSecurityAccounts",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							246u8, 192u8, 145u8, 222u8, 167u8, 131u8, 248u8, 22u8, 219u8, 213u8,
-							41u8, 3u8, 152u8, 132u8, 180u8, 251u8, 193u8, 91u8, 139u8, 164u8,
-							142u8, 208u8, 122u8, 16u8, 40u8, 140u8, 15u8, 38u8, 145u8, 193u8, 77u8,
-							165u8,
+							11u8, 143u8, 95u8, 23u8, 55u8, 163u8, 22u8, 238u8, 88u8, 24u8, 50u8,
+							162u8, 72u8, 98u8, 32u8, 219u8, 231u8, 199u8, 118u8, 150u8, 84u8,
+							126u8, 225u8, 88u8, 129u8, 200u8, 236u8, 214u8, 187u8, 8u8, 252u8,
+							120u8,
 						],
 					)
 				}
@@ -9449,7 +11449,8 @@ pub mod api {
 					)
 				}
 				#[doc = " Maps interceptor accounts to the list of accounts they can intercept for."]
-				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an interceptor."]
+				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an"]
+				#[doc = " interceptor."]
 				pub fn interceptor_index_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -9472,7 +11473,8 @@ pub mod api {
 					)
 				}
 				#[doc = " Maps interceptor accounts to the list of accounts they can intercept for."]
-				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an interceptor."]
+				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an"]
+				#[doc = " interceptor."]
 				pub fn interceptor_index(
 					&self,
 					_0: types::interceptor_index::Param0,
@@ -10142,7 +12144,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An account that has voted"]
+			#[doc = "An account has voted"]
 			pub struct Voted {
 				pub who: voted::Who,
 				pub vote: voted::Vote,
@@ -10165,7 +12167,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A vote that been removed"]
+			#[doc = "A vote has been removed"]
 			pub struct VoteRemoved {
 				pub who: vote_removed::Who,
 				pub vote: vote_removed::Vote,
@@ -10180,6 +12182,27 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for VoteRemoved {
 				const PALLET: &'static str = "ConvictionVoting";
 				const EVENT: &'static str = "VoteRemoved";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The lockup period of a conviction vote expired, and the funds have been unlocked."]
+			pub struct VoteUnlocked {
+				pub who: vote_unlocked::Who,
+				pub class: vote_unlocked::Class,
+			}
+			pub mod vote_unlocked {
+				use super::runtime_types;
+				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Class = ::core::primitive::u16;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for VoteUnlocked {
+				const PALLET: &'static str = "ConvictionVoting";
+				const EVENT: &'static str = "VoteUnlocked";
 			}
 		}
 		pub mod storage {
@@ -11385,7 +13408,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::poseidon_resonance::PoseidonHasher,
+						runtime_types::qp_poseidon::PoseidonHasher,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -11658,10 +13681,9 @@ pub mod api {
 							enactment_moment,
 						},
 						[
-							140u8, 121u8, 244u8, 4u8, 5u8, 245u8, 133u8, 203u8, 193u8, 24u8, 133u8,
-							222u8, 208u8, 74u8, 248u8, 59u8, 153u8, 154u8, 194u8, 226u8, 101u8,
-							232u8, 174u8, 79u8, 177u8, 183u8, 39u8, 178u8, 178u8, 229u8, 0u8,
-							188u8,
+							30u8, 232u8, 132u8, 0u8, 199u8, 166u8, 49u8, 94u8, 238u8, 61u8, 236u8,
+							207u8, 2u8, 136u8, 37u8, 81u8, 67u8, 133u8, 2u8, 147u8, 177u8, 176u8,
+							178u8, 113u8, 155u8, 180u8, 104u8, 176u8, 215u8, 255u8, 240u8, 100u8,
 						],
 					)
 				}
@@ -11877,7 +13899,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::poseidon_resonance::PoseidonHasher,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -11971,7 +13993,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::poseidon_resonance::PoseidonHasher,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 				pub type Tally = runtime_types::pallet_ranked_collective::Tally;
 			}
@@ -12222,7 +14244,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::poseidon_resonance::PoseidonHasher,
+								runtime_types::qp_poseidon::PoseidonHasher,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_ranked_collective::Tally,
@@ -12296,9 +14318,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						(),
 						[
-							192u8, 180u8, 68u8, 141u8, 53u8, 224u8, 151u8, 105u8, 99u8, 45u8,
-							177u8, 250u8, 11u8, 236u8, 98u8, 81u8, 52u8, 44u8, 71u8, 238u8, 77u8,
-							139u8, 182u8, 93u8, 241u8, 238u8, 66u8, 73u8, 10u8, 96u8, 129u8, 162u8,
+							12u8, 160u8, 226u8, 48u8, 96u8, 127u8, 60u8, 27u8, 37u8, 158u8, 31u8,
+							162u8, 106u8, 183u8, 90u8, 169u8, 244u8, 35u8, 25u8, 121u8, 84u8,
+							120u8, 20u8, 206u8, 137u8, 42u8, 139u8, 47u8, 62u8, 73u8, 157u8, 182u8,
 						],
 					)
 				}
@@ -12320,9 +14342,9 @@ pub mod api {
 						"ReferendumInfoFor",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							192u8, 180u8, 68u8, 141u8, 53u8, 224u8, 151u8, 105u8, 99u8, 45u8,
-							177u8, 250u8, 11u8, 236u8, 98u8, 81u8, 52u8, 44u8, 71u8, 238u8, 77u8,
-							139u8, 182u8, 93u8, 241u8, 238u8, 66u8, 73u8, 10u8, 96u8, 129u8, 162u8,
+							12u8, 160u8, 226u8, 48u8, 96u8, 127u8, 60u8, 27u8, 37u8, 158u8, 31u8,
+							162u8, 106u8, 183u8, 90u8, 169u8, 244u8, 35u8, 25u8, 121u8, 84u8,
+							120u8, 20u8, 206u8, 137u8, 42u8, 139u8, 47u8, 62u8, 73u8, 157u8, 182u8,
 						],
 					)
 				}
@@ -12559,15 +14581,18 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Information concerning the different referendum tracks."]
+				#[doc = " A list of tracks."]
+				#[doc = ""]
+				#[doc = " Note: if the tracks are dynamic, the value in the static metadata might be inaccurate."]
 				pub fn tracks(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
 					::subxt::ext::subxt_core::alloc::vec::Vec<(
 						::core::primitive::u16,
-						runtime_types::pallet_referenda::types::TrackInfo<
+						runtime_types::pallet_referenda::types::TrackDetails<
 							::core::primitive::u128,
 							::core::primitive::u32,
+							::subxt::ext::subxt_core::alloc::string::String,
 						>,
 					)>,
 				> {
@@ -14346,6 +16371,23 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = " Gets this pallet's derived pot account."]
+				pub fn pot_account(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					::subxt::ext::subxt_core::utils::AccountId32,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"TreasuryPallet",
+						"pot_account",
+						[
+							115u8, 233u8, 13u8, 223u8, 88u8, 20u8, 202u8, 139u8, 153u8, 28u8,
+							155u8, 157u8, 224u8, 66u8, 3u8, 250u8, 23u8, 53u8, 88u8, 168u8, 211u8,
+							204u8, 122u8, 166u8, 248u8, 23u8, 174u8, 225u8, 99u8, 108u8, 89u8,
+							135u8,
+						],
+					)
+				}
 			}
 		}
 	}
@@ -14409,7 +16451,7 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Allow ROOT to bypass the recovery process and set an a rescuer account"]
+				#[doc = "Allow ROOT to bypass the recovery process and set a rescuer account"]
 				#[doc = "for a lost account directly."]
 				#[doc = ""]
 				#[doc = "The dispatch origin for this call must be _ROOT_."]
@@ -14687,6 +16729,56 @@ pub mod api {
 					const PALLET: &'static str = "Recovery";
 					const CALL: &'static str = "cancel_recovered";
 				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Poke deposits for recovery configurations and / or active recoveries."]
+				#[doc = ""]
+				#[doc = "This can be used by accounts to possibly lower their locked amount."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Signed_."]
+				#[doc = ""]
+				#[doc = "Parameters:"]
+				#[doc = "- `maybe_account`: Optional recoverable account for which you have an active recovery"]
+				#[doc = "and want to adjust the deposit for the active recovery."]
+				#[doc = ""]
+				#[doc = "This function checks both recovery configuration deposit and active recovery deposits"]
+				#[doc = "of the caller:"]
+				#[doc = "- If the caller has created a recovery configuration, checks and adjusts its deposit"]
+				#[doc = "- If the caller has initiated any active recoveries, and provides the account in"]
+				#[doc = "`maybe_account`, checks and adjusts those deposits"]
+				#[doc = ""]
+				#[doc = "If any deposit is updated, the difference will be reserved/unreserved from the caller's"]
+				#[doc = "account."]
+				#[doc = ""]
+				#[doc = "The transaction is made free if any deposit is updated and paid otherwise."]
+				#[doc = ""]
+				#[doc = "Emits `DepositPoked` if any deposit is updated."]
+				#[doc = "Multiple events may be emitted in case both types of deposits are updated."]
+				pub struct PokeDeposit {
+					pub maybe_account: poke_deposit::MaybeAccount,
+				}
+				pub mod poke_deposit {
+					use super::runtime_types;
+					pub type MaybeAccount = ::core::option::Option<
+						::subxt::ext::subxt_core::utils::MultiAddress<
+							::subxt::ext::subxt_core::utils::AccountId32,
+							(),
+						>,
+					>;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for PokeDeposit {
+					const PALLET: &'static str = "Recovery";
+					const CALL: &'static str = "poke_deposit";
+				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
@@ -14711,13 +16803,14 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							73u8, 156u8, 224u8, 32u8, 62u8, 42u8, 40u8, 157u8, 16u8, 250u8, 121u8,
-							113u8, 185u8, 125u8, 247u8, 113u8, 58u8, 229u8, 172u8, 209u8, 153u8,
-							36u8, 204u8, 24u8, 125u8, 23u8, 195u8, 48u8, 153u8, 32u8, 203u8, 100u8,
+							60u8, 61u8, 138u8, 19u8, 43u8, 218u8, 179u8, 117u8, 205u8, 143u8,
+							128u8, 223u8, 96u8, 166u8, 90u8, 187u8, 255u8, 119u8, 238u8, 209u8,
+							140u8, 58u8, 239u8, 44u8, 153u8, 196u8, 218u8, 155u8, 227u8, 228u8,
+							210u8, 187u8,
 						],
 					)
 				}
-				#[doc = "Allow ROOT to bypass the recovery process and set an a rescuer account"]
+				#[doc = "Allow ROOT to bypass the recovery process and set a rescuer account"]
 				#[doc = "for a lost account directly."]
 				#[doc = ""]
 				#[doc = "The dispatch origin for this call must be _ROOT_."]
@@ -14936,6 +17029,44 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = "Poke deposits for recovery configurations and / or active recoveries."]
+				#[doc = ""]
+				#[doc = "This can be used by accounts to possibly lower their locked amount."]
+				#[doc = ""]
+				#[doc = "The dispatch origin for this call must be _Signed_."]
+				#[doc = ""]
+				#[doc = "Parameters:"]
+				#[doc = "- `maybe_account`: Optional recoverable account for which you have an active recovery"]
+				#[doc = "and want to adjust the deposit for the active recovery."]
+				#[doc = ""]
+				#[doc = "This function checks both recovery configuration deposit and active recovery deposits"]
+				#[doc = "of the caller:"]
+				#[doc = "- If the caller has created a recovery configuration, checks and adjusts its deposit"]
+				#[doc = "- If the caller has initiated any active recoveries, and provides the account in"]
+				#[doc = "`maybe_account`, checks and adjusts those deposits"]
+				#[doc = ""]
+				#[doc = "If any deposit is updated, the difference will be reserved/unreserved from the caller's"]
+				#[doc = "account."]
+				#[doc = ""]
+				#[doc = "The transaction is made free if any deposit is updated and paid otherwise."]
+				#[doc = ""]
+				#[doc = "Emits `DepositPoked` if any deposit is updated."]
+				#[doc = "Multiple events may be emitted in case both types of deposits are updated."]
+				pub fn poke_deposit(
+					&self,
+					maybe_account: types::poke_deposit::MaybeAccount,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::PokeDeposit> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Recovery",
+						"poke_deposit",
+						types::PokeDeposit { maybe_account },
+						[
+							177u8, 98u8, 53u8, 15u8, 228u8, 36u8, 173u8, 55u8, 125u8, 3u8, 234u8,
+							70u8, 147u8, 147u8, 124u8, 86u8, 31u8, 101u8, 171u8, 56u8, 148u8,
+							180u8, 87u8, 149u8, 11u8, 113u8, 195u8, 35u8, 56u8, 32u8, 251u8, 56u8,
+						],
+					)
+				}
 			}
 		}
 		#[doc = "Events type."]
@@ -15065,6 +17196,33 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for RecoveryRemoved {
 				const PALLET: &'static str = "Recovery";
 				const EVENT: &'static str = "RecoveryRemoved";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A deposit has been updated."]
+			pub struct DepositPoked {
+				pub who: deposit_poked::Who,
+				pub kind: deposit_poked::Kind,
+				pub old_deposit: deposit_poked::OldDeposit,
+				pub new_deposit: deposit_poked::NewDeposit,
+			}
+			pub mod deposit_poked {
+				use super::runtime_types;
+				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Kind = runtime_types::pallet_recovery::DepositKind<
+					runtime_types::quantus_runtime::Runtime,
+				>;
+				pub type OldDeposit = ::core::primitive::u128;
+				pub type NewDeposit = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for DepositPoked {
+				const PALLET: &'static str = "Recovery";
+				const EVENT: &'static str = "DepositPoked";
 			}
 		}
 		pub mod storage {
@@ -15510,6 +17668,9 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
 				#[doc = "  asset."]
+				#[doc = ""]
+				#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+				#[doc = "an account contains holds or freezes in place."]
 				pub struct StartDestroy {
 					#[codec(compact)]
 					pub id: start_destroy::Id,
@@ -16575,6 +18736,9 @@ pub mod api {
 				#[doc = "  refunded."]
 				#[doc = "- `allow_burn`: If `true` then assets may be destroyed in order to complete the refund."]
 				#[doc = ""]
+				#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+				#[doc = "the asset account contains holds or freezes in place."]
+				#[doc = ""]
 				#[doc = "Emits `Refunded` event when successful."]
 				pub struct Refund {
 					#[codec(compact)]
@@ -16684,6 +18848,9 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
 				#[doc = "- `who`: The account to refund."]
+				#[doc = ""]
+				#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+				#[doc = "the asset account contains holds or freezes in place."]
 				#[doc = ""]
 				#[doc = "Emits `Refunded` event when successful."]
 				pub struct RefundOther {
@@ -16873,6 +19040,9 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
 				#[doc = "  asset."]
+				#[doc = ""]
+				#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+				#[doc = "an account contains holds or freezes in place."]
 				pub fn start_destroy(
 					&self,
 					id: types::start_destroy::Id,
@@ -17652,6 +19822,9 @@ pub mod api {
 				#[doc = "  refunded."]
 				#[doc = "- `allow_burn`: If `true` then assets may be destroyed in order to complete the refund."]
 				#[doc = ""]
+				#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+				#[doc = "the asset account contains holds or freezes in place."]
+				#[doc = ""]
 				#[doc = "Emits `Refunded` event when successful."]
 				pub fn refund(
 					&self,
@@ -17734,6 +19907,9 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
 				#[doc = "- `who`: The account to refund."]
+				#[doc = ""]
+				#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+				#[doc = "the asset account contains holds or freezes in place."]
 				#[doc = ""]
 				#[doc = "Emits `Refunded` event when successful."]
 				pub fn refund_other(
@@ -18896,6 +21072,276 @@ pub mod api {
 			}
 		}
 	}
+	pub mod assets_holder {
+		use super::{root_mod, runtime_types};
+		#[doc = "The `Error` enum of this pallet."]
+		pub type Error = runtime_types::pallet_assets_holder::pallet::Error;
+		#[doc = "The `Event` enum of this pallet"]
+		pub type Event = runtime_types::pallet_assets_holder::pallet::Event;
+		pub mod events {
+			use super::runtime_types;
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "`who`s balance on hold was increased by `amount`."]
+			pub struct Held {
+				pub who: held::Who,
+				pub asset_id: held::AssetId,
+				pub reason: held::Reason,
+				pub amount: held::Amount,
+			}
+			pub mod held {
+				use super::runtime_types;
+				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type AssetId = ::core::primitive::u32;
+				pub type Reason = runtime_types::quantus_runtime::RuntimeHoldReason;
+				pub type Amount = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for Held {
+				const PALLET: &'static str = "AssetsHolder";
+				const EVENT: &'static str = "Held";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "`who`s balance on hold was decreased by `amount`."]
+			pub struct Released {
+				pub who: released::Who,
+				pub asset_id: released::AssetId,
+				pub reason: released::Reason,
+				pub amount: released::Amount,
+			}
+			pub mod released {
+				use super::runtime_types;
+				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type AssetId = ::core::primitive::u32;
+				pub type Reason = runtime_types::quantus_runtime::RuntimeHoldReason;
+				pub type Amount = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for Released {
+				const PALLET: &'static str = "AssetsHolder";
+				const EVENT: &'static str = "Released";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "`who`s balance on hold was burned by `amount`."]
+			pub struct Burned {
+				pub who: burned::Who,
+				pub asset_id: burned::AssetId,
+				pub reason: burned::Reason,
+				pub amount: burned::Amount,
+			}
+			pub mod burned {
+				use super::runtime_types;
+				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type AssetId = ::core::primitive::u32;
+				pub type Reason = runtime_types::quantus_runtime::RuntimeHoldReason;
+				pub type Amount = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for Burned {
+				const PALLET: &'static str = "AssetsHolder";
+				const EVENT: &'static str = "Burned";
+			}
+		}
+		pub mod storage {
+			use super::runtime_types;
+			pub mod types {
+				use super::runtime_types;
+				pub mod holds {
+					use super::runtime_types;
+					pub type Holds = runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						runtime_types::frame_support::traits::tokens::misc::IdAmount<
+							runtime_types::quantus_runtime::RuntimeHoldReason,
+							::core::primitive::u128,
+						>,
+					>;
+					pub type Param0 = ::core::primitive::u32;
+					pub type Param1 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
+				pub mod balances_on_hold {
+					use super::runtime_types;
+					pub type BalancesOnHold = ::core::primitive::u128;
+					pub type Param0 = ::core::primitive::u32;
+					pub type Param1 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
+			}
+			pub struct StorageApi;
+			impl StorageApi {
+				#[doc = " A map that stores holds applied on an account for a given AssetId."]
+				pub fn holds_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::holds::Holds,
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"AssetsHolder",
+						"Holds",
+						(),
+						[
+							131u8, 85u8, 98u8, 45u8, 101u8, 28u8, 94u8, 4u8, 1u8, 137u8, 126u8,
+							129u8, 241u8, 99u8, 206u8, 145u8, 177u8, 135u8, 27u8, 52u8, 122u8,
+							94u8, 241u8, 29u8, 253u8, 154u8, 158u8, 229u8, 208u8, 129u8, 29u8,
+							41u8,
+						],
+					)
+				}
+				#[doc = " A map that stores holds applied on an account for a given AssetId."]
+				pub fn holds_iter1(
+					&self,
+					_0: types::holds::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::holds::Param0,
+					>,
+					types::holds::Holds,
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"AssetsHolder",
+						"Holds",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							131u8, 85u8, 98u8, 45u8, 101u8, 28u8, 94u8, 4u8, 1u8, 137u8, 126u8,
+							129u8, 241u8, 99u8, 206u8, 145u8, 177u8, 135u8, 27u8, 52u8, 122u8,
+							94u8, 241u8, 29u8, 253u8, 154u8, 158u8, 229u8, 208u8, 129u8, 29u8,
+							41u8,
+						],
+					)
+				}
+				#[doc = " A map that stores holds applied on an account for a given AssetId."]
+				pub fn holds(
+					&self,
+					_0: types::holds::Param0,
+					_1: types::holds::Param1,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+							types::holds::Param0,
+						>,
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+							types::holds::Param1,
+						>,
+					),
+					types::holds::Holds,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"AssetsHolder",
+						"Holds",
+						(
+							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
+						),
+						[
+							131u8, 85u8, 98u8, 45u8, 101u8, 28u8, 94u8, 4u8, 1u8, 137u8, 126u8,
+							129u8, 241u8, 99u8, 206u8, 145u8, 177u8, 135u8, 27u8, 52u8, 122u8,
+							94u8, 241u8, 29u8, 253u8, 154u8, 158u8, 229u8, 208u8, 129u8, 29u8,
+							41u8,
+						],
+					)
+				}
+				#[doc = " A map that stores the current total balance on hold for every account on a given AssetId."]
+				pub fn balances_on_hold_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::balances_on_hold::BalancesOnHold,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"AssetsHolder",
+						"BalancesOnHold",
+						(),
+						[
+							39u8, 48u8, 137u8, 178u8, 85u8, 119u8, 90u8, 207u8, 72u8, 232u8, 81u8,
+							190u8, 234u8, 32u8, 246u8, 199u8, 37u8, 220u8, 0u8, 216u8, 47u8, 241u8,
+							9u8, 107u8, 9u8, 130u8, 13u8, 232u8, 142u8, 226u8, 77u8, 179u8,
+						],
+					)
+				}
+				#[doc = " A map that stores the current total balance on hold for every account on a given AssetId."]
+				pub fn balances_on_hold_iter1(
+					&self,
+					_0: types::balances_on_hold::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::balances_on_hold::Param0,
+					>,
+					types::balances_on_hold::BalancesOnHold,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"AssetsHolder",
+						"BalancesOnHold",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							39u8, 48u8, 137u8, 178u8, 85u8, 119u8, 90u8, 207u8, 72u8, 232u8, 81u8,
+							190u8, 234u8, 32u8, 246u8, 199u8, 37u8, 220u8, 0u8, 216u8, 47u8, 241u8,
+							9u8, 107u8, 9u8, 130u8, 13u8, 232u8, 142u8, 226u8, 77u8, 179u8,
+						],
+					)
+				}
+				#[doc = " A map that stores the current total balance on hold for every account on a given AssetId."]
+				pub fn balances_on_hold(
+					&self,
+					_0: types::balances_on_hold::Param0,
+					_1: types::balances_on_hold::Param1,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+							types::balances_on_hold::Param0,
+						>,
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+							types::balances_on_hold::Param1,
+						>,
+					),
+					types::balances_on_hold::BalancesOnHold,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"AssetsHolder",
+						"BalancesOnHold",
+						(
+							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
+						),
+						[
+							39u8, 48u8, 137u8, 178u8, 85u8, 119u8, 90u8, 207u8, 72u8, 232u8, 81u8,
+							190u8, 234u8, 32u8, 246u8, 199u8, 37u8, 220u8, 0u8, 216u8, 47u8, 241u8,
+							9u8, 107u8, 9u8, 130u8, 13u8, 232u8, 142u8, 226u8, 77u8, 179u8,
+						],
+					)
+				}
+			}
+		}
+	}
 	pub mod runtime_types {
 		use super::runtime_types;
 		pub mod bounded_collections {
@@ -18929,41 +21375,6 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				pub struct WeakBoundedVec<_0>(pub ::subxt::ext::subxt_core::alloc::vec::Vec<_0>);
-			}
-		}
-		pub mod dilithium_crypto {
-			use super::runtime_types;
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub enum DilithiumSignatureScheme {
-					#[codec(index = 0)]
-					Dilithium(runtime_types::dilithium_crypto::types::DilithiumSignatureWithPublic),
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct DilithiumSignatureWithPublic {
-					pub bytes: [::core::primitive::u8; 7219usize],
-				}
 			}
 		}
 		pub mod frame_metadata_hash_extension {
@@ -19082,6 +21493,8 @@ pub mod api {
 					Signed(_0),
 					#[codec(index = 2)]
 					None,
+					#[codec(index = 3)]
+					Authorized,
 				}
 			}
 			pub mod traits {
@@ -19542,6 +21955,12 @@ pub mod api {
 						code_hash: ::subxt::ext::subxt_core::utils::H256,
 						check_version: ::core::primitive::bool,
 					},
+					#[codec(index = 7)]
+					#[doc = "An invalid authorized upgrade was rejected while trying to apply it."]
+					RejectedInvalidAuthorizedUpgrade {
+						code_hash: ::subxt::ext::subxt_core::utils::H256,
+						error: runtime_types::sp_runtime::DispatchError,
+					},
 				}
 			}
 			#[derive(
@@ -19708,6 +22127,9 @@ pub mod api {
 					#[doc = ""]
 					#[doc = "- `id`: The identifier of the asset to be destroyed. This must identify an existing"]
 					#[doc = "  asset."]
+					#[doc = ""]
+					#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+					#[doc = "an account contains holds or freezes in place."]
 					start_destroy {
 						#[codec(compact)]
 						id: ::core::primitive::u32,
@@ -20280,6 +22702,9 @@ pub mod api {
 					#[doc = "  refunded."]
 					#[doc = "- `allow_burn`: If `true` then assets may be destroyed in order to complete the refund."]
 					#[doc = ""]
+					#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+					#[doc = "the asset account contains holds or freezes in place."]
+					#[doc = ""]
 					#[doc = "Emits `Refunded` event when successful."]
 					refund {
 						#[codec(compact)]
@@ -20332,6 +22757,9 @@ pub mod api {
 					#[doc = ""]
 					#[doc = "- `id`: The identifier of the asset for the account holding a deposit."]
 					#[doc = "- `who`: The account to refund."]
+					#[doc = ""]
+					#[doc = "It will fail with either [`Error::ContainsHolds`] or [`Error::ContainsFreezes`] if"]
+					#[doc = "the asset account contains holds or freezes in place."]
 					#[doc = ""]
 					#[doc = "Emits `Refunded` event when successful."]
 					refund_other {
@@ -20467,6 +22895,12 @@ pub mod api {
 					#[codec(index = 20)]
 					#[doc = "The asset ID must be equal to the [`NextAssetId`]."]
 					BadAssetId,
+					#[codec(index = 21)]
+					#[doc = "The asset cannot be destroyed because some accounts for this asset contain freezes."]
+					ContainsFreezes,
+					#[codec(index = 22)]
+					#[doc = "The asset cannot be destroyed because some accounts for this asset contain holds."]
+					ContainsHolds,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -20782,6 +23216,67 @@ pub mod api {
 					DepositRefunded,
 					#[codec(index = 4)]
 					DepositFrom(_1, _0),
+				}
+			}
+		}
+		pub mod pallet_assets_holder {
+			use super::runtime_types;
+			pub mod pallet {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "The `Error` enum of this pallet."]
+				pub enum Error {
+					#[codec(index = 0)]
+					#[doc = "Number of holds on an account would exceed the count of `RuntimeHoldReason`."]
+					TooManyHolds,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "The `Event` enum of this pallet"]
+				pub enum Event {
+					#[codec(index = 0)]
+					#[doc = "`who`s balance on hold was increased by `amount`."]
+					Held {
+						who: ::subxt::ext::subxt_core::utils::AccountId32,
+						asset_id: ::core::primitive::u32,
+						reason: runtime_types::quantus_runtime::RuntimeHoldReason,
+						amount: ::core::primitive::u128,
+					},
+					#[codec(index = 1)]
+					#[doc = "`who`s balance on hold was decreased by `amount`."]
+					Released {
+						who: ::subxt::ext::subxt_core::utils::AccountId32,
+						asset_id: ::core::primitive::u32,
+						reason: runtime_types::quantus_runtime::RuntimeHoldReason,
+						amount: ::core::primitive::u128,
+					},
+					#[codec(index = 2)]
+					#[doc = "`who`s balance on hold was burned by `amount`."]
+					Burned {
+						who: ::subxt::ext::subxt_core::utils::AccountId32,
+						asset_id: ::core::primitive::u32,
+						reason: runtime_types::quantus_runtime::RuntimeHoldReason,
+						amount: ::core::primitive::u128,
+					},
 				}
 			}
 		}
@@ -21491,7 +23986,7 @@ pub mod api {
 					#[doc = "An \\[account\\] has cancelled a previous delegation operation."]
 					Undelegated(::subxt::ext::subxt_core::utils::AccountId32),
 					#[codec(index = 2)]
-					#[doc = "An account that has voted"]
+					#[doc = "An account has voted"]
 					Voted {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
 						vote: runtime_types::pallet_conviction_voting::vote::AccountVote<
@@ -21499,12 +23994,18 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 3)]
-					#[doc = "A vote that been removed"]
+					#[doc = "A vote has been removed"]
 					VoteRemoved {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
 						vote: runtime_types::pallet_conviction_voting::vote::AccountVote<
 							::core::primitive::u128,
 						>,
+					},
+					#[codec(index = 4)]
+					#[doc = "The lockup period of a conviction vote expired, and the funds have been unlocked."]
+					VoteUnlocked {
+						who: ::subxt::ext::subxt_core::utils::AccountId32,
+						class: ::core::primitive::u16,
 					},
 				}
 			}
@@ -21925,7 +24426,7 @@ pub mod api {
 					#[doc = "NOTE: THIS MUST NOT BE CALLED ON `hash` MORE TIMES THAN `request_preimage`."]
 					unrequest_preimage { hash: ::subxt::ext::subxt_core::utils::H256 },
 					#[codec(index = 4)]
-					#[doc = "Ensure that the a bulk of pre-images is upgraded."]
+					#[doc = "Ensure that the bulk of pre-images is upgraded."]
 					#[doc = ""]
 					#[doc = "The caller pays no fee if at least 90% of pre-images were successfully updated."]
 					ensure_updated {
@@ -22082,7 +24583,11 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
-					ProofSubmitted { nonce: [::core::primitive::u8; 64usize] },
+					ProofSubmitted {
+						nonce: [::core::primitive::u8; 64usize],
+						difficulty: runtime_types::primitive_types::U512,
+						distance_achieved: runtime_types::primitive_types::U512,
+					},
 					#[codec(index = 1)]
 					DistanceThresholdAdjusted {
 						old_distance_threshold: runtime_types::primitive_types::U512,
@@ -22370,7 +24875,7 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 1)]
-					#[doc = "Allow ROOT to bypass the recovery process and set an a rescuer account"]
+					#[doc = "Allow ROOT to bypass the recovery process and set a rescuer account"]
 					#[doc = "for a lost account directly."]
 					#[doc = ""]
 					#[doc = "The dispatch origin for this call must be _ROOT_."]
@@ -22514,6 +25019,38 @@ pub mod api {
 							(),
 						>,
 					},
+					#[codec(index = 9)]
+					#[doc = "Poke deposits for recovery configurations and / or active recoveries."]
+					#[doc = ""]
+					#[doc = "This can be used by accounts to possibly lower their locked amount."]
+					#[doc = ""]
+					#[doc = "The dispatch origin for this call must be _Signed_."]
+					#[doc = ""]
+					#[doc = "Parameters:"]
+					#[doc = "- `maybe_account`: Optional recoverable account for which you have an active recovery"]
+					#[doc = "and want to adjust the deposit for the active recovery."]
+					#[doc = ""]
+					#[doc = "This function checks both recovery configuration deposit and active recovery deposits"]
+					#[doc = "of the caller:"]
+					#[doc = "- If the caller has created a recovery configuration, checks and adjusts its deposit"]
+					#[doc = "- If the caller has initiated any active recoveries, and provides the account in"]
+					#[doc = "`maybe_account`, checks and adjusts those deposits"]
+					#[doc = ""]
+					#[doc = "If any deposit is updated, the difference will be reserved/unreserved from the caller's"]
+					#[doc = "account."]
+					#[doc = ""]
+					#[doc = "The transaction is made free if any deposit is updated and paid otherwise."]
+					#[doc = ""]
+					#[doc = "Emits `DepositPoked` if any deposit is updated."]
+					#[doc = "Multiple events may be emitted in case both types of deposits are updated."]
+					poke_deposit {
+						maybe_account: ::core::option::Option<
+							::subxt::ext::subxt_core::utils::MultiAddress<
+								::subxt::ext::subxt_core::utils::AccountId32,
+								(),
+							>,
+						>,
+					},
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -22621,6 +25158,16 @@ pub mod api {
 					#[codec(index = 5)]
 					#[doc = "A recovery process has been removed for an account."]
 					RecoveryRemoved { lost_account: ::subxt::ext::subxt_core::utils::AccountId32 },
+					#[codec(index = 6)]
+					#[doc = "A deposit has been updated."]
+					DepositPoked {
+						who: ::subxt::ext::subxt_core::utils::AccountId32,
+						kind: runtime_types::pallet_recovery::DepositKind<
+							runtime_types::quantus_runtime::Runtime,
+						>,
+						old_deposit: ::core::primitive::u128,
+						new_deposit: ::core::primitive::u128,
+					},
 				}
 			}
 			#[derive(
@@ -22634,6 +25181,20 @@ pub mod api {
 				pub created: _0,
 				pub deposit: _1,
 				pub friends: _2,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub enum DepositKind<_0> {
+				#[codec(index = 0)]
+				RecoveryConfig,
+				#[codec(index = 1)]
+				ActiveRecoveryFor(::subxt::ext::subxt_core::utils::AccountId32),
+				__Ignore(::core::marker::PhantomData<_0>),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -22682,7 +25243,7 @@ pub mod api {
 						>,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::poseidon_resonance::PoseidonHasher,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 						enactment_moment:
 							runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -22839,7 +25400,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::poseidon_resonance::PoseidonHasher,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 					},
 					#[codec(index = 1)]
@@ -22869,7 +25430,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::poseidon_resonance::PoseidonHasher,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 						tally: runtime_types::pallet_conviction_voting::types::Tally<
 							::core::primitive::u128,
@@ -22962,7 +25523,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::poseidon_resonance::PoseidonHasher,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 					},
 					#[codec(index = 1)]
@@ -22992,7 +25553,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::poseidon_resonance::PoseidonHasher,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 						tally: runtime_types::pallet_ranked_collective::Tally,
 					},
@@ -23225,8 +25786,8 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				pub struct TrackInfo<_0, _1> {
-					pub name: ::subxt::ext::subxt_core::alloc::string::String,
+				pub struct TrackDetails<_0, _1, _2> {
+					pub name: _2,
 					pub max_deciding: ::core::primitive::u32,
 					pub decision_deposit: _0,
 					pub prepare_period: _1,
@@ -23256,16 +25817,25 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
-					#[doc = "Enable high-security for the calling account with a specified delay"]
+					#[doc = "Enable high-security for the calling account with a specified"]
+					#[doc = "reversibility delay."]
 					#[doc = ""]
-					#[doc = "- `delay`: The time (in milliseconds) after submission before the transaction executes."]
+					#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
+					#[doc = "different accounts."]
+					#[doc = ""]
+					#[doc = "Once an account is set as high security it can only make reversible"]
+					#[doc = "transfers. It is not allowed any other calls."]
+					#[doc = ""]
+					#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
+					#[doc = "security account."]
+					#[doc = "- interceptor: The account that can intercept transctions from the"]
+					#[doc = "high security account."]
 					set_high_security {
 						delay: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
 						>,
 						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
-						recoverer: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 1)]
 					#[doc = "Cancel a pending reversible transaction scheduled by the caller."]
@@ -23290,10 +25860,35 @@ pub mod api {
 					#[doc = "Schedule a transaction for delayed execution with a custom, one-time delay."]
 					#[doc = ""]
 					#[doc = "This can only be used by accounts that have *not* set up a persistent"]
-					#[doc = "reversibility configuration with `set_reversibility`."]
+					#[doc = "reversibility configuration with `set_high_security`."]
 					#[doc = ""]
 					#[doc = "- `delay`: The time (in blocks or milliseconds) before the transaction executes."]
 					schedule_transfer_with_delay {
+						dest: ::subxt::ext::subxt_core::utils::MultiAddress<
+							::subxt::ext::subxt_core::utils::AccountId32,
+							(),
+						>,
+						amount: ::core::primitive::u128,
+						delay: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
+							::core::primitive::u32,
+							::core::primitive::u64,
+						>,
+					},
+					#[codec(index = 5)]
+					#[doc = "Schedule an asset transfer (pallet-assets) for delayed execution using the configured"]
+					#[doc = "delay."]
+					schedule_asset_transfer {
+						asset_id: ::core::primitive::u32,
+						dest: ::subxt::ext::subxt_core::utils::MultiAddress<
+							::subxt::ext::subxt_core::utils::AccountId32,
+							(),
+						>,
+						amount: ::core::primitive::u128,
+					},
+					#[codec(index = 6)]
+					#[doc = "Schedule an asset transfer (pallet-assets) with a custom one-time delay."]
+					schedule_asset_transfer_with_delay {
+						asset_id: ::core::primitive::u32,
 						dest: ::subxt::ext::subxt_core::utils::MultiAddress<
 							::subxt::ext::subxt_core::utils::AccountId32,
 							(),
@@ -23361,7 +25956,8 @@ pub mod api {
 					#[doc = "Reverser is invalid"]
 					InvalidReverser,
 					#[codec(index = 14)]
-					#[doc = "Cannot schedule one time reversible transaction when account is reversible (theft deterrence)"]
+					#[doc = "Cannot schedule one time reversible transaction when account is reversible (theft"]
+					#[doc = "deterrence)"]
 					AccountAlreadyReversibleCannotScheduleOneTime,
 					#[codec(index = 15)]
 					#[doc = "The interceptor has reached the maximum number of accounts they can intercept for."]
@@ -23386,7 +25982,6 @@ pub mod api {
 					HighSecuritySet {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
 						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
-						recoverer: ::subxt::ext::subxt_core::utils::AccountId32,
 						delay: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
@@ -23399,6 +25994,7 @@ pub mod api {
 						from: ::subxt::ext::subxt_core::utils::AccountId32,
 						to: ::subxt::ext::subxt_core::utils::AccountId32,
 						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
+						asset_id: ::core::option::Option<::core::primitive::u32>,
 						amount: ::core::primitive::u128,
 						tx_id: ::subxt::ext::subxt_core::utils::H256,
 						execute_at: runtime_types::qp_scheduler::DispatchTime<
@@ -23451,7 +26047,6 @@ pub mod api {
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub struct HighSecurityAccountData<_0, _1> {
 				pub interceptor: _0,
-				pub recoverer: _0,
 				pub delay: _1,
 			}
 			#[derive(
@@ -24012,6 +26607,58 @@ pub mod api {
 					},
 				}
 			}
+			pub mod types {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct FeeDetails<_0> {
+					pub inclusion_fee: ::core::option::Option<
+						runtime_types::pallet_transaction_payment::types::InclusionFee<_0>,
+					>,
+					pub tip: _0,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct InclusionFee<_0> {
+					pub base_fee: _0,
+					pub len_fee: _0,
+					pub adjusted_weight_fee: _0,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct RuntimeDispatchInfo<_0, _1> {
+					pub weight: _1,
+					pub class: runtime_types::frame_support::dispatch::DispatchClass,
+					pub partial_fee: _0,
+				}
+			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
 				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
@@ -24497,6 +27144,52 @@ pub mod api {
 						>,
 						weight: runtime_types::sp_weights::weight_v2::Weight,
 					},
+					#[codec(index = 6)]
+					#[doc = "Dispatch a fallback call in the event the main call fails to execute."]
+					#[doc = "May be called from any origin except `None`."]
+					#[doc = ""]
+					#[doc = "This function first attempts to dispatch the `main` call."]
+					#[doc = "If the `main` call fails, the `fallback` is attemted."]
+					#[doc = "if the fallback is successfully dispatched, the weights of both calls"]
+					#[doc = "are accumulated and an event containing the main call error is deposited."]
+					#[doc = ""]
+					#[doc = "In the event of a fallback failure the whole call fails"]
+					#[doc = "with the weights returned."]
+					#[doc = ""]
+					#[doc = "- `main`: The main call to be dispatched. This is the primary action to execute."]
+					#[doc = "- `fallback`: The fallback call to be dispatched in case the `main` call fails."]
+					#[doc = ""]
+					#[doc = "## Dispatch Logic"]
+					#[doc = "- If the origin is `root`, both the main and fallback calls are executed without"]
+					#[doc = "  applying any origin filters."]
+					#[doc = "- If the origin is not `root`, the origin filter is applied to both the `main` and"]
+					#[doc = "  `fallback` calls."]
+					#[doc = ""]
+					#[doc = "## Use Case"]
+					#[doc = "- Some use cases might involve submitting a `batch` type call in either main, fallback"]
+					#[doc = "  or both."]
+					if_else {
+						main: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::RuntimeCall,
+						>,
+						fallback: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::RuntimeCall,
+						>,
+					},
+					#[codec(index = 7)]
+					#[doc = "Dispatches a function call with a provided origin."]
+					#[doc = ""]
+					#[doc = "Almost the same as [`Pallet::dispatch_as`] but forwards any error of the inner call."]
+					#[doc = ""]
+					#[doc = "The dispatch origin for this call must be _Root_."]
+					dispatch_as_fallible {
+						as_origin: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::OriginCaller,
+						>,
+						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
+							runtime_types::quantus_runtime::RuntimeCall,
+						>,
+					},
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -24553,6 +27246,12 @@ pub mod api {
 						result:
 							::core::result::Result<(), runtime_types::sp_runtime::DispatchError>,
 					},
+					#[codec(index = 6)]
+					#[doc = "Main call was dispatched."]
+					IfElseMainSuccess,
+					#[codec(index = 7)]
+					#[doc = "The fallback call was dispatched."]
+					IfElseFallbackCalled { main_error: runtime_types::sp_runtime::DispatchError },
 				}
 			}
 		}
@@ -24740,13 +27439,19 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
+					#[doc = "A vesting schedule has been created."]
+					VestingCreated {
+						account: ::subxt::ext::subxt_core::utils::AccountId32,
+						schedule_index: ::core::primitive::u32,
+					},
+					#[codec(index = 1)]
 					#[doc = "The amount vested has been updated. This could indicate a change in funds available."]
 					#[doc = "The balance given is the amount which is left unvested (and thus locked)."]
 					VestingUpdated {
 						account: ::subxt::ext::subxt_core::utils::AccountId32,
 						unvested: ::core::primitive::u128,
 					},
-					#[codec(index = 1)]
+					#[codec(index = 2)]
 					#[doc = "An \\[account\\] has become fully vested."]
 					VestingCompleted { account: ::subxt::ext::subxt_core::utils::AccountId32 },
 				}
@@ -24784,9 +27489,20 @@ pub mod api {
 				V1,
 			}
 		}
-		pub mod pallet_wormhole {
+		pub mod primitive_types {
 			use super::runtime_types;
-			pub mod pallet {
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct U512(pub [::core::primitive::u64; 8usize]);
+		}
+		pub mod qp_dilithium_crypto {
+			use super::runtime_types;
+			pub mod types {
 				use super::runtime_types;
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -24799,14 +27515,11 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-				pub enum Call {
+				pub enum DilithiumSignatureScheme {
 					#[codec(index = 0)]
-					verify_wormhole_proof {
-						proof_bytes:
-							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
-						block_number: ::core::primitive::u32,
-					},
+					Dilithium(
+						runtime_types::qp_dilithium_crypto::types::DilithiumSignatureWithPublic,
+					),
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -24819,48 +27532,12 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "The `Error` enum of this pallet."]
-				pub enum Error {
-					#[codec(index = 0)]
-					InvalidProof,
-					#[codec(index = 1)]
-					ProofDeserializationFailed,
-					#[codec(index = 2)]
-					VerificationFailed,
-					#[codec(index = 3)]
-					InvalidPublicInputs,
-					#[codec(index = 4)]
-					NullifierAlreadyUsed,
-					#[codec(index = 5)]
-					VerifierNotAvailable,
-					#[codec(index = 6)]
-					InvalidStorageRoot,
-					#[codec(index = 7)]
-					StorageRootMismatch,
-					#[codec(index = 8)]
-					BlockNotFound,
-					#[codec(index = 9)]
-					InvalidBlockNumber,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "The `Event` enum of this pallet"]
-				pub enum Event {
-					#[codec(index = 0)]
-					ProofVerified { exit_amount: ::core::primitive::u128 },
+				pub struct DilithiumSignatureWithPublic {
+					pub bytes: [::core::primitive::u8; 7219usize],
 				}
 			}
 		}
-		pub mod poseidon_resonance {
+		pub mod qp_poseidon {
 			use super::runtime_types;
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -24870,17 +27547,6 @@ pub mod api {
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub struct PoseidonHasher;
-		}
-		pub mod primitive_types {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct U512(pub [::core::primitive::u64; 8usize]);
 		}
 		pub mod qp_scheduler {
 			use super::runtime_types;
@@ -25008,8 +27674,6 @@ pub mod api {
 				Balances(runtime_types::pallet_balances::pallet::Call),
 				#[codec(index = 4)]
 				Sudo(runtime_types::pallet_sudo::pallet::Call),
-				#[codec(index = 6)]
-				Wormhole(runtime_types::pallet_wormhole::pallet::Call),
 				#[codec(index = 8)]
 				Vesting(runtime_types::pallet_vesting::pallet::Call),
 				#[codec(index = 9)]
@@ -25053,8 +27717,6 @@ pub mod api {
 				Sudo(runtime_types::pallet_sudo::pallet::Error),
 				#[codec(index = 5)]
 				QPoW(runtime_types::pallet_qpow::pallet::Error),
-				#[codec(index = 6)]
-				Wormhole(runtime_types::pallet_wormhole::pallet::Error),
 				#[codec(index = 8)]
 				Vesting(runtime_types::pallet_vesting::pallet::Error),
 				#[codec(index = 9)]
@@ -25081,6 +27743,8 @@ pub mod api {
 				Recovery(runtime_types::pallet_recovery::pallet::Error),
 				#[codec(index = 21)]
 				Assets(runtime_types::pallet_assets::pallet::Error),
+				#[codec(index = 22)]
+				AssetsHolder(runtime_types::pallet_assets_holder::pallet::Error),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -25100,8 +27764,6 @@ pub mod api {
 				Sudo(runtime_types::pallet_sudo::pallet::Event),
 				#[codec(index = 5)]
 				QPoW(runtime_types::pallet_qpow::pallet::Event),
-				#[codec(index = 6)]
-				Wormhole(runtime_types::pallet_wormhole::pallet::Event),
 				#[codec(index = 7)]
 				MiningRewards(runtime_types::pallet_mining_rewards::pallet::Event),
 				#[codec(index = 8)]
@@ -25130,6 +27792,8 @@ pub mod api {
 				Recovery(runtime_types::pallet_recovery::pallet::Event),
 				#[codec(index = 21)]
 				Assets(runtime_types::pallet_assets::pallet::Event),
+				#[codec(index = 22)]
+				AssetsHolder(runtime_types::pallet_assets_holder::pallet::Event),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -25225,10 +27889,84 @@ pub mod api {
 				DivisionByZero,
 			}
 		}
+		pub mod sp_core {
+			use super::runtime_types;
+			pub mod crypto {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct KeyTypeId(pub [::core::primitive::u8; 4usize]);
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct OpaqueMetadata(
+				pub ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+			);
+		}
+		pub mod sp_inherents {
+			use super::runtime_types;
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct CheckInherentsResult {
+				pub okay: ::core::primitive::bool,
+				pub fatal_error: ::core::primitive::bool,
+				pub errors: runtime_types::sp_inherents::InherentData,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct InherentData {
+				pub data: ::subxt::ext::subxt_core::utils::KeyedVec<
+					[::core::primitive::u8; 8usize],
+					::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+				>,
+			}
+		}
 		pub mod sp_runtime {
 			use super::runtime_types;
 			pub mod generic {
 				use super::runtime_types;
+				pub mod block {
+					use super::runtime_types;
+					#[derive(
+						:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+						:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+						Debug,
+					)]
+					#[decode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+					)]
+					#[encode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+					)]
+					pub struct Block<_0, _1> {
+						pub header: _0,
+						pub extrinsics: ::subxt::ext::subxt_core::alloc::vec::Vec<_1>,
+					}
+				}
 				pub mod digest {
 					use super::runtime_types;
 					#[derive(
@@ -25808,6 +28546,28 @@ pub mod api {
 						Mortal255(::core::primitive::u8),
 					}
 				}
+				pub mod header {
+					use super::runtime_types;
+					#[derive(
+						:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+						:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+						Debug,
+					)]
+					#[decode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+					)]
+					#[encode_as_type(
+						crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+					)]
+					pub struct Header<_0> {
+						pub parent_hash: ::subxt::ext::subxt_core::utils::H256,
+						#[codec(compact)]
+						pub number: _0,
+						pub state_root: ::subxt::ext::subxt_core::utils::H256,
+						pub extrinsics_root: ::subxt::ext::subxt_core::utils::H256,
+						pub digest: runtime_types::sp_runtime::generic::digest::Digest,
+					}
+				}
 			}
 			pub mod proving_trie {
 				use super::runtime_types;
@@ -25851,6 +28611,125 @@ pub mod api {
 					RootMismatch,
 					#[codec(index = 13)]
 					DecodeError,
+				}
+			}
+			pub mod transaction_validity {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum InvalidTransaction {
+					#[codec(index = 0)]
+					Call,
+					#[codec(index = 1)]
+					Payment,
+					#[codec(index = 2)]
+					Future,
+					#[codec(index = 3)]
+					Stale,
+					#[codec(index = 4)]
+					BadProof,
+					#[codec(index = 5)]
+					AncientBirthBlock,
+					#[codec(index = 6)]
+					ExhaustsResources,
+					#[codec(index = 7)]
+					Custom(::core::primitive::u8),
+					#[codec(index = 8)]
+					BadMandatory,
+					#[codec(index = 9)]
+					MandatoryValidation,
+					#[codec(index = 10)]
+					BadSigner,
+					#[codec(index = 11)]
+					IndeterminateImplicit,
+					#[codec(index = 12)]
+					UnknownOrigin,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum TransactionSource {
+					#[codec(index = 0)]
+					InBlock,
+					#[codec(index = 1)]
+					Local,
+					#[codec(index = 2)]
+					External,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum TransactionValidityError {
+					#[codec(index = 0)]
+					Invalid(runtime_types::sp_runtime::transaction_validity::InvalidTransaction),
+					#[codec(index = 1)]
+					Unknown(runtime_types::sp_runtime::transaction_validity::UnknownTransaction),
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum UnknownTransaction {
+					#[codec(index = 0)]
+					CannotLookup,
+					#[codec(index = 1)]
+					NoUnsignedValidator,
+					#[codec(index = 2)]
+					Custom(::core::primitive::u8),
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct ValidTransaction {
+					pub priority: ::core::primitive::u64,
+					pub requires: ::subxt::ext::subxt_core::alloc::vec::Vec<
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+					>,
+					pub provides: ::subxt::ext::subxt_core::alloc::vec::Vec<
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+					>,
+					pub longevity: ::core::primitive::u64,
+					pub propagate: ::core::primitive::bool,
 				}
 			}
 			#[derive(
@@ -25902,6 +28781,19 @@ pub mod api {
 			pub struct DispatchErrorWithPostInfo<_0> {
 				pub post_info: _0,
 				pub error: runtime_types::sp_runtime::DispatchError,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub enum ExtrinsicInclusionMode {
+				#[codec(index = 0)]
+				AllExtrinsics,
+				#[codec(index = 1)]
+				OnlyInherents,
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,

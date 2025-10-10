@@ -5,13 +5,12 @@
 /// - Loading and decrypting wallet data with post-quantum cryptography
 /// - Managing wallet files on disk with quantum-resistant security
 use crate::error::{Result, WalletError};
-use rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
+use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
 use sp_core::{
-	crypto::{AccountId32, Ss58Codec},
+	crypto::{AccountId32, Ss58AddressFormat, Ss58Codec},
 	ByteArray,
 };
-
 // Quantum-safe encryption imports
 use aes_gcm::{
 	aead::{Aead, AeadCore, KeyInit, OsRng as AesOsRng},
@@ -22,7 +21,7 @@ use rand::{rng, RngCore};
 
 use std::path::Path;
 
-use dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
+use qp_dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
 use sp_runtime::traits::IdentifyAccount;
 
 /// Quantum-safe key pair using Dilithium post-quantum signatures
@@ -80,11 +79,11 @@ impl QuantumKeyPair {
 
 	pub fn to_account_id_ss58check(&self) -> String {
 		let account = self.to_account_id_32();
-		account.to_ss58check()
+		account.to_ss58check_with_version(Ss58AddressFormat::custom(189))
 	}
 
 	/// Convert to subxt Signer for use
-	pub fn to_subxt_signer(&self) -> Result<dilithium_crypto::types::DilithiumPair> {
+	pub fn to_subxt_signer(&self) -> Result<qp_dilithium_crypto::types::DilithiumPair> {
 		// Convert to DilithiumPair first - now it implements subxt::tx::Signer<ChainConfig>
 		let resonance_pair = self.to_resonance_pair()?;
 
@@ -96,7 +95,7 @@ impl QuantumKeyPair {
 		// from_ss58check returns a Result, we unwrap it to panic on invalid input.
 		// We then convert the AccountId32 struct to a Vec<u8> to be compatible with Polkadart's
 		// typedef.
-		AsRef::<[u8]>::as_ref(&AccountId32::from_ss58check(s).unwrap()).to_vec()
+		AsRef::<[u8]>::as_ref(&AccountId32::from_ss58check_with_version(s).unwrap().0).to_vec()
 	}
 }
 
@@ -121,6 +120,7 @@ pub struct WalletData {
 	pub name: String,
 	pub keypair: QuantumKeyPair,
 	pub mnemonic: Option<String>,
+	pub derivation_path: String,
 	pub metadata: std::collections::HashMap<String, String>,
 }
 
@@ -145,7 +145,7 @@ impl Keystore {
 
 	/// Load an encrypted wallet from disk
 	pub fn load_wallet(&self, name: &str) -> Result<Option<EncryptedWallet>> {
-		let wallet_file = self.storage_path.join(format!("{}.json", name));
+		let wallet_file = self.storage_path.join(format!("{name}.json"));
 
 		if !wallet_file.exists() {
 			return Ok(None);
@@ -180,7 +180,7 @@ impl Keystore {
 
 	/// Delete a wallet file
 	pub fn delete_wallet(&self, name: &str) -> Result<bool> {
-		let wallet_file = self.storage_path.join(format!("{}.json", name));
+		let wallet_file = self.storage_path.join(format!("{name}.json"));
 
 		if wallet_file.exists() {
 			std::fs::remove_file(wallet_file)?;
@@ -271,8 +271,8 @@ impl Keystore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
-	use rusty_crystals_dilithium::ml_dsa_87::Keypair;
+	use qp_dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
+	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
 	use tempfile::TempDir;
 
 	#[test]
@@ -331,6 +331,7 @@ mod tests {
 
 	#[test]
 	fn test_quantum_keypair_address_generation() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 		// Test with known test keypairs
 		let test_pairs = vec![
 			("crystal_alice", crystal_alice()),
@@ -346,33 +347,31 @@ mod tests {
 			let ss58_address = quantum_keypair.to_account_id_ss58check();
 
 			// Verify address format
-			assert!(ss58_address.starts_with("5"), "SS58 address for {} should start with 5", name);
+			assert!(ss58_address.starts_with("qz"), "SS58 address for {name} should start with 5");
 			assert!(
 				ss58_address.len() >= 47,
-				"SS58 address for {} should be at least 47 characters",
-				name
+				"SS58 address for {name} should be at least 47 characters"
 			);
 
 			// Verify consistency between methods
 			assert_eq!(
 				account_id.to_ss58check(),
 				ss58_address,
-				"Address methods should be consistent for {}",
-				name
+				"Address methods should be consistent for {name}"
 			);
 
 			// Verify it matches the direct DilithiumPair method
 			let expected_address = resonance_pair.public().into_account().to_ss58check();
 			assert_eq!(
 				ss58_address, expected_address,
-				"Address should match DilithiumPair method for {}",
-				name
+				"Address should match DilithiumPair method for {name}"
 			);
 		}
 	}
 
 	#[test]
 	fn test_ss58_to_account_id_conversion() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 		// Test with known addresses
 		let test_cases = vec![
 			crystal_alice().public().into_account().to_ss58check(),
@@ -401,6 +400,8 @@ mod tests {
 	#[test]
 	fn test_address_consistency_across_conversions() {
 		// Start with a Dilithium keypair
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
 		let entropy = [3u8; 32];
 		let dilithium_keypair = Keypair::generate(Some(&entropy));
 
@@ -422,6 +423,7 @@ mod tests {
 	#[test]
 	fn test_known_test_wallet_addresses() {
 		// Test that our test wallets generate expected addresses
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 		let alice_pair = crystal_alice();
 		let bob_pair = dilithium_bob();
 		let charlie_pair = crystal_charlie();
@@ -440,14 +442,14 @@ mod tests {
 		assert_ne!(alice_addr, charlie_addr, "Alice and Charlie should have different addresses");
 
 		// All should be valid SS58 addresses
-		assert!(alice_addr.starts_with("5"), "Alice address should be valid SS58");
-		assert!(bob_addr.starts_with("5"), "Bob address should be valid SS58");
-		assert!(charlie_addr.starts_with("5"), "Charlie address should be valid SS58");
+		assert!(alice_addr.starts_with("qz"), "Alice address should be valid SS58");
+		assert!(bob_addr.starts_with("qz"), "Bob address should be valid SS58");
+		assert!(charlie_addr.starts_with("qz"), "Charlie address should be valid SS58");
 
 		println!("Test wallet addresses:");
-		println!("  Alice:   {}", alice_addr);
-		println!("  Bob:     {}", bob_addr);
-		println!("  Charlie: {}", charlie_addr);
+		println!("  Alice:   {alice_addr}");
+		println!("  Bob:     {bob_addr}");
+		println!("  Charlie: {charlie_addr}");
 	}
 
 	#[test]
@@ -463,12 +465,14 @@ mod tests {
 		for invalid_addr in invalid_addresses {
 			let result =
 				std::panic::catch_unwind(|| QuantumKeyPair::ss58_to_account_id(invalid_addr));
-			assert!(result.is_err(), "Should panic on invalid address: {}", invalid_addr);
+			assert!(result.is_err(), "Should panic on invalid address: {invalid_addr}");
 		}
 	}
 
 	#[test]
 	fn test_stored_wallet_address_generation() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
 		// This test reproduces the error that occurs when loading a wallet from disk
 		// and trying to generate its address - simulating the real-world scenario
 
@@ -486,6 +490,7 @@ mod tests {
 			name: "test_crystal_alice".to_string(),
 			keypair: quantum_keypair.clone(),
 			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
@@ -494,7 +499,7 @@ mod tests {
 
 		match result {
 			Ok(address) => {
-				println!("✅ Address generation successful: {}", address);
+				println!("✅ Address generation successful: {address}");
 				// Verify it matches the expected address
 				let expected = alice_pair.public().into_account().to_ss58check();
 				assert_eq!(address, expected, "Stored wallet should generate correct address");
@@ -526,6 +531,7 @@ mod tests {
 			name: "test_crystal_alice".to_string(),
 			keypair: quantum_keypair,
 			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
@@ -551,7 +557,7 @@ mod tests {
 
 		match result {
 			Ok(address) => {
-				println!("✅ Encrypted wallet address generation successful: {}", address);
+				println!("✅ Encrypted wallet address generation successful: {address}");
 				// Verify it matches the expected address
 				let expected = alice_pair.public().into_account().to_ss58check();
 				assert_eq!(address, expected, "Decrypted wallet should generate correct address");
@@ -584,6 +590,7 @@ mod tests {
 			name: "crystal_alice".to_string(),
 			keypair: quantum_keypair,
 			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
@@ -608,7 +615,7 @@ mod tests {
 
 		match result {
 			Ok(address) => {
-				println!("✅ Send command flow works: {}", address);
+				println!("✅ Send command flow works: {address}");
 				// If this passes, the bug is fixed
 				let expected = alice_pair.public().into_account().to_ss58check();
 				assert_eq!(address, expected, "Loaded wallet should generate correct address");

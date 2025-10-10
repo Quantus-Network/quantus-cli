@@ -4,9 +4,9 @@
 //! across all CLI modules.
 
 use crate::{error::QuantusError, log_verbose};
-use dilithium_crypto::types::DilithiumSignatureScheme;
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
-use poseidon_resonance::PoseidonHasher;
+use qp_dilithium_crypto::types::DilithiumSignatureScheme;
+use qp_poseidon::PoseidonHasher;
 use sp_core::{crypto::AccountId32, ByteArray};
 use sp_runtime::{traits::IdentifyAccount, MultiAddress};
 use std::{sync::Arc, time::Duration};
@@ -36,7 +36,7 @@ impl subxt::config::Hasher for SubxtPoseidonHasher {
 pub enum ChainConfig {}
 impl Config for ChainConfig {
 	type AccountId = AccountId32;
-	type Address = MultiAddress<Self::AccountId, u32>;
+	type Address = MultiAddress<Self::AccountId, ()>;
 	type Signature = DilithiumSignatureScheme;
 	type Hasher = SubxtPoseidonHasher;
 	type Header = SubstrateHeader<u32, SubxtPoseidonHasher>;
@@ -45,6 +45,7 @@ impl Config for ChainConfig {
 }
 
 /// Wrapper around OnlineClient that also stores the node URL and RPC client
+#[derive(Clone)]
 pub struct QuantusClient {
 	client: OnlineClient<ChainConfig>,
 	rpc_client: Arc<WsClient>,
@@ -59,8 +60,7 @@ impl QuantusClient {
 		// Validate URL format and provide helpful error messages
 		if !node_url.starts_with("ws://") && !node_url.starts_with("wss://") {
 			return Err(QuantusError::NetworkError(format!(
-                "Invalid WebSocket URL: '{}'. URL must start with 'ws://' (unsecured) or 'wss://' (secured)",
-                node_url
+                "Invalid WebSocket URL: '{node_url}'. URL must start with 'ws://' (unsecured) or 'wss://' (secured)"
             )));
 		}
 
@@ -83,7 +83,7 @@ impl QuantusClient {
             .await
             .map_err(|e| {
                 // Provide more helpful error messages for common issues
-                let error_str = format!("{:?}", e);
+                let error_str = format!("{e:?}");
                 let error_msg = if error_str.contains("TimedOut") || error_str.contains("timed out") {
                     if node_url.starts_with("ws://") && (node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm")) {
                         format!(
@@ -92,12 +92,12 @@ impl QuantusClient {
                             node_url.strip_prefix("ws://").unwrap_or(node_url)
                         )
                     } else {
-                        format!("Connection timed out. Please check if the node is running and accessible at: {}", node_url)
+                        format!("Connection timed out. Please check if the node is running and accessible at: {node_url}")
                     }
                 } else if error_str.contains("HTTP") {
-                    format!("HTTP error: {}. This might indicate the node doesn't support WebSocket connections", error_str)
+                    format!("HTTP error: {error_str}. This might indicate the node doesn't support WebSocket connections")
                 } else {
-                    format!("Failed to create RPC client: {}", error_str)
+                    format!("Failed to create RPC client: {error_str}")
                 };
                 QuantusError::NetworkError(error_msg)
             })?;
@@ -109,9 +109,7 @@ impl QuantusClient {
 		let rpc_client = RpcClient::new(ws_client.clone());
 
 		// Create SubXT client using the configured RPC client
-		let client = OnlineClient::<ChainConfig>::from_rpc_client(rpc_client)
-			.await
-			.map_err(|e| QuantusError::NetworkError(format!("Failed to connect: {:?}", e)))?;
+		let client = OnlineClient::<ChainConfig>::from_rpc_client(rpc_client).await?;
 
 		log_verbose!("✅ Connected to Quantus node successfully!");
 
@@ -146,8 +144,7 @@ impl QuantusClient {
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch latest block hash: {:?}",
-					e
+					"Failed to fetch latest block hash: {e:?}"
 				))
 			})?;
 
@@ -177,12 +174,7 @@ impl QuantusClient {
 
 		let storage_at = self.client.storage().at(latest_block_hash);
 
-		let account_info = storage_at.fetch_or_default(&storage_addr).await.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!(
-				"Failed to fetch account info from best block: {:?}",
-				e
-			))
-		})?;
+		let account_info = storage_at.fetch_or_default(&storage_addr).await?;
 
 		log_verbose!("✅ Nonce from best block: {}", account_info.nonce);
 		Ok(account_info.nonce as u64)
@@ -199,8 +191,7 @@ impl QuantusClient {
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch genesis hash: {:?}",
-					e
+					"Failed to fetch genesis hash: {e:?}"
 				))
 			})?;
 
@@ -219,8 +210,7 @@ impl QuantusClient {
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch runtime version: {:?}",
-					e
+					"Failed to fetch runtime version: {e:?}"
 				))
 			})?;
 
@@ -260,8 +250,8 @@ impl QuantusClient {
 						}
 					}
 				},
-				Err(e) => {
-					log_verbose!("❌ {} failed: {:?}", call_name, e);
+				Err(_e) => {
+					log_verbose!("❌ {} failed: {:?}", call_name, _e);
 				},
 			}
 		}
@@ -272,12 +262,12 @@ impl QuantusClient {
 }
 
 // Implement subxt::tx::Signer for ResonancePair
-impl subxt::tx::Signer<ChainConfig> for dilithium_crypto::types::DilithiumPair {
+impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::DilithiumPair {
 	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
 		let resonance_public =
-			dilithium_crypto::types::DilithiumPublic::from_slice(self.public.as_slice())
+			qp_dilithium_crypto::types::DilithiumPublic::from_slice(self.public.as_slice())
 				.expect("Invalid public key");
-		<dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
+		<qp_dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
 			resonance_public,
 		)
 	}
@@ -287,7 +277,10 @@ impl subxt::tx::Signer<ChainConfig> for dilithium_crypto::types::DilithiumPair {
 		// sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in
 		// ResonanceSignatureScheme
 		let signature_with_public =
-			<dilithium_crypto::types::DilithiumPair as sp_core::Pair>::sign(self, signer_payload);
-		dilithium_crypto::types::DilithiumSignatureScheme::Dilithium(signature_with_public)
+			<qp_dilithium_crypto::types::DilithiumPair as sp_core::Pair>::sign(
+				self,
+				signer_payload,
+			);
+		qp_dilithium_crypto::types::DilithiumSignatureScheme::Dilithium(signature_with_public)
 	}
 }

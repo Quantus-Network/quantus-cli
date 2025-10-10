@@ -1,7 +1,10 @@
 //! `quantus tech-collective` subcommand - tech collective management
 use crate::{
 	chain::quantus_subxt,
-	cli::{common::resolve_address, progress_spinner::wait_for_tx_confirmation},
+	cli::{
+		address_format::QuantusSS58, common::resolve_address,
+		progress_spinner::wait_for_tx_confirmation,
+	},
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 };
@@ -111,8 +114,8 @@ pub async fn add_member(
 	log_verbose!("   Member: {}", who_address.bright_cyan());
 
 	// Parse the member address
-	let member_account_sp = AccountId32::from_ss58check(who_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
+	let (member_account_sp, _) = AccountId32::from_ss58check_with_version(who_address)
+		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
@@ -149,8 +152,8 @@ pub async fn remove_member(
 	log_verbose!("   Member: {}", who_address.bright_cyan());
 
 	// Parse the member address
-	let member_account_sp = AccountId32::from_ss58check(who_address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {:?}", e)))?;
+	let (member_account_sp, _) = AccountId32::from_ss58check_with_version(who_address)
+		.map_err(|e| QuantusError::Generic(format!("Invalid member address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let member_account_bytes: [u8; 32] = *member_account_sp.as_ref();
@@ -212,8 +215,8 @@ pub async fn is_member(
 	log_verbose!("   Address: {}", address.bright_cyan());
 
 	// Parse the address
-	let account_sp = AccountId32::from_ss58check(address)
-		.map_err(|e| QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
+	let (account_sp, _) = AccountId32::from_ss58check_with_version(address)
+		.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 
 	// Convert to subxt_core AccountId32
 	let account_bytes: [u8; 32] = *account_sp.as_ref();
@@ -230,7 +233,7 @@ pub async fn is_member(
 	let member_data = storage_at
 		.fetch(&storage_addr)
 		.await
-		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch member data: {:?}", e)))?;
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch member data: {e:?}")))?;
 
 	Ok(member_data.is_some())
 }
@@ -249,9 +252,10 @@ pub async fn get_member_count(
 
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let count_data = storage_at.fetch(&storage_addr).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to fetch member count: {:?}", e))
-	})?;
+	let count_data = storage_at
+		.fetch(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch member count: {e:?}")))?;
 
 	Ok(count_data)
 }
@@ -272,7 +276,7 @@ pub async fn get_member_list(
 
 	let mut members = Vec::new();
 	let mut iter = storage_at.iter(members_storage).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to create members iterator: {:?}", e))
+		QuantusError::NetworkError(format!("Failed to create members iterator: {e:?}"))
 	})?;
 
 	while let Some(result) = iter.next().await {
@@ -286,7 +290,7 @@ pub async fn get_member_list(
 					let account_bytes: [u8; 32] =
 						key[key.len() - 32..].try_into().unwrap_or([0u8; 32]);
 					let sp_account = AccountId32::from(account_bytes);
-					log_verbose!("Found member: {}", sp_account.to_ss58check());
+					log_verbose!("Found member: {}", sp_account.to_quantus_ss58());
 					members.push(sp_account);
 				}
 			},
@@ -314,9 +318,10 @@ pub async fn get_sudo_account(
 
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let sudo_account = storage_at.fetch(&storage_addr).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to fetch sudo account: {:?}", e))
-	})?;
+	let sudo_account = storage_at
+		.fetch(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch sudo account: {e:?}")))?;
 
 	// Convert from subxt_core AccountId32 to sp_core AccountId32
 	if let Some(subxt_account) = sudo_account {
@@ -449,7 +454,7 @@ pub async fn handle_tech_collective_command(
 							log_print!(
 								"{}. {}",
 								(index + 1).to_string().bright_blue(),
-								member.to_ss58check().bright_green()
+								member.to_quantus_ss58().bright_green()
 							);
 						}
 					},
@@ -510,7 +515,7 @@ pub async fn handle_tech_collective_command(
 
 			match get_sudo_account(&quantus_client).await? {
 				Some(sudo_account) => {
-					let sudo_address = sudo_account.to_ss58check();
+					let sudo_address = sudo_account.to_quantus_ss58();
 					log_verbose!("🔍 Found sudo account: {}", sudo_address);
 					log_success!("✅ Found sudo account: {}", sudo_address.bright_green());
 

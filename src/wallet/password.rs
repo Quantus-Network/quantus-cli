@@ -1,6 +1,5 @@
-use colored::Colorize;
-
 use crate::{error::Result, log_print, log_verbose, wallet::WalletManager};
+use colored::Colorize;
 
 /// Get wallet password with convenience options
 pub fn get_wallet_password(
@@ -20,8 +19,7 @@ pub fn get_wallet_password(
 		let pwd = std::fs::read_to_string(&file_path)
 			.map_err(|e| {
 				crate::error::QuantusError::Generic(format!(
-					"Failed to read password file '{}': {}",
-					file_path, e
+					"Failed to read password file '{file_path}': {e}"
 				))
 			})?
 			.trim()
@@ -51,14 +49,14 @@ pub fn get_wallet_password(
 	}
 
 	// Option 6: Prompt user for password
-	get_password_from_user(&format!("Enter password for wallet '{}'", wallet_name))
+	get_password_from_user(&format!("Enter password for wallet '{wallet_name}'"))
 }
 
 /// Get mnemonic phrase from user
 pub fn get_mnemonic_from_user() -> Result<String> {
 	log_print!("{}", "Please enter or paste your secret phrase:".bright_yellow());
 	let mnemonic = rpassword::read_password().map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to read secret phrase: {}", e))
+		crate::error::QuantusError::Generic(format!("Failed to read secret phrase: {e}"))
 	})?;
 	Ok(mnemonic.trim().to_string())
 }
@@ -67,7 +65,7 @@ pub fn get_mnemonic_from_user() -> Result<String> {
 pub fn get_password_from_user(prompt: &str) -> Result<String> {
 	log_print!("{}", prompt.bright_yellow());
 	let password = rpassword::read_password().map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to read password: {}", e))
+		crate::error::QuantusError::Generic(format!("Failed to read password: {e}"))
 	})?;
 	Ok(password)
 }

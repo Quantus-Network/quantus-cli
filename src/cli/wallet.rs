@@ -3,7 +3,7 @@ use crate::{
 	chain::quantus_subxt,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
-	wallet::{password::get_mnemonic_from_user, WalletManager},
+	wallet::{password::get_mnemonic_from_user, WalletManager, DEFAULT_DERIVATION_PATH},
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -22,6 +22,14 @@ pub enum WalletCommands {
 		/// Password to encrypt the wallet (optional, will prompt if not provided)
 		#[arg(short, long)]
 		password: Option<String>,
+
+		/// Derivation path (default: m/44'/189189'/0'/0/0)
+		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
+		derivation_path: String,
+
+		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
+		#[arg(long)]
+		no_derivation: bool,
 	},
 
 	/// View wallet information
@@ -59,6 +67,29 @@ pub enum WalletCommands {
 		/// Mnemonic phrase (24 words, will prompt if not provided)
 		#[arg(short, long)]
 		mnemonic: Option<String>,
+
+		/// Password to encrypt the wallet (optional, will prompt if not provided)
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Derivation path (default: m/44'/189189'/0'/0/0)
+		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
+		derivation_path: String,
+
+		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
+		#[arg(long)]
+		no_derivation: bool,
+	},
+
+	/// Create wallet from 32-byte seed
+	FromSeed {
+		/// Wallet name
+		#[arg(short, long)]
+		name: String,
+
+		/// 32-byte seed in hex format (64 hex characters)
+		#[arg(short, long)]
+		seed: String,
 
 		/// Password to encrypt the wallet (optional, will prompt if not provided)
 		#[arg(short, long)]
@@ -103,8 +134,8 @@ pub async fn get_account_nonce(
 	log_verbose!("#️⃣ Querying nonce for account: {}", account_address.bright_green());
 
 	// Parse the SS58 address to AccountId32 (sp-core)
-	let account_id_sp = AccountId32::from_ss58check(account_address)
-		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {:?}", e)))?;
+	let (account_id_sp, _) = AccountId32::from_ss58check_with_version(account_address)
+		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
 
 	log_verbose!("🔍 SP Account ID: {:?}", account_id_sp);
 
@@ -123,9 +154,10 @@ pub async fn get_account_nonce(
 
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let account_info = storage_at.fetch_or_default(&storage_addr).await.map_err(|e| {
-		QuantusError::NetworkError(format!("Failed to fetch account info: {:?}", e))
-	})?;
+	let account_info = storage_at
+		.fetch_or_default(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}")))?;
 
 	log_verbose!("✅ Account info retrieved with storage query!");
 	log_verbose!("🔢 Nonce: {}", account_info.nonce);
@@ -139,16 +171,36 @@ pub async fn handle_wallet_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WalletCommands::Create { name, password } => {
+		WalletCommands::Create { name, password, derivation_path, no_derivation } => {
 			log_print!("🔐 Creating new quantum wallet...");
 
 			let wallet_manager = WalletManager::new()?;
 
-			match wallet_manager.create_wallet(&name, password.as_deref()).await {
+			// Choose creation method based on flags
+			let result = if no_derivation {
+				// Use master seed directly (like quantus-node --no-derivation)
+				wallet_manager.create_wallet_no_derivation(&name, password.as_deref()).await
+			} else if derivation_path == DEFAULT_DERIVATION_PATH {
+				wallet_manager.create_wallet(&name, password.as_deref()).await
+			} else {
+				wallet_manager
+					.create_wallet_with_derivation_path(
+						&name,
+						password.as_deref(),
+						&derivation_path,
+					)
+					.await
+			};
+
+			match result {
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
+					log_success!(
+						"Derivation path: {}",
+						wallet_info.derivation_path.bright_magenta()
+					);
 					log_success!(
 						"Created: {}",
 						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
@@ -156,7 +208,7 @@ pub async fn handle_wallet_command(
 					log_success!("✅ Wallet created successfully!");
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to create wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to create wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -187,6 +239,10 @@ pub async fn handle_wallet_command(
 								log_print!("   Address: {}", wallet.address.bright_cyan());
 								log_print!("   Type: {}", wallet.key_type.bright_yellow());
 								log_print!(
+									"   Derivation Path: {}",
+									wallet.derivation_path.bright_magenta()
+								);
+								log_print!(
 									"   Created: {}",
 									wallet
 										.created_at
@@ -200,7 +256,7 @@ pub async fn handle_wallet_command(
 							}
 						},
 					Err(e) => {
-						log_error!("{}", format!("❌ Failed to view wallets: {}", e).red());
+						log_error!("{}", format!("❌ Failed to view wallets: {e}").red());
 						return Err(e);
 					},
 				}
@@ -212,6 +268,10 @@ pub async fn handle_wallet_command(
 						log_print!("Name: {}", wallet_info.name.bright_green());
 						log_print!("Address: {}", wallet_info.address.bright_cyan());
 						log_print!("Key Type: {}", wallet_info.key_type.bright_yellow());
+						log_print!(
+							"Derivation Path: {}",
+							wallet_info.derivation_path.bright_magenta()
+						);
 						log_print!(
 							"Created: {}",
 							wallet_info
@@ -230,14 +290,14 @@ pub async fn handle_wallet_command(
 						}
 					},
 					Ok(None) => {
-						log_error!("{}", format!("❌ Wallet '{}' not found", wallet_name).red());
+						log_error!("{}", format!("❌ Wallet '{wallet_name}' not found").red());
 						log_print!(
 							"Use {} to see available wallets",
 							"quantus wallet list".bright_green()
 						);
 					},
 					Err(e) => {
-						log_error!("{}", format!("❌ Failed to view wallet: {}", e).red());
+						log_error!("{}", format!("❌ Failed to view wallet: {e}").red());
 						return Err(e);
 					},
 				}
@@ -281,7 +341,7 @@ pub async fn handle_wallet_command(
                     );
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to export wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to export wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -289,7 +349,7 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Import { name, mnemonic, password } => {
+		WalletCommands::Import { name, mnemonic, password, derivation_path, no_derivation } => {
 			log_print!("📥 Importing wallet...");
 
 			let wallet_manager = WalletManager::new()?;
@@ -302,14 +362,36 @@ pub async fn handle_wallet_command(
 			let final_password =
 				crate::wallet::password::get_wallet_password(&name, password, None)?;
 
-			match wallet_manager
-				.import_wallet(&name, &mnemonic_phrase, Some(&final_password))
-				.await
-			{
+			// Choose import method based on flags
+			let result = if no_derivation {
+				// Use master seed directly (like quantus-node --no-derivation)
+				wallet_manager
+					.import_wallet_no_derivation(&name, &mnemonic_phrase, Some(&final_password))
+					.await
+			} else if derivation_path == DEFAULT_DERIVATION_PATH {
+				wallet_manager
+					.import_wallet(&name, &mnemonic_phrase, Some(&final_password))
+					.await
+			} else {
+				wallet_manager
+					.import_wallet_with_derivation_path(
+						&name,
+						&mnemonic_phrase,
+						Some(&final_password),
+						&derivation_path,
+					)
+					.await
+			};
+
+			match result {
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
+					log_success!(
+						"Derivation path: {}",
+						wallet_info.derivation_path.bright_magenta()
+					);
 					log_success!(
 						"Imported: {}",
 						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
@@ -317,7 +399,39 @@ pub async fn handle_wallet_command(
 					log_success!("✅ Wallet imported successfully!");
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to import wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to import wallet: {e}").red());
+					return Err(e);
+				},
+			}
+
+			Ok(())
+		},
+
+		WalletCommands::FromSeed { name, seed, password } => {
+			log_print!("🌱 Creating wallet from seed...");
+
+			let wallet_manager = WalletManager::new()?;
+
+			// Get password from user if not provided
+			let final_password =
+				crate::wallet::password::get_wallet_password(&name, password, None)?;
+
+			match wallet_manager
+				.create_wallet_from_seed(&name, &seed, Some(&final_password))
+				.await
+			{
+				Ok(wallet_info) => {
+					log_success!("Wallet name: {}", name.bright_green());
+					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
+					log_success!(
+						"Created: {}",
+						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
+					);
+					log_success!("✅ Wallet created from seed successfully!");
+				},
+				Err(e) => {
+					log_error!("{}", format!("❌ Failed to create wallet from seed: {e}").red());
 					return Err(e);
 				},
 			}
@@ -369,7 +483,7 @@ pub async fn handle_wallet_command(
 						);
 					},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to list wallets: {}", e).red());
+					log_error!("{}", format!("❌ Failed to list wallets: {e}").red());
 					return Err(e);
 				},
 			}
@@ -422,23 +536,23 @@ pub async fn handle_wallet_command(
 							log_success!("✅ Wallet '{}' deleted successfully!", name);
 						},
 						Ok(false) => {
-							log_error!("{}", format!("❌ Wallet '{}' was not found", name).red());
+							log_error!("{}", format!("❌ Wallet '{name}' was not found").red());
 						},
 						Err(e) => {
-							log_error!("{}", format!("❌ Failed to delete wallet: {}", e).red());
+							log_error!("{}", format!("❌ Failed to delete wallet: {e}").red());
 							return Err(e);
 						},
 					}
 				},
 				Ok(None) => {
-					log_error!("{}", format!("❌ Wallet '{}' not found", name).red());
+					log_error!("{}", format!("❌ Wallet '{name}' not found").red());
 					log_print!(
 						"Use {} to see available wallets",
 						"quantus wallet list".bright_green()
 					);
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to check wallet: {}", e).red());
+					log_error!("{}", format!("❌ Failed to check wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -456,7 +570,7 @@ pub async fn handle_wallet_command(
 				(Some(addr), _) => {
 					// Validate the provided address
 					AccountId32::from_ss58check(&addr)
-						.map_err(|e| QuantusError::Generic(format!("Invalid address: {:?}", e)))?;
+						.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 					addr
 				},
 				(None, Some(wallet_name)) => {

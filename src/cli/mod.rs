@@ -2,12 +2,17 @@ use crate::{log_error, log_print, log_success, log_verbose};
 use clap::Subcommand;
 use colored::Colorize;
 
+pub mod address_format;
+pub mod batch;
+pub mod block;
 pub mod common;
 pub mod events;
 pub mod generic_call;
+pub mod high_security;
 pub mod metadata;
 pub mod preimage;
 pub mod progress_spinner;
+pub mod recovery;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
@@ -50,11 +55,27 @@ pub enum Commands {
 		/// Optional tip amount to prioritize the transaction (e.g., "1", "0.5")
 		#[arg(long)]
 		tip: Option<String>,
+
+		/// Manual nonce override (use with caution - must be exact next nonce for account)
+		#[arg(long)]
+		nonce: Option<u32>,
 	},
+
+	/// Batch transfer commands and configuration
+	#[command(subcommand)]
+	Batch(batch::BatchCommands),
 
 	/// Reversible transfer commands
 	#[command(subcommand)]
 	Reversible(reversible::ReversibleCommands),
+
+	/// High-Security commands (reversible account settings)
+	#[command(subcommand)]
+	HighSecurity(high_security::HighSecurityCommands),
+
+	/// Recovery commands
+	#[command(subcommand)]
+	Recovery(recovery::RecoveryCommands),
 
 	/// Scheduler commands
 	#[command(subcommand)]
@@ -169,6 +190,10 @@ pub enum Commands {
 		/// Show metadata statistics
 		#[arg(long)]
 		metadata: bool,
+
+		/// Show available JSON-RPC methods exposed by the node
+		#[arg(long)]
+		rpc_methods: bool,
 	},
 
 	/// Explore chain metadata and available pallets/calls
@@ -191,6 +216,10 @@ pub enum Commands {
 
 	/// Check compatibility with the connected node
 	CompatibilityCheck,
+
+	/// Block management and analysis commands
+	#[command(subcommand)]
+	Block(block::BlockCommands),
 }
 
 /// Developer subcommands
@@ -208,11 +237,25 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip } =>
-			send::handle_send_command(from, to, &amount, node_url, password, password_file, tip)
-				.await,
+		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
+			send::handle_send_command(
+				from,
+				to,
+				&amount,
+				node_url,
+				password,
+				password_file,
+				tip,
+				nonce,
+			)
+			.await,
+		Commands::Batch(batch_cmd) => batch::handle_batch_command(batch_cmd, node_url).await,
 		Commands::Reversible(reversible_cmd) =>
 			reversible::handle_reversible_command(reversible_cmd, node_url).await,
+		Commands::HighSecurity(hs_cmd) =>
+			high_security::handle_high_security_command(hs_cmd, node_url).await,
+		Commands::Recovery(recovery_cmd) =>
+			recovery::handle_recovery_command(recovery_cmd, node_url).await,
 		Commands::Scheduler(scheduler_cmd) =>
 			scheduler::handle_scheduler_command(scheduler_cmd, node_url).await,
 		Commands::Storage(storage_cmd) =>
@@ -273,9 +316,16 @@ pub async fn execute_command(
 				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
 			)
 			.await,
-		Commands::System { runtime, metadata } =>
-			if runtime || metadata {
-				system::handle_system_extended_command(node_url, runtime, metadata, verbose).await
+		Commands::System { runtime, metadata, rpc_methods } =>
+			if runtime || metadata || rpc_methods {
+				system::handle_system_extended_command(
+					node_url,
+					runtime,
+					metadata,
+					rpc_methods,
+					verbose,
+				)
+				.await
 			} else {
 				system::handle_system_command(node_url).await
 			},
@@ -286,6 +336,7 @@ pub async fn execute_command(
 			Ok(())
 		},
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
+		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
 	}
 }
 
@@ -319,7 +370,7 @@ async fn handle_generic_call_command(
 
 	let args_vec = if let Some(args_str) = args {
 		serde_json::from_str(&args_str).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid JSON for arguments: {}", e))
+			crate::error::QuantusError::Generic(format!("Invalid JSON for arguments: {e}"))
 		})?
 	} else {
 		vec![]

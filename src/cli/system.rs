@@ -73,7 +73,7 @@ impl ChainHeadTokenClient {
 	/// Gets genesis hash
 	pub async fn get_genesis_hash(&self) -> Result<String, Box<dyn Error>> {
 		let hash = self.rpc.chainspec_v1_genesis_hash().await?;
-		Ok(format!("{:?}", hash)) // Format the hash for display
+		Ok(format!("{hash:?}")) // Format the hash for display
 	}
 }
 
@@ -83,8 +83,7 @@ pub async fn get_complete_chain_info(node_url: &str) -> crate::error::Result<Cha
 		Ok(client) => {
 			let token_info = client.get_token_info().await.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"ChainHead token info failed: {:?}",
-					e
+					"ChainHead token info failed: {e:?}"
 				))
 			})?;
 
@@ -95,10 +94,7 @@ pub async fn get_complete_chain_info(node_url: &str) -> crate::error::Result<Cha
 		},
 		Err(e) => {
 			log_verbose!("❌ ChainHead client creation failed: {:?}", e);
-			Err(crate::error::QuantusError::NetworkError(format!(
-				"ChainHead client failed: {:?}",
-				e
-			)))
+			Err(crate::error::QuantusError::NetworkError(format!("ChainHead client failed: {e:?}")))
 		},
 	}
 }
@@ -167,8 +163,7 @@ pub async fn get_detailed_chain_params(
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::NetworkError(format!(
-				"Failed to fetch current block: {:?}",
-				e
+				"Failed to fetch current block: {e:?}"
 			))
 		})?;
 
@@ -194,10 +189,7 @@ pub async fn get_detailed_chain_params(
 		.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
 		.await
 		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!(
-				"Failed to fetch runtime info: {:?}",
-				e
-			))
+			crate::error::QuantusError::NetworkError(format!("Failed to fetch runtime info: {e:?}"))
 		})?;
 
 	if show_raw_data {
@@ -237,8 +229,7 @@ pub async fn get_detailed_chain_params(
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::NetworkError(format!(
-				"Failed to fetch chain properties: {:?}",
-				e
+				"Failed to fetch chain properties: {e:?}"
 			))
 		})?;
 
@@ -306,6 +297,7 @@ pub async fn handle_system_extended_command(
 	node_url: &str,
 	show_runtime: bool,
 	show_metadata: bool,
+	show_rpc_methods: bool,
 	verbose: bool,
 ) -> crate::error::Result<()> {
 	log_print!("🚀 Extended System Information");
@@ -323,6 +315,48 @@ pub async fn handle_system_extended_command(
 	if show_metadata {
 		log_print!("");
 		get_metadata_stats(quantus_client.client()).await?;
+	}
+
+	if show_rpc_methods {
+		log_print!("");
+		list_rpc_methods(&quantus_client).await?;
+	}
+
+	Ok(())
+}
+
+/// List all available JSON-RPC methods from the connected node
+async fn list_rpc_methods(quantus_client: &QuantusClient) -> crate::error::Result<()> {
+	use jsonrpsee::core::client::ClientT;
+
+	log_print!("🧭 JSON-RPC Methods exposed by node:");
+
+	let response: serde_json::Value = quantus_client
+		.rpc_client()
+		.request::<serde_json::Value, [(); 0]>("rpc_methods", [])
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!("Failed to fetch rpc_methods: {e:?}"))
+		})?;
+
+	if let Some(methods) = response.get("methods").and_then(|v| v.as_array()) {
+		for method in methods {
+			if let Some(name) = method.as_str() {
+				log_print!("\t{}", name);
+			}
+		}
+		if let Some(version) = response.get("version").and_then(|v| v.as_u64()) {
+			log_verbose!("RPC methods schema version: {}", version);
+		}
+	} else if let Some(array) = response.as_array() {
+		for method in array {
+			if let Some(name) = method.as_str() {
+				log_print!("\t{}", name);
+			}
+		}
+	} else {
+		log_print!("   (no methods returned or unexpected format)");
+		log_verbose!("rpc_methods raw response: {:?}", response);
 	}
 
 	Ok(())
