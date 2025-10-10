@@ -239,7 +239,7 @@ async fn submit_runtime_upgrade(
 	type ProposalBounded =
 		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded<
 			quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall,
-			quantus_subxt::api::runtime_types::poseidon_resonance::PoseidonHasher,
+			quantus_subxt::api::runtime_types::qp_poseidon::PoseidonHasher,
 		>;
 
 	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash_parsed;
@@ -283,7 +283,7 @@ async fn submit_runtime_upgrade_with_preimage(
 	password: Option<String>,
 	password_file: Option<String>,
 ) -> crate::error::Result<()> {
-	use poseidon_resonance::PoseidonHasher;
+	use qp_poseidon::PoseidonHasher;
 
 	log_print!("📝 Submitting Runtime Upgrade Proposal to Tech Referenda");
 	log_print!("   📂 WASM file: {}", wasm_file.display().to_string().bright_cyan());
@@ -341,7 +341,7 @@ async fn submit_runtime_upgrade_with_preimage(
 	type ProposalBounded =
 		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded<
 			quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall,
-			quantus_subxt::api::runtime_types::poseidon_resonance::PoseidonHasher,
+			quantus_subxt::api::runtime_types::qp_poseidon::PoseidonHasher,
 		>;
 
 	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash;

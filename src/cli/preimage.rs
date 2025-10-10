@@ -361,7 +361,7 @@ async fn create_preimage(
 	password: Option<String>,
 	password_file: Option<String>,
 ) -> crate::error::Result<()> {
-	use poseidon_resonance::PoseidonHasher;
+	use qp_poseidon::PoseidonHasher;
 
 	log_print!("📦 Creating preimage from WASM file: {}", wasm_file.display());
 	log_print!("   👤 From: {}", from_str.bright_yellow());
