@@ -143,6 +143,44 @@ pub enum TechReferendaCommands {
 		password_file: Option<String>,
 	},
 
+	/// Refund submission deposit for a completed Tech Referendum
+	RefundSubmissionDeposit {
+		/// Referendum index
+		#[arg(short, long)]
+		index: u32,
+
+		/// Wallet name that submitted the referendum
+		#[arg(short, long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Refund decision deposit for a completed Tech Referendum
+	RefundDecisionDeposit {
+		/// Referendum index
+		#[arg(short, long)]
+		index: u32,
+
+		/// Wallet name that placed the decision deposit
+		#[arg(short, long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
 	/// Get Tech Referenda configuration
 	Config,
 }
@@ -155,10 +193,11 @@ pub async fn handle_tech_referenda_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		TechReferendaCommands::Submit { preimage_hash, from, password, password_file } =>
+		TechReferendaCommands::Submit { preimage_hash, from, password, password_file } => {
 			submit_runtime_upgrade(&quantus_client, &preimage_hash, &from, password, password_file)
-				.await,
-		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } =>
+				.await
+		},
+		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } => {
 			submit_runtime_upgrade_with_preimage(
 				&quantus_client,
 				&wasm_file,
@@ -166,19 +205,31 @@ pub async fn handle_tech_referenda_command(
 				password,
 				password_file,
 			)
-			.await,
+			.await
+		},
 		TechReferendaCommands::List => list_proposals(&quantus_client).await,
 		TechReferendaCommands::Get { index } => get_proposal_details(&quantus_client, index).await,
-		TechReferendaCommands::Status { index } =>
-			get_proposal_status(&quantus_client, index).await,
-		TechReferendaCommands::PlaceDecisionDeposit { index, from, password, password_file } =>
-			place_decision_deposit(&quantus_client, index, &from, password, password_file).await,
-		TechReferendaCommands::Cancel { index, from, password, password_file } =>
-			cancel_proposal(&quantus_client, index, &from, password, password_file).await,
-		TechReferendaCommands::Kill { index, from, password, password_file } =>
-			kill_proposal(&quantus_client, index, &from, password, password_file).await,
-		TechReferendaCommands::Nudge { index, from, password, password_file } =>
-			nudge_proposal(&quantus_client, index, &from, password, password_file).await,
+		TechReferendaCommands::Status { index } => {
+			get_proposal_status(&quantus_client, index).await
+		},
+		TechReferendaCommands::PlaceDecisionDeposit { index, from, password, password_file } => {
+			place_decision_deposit(&quantus_client, index, &from, password, password_file).await
+		},
+		TechReferendaCommands::Cancel { index, from, password, password_file } => {
+			cancel_proposal(&quantus_client, index, &from, password, password_file).await
+		},
+		TechReferendaCommands::Kill { index, from, password, password_file } => {
+			kill_proposal(&quantus_client, index, &from, password, password_file).await
+		},
+		TechReferendaCommands::Nudge { index, from, password, password_file } => {
+			nudge_proposal(&quantus_client, index, &from, password, password_file).await
+		},
+		TechReferendaCommands::RefundSubmissionDeposit { index, from, password, password_file } => {
+			refund_submission_deposit(&quantus_client, index, &from, password, password_file).await
+		},
+		TechReferendaCommands::RefundDecisionDeposit { index, from, password, password_file } => {
+			refund_decision_deposit(&quantus_client, index, &from, password, password_file).await
+		},
 		TechReferendaCommands::Config => get_config(&quantus_client).await,
 	}
 }
@@ -626,5 +677,65 @@ async fn get_config(
 		},
 	}
 
+	Ok(())
+}
+
+/// Refund submission deposit for a completed Tech Referendum
+async fn refund_submission_deposit(
+	quantus_client: &crate::chain::client::QuantusClient,
+	index: u32,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<()> {
+	log_print!("💰 Refunding submission deposit for Tech Referendum #{}", index);
+	log_print!("   🔑 Refund to: {}", from.bright_yellow());
+
+	// Load wallet keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+	// Create refund_submission_deposit call for TechReferenda instance
+	let refund_call = quantus_subxt::api::tx().tech_referenda().refund_submission_deposit(index);
+
+	let tx_hash = submit_transaction(quantus_client, &keypair, refund_call, None).await?;
+	log_print!(
+		"✅ {} Refund transaction submitted! Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		tx_hash
+	);
+
+	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
+	log_success!("🎉 {} Submission deposit refunded!", "FINISHED".bright_green().bold());
+	log_print!("💡 Check your balance to confirm the refund");
+	Ok(())
+}
+
+/// Refund decision deposit for a completed Tech Referendum
+async fn refund_decision_deposit(
+	quantus_client: &crate::chain::client::QuantusClient,
+	index: u32,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<()> {
+	log_print!("💰 Refunding decision deposit for Tech Referendum #{}", index);
+	log_print!("   🔑 Refund to: {}", from.bright_yellow());
+
+	// Load wallet keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+	// Create refund_decision_deposit call for TechReferenda instance
+	let refund_call = quantus_subxt::api::tx().tech_referenda().refund_decision_deposit(index);
+
+	let tx_hash = submit_transaction(quantus_client, &keypair, refund_call, None).await?;
+	log_print!(
+		"✅ {} Refund transaction submitted! Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		tx_hash
+	);
+
+	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
+	log_success!("🎉 {} Decision deposit refunded!", "FINISHED".bright_green().bold());
+	log_print!("💡 Check your balance to confirm the refund");
 	Ok(())
 }
