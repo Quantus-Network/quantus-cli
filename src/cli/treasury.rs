@@ -1,5 +1,9 @@
 //! `quantus treasury` subcommand - manage Treasury
-use crate::{chain::quantus_subxt, log_print};
+use crate::{
+	chain::quantus_subxt,
+	cli::{common::submit_transaction, progress_spinner::wait_for_tx_confirmation},
+	log_print, log_success,
+};
 use clap::Subcommand;
 use colored::Colorize;
 
@@ -14,6 +18,102 @@ pub enum TreasuryCommands {
 
 	/// Show Treasury information and how to spend from it
 	Info,
+
+	/// Submit a Treasury spend proposal via referendum (requires specific track)
+	/// This creates a referendum that, if approved, will approve a treasury spend
+	SubmitSpend {
+		/// Beneficiary address (will receive the funds)
+		#[arg(long)]
+		beneficiary: String,
+
+		/// Amount to spend (e.g., "100.0" for 100 QUAN)
+		#[arg(long)]
+		amount: String,
+
+		/// Track to use: "small", "medium", "big", or "treasurer"
+		/// - small: < 100 QUAN (Track 2)
+		/// - medium: < 1000 QUAN (Track 3)
+		/// - big: < 10000 QUAN (Track 4)
+		/// - treasurer: any amount (Track 5)
+		#[arg(long)]
+		track: String,
+
+		/// Wallet name to sign the transaction
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Payout an approved Treasury spend (anyone can call this)
+	Payout {
+		/// Spend index to payout
+		#[arg(long)]
+		index: u32,
+
+		/// Wallet name to sign the transaction
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Check and cleanup a Treasury spend status
+	CheckStatus {
+		/// Spend index to check
+		#[arg(long)]
+		index: u32,
+
+		/// Wallet name to sign the transaction
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// List active Treasury spends
+	ListSpends,
+
+	/// Directly create a Treasury spend via sudo (root only, for testing)
+	SpendSudo {
+		/// Beneficiary address (will receive the funds)
+		#[arg(long)]
+		beneficiary: String,
+
+		/// Amount to spend (e.g., "50.0" for 50 QUAN)
+		#[arg(long)]
+		amount: String,
+
+		/// Wallet name to sign with (must have sudo)
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
 }
 
 /// Handle treasury commands
@@ -27,6 +127,35 @@ pub async fn handle_treasury_command(
 		TreasuryCommands::Balance => get_treasury_balance(&quantus_client).await,
 		TreasuryCommands::Config => get_config(&quantus_client).await,
 		TreasuryCommands::Info => show_treasury_info().await,
+		TreasuryCommands::SubmitSpend {
+			beneficiary,
+			amount,
+			track,
+			from,
+			password,
+			password_file,
+		} => {
+			submit_spend_referendum(
+				&quantus_client,
+				&beneficiary,
+				&amount,
+				&track,
+				&from,
+				password,
+				password_file,
+			)
+			.await
+		},
+		TreasuryCommands::Payout { index, from, password, password_file } => {
+			payout_spend(&quantus_client, index, &from, password, password_file).await
+		},
+		TreasuryCommands::CheckStatus { index, from, password, password_file } => {
+			check_spend_status(&quantus_client, index, &from, password, password_file).await
+		},
+		TreasuryCommands::ListSpends => list_spends(&quantus_client).await,
+		TreasuryCommands::SpendSudo { beneficiary, amount, from, password, password_file } => {
+			spend_sudo(&quantus_client, &beneficiary, &amount, &from, password, password_file).await
+		},
 	}
 }
 
@@ -151,6 +280,301 @@ async fn show_treasury_info() -> crate::error::Result<()> {
 	log_print!("   quantus treasury config      - View Treasury configuration");
 	log_print!("   quantus referenda config     - View available tracks");
 	log_print!("");
+
+	Ok(())
+}
+
+/// Submit a Treasury spend proposal via referendum
+async fn submit_spend_referendum(
+	quantus_client: &crate::chain::client::QuantusClient,
+	beneficiary: &str,
+	amount: &str,
+	track: &str,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<()> {
+	use qp_poseidon::PoseidonHasher;
+	use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+	use subxt::tx::Payload;
+
+	log_print!("💰 Submitting Treasury Spend Referendum");
+	log_print!("   📍 Beneficiary: {}", beneficiary.bright_yellow());
+	log_print!("   💵 Amount: {}", amount.bright_green());
+	log_print!("   🛤️  Track: {}", track.bright_cyan());
+
+	// Parse amount
+	let amount_value = crate::cli::send::parse_amount(quantus_client, amount).await?;
+
+	// Parse beneficiary address
+	let beneficiary_resolved = crate::cli::common::resolve_address(beneficiary)?;
+	let (beneficiary_sp, _) = SpAccountId32::from_ss58check_with_version(&beneficiary_resolved)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Invalid beneficiary address '{beneficiary}': {e:?}"
+			))
+		})?;
+	let bytes: [u8; 32] = *beneficiary_sp.as_ref();
+	let beneficiary_account = subxt::utils::AccountId32::from(bytes);
+
+	// Create the treasury spend call using the transaction API
+	let beneficiary_multi = subxt::utils::MultiAddress::Id(beneficiary_account.clone());
+
+	let treasury_spend_call =
+		quantus_subxt::api::tx()
+			.treasury_pallet()
+			.spend((), amount_value, beneficiary_multi, None);
+
+	// Encode call_data - this is what we've been using and it works
+	// The issue was support threshold, not encoding
+	let encoded_call = treasury_spend_call
+		.encode_call_data(&quantus_client.client().metadata())
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to encode call: {:?}", e))
+		})?;
+
+	log_print!("📝 Creating preimage...");
+
+	// Load wallet keypair
+	let keypair =
+		crate::wallet::load_keypair_from_wallet(from, password.clone(), password_file.clone())?;
+
+	// Calculate preimage hash using Poseidon (runtime uses PoseidonHasher)
+	let preimage_hash: sp_core::H256 =
+		<PoseidonHasher as sp_runtime::traits::Hash>::hash(&encoded_call);
+
+	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
+
+	// Submit preimage
+	let preimage_call = quantus_subxt::api::tx().preimage().note_preimage(encoded_call.clone());
+	let preimage_tx_hash =
+		submit_transaction(quantus_client, &keypair, preimage_call, None).await?;
+	let _ = wait_for_tx_confirmation(quantus_client.client(), preimage_tx_hash).await?;
+
+	log_print!("✅ Preimage created");
+
+	// Determine the origin based on track
+	let origin_caller = match track.to_lowercase().as_str() {
+		"small" => quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::Origins(
+			quantus_subxt::api::runtime_types::quantus_runtime::governance::origins::pallet_custom_origins::Origin::SmallSpender,
+		),
+		"medium" => quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::Origins(
+			quantus_subxt::api::runtime_types::quantus_runtime::governance::origins::pallet_custom_origins::Origin::MediumSpender,
+		),
+		"big" => quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::Origins(
+			quantus_subxt::api::runtime_types::quantus_runtime::governance::origins::pallet_custom_origins::Origin::BigSpender,
+		),
+		"treasurer" => quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::Origins(
+			quantus_subxt::api::runtime_types::quantus_runtime::governance::origins::pallet_custom_origins::Origin::Treasurer,
+		),
+		_ => {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"Invalid track: {}. Must be 'small', 'medium', 'big', or 'treasurer'",
+				track
+			)))
+		},
+	};
+
+	// Create the bounded proposal
+	let proposal =
+		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded::Lookup {
+			hash: preimage_hash,
+			len: encoded_call.len() as u32,
+		};
+
+	log_print!("📜 Submitting referendum...");
+
+	// Submit referendum with DispatchTime::After
+	let enactment =
+		quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime::After(
+			1u32,
+		);
+	let submit_call =
+		quantus_subxt::api::tx().referenda().submit(origin_caller, proposal, enactment);
+	let submit_tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None).await?;
+	let _ = wait_for_tx_confirmation(quantus_client.client(), submit_tx_hash).await?;
+
+	log_print!("✅ {} Treasury spend referendum submitted!", "SUCCESS".bright_green().bold());
+	log_print!("💡 Next steps:");
+	log_print!("   1. Place decision deposit: quantus referenda place-decision-deposit --index <INDEX> --from {}", from);
+	log_print!(
+		"   2. Vote on the referendum: quantus referenda vote --index <INDEX> --aye --from <VOTER>"
+	);
+	log_print!(
+		"   3. After approval, payout: quantus treasury payout --index <SPEND_INDEX> --from {}",
+		from
+	);
+
+	Ok(())
+}
+
+/// Payout an approved Treasury spend
+async fn payout_spend(
+	quantus_client: &crate::chain::client::QuantusClient,
+	index: u32,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<()> {
+	log_print!("💸 Paying out Treasury Spend #{}", index);
+
+	// Load wallet keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+	// Create payout call
+	let payout_call = quantus_subxt::api::tx().treasury_pallet().payout(index);
+
+	let tx_hash = submit_transaction(quantus_client, &keypair, payout_call, None).await?;
+	log_print!(
+		"✅ {} Payout transaction submitted! Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		tx_hash
+	);
+
+	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
+	log_success!("🎉 {} Treasury spend paid out!", "FINISHED".bright_green().bold());
+	log_print!("💡 Use 'quantus treasury check-status --index {}' to cleanup", index);
+
+	Ok(())
+}
+
+/// Check and cleanup a Treasury spend status
+async fn check_spend_status(
+	quantus_client: &crate::chain::client::QuantusClient,
+	index: u32,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<()> {
+	log_print!("🔍 Checking Treasury Spend #{} status", index);
+
+	// Load wallet keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+	// Create check_status call
+	let check_call = quantus_subxt::api::tx().treasury_pallet().check_status(index);
+
+	let tx_hash = submit_transaction(quantus_client, &keypair, check_call, None).await?;
+	log_print!(
+		"✅ {} Check status transaction submitted! Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		tx_hash
+	);
+
+	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
+	log_success!("🎉 {} Spend status checked and cleaned up!", "FINISHED".bright_green().bold());
+
+	Ok(())
+}
+
+/// List active Treasury spends
+async fn list_spends(
+	quantus_client: &crate::chain::client::QuantusClient,
+) -> crate::error::Result<()> {
+	log_print!("📋 Active Treasury Spends");
+	log_print!("");
+
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	// Iterate through spend storage indices (0 to 100 for example)
+	let mut count = 0;
+	for spend_index in 0..100 {
+		let spend_addr = quantus_subxt::api::storage().treasury_pallet().spends(spend_index);
+		if let Some(spend_status) = storage_at.fetch(&spend_addr).await? {
+			log_print!("💰 Spend #{}", spend_index.to_string().bright_yellow().bold());
+			log_print!("   Amount: {} (raw)", spend_status.amount.to_string().bright_green());
+			log_print!(
+				"   Beneficiary: {}",
+				format!("{:?}", spend_status.beneficiary).bright_cyan()
+			);
+			log_print!("   Valid From: Block #{}", spend_status.valid_from);
+			log_print!("   Expires At: Block #{}", spend_status.expire_at);
+			log_print!(
+				"   Status: {}",
+				match spend_status.status {
+					quantus_subxt::api::runtime_types::pallet_treasury::PaymentState::Pending =>
+						"Pending".bright_yellow(),
+					quantus_subxt::api::runtime_types::pallet_treasury::PaymentState::Attempted { .. } =>
+						"Attempted".bright_blue(),
+					quantus_subxt::api::runtime_types::pallet_treasury::PaymentState::Failed =>
+						"Failed".bright_red(),
+				}
+			);
+			log_print!("");
+			count += 1;
+		}
+	}
+
+	if count == 0 {
+		log_print!("📭 No active Treasury spends found");
+	} else {
+		log_print!("Total: {} active spend(s)", count.to_string().bright_green().bold());
+	}
+
+	Ok(())
+}
+
+/// Directly create a Treasury spend via sudo (testing/root only)
+async fn spend_sudo(
+	quantus_client: &crate::chain::client::QuantusClient,
+	beneficiary: &str,
+	amount: &str,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<()> {
+	use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+
+	log_print!("💰 Creating Treasury Spend via Sudo (Root)");
+	log_print!("   📍 Beneficiary: {}", beneficiary.bright_yellow());
+	log_print!("   💵 Amount: {}", amount.bright_green());
+	log_print!("   ⚠️  Using ROOT permissions (sudo)");
+
+	// Parse amount
+	let amount_value = crate::cli::send::parse_amount(quantus_client, amount).await?;
+
+	// Parse beneficiary address
+	let beneficiary_resolved = crate::cli::common::resolve_address(beneficiary)?;
+	let (beneficiary_sp, _) = SpAccountId32::from_ss58check_with_version(&beneficiary_resolved)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Invalid beneficiary address '{beneficiary}': {e:?}"
+			))
+		})?;
+	let bytes: [u8; 32] = *beneficiary_sp.as_ref();
+	let beneficiary_account = subxt::utils::AccountId32::from(bytes);
+	let beneficiary_multi = subxt::utils::MultiAddress::Id(beneficiary_account.clone());
+
+	// Create the treasury spend call
+	let spend_call = quantus_subxt::api::Call::TreasuryPallet(
+		quantus_subxt::api::treasury_pallet::Call::spend {
+			asset_kind: Box::new(()),
+			amount: amount_value,
+			beneficiary: Box::new(beneficiary_multi),
+			valid_from: None,
+		},
+	);
+
+	// Wrap with sudo
+	let sudo_call = quantus_subxt::api::tx().sudo().sudo(spend_call);
+
+	// Load wallet keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+	// Submit transaction
+	log_print!("📡 Submitting sudo transaction...");
+	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None).await?;
+	log_print!(
+		"✅ {} Sudo transaction submitted! Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		tx_hash
+	);
+
+	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
+	log_success!("🎉 {} Treasury spend created via sudo!", "FINISHED".bright_green().bold());
+	log_print!("💡 Next step: quantus treasury list-spends");
+	log_print!("💡 Then payout: quantus treasury payout --index <INDEX> --from {}", beneficiary);
 
 	Ok(())
 }

@@ -193,11 +193,10 @@ pub async fn handle_tech_referenda_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		TechReferendaCommands::Submit { preimage_hash, from, password, password_file } => {
+		TechReferendaCommands::Submit { preimage_hash, from, password, password_file } =>
 			submit_runtime_upgrade(&quantus_client, &preimage_hash, &from, password, password_file)
-				.await
-		},
-		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } => {
+				.await,
+		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } =>
 			submit_runtime_upgrade_with_preimage(
 				&quantus_client,
 				&wasm_file,
@@ -205,31 +204,23 @@ pub async fn handle_tech_referenda_command(
 				password,
 				password_file,
 			)
-			.await
-		},
+			.await,
 		TechReferendaCommands::List => list_proposals(&quantus_client).await,
 		TechReferendaCommands::Get { index } => get_proposal_details(&quantus_client, index).await,
-		TechReferendaCommands::Status { index } => {
-			get_proposal_status(&quantus_client, index).await
-		},
-		TechReferendaCommands::PlaceDecisionDeposit { index, from, password, password_file } => {
-			place_decision_deposit(&quantus_client, index, &from, password, password_file).await
-		},
-		TechReferendaCommands::Cancel { index, from, password, password_file } => {
-			cancel_proposal(&quantus_client, index, &from, password, password_file).await
-		},
-		TechReferendaCommands::Kill { index, from, password, password_file } => {
-			kill_proposal(&quantus_client, index, &from, password, password_file).await
-		},
-		TechReferendaCommands::Nudge { index, from, password, password_file } => {
-			nudge_proposal(&quantus_client, index, &from, password, password_file).await
-		},
-		TechReferendaCommands::RefundSubmissionDeposit { index, from, password, password_file } => {
-			refund_submission_deposit(&quantus_client, index, &from, password, password_file).await
-		},
-		TechReferendaCommands::RefundDecisionDeposit { index, from, password, password_file } => {
-			refund_decision_deposit(&quantus_client, index, &from, password, password_file).await
-		},
+		TechReferendaCommands::Status { index } =>
+			get_proposal_status(&quantus_client, index).await,
+		TechReferendaCommands::PlaceDecisionDeposit { index, from, password, password_file } =>
+			place_decision_deposit(&quantus_client, index, &from, password, password_file).await,
+		TechReferendaCommands::Cancel { index, from, password, password_file } =>
+			cancel_proposal(&quantus_client, index, &from, password, password_file).await,
+		TechReferendaCommands::Kill { index, from, password, password_file } =>
+			kill_proposal(&quantus_client, index, &from, password, password_file).await,
+		TechReferendaCommands::Nudge { index, from, password, password_file } =>
+			nudge_proposal(&quantus_client, index, &from, password, password_file).await,
+		TechReferendaCommands::RefundSubmissionDeposit { index, from, password, password_file } =>
+			refund_submission_deposit(&quantus_client, index, &from, password, password_file).await,
+		TechReferendaCommands::RefundDecisionDeposit { index, from, password, password_file } =>
+			refund_decision_deposit(&quantus_client, index, &from, password, password_file).await,
 		TechReferendaCommands::Config => get_config(&quantus_client).await,
 	}
 }

@@ -609,8 +609,9 @@ pub async fn iterate_storage_entries(
 				{
 					if let Some(ref decode_type) = decode_as {
 						match decode_storage_value(&value_bytes, decode_type) {
-							Ok(decoded_value) =>
-								log_print!("   Value: {}", decoded_value.bright_green()),
+							Ok(decoded_value) => {
+								log_print!("   Value: {}", decoded_value.bright_green())
+							},
 							Err(_) => log_print!(
 								"   Value: 0x{} (raw)",
 								hex::encode(&value_bytes).dimmed()
@@ -685,8 +686,9 @@ async fn get_storage_by_storage_key(
 		if let Some(type_str) = decode_as {
 			log_print!("Attempting to decode as {}...", type_str.bright_cyan());
 			match decode_storage_value(&value_bytes, &type_str) {
-				Ok(decoded_value) =>
-					log_success!("Decoded Value: {}", decoded_value.bright_green()),
+				Ok(decoded_value) => {
+					log_success!("Decoded Value: {}", decoded_value.bright_green())
+				},
 				Err(e) => log_error!("{}", e),
 			}
 		}
@@ -779,8 +781,9 @@ async fn get_storage_by_parts(
 			if let Some(type_str) = decode_as {
 				log_print!("Attempting to decode as {}...", type_str.bright_cyan());
 				match decode_storage_value(&value_bytes, &type_str) {
-					Ok(decoded_value) =>
-						log_success!("Decoded Value: {}", decoded_value.bright_green()),
+					Ok(decoded_value) => {
+						log_success!("Decoded Value: {}", decoded_value.bright_green())
+					},
 					Err(e) => log_error!("{}", e),
 				}
 			}
