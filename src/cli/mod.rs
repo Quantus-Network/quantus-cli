@@ -22,6 +22,7 @@ pub mod storage;
 pub mod system;
 pub mod tech_collective;
 pub mod tech_referenda;
+pub mod treasury;
 pub mod wallet;
 
 /// Main CLI commands
@@ -99,6 +100,10 @@ pub enum Commands {
 	/// Standard Referenda management commands (public governance)
 	#[command(subcommand)]
 	Referenda(referenda::ReferendaCommands),
+
+	/// Treasury management commands
+	#[command(subcommand)]
+	Treasury(treasury::TreasuryCommands),
 
 	/// Runtime management commands (requires root/sudo permissions)
 	#[command(subcommand)]
@@ -282,6 +287,9 @@ pub async fn execute_command(
 		},
 		Commands::Referenda(referenda_cmd) => {
 			referenda::handle_referenda_command(referenda_cmd, node_url).await
+		},
+		Commands::Treasury(treasury_cmd) => {
+			treasury::handle_treasury_command(treasury_cmd, node_url).await
 		},
 		Commands::Runtime(runtime_cmd) => {
 			runtime::handle_runtime_command(runtime_cmd, node_url).await
