@@ -148,8 +148,9 @@ pub async fn handle_high_security_command(
 						"Missing delay parameter".to_string(),
 					));
 				},
-				(Some(_), Some(_)) =>
-					unreachable!("clap conflicts_with ensures these are mutually exclusive"),
+				(Some(_), Some(_)) => {
+					unreachable!("clap conflicts_with ensures these are mutually exclusive")
+				},
 			};
 
 			log_verbose!("✍️  Creating set_high_security extrinsic...");
