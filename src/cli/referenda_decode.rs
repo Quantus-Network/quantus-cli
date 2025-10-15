@@ -22,8 +22,9 @@ pub async fn decode_preimage(
 
 	let content = match preimage_result {
 		Ok(Some(bounded_vec)) => bounded_vec.0,
-		Ok(None) =>
-			return Err(QuantusError::Generic(format!("Preimage not found for hash {:?}", hash))),
+		Ok(None) => {
+			return Err(QuantusError::Generic(format!("Preimage not found for hash {:?}", hash)))
+		},
 		Err(e) => return Err(QuantusError::Generic(format!("Error fetching preimage: {:?}", e))),
 	};
 
@@ -190,7 +191,7 @@ fn decode_treasury_spend_call(args: &[u8]) -> crate::error::Result<String> {
 
 	// Calculate amount bytes length: total - 32 (beneficiary) - 1 (valid_from)
 	let amount_bytes_len = args.len() - 32 - 1;
-	if amount_bytes_len > 16 || amount_bytes_len < 1 {
+	if !(1..=16).contains(&amount_bytes_len) {
 		return Err(QuantusError::Generic(format!(
 			"Invalid amount bytes length: {}",
 			amount_bytes_len
