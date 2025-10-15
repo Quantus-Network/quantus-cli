@@ -66,6 +66,10 @@ pub enum ReferendaCommands {
 		/// Referendum index
 		#[arg(short, long)]
 		index: u32,
+
+		/// Decode and display the proposal call in human-readable format
+		#[arg(long)]
+		decode: bool,
 	},
 
 	/// Check the status of a Referendum
@@ -196,7 +200,8 @@ pub async fn handle_referenda_command(
 			)
 			.await,
 		ReferendaCommands::List => list_proposals(&quantus_client).await,
-		ReferendaCommands::Get { index } => get_proposal_details(&quantus_client, index).await,
+		ReferendaCommands::Get { index, decode } =>
+			get_proposal_details(&quantus_client, index, decode).await,
 		ReferendaCommands::Status { index } => get_proposal_status(&quantus_client, index).await,
 		ReferendaCommands::PlaceDecisionDeposit { index, from, password, password_file } =>
 			place_decision_deposit(&quantus_client, index, &from, password, password_file).await,
@@ -493,7 +498,10 @@ async fn list_proposals(
 async fn get_proposal_details(
 	quantus_client: &crate::chain::client::QuantusClient,
 	index: u32,
+	decode: bool,
 ) -> crate::error::Result<()> {
+	use quantus_subxt::api::runtime_types::pallet_referenda::types::ReferendumInfo;
+
 	log_print!("📄 Referendum #{} Details", index);
 	log_print!("");
 
@@ -505,8 +513,81 @@ async fn get_proposal_details(
 	let info = storage_at.fetch(&addr).await?;
 
 	if let Some(referendum_info) = info {
-		log_print!("📋 Referendum Information (raw):");
-		log_print!("{:#?}", referendum_info);
+		if decode {
+			// Try to decode the proposal
+			match &referendum_info {
+				ReferendumInfo::Ongoing(status) => {
+					log_print!("📊 {} Referendum #{}", "Ongoing".bright_green(), index);
+					log_print!("   🛤️  Track: {}", status.track);
+					log_print!("   📅 Submitted: Block #{}", status.submitted);
+					log_print!(
+						"   🗳️  Tally: Ayes: {}, Nays: {}, Support: {}",
+						status.tally.ayes,
+						status.tally.nays,
+						status.tally.support
+					);
+					log_print!("");
+
+					// Extract preimage hash and length from proposal
+					if let quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded::Lookup {
+						hash,
+						len,
+					} = &status.proposal
+					{
+						log_print!("📝 Proposal Details:");
+						log_print!("   🔗 Preimage Hash: {:?}", hash);
+						log_print!("   📏 Length: {} bytes", len);
+						log_print!("");
+
+						// Fetch and decode the preimage
+					match crate::cli::referenda_decode::decode_preimage(quantus_client, hash, *len).await {
+						Ok(decoded) => {
+							log_print!("✅ Decoded Proposal:");
+							log_print!("{}", decoded);
+						},
+						Err(e) => {
+							log_print!("⚠️  Could not decode proposal: {}", e);
+							log_print!("   Run 'quantus preimage get --hash {:?} --len {}' to see raw data", hash, len);
+						},
+					}
+					} else {
+						log_print!("⚠️  Proposal is inline (not a preimage lookup)");
+					}
+				},
+				ReferendumInfo::Approved(..) => {
+					log_print!("📊 {} Referendum #{}", "Approved".green(), index);
+					log_print!(
+						"   ℹ️  Proposal details no longer available (referendum finalized)"
+					);
+				},
+				ReferendumInfo::Rejected(..) => {
+					log_print!("📊 {} Referendum #{}", "Rejected".red(), index);
+					log_print!(
+						"   ℹ️  Proposal details no longer available (referendum finalized)"
+					);
+				},
+				ReferendumInfo::Cancelled(..) => {
+					log_print!("📊 {} Referendum #{}", "Cancelled".yellow(), index);
+					log_print!(
+						"   ℹ️  Proposal details no longer available (referendum finalized)"
+					);
+				},
+				ReferendumInfo::TimedOut(..) => {
+					log_print!("📊 {} Referendum #{}", "TimedOut".dimmed(), index);
+					log_print!(
+						"   ℹ️  Proposal details no longer available (referendum finalized)"
+					);
+				},
+				ReferendumInfo::Killed(..) => {
+					log_print!("📊 {} Referendum #{}", "Killed".red().bold(), index);
+					log_print!("   ℹ️  Proposal details no longer available (referendum killed)");
+				},
+			}
+		} else {
+			// Raw output (original behavior)
+			log_print!("📋 Referendum Information (raw):");
+			log_print!("{:#?}", referendum_info);
+		}
 	} else {
 		log_print!("📭 Referendum #{} not found", index);
 	}

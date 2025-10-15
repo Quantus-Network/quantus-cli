@@ -14,6 +14,7 @@ pub mod preimage;
 pub mod progress_spinner;
 pub mod recovery;
 pub mod referenda;
+pub mod referenda_decode;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
