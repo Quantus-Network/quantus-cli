@@ -1,8 +1,8 @@
 use crate::{
 	chain::{client::QuantusClient, quantus_subxt},
-	cli::{common::resolve_address, progress_spinner::wait_for_tx_confirmation},
+	cli::common::resolve_address,
 	error::Result,
-	log_error, log_info, log_print, log_success, log_verbose,
+	log_info, log_print, log_success, log_verbose,
 };
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
@@ -156,8 +156,10 @@ pub async fn transfer(
 	to_address: &str,
 	amount: u128,
 	tip: Option<u128>,
+	finalized: bool,
 ) -> Result<subxt::utils::H256> {
-	transfer_with_nonce(quantus_client, from_keypair, to_address, amount, tip, None).await
+	transfer_with_nonce(quantus_client, from_keypair, to_address, amount, tip, None, finalized)
+		.await
 }
 
 /// Transfer tokens with manual nonce override
@@ -168,6 +170,7 @@ pub async fn transfer_with_nonce(
 	amount: u128,
 	tip: Option<u128>,
 	nonce: Option<u32>,
+	finalized: bool,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating transfer transaction...");
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
@@ -209,6 +212,7 @@ pub async fn transfer_with_nonce(
 			transfer_call,
 			Some(tip_to_use),
 			manual_nonce,
+			finalized,
 		)
 		.await?
 	} else {
@@ -217,6 +221,7 @@ pub async fn transfer_with_nonce(
 			from_keypair,
 			transfer_call,
 			Some(tip_to_use),
+			finalized,
 		)
 		.await?
 	};
@@ -232,6 +237,7 @@ pub async fn batch_transfer(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	transfers: Vec<(String, u128)>, // (to_address, amount) pairs
 	tip: Option<u128>,
+	finalized: bool,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating batch transfer transaction with {} transfers...", transfers.len());
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
@@ -311,6 +317,7 @@ pub async fn batch_transfer(
 		from_keypair,
 		batch_call,
 		Some(tip_to_use),
+		finalized,
 	)
 	.await?;
 
@@ -331,6 +338,7 @@ pub async fn handle_send_command(
 	password_file: Option<String>,
 	tip: Option<String>,
 	nonce: Option<u32>,
+	finalized: bool,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -389,33 +397,25 @@ pub async fn handle_send_command(
 		amount,
 		tip_amount,
 		nonce,
+		finalized,
 	)
 	.await?;
 
 	log_print!("✅ {} Transaction submitted! Hash: {:?}", "SUCCESS".bright_green().bold(), tx_hash);
+	log_success!("🎉 {} Transaction confirmed!", "FINISHED".bright_green().bold());
 
-	let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
+	// Show updated balance with proper formatting
+	let new_balance = get_balance(&quantus_client, &from_account_id).await?;
+	let formatted_new_balance = format_balance_with_symbol(&quantus_client, new_balance).await?;
 
-	if success {
-		log_info!("✅ Transaction confirmed and finalized on chain");
-		log_success!("🎉 {} Transaction confirmed!", "FINISHED".bright_green().bold());
-
-		// Show updated balance with proper formatting
-		let new_balance = get_balance(&quantus_client, &from_account_id).await?;
-		let formatted_new_balance =
-			format_balance_with_symbol(&quantus_client, new_balance).await?;
-
-		// Calculate and display transaction fee in verbose mode
-		let fee_paid = balance.saturating_sub(new_balance).saturating_sub(amount);
-		if fee_paid > 0 {
-			let formatted_fee = format_balance_with_symbol(&quantus_client, fee_paid).await?;
-			log_verbose!("💸 Transaction fee: {}", formatted_fee.bright_cyan());
-		}
-
-		log_print!("💰 New balance: {}", formatted_new_balance.bright_yellow());
-	} else {
-		log_error!("Transaction failed!");
+	// Calculate and display transaction fee in verbose mode
+	let fee_paid = balance.saturating_sub(new_balance).saturating_sub(amount);
+	if fee_paid > 0 {
+		let formatted_fee = format_balance_with_symbol(&quantus_client, fee_paid).await?;
+		log_verbose!("💸 Transaction fee: {}", formatted_fee.bright_cyan());
 	}
+
+	log_print!("💰 New balance: {}", formatted_new_balance.bright_yellow());
 
 	Ok(())
 }

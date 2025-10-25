@@ -1,8 +1,5 @@
 //! `quantus preimage` subcommand - preimage operations
-use crate::{
-	chain::quantus_subxt, cli::progress_spinner::wait_for_tx_confirmation, error::QuantusError,
-	log_error, log_print, log_verbose,
-};
+use crate::{chain::quantus_subxt, error::QuantusError, log_error, log_print, log_verbose};
 use clap::Subcommand;
 use colored::Colorize;
 use std::str::FromStr;
@@ -73,6 +70,7 @@ pub enum PreimageCommands {
 pub async fn handle_preimage_command(
 	command: PreimageCommands,
 	node_url: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -87,13 +85,14 @@ pub async fn handle_preimage_command(
 			list_preimages(&quantus_client).await?;
 		},
 		PreimageCommands::Request { hash, from } => {
-			request_preimage(&quantus_client, &hash, &from).await?;
+			request_preimage(&quantus_client, &hash, &from, finalized).await?;
 		},
 		PreimageCommands::Note { content, from } => {
-			note_preimage(&quantus_client, &content, &from).await?;
+			note_preimage(&quantus_client, &content, &from, finalized).await?;
 		},
 		PreimageCommands::Create { wasm_file, from, password, password_file } => {
-			create_preimage(&quantus_client, wasm_file, &from, password, password_file).await?;
+			create_preimage(&quantus_client, wasm_file, &from, password, password_file, finalized)
+				.await?;
 		},
 	}
 
@@ -296,6 +295,7 @@ async fn request_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	hash_str: &str,
 	from_str: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	let preimage_hash = parse_hash(hash_str)?;
 
@@ -309,14 +309,18 @@ async fn request_preimage(
 	let request_call = quantus_subxt::api::tx().preimage().request_preimage(preimage_hash);
 
 	// Submit transaction
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, &keypair, request_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		&keypair,
+		request_call,
+		None,
+		finalized,
+	)
+	.await?;
 	log_print!("✅ Preimage request transaction submitted: {:?}", tx_hash);
 
 	// Wait for confirmation
 	log_print!("⏳ Waiting for preimage request confirmation...");
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 	log_print!("✅ Preimage request confirmed!");
 
 	Ok(())
@@ -327,6 +331,7 @@ async fn note_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	content_str: &str,
 	from_str: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	let content = hex::decode(content_str.trim_start_matches("0x"))
 		.map_err(|e| QuantusError::Generic(format!("Invalid hex content: {}", e)))?;
@@ -341,13 +346,18 @@ async fn note_preimage(
 	let note_call = quantus_subxt::api::tx().preimage().note_preimage(content);
 
 	// Submit transaction
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, &keypair, note_call, None).await?;
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		&keypair,
+		note_call,
+		None,
+		finalized,
+	)
+	.await?;
 	log_print!("✅ Preimage note transaction submitted: {:?}", tx_hash);
 
 	// Wait for confirmation
 	log_print!("⏳ Waiting for preimage note confirmation...");
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 	log_print!("✅ Preimage note confirmed!");
 
 	Ok(())
@@ -360,6 +370,7 @@ async fn create_preimage(
 	from_str: &str,
 	password: Option<String>,
 	password_file: Option<String>,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	use qp_poseidon::PoseidonHasher;
 
@@ -399,14 +410,18 @@ async fn create_preimage(
 
 	log_print!("📝 Submitting preimage...");
 	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
-	let preimage_tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, &keypair, note_preimage_tx, None)
-			.await?;
+	let preimage_tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		&keypair,
+		note_preimage_tx,
+		None,
+		finalized,
+	)
+	.await?;
 	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
 
 	// Wait for preimage transaction confirmation
 	log_print!("⏳ Waiting for preimage transaction confirmation...");
-	let _ = wait_for_tx_confirmation(quantus_client.client(), preimage_tx_hash).await?;
 	log_print!("✅ Preimage transaction confirmed!");
 
 	log_print!("🎯 Preimage created successfully!");

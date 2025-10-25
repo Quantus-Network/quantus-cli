@@ -75,6 +75,13 @@ macro_rules! log_error {
 }
 
 #[macro_export]
+macro_rules! log_warning {
+    ($($arg:tt)*) => {
+        $crate::log::warnln(format_args!($($arg)*))
+    };
+}
+
+#[macro_export]
 macro_rules! log_success {
     ($($arg:tt)*) => {
         $crate::log::successln(format_args!($($arg)*))

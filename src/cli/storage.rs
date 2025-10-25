@@ -2,7 +2,7 @@
 
 use crate::{
 	chain::{client::ChainConfig, quantus_subxt},
-	cli::{address_format::QuantusSS58, progress_spinner::wait_for_tx_confirmation},
+	cli::address_format::QuantusSS58,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 };
@@ -269,9 +269,14 @@ pub async fn set_storage_value(
 	// Wrap in Sudo::sudo call
 	let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
 
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		false,
+	)
+	.await?;
 
 	log_verbose!("📋 Set storage transaction submitted: {:?}", tx_hash);
 
@@ -832,14 +837,18 @@ pub async fn handle_storage_command(
 				.await
 			}
 		},
-		StorageCommands::List { pallet, names_only } =>
-			list_storage_items(&quantus_client, &pallet, names_only).await,
-		StorageCommands::ListPallets { with_counts } =>
-			list_pallets_with_storage(&quantus_client, with_counts).await,
-		StorageCommands::Stats { pallet, detailed } =>
-			show_storage_stats(&quantus_client, pallet, detailed).await,
-		StorageCommands::Iterate { pallet, name, limit, decode_as, block } =>
-			iterate_storage_entries(&quantus_client, &pallet, &name, limit, decode_as, block).await,
+		StorageCommands::List { pallet, names_only } => {
+			list_storage_items(&quantus_client, &pallet, names_only).await
+		},
+		StorageCommands::ListPallets { with_counts } => {
+			list_pallets_with_storage(&quantus_client, with_counts).await
+		},
+		StorageCommands::Stats { pallet, detailed } => {
+			show_storage_stats(&quantus_client, pallet, detailed).await
+		},
+		StorageCommands::Iterate { pallet, name, limit, decode_as, block } => {
+			iterate_storage_entries(&quantus_client, &pallet, &name, limit, decode_as, block).await
+		},
 
 		StorageCommands::Set { pallet, name, value, wallet, password, password_file, r#type } => {
 			log_print!("✍️  Setting storage for {}::{}", pallet.bright_green(), name.bright_cyan());
@@ -883,10 +892,11 @@ pub async fn handle_storage_command(
 							.map_err(|e| QuantusError::Generic(format!("Invalid hex value: {e}")))?
 					}
 				},
-				Some(unsupported) =>
+				Some(unsupported) => {
 					return Err(QuantusError::Generic(format!(
 						"Unsupported type for --type: {unsupported}"
-					))),
+					)))
+				},
 			};
 
 			log_verbose!("Encoded value bytes: 0x{}", hex::encode(&value_bytes).dimmed());
@@ -907,17 +917,6 @@ pub async fn handle_storage_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Set storage transaction confirmed!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
 
 			Ok(())
 		},

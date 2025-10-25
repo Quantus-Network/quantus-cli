@@ -11,7 +11,6 @@ pub mod generic_call;
 pub mod high_security;
 pub mod metadata;
 pub mod preimage;
-pub mod progress_spinner;
 pub mod recovery;
 pub mod referenda;
 pub mod referenda_decode;
@@ -245,10 +244,11 @@ pub async fn execute_command(
 	command: Commands,
 	node_url: &str,
 	verbose: bool,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
+		Commands::Send { from, to, amount, password, password_file, tip, nonce } => {
 			send::handle_send_command(
 				from,
 				to,
@@ -258,31 +258,46 @@ pub async fn execute_command(
 				password_file,
 				tip,
 				nonce,
+				finalized,
 			)
-			.await,
-		Commands::Batch(batch_cmd) => batch::handle_batch_command(batch_cmd, node_url).await,
-		Commands::Reversible(reversible_cmd) =>
-			reversible::handle_reversible_command(reversible_cmd, node_url).await,
-		Commands::HighSecurity(hs_cmd) =>
-			high_security::handle_high_security_command(hs_cmd, node_url).await,
-		Commands::Recovery(recovery_cmd) =>
-			recovery::handle_recovery_command(recovery_cmd, node_url).await,
-		Commands::Scheduler(scheduler_cmd) =>
-			scheduler::handle_scheduler_command(scheduler_cmd, node_url).await,
-		Commands::Storage(storage_cmd) =>
-			storage::handle_storage_command(storage_cmd, node_url).await,
-		Commands::TechCollective(tech_collective_cmd) =>
-			tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await,
-		Commands::Preimage(preimage_cmd) =>
-			preimage::handle_preimage_command(preimage_cmd, node_url).await,
-		Commands::TechReferenda(tech_referenda_cmd) =>
-			tech_referenda::handle_tech_referenda_command(tech_referenda_cmd, node_url).await,
-		Commands::Referenda(referenda_cmd) =>
-			referenda::handle_referenda_command(referenda_cmd, node_url).await,
-		Commands::Treasury(treasury_cmd) =>
-			treasury::handle_treasury_command(treasury_cmd, node_url).await,
-		Commands::Runtime(runtime_cmd) =>
-			runtime::handle_runtime_command(runtime_cmd, node_url).await,
+			.await
+		},
+		Commands::Batch(batch_cmd) => {
+			batch::handle_batch_command(batch_cmd, node_url, finalized).await
+		},
+		Commands::Reversible(reversible_cmd) => {
+			reversible::handle_reversible_command(reversible_cmd, node_url, finalized).await
+		},
+		Commands::HighSecurity(hs_cmd) => {
+			high_security::handle_high_security_command(hs_cmd, node_url, finalized).await
+		},
+		Commands::Recovery(recovery_cmd) => {
+			recovery::handle_recovery_command(recovery_cmd, node_url, finalized).await
+		},
+		Commands::Scheduler(scheduler_cmd) => {
+			scheduler::handle_scheduler_command(scheduler_cmd, node_url, finalized).await
+		},
+		Commands::Storage(storage_cmd) => {
+			storage::handle_storage_command(storage_cmd, node_url).await
+		},
+		Commands::TechCollective(tech_collective_cmd) => {
+			tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await
+		},
+		Commands::Preimage(preimage_cmd) => {
+			preimage::handle_preimage_command(preimage_cmd, node_url, finalized).await
+		},
+		Commands::TechReferenda(tech_referenda_cmd) => {
+			tech_referenda::handle_tech_referenda_command(tech_referenda_cmd, node_url).await
+		},
+		Commands::Referenda(referenda_cmd) => {
+			referenda::handle_referenda_command(referenda_cmd, node_url).await
+		},
+		Commands::Treasury(treasury_cmd) => {
+			treasury::handle_treasury_command(treasury_cmd, node_url).await
+		},
+		Commands::Runtime(runtime_cmd) => {
+			runtime::handle_runtime_command(runtime_cmd, node_url).await
+		},
 		Commands::Call {
 			pallet,
 			call,
@@ -293,7 +308,7 @@ pub async fn execute_command(
 			tip,
 			offline,
 			call_data_only,
-		} =>
+		} => {
 			handle_generic_call_command(
 				pallet,
 				call,
@@ -305,8 +320,10 @@ pub async fn execute_command(
 				offline,
 				call_data_only,
 				node_url,
+				finalized,
 			)
-			.await,
+			.await
+		},
 		Commands::Balance { address } => {
 			let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -326,11 +343,12 @@ pub async fn execute_command(
 				Ok(())
 			},
 		},
-		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } =>
+		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } => {
 			events::handle_events_command(
 				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
 			)
-			.await,
+			.await
+		},
 		Commands::System { runtime, metadata, rpc_methods } => {
 			if runtime || metadata || rpc_methods {
 				system::handle_system_extended_command(
@@ -345,8 +363,9 @@ pub async fn execute_command(
 				system::handle_system_command(node_url).await
 			}
 		},
-		Commands::Metadata { no_docs, stats_only, pallet } =>
-			metadata::handle_metadata_command(node_url, no_docs, stats_only, pallet).await,
+		Commands::Metadata { no_docs, stats_only, pallet } => {
+			metadata::handle_metadata_command(node_url, no_docs, stats_only, pallet).await
+		},
 		Commands::Version => {
 			log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 			Ok(())
@@ -368,6 +387,7 @@ async fn handle_generic_call_command(
 	offline: bool,
 	call_data_only: bool,
 	node_url: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	// For now, we only support live submission (not offline or call-data-only)
 	if offline {
@@ -392,7 +412,8 @@ async fn handle_generic_call_command(
 		vec![]
 	};
 
-	generic_call::handle_generic_call(&pallet, &call, args_vec, &keypair, tip, node_url).await
+	generic_call::handle_generic_call(&pallet, &call, args_vec, &keypair, tip, node_url, finalized)
+		.await
 }
 
 /// Handle developer subcommands

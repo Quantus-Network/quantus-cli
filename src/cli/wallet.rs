@@ -224,7 +224,7 @@ pub async fn handle_wallet_command(
 			if all {
 				// Show all wallets (same as list command but with different header)
 				match wallet_manager.list_wallets() {
-					Ok(wallets) =>
+					Ok(wallets) => {
 						if wallets.is_empty() {
 							log_print!("{}", "No wallets found.".dimmed());
 						} else {
@@ -254,7 +254,8 @@ pub async fn handle_wallet_command(
 									log_print!();
 								}
 							}
-						},
+						}
+					},
 					Err(e) => {
 						log_error!("{}", format!("❌ Failed to view wallets: {e}").red());
 						return Err(e);
@@ -445,7 +446,7 @@ pub async fn handle_wallet_command(
 			let wallet_manager = WalletManager::new()?;
 
 			match wallet_manager.list_wallets() {
-				Ok(wallets) =>
+				Ok(wallets) => {
 					if wallets.is_empty() {
 						log_print!("{}", "No wallets found.".dimmed());
 						log_print!(
@@ -481,7 +482,8 @@ pub async fn handle_wallet_command(
 							"💡 Use 'quantus wallet view --name <wallet>' to see full details"
 								.dimmed()
 						);
-					},
+					}
+				},
 				Err(e) => {
 					log_error!("{}", format!("❌ Failed to list wallets: {e}").red());
 					return Err(e);

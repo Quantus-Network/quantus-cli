@@ -1,7 +1,11 @@
 //! Common SubXT utilities and functions shared across CLI commands
-use crate::{error::Result, log_error, log_verbose};
+use crate::{chain::client::ChainConfig, error::Result, log_error, log_verbose};
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
+use subxt::{
+	tx::{TxProgress, TxStatus},
+	OnlineClient,
+};
 
 /// Resolve address - if it's a wallet name, return the wallet's address
 /// If it's already an SS58 address, return it as is
@@ -116,6 +120,7 @@ pub async fn submit_transaction<Call>(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	call: Call,
 	tip: Option<u128>,
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256>
 where
 	Call: subxt::tx::Payload,
@@ -198,20 +203,29 @@ where
 		log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
 
 		// Submit the transaction with fresh nonce and optional tip
-		match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
-			Ok(tx_hash) => {
-				crate::log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
+		match quantus_client
+			.client()
+			.tx()
+			.sign_and_submit_then_watch(&call, &signer, params)
+			.await
+		{
+			Ok(mut tx_progress) => {
+				crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
+
+				let tx_hash = tx_progress.extrinsic_hash();
+				let _ = wait_tx_inclusion(&mut tx_progress, finalized).await?;
+
 				return Ok(tx_hash);
 			},
 			Err(e) => {
 				let error_msg = format!("{e:?}");
 
 				// Check if it's a retryable error
-				let is_retryable = error_msg.contains("Priority is too low") ||
-					error_msg.contains("Transaction is outdated") ||
-					error_msg.contains("Transaction is temporarily banned") ||
-					error_msg.contains("Transaction has a bad signature") ||
-					error_msg.contains("Invalid Transaction");
+				let is_retryable = error_msg.contains("Priority is too low")
+					|| error_msg.contains("Transaction is outdated")
+					|| error_msg.contains("Transaction is temporarily banned")
+					|| error_msg.contains("Transaction has a bad signature")
+					|| error_msg.contains("Invalid Transaction");
 
 				if is_retryable && attempt < 5 {
 					log_verbose!(
@@ -243,6 +257,7 @@ pub async fn submit_transaction_with_nonce<Call>(
 	call: Call,
 	tip: Option<u128>,
 	nonce: u32,
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256>
 where
 	Call: subxt::tx::Payload,
@@ -275,9 +290,16 @@ where
 	log_verbose!("📤 Submitting transaction with manual nonce...");
 
 	// Submit the transaction with manual nonce
-	match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
-		Ok(tx_hash) => {
+	match quantus_client
+		.client()
+		.tx()
+		.sign_and_submit_then_watch(&call, &signer, params)
+		.await
+	{
+		Ok(mut tx_progress) => {
+			let tx_hash = tx_progress.extrinsic_hash();
 			log_verbose!("✅ Transaction submitted successfully: {:?}", tx_hash);
+			let _ = wait_tx_inclusion(&mut tx_progress, finalized).await?;
 			Ok(tx_hash)
 		},
 		Err(e) => {
@@ -287,4 +309,39 @@ where
 			)))
 		},
 	}
+}
+
+/// Watch transaction until it is included in the best block or finalized
+///
+/// Since Quantus network is PoW, we can't use default subxt's way of waiting for finalized block as it
+/// may take a long time. We wait for the transaction to be included in the best block and leave it up
+/// to the user to check the status of the transaction.
+async fn wait_tx_inclusion(
+	tx_progress: &mut TxProgress<ChainConfig, OnlineClient<ChainConfig>>,
+	finalized: bool,
+) -> Result<()> {
+	while let Some(Ok(status)) = tx_progress.next().await {
+		crate::log_verbose!("   Transaction status: {:?}", status);
+		match status {
+			TxStatus::InBestBlock(block_hash) => {
+				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
+				if finalized {
+					continue;
+				} else {
+					break;
+				};
+			},
+			TxStatus::InFinalizedBlock(block_hash) => {
+				crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
+				break;
+			},
+			TxStatus::Error { message } | TxStatus::Invalid { message } => {
+				crate::log_verbose!("   Transaction error: {}", message);
+				break;
+			},
+			_ => continue,
+		}
+	}
+
+	Ok(())
 }

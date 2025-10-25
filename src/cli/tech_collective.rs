@@ -1,12 +1,9 @@
 //! `quantus tech-collective` subcommand - tech collective management
 use crate::{
 	chain::quantus_subxt,
-	cli::{
-		address_format::QuantusSS58, common::resolve_address,
-		progress_spinner::wait_for_tx_confirmation,
-	},
+	cli::{address_format::QuantusSS58, common::resolve_address},
 	error::QuantusError,
-	log_error, log_print, log_success, log_verbose,
+	log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -133,9 +130,14 @@ pub async fn add_member(
 	// Wrap in Sudo::sudo call
 	let sudo_call = quantus_subxt::api::tx().sudo().sudo(add_member_call);
 
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		false,
+	)
+	.await?;
 
 	log_verbose!("📋 Add member transaction submitted: {:?}", tx_hash);
 
@@ -172,9 +174,14 @@ pub async fn remove_member(
 	// Wrap in Sudo::sudo call
 	let sudo_call = quantus_subxt::api::tx().sudo().sudo(remove_member_call);
 
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		false,
+	)
+	.await?;
 
 	log_verbose!("📋 Remove member transaction submitted: {:?}", tx_hash);
 
@@ -197,9 +204,14 @@ pub async fn vote_on_referendum(
 	// Create the TechCollective::vote call
 	let vote_call = quantus_subxt::api::tx().tech_collective().vote(referendum_index, aye);
 
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, vote_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		vote_call,
+		None,
+		false,
+	)
+	.await?;
 
 	log_verbose!("📋 Vote transaction submitted: {:?}", tx_hash);
 
@@ -359,19 +371,6 @@ pub async fn handle_tech_collective_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Member added to Tech Collective!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::RemoveMember { who, from, password, password_file } => {
@@ -390,19 +389,6 @@ pub async fn handle_tech_collective_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Member removed from Tech Collective!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::Vote { referendum_index, aye, from, password, password_file } => {
@@ -425,16 +411,6 @@ pub async fn handle_tech_collective_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!("🎉 {} Vote submitted!", "FINISHED".bright_green().bold());
-			} else {
-				log_error!("Transaction failed!");
-			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::ListMembers => {
@@ -443,7 +419,7 @@ pub async fn handle_tech_collective_command(
 
 			// Get actual member list
 			match get_member_list(&quantus_client).await {
-				Ok(members) =>
+				Ok(members) => {
 					if members.is_empty() {
 						log_print!("📭 No members in Tech Collective");
 					} else {
@@ -457,7 +433,8 @@ pub async fn handle_tech_collective_command(
 								member.to_quantus_ss58().bright_green()
 							);
 						}
-					},
+					}
+				},
 				Err(e) => {
 					log_verbose!("⚠️  Failed to get member list: {:?}", e);
 					// Fallback to member count
@@ -487,8 +464,6 @@ pub async fn handle_tech_collective_command(
 			log_print!(
 				"   quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>"
 			);
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::IsMember { address } => {
@@ -506,8 +481,6 @@ pub async fn handle_tech_collective_command(
 				log_print!("❌ Address is NOT a member of Tech Collective");
 				log_print!("💡 No membership record found for this address");
 			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::CheckSudo { address } => {
@@ -544,8 +517,6 @@ pub async fn handle_tech_collective_command(
 					log_verbose!("💡 The network may not have sudo configured");
 				},
 			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::ListReferenda => {
@@ -556,8 +527,6 @@ pub async fn handle_tech_collective_command(
 			log_print!(
                 "💡 Use 'quantus call --pallet TechReferenda --call <method>' for direct interaction"
             );
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::GetReferendum { index } => {
@@ -566,8 +535,8 @@ pub async fn handle_tech_collective_command(
 
 			log_print!("💡 Referendum details require TechReferenda storage access");
 			log_print!("💡 Query ReferendumInfoFor storage with index {}", index);
-
-			Ok(())
 		},
-	}
+	};
+
+	Ok(())
 }

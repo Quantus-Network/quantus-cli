@@ -1,7 +1,5 @@
 use crate::{
-	chain::quantus_subxt,
-	cli::{common::resolve_address, progress_spinner::wait_for_tx_confirmation},
-	log_error, log_print, log_success,
+	chain::quantus_subxt, cli::common::resolve_address, log_error, log_print, log_success,
 };
 use clap::Subcommand;
 // no colored output needed here
@@ -171,10 +169,11 @@ pub enum RecoveryCommands {
 pub async fn handle_recovery_command(
 	command: RecoveryCommands,
 	node_url: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
-	match command {
+	let _ = match command {
 		RecoveryCommands::Initiate { rescuer, lost, password, password_file } => {
 			let rescuer_key =
 				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
@@ -190,34 +189,21 @@ pub async fn handle_recovery_command(
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.initiate_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
-			let tx_hash =
-				crate::cli::common::submit_transaction(&quantus_client, &rescuer_key, call, None)
-					.await
-					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!(
-							"Failed to submit initiate_recovery transaction: {e}"
-						))
-					})?;
 
-			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
-			log_success!("✅ Initiate recovery submitted successfully");
-
-			let confirmation_result =
-				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
-			match confirmation_result {
-				Ok(true) => {
-					log_success!("✅ Transaction confirmed");
-					Ok(())
-				},
-				Ok(false) => {
-					log_error!("⚠️  Transaction may not have been confirmed");
-					Ok(())
-				},
-				Err(e) => {
-					log_error!("❌ Failed to confirm transaction: {e}");
-					Err(e)
-				},
-			}
+			let tx_hash = crate::cli::common::submit_transaction(
+				&quantus_client,
+				&rescuer_key,
+				call,
+				None,
+				finalized,
+			)
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit initiate_recovery transaction: {e}"
+				))
+			})?;
+			log_success!("✅ Initiate recovery submitted successfully {:?}", tx_hash);
 		},
 
 		RecoveryCommands::Vouch { friend, lost, rescuer, password, password_file } => {
@@ -239,34 +225,20 @@ pub async fn handle_recovery_command(
 				subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id),
 				subxt::ext::subxt_core::utils::MultiAddress::Id(rescuer_id),
 			);
-			let tx_hash =
-				crate::cli::common::submit_transaction(&quantus_client, &friend_key, call, None)
-					.await
-					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!(
-							"Failed to submit vouch_recovery transaction: {e}"
-						))
-					})?;
-
-			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
-			log_success!("✅ Vouch submitted successfully");
-
-			let confirmation_result =
-				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
-			match confirmation_result {
-				Ok(true) => {
-					log_success!("✅ Transaction confirmed");
-					Ok(())
-				},
-				Ok(false) => {
-					log_error!("⚠️  Transaction may not have been confirmed");
-					Ok(())
-				},
-				Err(e) => {
-					log_error!("❌ Failed to confirm transaction: {e}");
-					Err(e)
-				},
-			}
+			let tx_hash = crate::cli::common::submit_transaction(
+				&quantus_client,
+				&friend_key,
+				call,
+				None,
+				finalized,
+			)
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit vouch_recovery transaction: {e}"
+				))
+			})?;
+			log_success!("✅ Vouch submitted successfully {:?}", tx_hash);
 		},
 
 		RecoveryCommands::Claim { rescuer, lost, password, password_file } => {
@@ -281,34 +253,21 @@ pub async fn handle_recovery_command(
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.claim_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
-			let tx_hash =
-				crate::cli::common::submit_transaction(&quantus_client, &rescuer_key, call, None)
-					.await
-					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!(
-							"Failed to submit claim_recovery transaction: {e}"
-						))
-					})?;
+			let tx_hash = crate::cli::common::submit_transaction(
+				&quantus_client,
+				&rescuer_key,
+				call,
+				None,
+				false,
+			)
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit claim_recovery transaction: {e}"
+				))
+			})?;
 
-			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
-			log_success!("✅ Claim submitted successfully");
-
-			let confirmation_result =
-				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
-			match confirmation_result {
-				Ok(true) => {
-					log_success!("✅ Transaction confirmed");
-					Ok(())
-				},
-				Ok(false) => {
-					log_error!("⚠️  Transaction may not have been confirmed");
-					Ok(())
-				},
-				Err(e) => {
-					log_error!("❌ Failed to confirm transaction: {e}");
-					Err(e)
-				},
-			}
+			log_success!("✅ Claim submitted successfully {:?}", tx_hash);
 		},
 
 		RecoveryCommands::RecoverAll {
@@ -409,6 +368,7 @@ pub async fn handle_recovery_command(
 				&rescuer_key,
 				call,
 				None,
+				finalized,
 			)
 			.await
 			{
@@ -418,26 +378,7 @@ pub async fn handle_recovery_command(
 					return Err(e);
 				},
 			};
-
-			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
-			log_success!("✅ recover_all submitted successfully");
-
-			let confirmation_result =
-				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
-			match confirmation_result {
-				Ok(true) => {
-					log_success!("✅ Transaction confirmed");
-					Ok(())
-				},
-				Ok(false) => {
-					log_error!("⚠️  Transaction may not have been confirmed");
-					Ok(())
-				},
-				Err(e) => {
-					log_error!("❌ Failed to confirm transaction: {e}");
-					Err(e)
-				},
-			}
+			log_success!("✅ recover_all submitted successfully {:?}", tx_hash);
 		},
 
 		RecoveryCommands::RecoverAmount {
@@ -538,6 +479,7 @@ pub async fn handle_recovery_command(
 				&rescuer_key,
 				call,
 				None,
+				finalized,
 			)
 			.await
 			{
@@ -547,26 +489,7 @@ pub async fn handle_recovery_command(
 					return Err(e);
 				},
 			};
-
-			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
-			log_success!("✅ recover_amount submitted successfully");
-
-			let confirmation_result =
-				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
-			match confirmation_result {
-				Ok(true) => {
-					log_success!("✅ Transaction confirmed");
-					Ok(())
-				},
-				Ok(false) => {
-					log_error!("⚠️  Transaction may not have been confirmed");
-					Ok(())
-				},
-				Err(e) => {
-					log_error!("❌ Failed to confirm transaction: {e}");
-					Err(e)
-				},
-			}
+			log_success!("✅ recover_amount submitted successfully {:?}", tx_hash);
 		},
 
 		RecoveryCommands::Close { lost, rescuer, password, password_file } => {
@@ -580,34 +503,22 @@ pub async fn handle_recovery_command(
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.close_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(rescuer_id));
-			let tx_hash =
-				crate::cli::common::submit_transaction(&quantus_client, &lost_key, call, None)
-					.await
-					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!(
-							"Failed to submit close_recovery transaction: {e}"
-						))
-					})?;
+			let tx_hash = crate::cli::common::submit_transaction(
+				&quantus_client,
+				&lost_key,
+				call,
+				None,
+				finalized,
+			)
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit close_recovery transaction: {e}"
+				))
+			})?;
 
 			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
 			log_success!("✅ close_recovery submitted successfully");
-
-			let confirmation_result =
-				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
-			match confirmation_result {
-				Ok(true) => {
-					log_success!("✅ Transaction confirmed");
-					Ok(())
-				},
-				Ok(false) => {
-					log_error!("⚠️  Transaction may not have been confirmed");
-					Ok(())
-				},
-				Err(e) => {
-					log_error!("❌ Failed to confirm transaction: {e}");
-					Err(e)
-				},
-			}
 		},
 
 		RecoveryCommands::CancelProxy { rescuer, lost, password, password_file } => {
@@ -622,34 +533,21 @@ pub async fn handle_recovery_command(
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.cancel_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
-			let tx_hash =
-				crate::cli::common::submit_transaction(&quantus_client, &rescuer_key, call, None)
-					.await
-					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!(
-							"Failed to submit cancel_recovered transaction: {e}"
-						))
-					})?;
+			let tx_hash = crate::cli::common::submit_transaction(
+				&quantus_client,
+				&rescuer_key,
+				call,
+				None,
+				finalized,
+			)
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit cancel_recovered transaction: {e}"
+				))
+			})?;
 
-			log_print!("📋 Transaction submitted: 0x{}", hex::encode(tx_hash.as_ref()));
-			log_success!("✅ cancel_recovered submitted successfully");
-
-			let confirmation_result =
-				wait_for_tx_confirmation(quantus_client.client(), tx_hash).await;
-			match confirmation_result {
-				Ok(true) => {
-					log_success!("✅ Transaction confirmed");
-					Ok(())
-				},
-				Ok(false) => {
-					log_error!("⚠️  Transaction may not have been confirmed");
-					Ok(())
-				},
-				Err(e) => {
-					log_error!("❌ Failed to confirm transaction: {e}");
-					Err(e)
-				},
-			}
+			log_success!("✅ cancel_recovered submitted successfully {:?}", tx_hash);
 		},
 
 		RecoveryCommands::Active { lost, rescuer } => {
@@ -689,7 +587,6 @@ pub async fn handle_recovery_command(
 			} else {
 				log_print!("{}", serde_json::json!({"active": false}));
 			}
-			Ok(())
 		},
 
 		RecoveryCommands::ProxyOf { rescuer } => {
@@ -715,7 +612,6 @@ pub async fn handle_recovery_command(
 			} else {
 				log_print!("{}", serde_json::json!({"lost": null}));
 			}
-			Ok(())
 		},
 
 		RecoveryCommands::Config { account } => {
@@ -749,7 +645,8 @@ pub async fn handle_recovery_command(
 			} else {
 				log_print!("{}", serde_json::json!({"recoverable": false}));
 			}
-			Ok(())
 		},
-	}
+	};
+
+	Ok(())
 }
