@@ -130,7 +130,7 @@ pub async fn handle_treasury_command(
 			from,
 			password,
 			password_file,
-		} => {
+		} =>
 			submit_spend_referendum(
 				&quantus_client,
 				&beneficiary,
@@ -140,18 +140,14 @@ pub async fn handle_treasury_command(
 				password,
 				password_file,
 			)
-			.await
-		},
-		TreasuryCommands::Payout { index, from, password, password_file } => {
-			payout_spend(&quantus_client, index, &from, password, password_file).await
-		},
-		TreasuryCommands::CheckStatus { index, from, password, password_file } => {
-			check_spend_status(&quantus_client, index, &from, password, password_file).await
-		},
+			.await,
+		TreasuryCommands::Payout { index, from, password, password_file } =>
+			payout_spend(&quantus_client, index, &from, password, password_file).await,
+		TreasuryCommands::CheckStatus { index, from, password, password_file } =>
+			check_spend_status(&quantus_client, index, &from, password, password_file).await,
 		TreasuryCommands::ListSpends => list_spends(&quantus_client).await,
-		TreasuryCommands::SpendSudo { beneficiary, amount, from, password, password_file } => {
-			spend_sudo(&quantus_client, &beneficiary, &amount, &from, password, password_file).await
-		},
+		TreasuryCommands::SpendSudo { beneficiary, amount, from, password, password_file } =>
+			spend_sudo(&quantus_client, &beneficiary, &amount, &from, password, password_file).await,
 	}
 }
 

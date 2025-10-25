@@ -837,18 +837,14 @@ pub async fn handle_storage_command(
 				.await
 			}
 		},
-		StorageCommands::List { pallet, names_only } => {
-			list_storage_items(&quantus_client, &pallet, names_only).await
-		},
-		StorageCommands::ListPallets { with_counts } => {
-			list_pallets_with_storage(&quantus_client, with_counts).await
-		},
-		StorageCommands::Stats { pallet, detailed } => {
-			show_storage_stats(&quantus_client, pallet, detailed).await
-		},
-		StorageCommands::Iterate { pallet, name, limit, decode_as, block } => {
-			iterate_storage_entries(&quantus_client, &pallet, &name, limit, decode_as, block).await
-		},
+		StorageCommands::List { pallet, names_only } =>
+			list_storage_items(&quantus_client, &pallet, names_only).await,
+		StorageCommands::ListPallets { with_counts } =>
+			list_pallets_with_storage(&quantus_client, with_counts).await,
+		StorageCommands::Stats { pallet, detailed } =>
+			show_storage_stats(&quantus_client, pallet, detailed).await,
+		StorageCommands::Iterate { pallet, name, limit, decode_as, block } =>
+			iterate_storage_entries(&quantus_client, &pallet, &name, limit, decode_as, block).await,
 
 		StorageCommands::Set { pallet, name, value, wallet, password, password_file, r#type } => {
 			log_print!("✍️  Setting storage for {}::{}", pallet.bright_green(), name.bright_cyan());
@@ -892,11 +888,10 @@ pub async fn handle_storage_command(
 							.map_err(|e| QuantusError::Generic(format!("Invalid hex value: {e}")))?
 					}
 				},
-				Some(unsupported) => {
+				Some(unsupported) =>
 					return Err(QuantusError::Generic(format!(
 						"Unsupported type for --type: {unsupported}"
-					)))
-				},
+					))),
 			};
 
 			log_verbose!("Encoded value bytes: 0x{}", hex::encode(&value_bytes).dimmed());

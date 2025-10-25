@@ -53,7 +53,7 @@ pub async fn execute_generic_call(
 
 	let tx_hash = match (pallet, call) {
 		// Balances pallet calls
-		("Balances", "transfer_allow_death") => {
+		("Balances", "transfer_allow_death") =>
 			submit_balance_transfer(
 				quantus_client,
 				from_keypair,
@@ -62,9 +62,8 @@ pub async fn execute_generic_call(
 				tip_amount,
 				finalized,
 			)
-			.await?
-		},
-		("Balances", "transfer_keep_alive") => {
+			.await?,
+		("Balances", "transfer_keep_alive") =>
 			submit_balance_transfer(
 				quantus_client,
 				from_keypair,
@@ -73,42 +72,34 @@ pub async fn execute_generic_call(
 				tip_amount,
 				finalized,
 			)
-			.await?
-		},
+			.await?,
 
 		// System pallet calls
-		("System", "remark") => {
-			submit_system_remark(quantus_client, from_keypair, &args, tip_amount, finalized).await?
-		},
+		("System", "remark") =>
+			submit_system_remark(quantus_client, from_keypair, &args, tip_amount, finalized).await?,
 
 		// Sudo pallet calls
 		("Sudo", "sudo") => submit_sudo_call(quantus_client, from_keypair, &args).await?,
 
 		// TechCollective pallet calls
-		("TechCollective", "add_member") => {
+		("TechCollective", "add_member") =>
 			submit_tech_collective_add_member(quantus_client, from_keypair, &args, finalized)
-				.await?
-		},
-		("TechCollective", "remove_member") => {
+				.await?,
+		("TechCollective", "remove_member") =>
 			submit_tech_collective_remove_member(quantus_client, from_keypair, &args, finalized)
-				.await?
-		},
-		("TechCollective", "vote") => {
-			submit_tech_collective_vote(quantus_client, from_keypair, &args, finalized).await?
-		},
+				.await?,
+		("TechCollective", "vote") =>
+			submit_tech_collective_vote(quantus_client, from_keypair, &args, finalized).await?,
 
 		// ReversibleTransfers pallet calls
-		("ReversibleTransfers", "schedule_transfer") => {
-			submit_reversible_transfer(quantus_client, from_keypair, &args, finalized).await?
-		},
+		("ReversibleTransfers", "schedule_transfer") =>
+			submit_reversible_transfer(quantus_client, from_keypair, &args, finalized).await?,
 
 		// Scheduler pallet calls
-		("Scheduler", "schedule") => {
-			submit_scheduler_schedule(quantus_client, from_keypair, &args).await?
-		},
-		("Scheduler", "cancel") => {
-			submit_scheduler_cancel(quantus_client, from_keypair, &args).await?
-		},
+		("Scheduler", "schedule") =>
+			submit_scheduler_schedule(quantus_client, from_keypair, &args).await?,
+		("Scheduler", "cancel") =>
+			submit_scheduler_cancel(quantus_client, from_keypair, &args).await?,
 
 		// Generic fallback for unknown calls
 		(_, _) => {

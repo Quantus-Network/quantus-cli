@@ -166,8 +166,7 @@ pub async fn handle_scheduler_command(
 			Ok(())
 		},
 		SchedulerCommands::Agenda { range } => list_agenda_range(&quantus_client, &range).await,
-		SchedulerCommands::ScheduleRemark { after, from } => {
-			schedule_remark(&quantus_client, after, &from, finalized).await
-		},
+		SchedulerCommands::ScheduleRemark { after, from } =>
+			schedule_remark(&quantus_client, after, &from, finalized).await,
 	}
 }

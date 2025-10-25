@@ -75,7 +75,7 @@ pub async fn handle_batch_command(
 			count,
 			to,
 			amount,
-		} => {
+		} =>
 			handle_batch_send_command(
 				from,
 				node_url,
@@ -88,11 +88,9 @@ pub async fn handle_batch_command(
 				amount,
 				finalized,
 			)
-			.await
-		},
-		BatchCommands::Config { limits, info } => {
-			handle_batch_config_command(node_url, limits, info).await
-		},
+			.await,
+		BatchCommands::Config { limits, info } =>
+			handle_batch_config_command(node_url, limits, info).await,
 	}
 }
 

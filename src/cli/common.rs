@@ -221,11 +221,11 @@ where
 				let error_msg = format!("{e:?}");
 
 				// Check if it's a retryable error
-				let is_retryable = error_msg.contains("Priority is too low")
-					|| error_msg.contains("Transaction is outdated")
-					|| error_msg.contains("Transaction is temporarily banned")
-					|| error_msg.contains("Transaction has a bad signature")
-					|| error_msg.contains("Invalid Transaction");
+				let is_retryable = error_msg.contains("Priority is too low") ||
+					error_msg.contains("Transaction is outdated") ||
+					error_msg.contains("Transaction is temporarily banned") ||
+					error_msg.contains("Transaction has a bad signature") ||
+					error_msg.contains("Invalid Transaction");
 
 				if is_retryable && attempt < 5 {
 					log_verbose!(
@@ -313,9 +313,9 @@ where
 
 /// Watch transaction until it is included in the best block or finalized
 ///
-/// Since Quantus network is PoW, we can't use default subxt's way of waiting for finalized block as it
-/// may take a long time. We wait for the transaction to be included in the best block and leave it up
-/// to the user to check the status of the transaction.
+/// Since Quantus network is PoW, we can't use default subxt's way of waiting for finalized block as
+/// it may take a long time. We wait for the transaction to be included in the best block and leave
+/// it up to the user to check the status of the transaction.
 async fn wait_tx_inclusion(
 	tx_progress: &mut TxProgress<ChainConfig, OnlineClient<ChainConfig>>,
 	finalized: bool,
