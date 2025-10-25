@@ -213,7 +213,7 @@ where
 				crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
 
 				let tx_hash = tx_progress.extrinsic_hash();
-				let _ = wait_tx_inclusion(&mut tx_progress, finalized).await?;
+				wait_tx_inclusion(&mut tx_progress, finalized).await?;
 
 				return Ok(tx_hash);
 			},
@@ -221,11 +221,11 @@ where
 				let error_msg = format!("{e:?}");
 
 				// Check if it's a retryable error
-				let is_retryable = error_msg.contains("Priority is too low") ||
-					error_msg.contains("Transaction is outdated") ||
-					error_msg.contains("Transaction is temporarily banned") ||
-					error_msg.contains("Transaction has a bad signature") ||
-					error_msg.contains("Invalid Transaction");
+				let is_retryable = error_msg.contains("Priority is too low")
+					|| error_msg.contains("Transaction is outdated")
+					|| error_msg.contains("Transaction is temporarily banned")
+					|| error_msg.contains("Transaction has a bad signature")
+					|| error_msg.contains("Invalid Transaction");
 
 				if is_retryable && attempt < 5 {
 					log_verbose!(
@@ -299,7 +299,7 @@ where
 		Ok(mut tx_progress) => {
 			let tx_hash = tx_progress.extrinsic_hash();
 			log_verbose!("✅ Transaction submitted successfully: {:?}", tx_hash);
-			let _ = wait_tx_inclusion(&mut tx_progress, finalized).await?;
+			wait_tx_inclusion(&mut tx_progress, finalized).await?;
 			Ok(tx_hash)
 		},
 		Err(e) => {

@@ -173,7 +173,7 @@ pub async fn handle_recovery_command(
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
-	let _ = match command {
+	match command {
 		RecoveryCommands::Initiate { rescuer, lost, password, password_file } => {
 			let rescuer_key =
 				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
