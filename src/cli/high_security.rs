@@ -160,7 +160,7 @@ pub async fn handle_high_security_command(
 				.reversible_transfers()
 				.set_high_security(delay_value, interceptor_subxt);
 
-			let tx_hash = crate::cli::common::submit_transaction(
+			let tx_hash = crate::cli::common::submit_transaction_with_finalization(
 				&quantus_client,
 				&keypair,
 				tx_call,

@@ -272,7 +272,7 @@ async fn submit_remark_proposal(
 	log_print!("📝 Submitting preimage...");
 	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
 	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, note_preimage_tx, None, false).await?;
+		submit_transaction(quantus_client, &keypair, note_preimage_tx, None).await?;
 	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
 
 	// Wait for preimage transaction confirmation
@@ -328,7 +328,7 @@ async fn submit_remark_proposal(
 	let submit_call =
 		quantus_subxt::api::tx().referenda().submit(origin_caller, proposal, enactment);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None).await?;
 	log_print!(
 		"✅ {} Referendum proposal submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -443,7 +443,7 @@ async fn submit_proposal(
 	let submit_call =
 		quantus_subxt::api::tx().referenda().submit(origin_caller, proposal, enactment);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None).await?;
 	log_print!(
 		"✅ {} Referendum proposal submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -660,7 +660,7 @@ async fn place_decision_deposit(
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
 
 	let deposit_call = quantus_subxt::api::tx().referenda().place_decision_deposit(index);
-	let tx_hash = submit_transaction(quantus_client, &keypair, deposit_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, deposit_call, None).await?;
 	log_success!("✅ Decision deposit placed! Hash: {:?}", tx_hash.to_string().bright_yellow());
 	Ok(())
 }
@@ -706,7 +706,7 @@ async fn vote_on_referendum(
 		};
 
 	let vote_call = quantus_subxt::api::tx().conviction_voting().vote(index, vote);
-	let tx_hash = submit_transaction(quantus_client, &keypair, vote_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, vote_call, None).await?;
 
 	log_print!(
 		"✅ {} Vote transaction submitted! Hash: {:?}",
@@ -774,7 +774,7 @@ async fn refund_submission_deposit(
 	// Create refund_submission_deposit call
 	let refund_call = quantus_subxt::api::tx().referenda().refund_submission_deposit(index);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, refund_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, refund_call, None).await?;
 	log_print!(
 		"✅ {} Refund transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -802,7 +802,7 @@ async fn refund_decision_deposit(
 	// Create refund_decision_deposit call
 	let refund_call = quantus_subxt::api::tx().referenda().refund_decision_deposit(index);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, refund_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, refund_call, None).await?;
 	log_print!(
 		"✅ {} Refund transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),

@@ -113,9 +113,22 @@ pub async fn get_incremented_nonce_with_client(
 	Ok(incremented_nonce)
 }
 
+/// Submit transaction and wait for finalization
+pub async fn submit_transaction<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: Call,
+	tip: Option<u128>,
+) -> crate::error::Result<subxt::utils::H256>
+where
+	Call: subxt::tx::Payload,
+{
+	submit_transaction_with_finalization(quantus_client, from_keypair, call, tip, false).await
+}
+
 /// Helper function to submit transaction with nonce management and retry logic
 /// Submit transaction with best block nonce for better performance on fast chains
-pub async fn submit_transaction<Call>(
+pub async fn submit_transaction_with_finalization<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	call: Call,
@@ -221,11 +234,11 @@ where
 				let error_msg = format!("{e:?}");
 
 				// Check if it's a retryable error
-				let is_retryable = error_msg.contains("Priority is too low")
-					|| error_msg.contains("Transaction is outdated")
-					|| error_msg.contains("Transaction is temporarily banned")
-					|| error_msg.contains("Transaction has a bad signature")
-					|| error_msg.contains("Invalid Transaction");
+				let is_retryable = error_msg.contains("Priority is too low") ||
+					error_msg.contains("Transaction is outdated") ||
+					error_msg.contains("Transaction is temporarily banned") ||
+					error_msg.contains("Transaction has a bad signature") ||
+					error_msg.contains("Invalid Transaction");
 
 				if is_retryable && attempt < 5 {
 					log_verbose!(
@@ -336,7 +349,7 @@ async fn wait_tx_inclusion(
 				break;
 			},
 			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				crate::log_verbose!("   Transaction error: {}", message);
+				crate::log_error!("   Transaction error: {}", message);
 				break;
 			},
 			_ => continue,

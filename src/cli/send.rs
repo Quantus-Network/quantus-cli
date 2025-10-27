@@ -216,7 +216,7 @@ pub async fn transfer_with_nonce(
 		)
 		.await?
 	} else {
-		crate::cli::common::submit_transaction(
+		crate::cli::common::submit_transaction_with_finalization(
 			quantus_client,
 			from_keypair,
 			transfer_call,
@@ -312,7 +312,7 @@ pub async fn batch_transfer(
 	let tip_to_use = tip.unwrap_or(10_000_000_000);
 
 	// Submit the batch transaction
-	let tx_hash = crate::cli::common::submit_transaction(
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		from_keypair,
 		batch_call,

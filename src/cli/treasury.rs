@@ -339,7 +339,7 @@ async fn submit_spend_referendum(
 	// Submit preimage
 	let preimage_call = quantus_subxt::api::tx().preimage().note_preimage(encoded_call.clone());
 	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, preimage_call, None, false).await?;
+		submit_transaction(quantus_client, &keypair, preimage_call, None).await?;
 
 	log_print!("✅ Preimage created {:?}", preimage_tx_hash);
 
@@ -381,8 +381,7 @@ async fn submit_spend_referendum(
 		);
 	let submit_call =
 		quantus_subxt::api::tx().referenda().submit(origin_caller, proposal, enactment);
-	let submit_tx_hash =
-		submit_transaction(quantus_client, &keypair, submit_call, None, false).await?;
+	let submit_tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None).await?;
 
 	log_print!(
 		"✅ {} Treasury spend referendum submitted! {:?}",
@@ -418,7 +417,7 @@ async fn payout_spend(
 	// Create payout call
 	let payout_call = quantus_subxt::api::tx().treasury_pallet().payout(index);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, payout_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, payout_call, None).await?;
 	log_print!(
 		"✅ {} Payout transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -447,7 +446,7 @@ async fn check_spend_status(
 	// Create check_status call
 	let check_call = quantus_subxt::api::tx().treasury_pallet().check_status(index);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, check_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, check_call, None).await?;
 	log_print!(
 		"✅ {} Check status transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -556,7 +555,7 @@ async fn spend_sudo(
 
 	// Submit transaction
 	log_print!("📡 Submitting sudo transaction...");
-	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None, false).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None).await?;
 	log_print!(
 		"✅ {} Sudo transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),

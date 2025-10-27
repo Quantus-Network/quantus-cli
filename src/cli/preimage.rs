@@ -309,7 +309,7 @@ async fn request_preimage(
 	let request_call = quantus_subxt::api::tx().preimage().request_preimage(preimage_hash);
 
 	// Submit transaction
-	let tx_hash = crate::cli::common::submit_transaction(
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		&keypair,
 		request_call,
@@ -346,7 +346,7 @@ async fn note_preimage(
 	let note_call = quantus_subxt::api::tx().preimage().note_preimage(content);
 
 	// Submit transaction
-	let tx_hash = crate::cli::common::submit_transaction(
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		&keypair,
 		note_call,
@@ -410,7 +410,7 @@ async fn create_preimage(
 
 	log_print!("📝 Submitting preimage...");
 	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
-	let preimage_tx_hash = crate::cli::common::submit_transaction(
+	let preimage_tx_hash = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		&keypair,
 		note_preimage_tx,

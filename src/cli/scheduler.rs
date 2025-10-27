@@ -128,7 +128,7 @@ async fn schedule_remark(
 	let keypair = crate::wallet::load_keypair_from_wallet(from, None, None)?;
 	let schedule_tx =
 		api::tx().scheduler().schedule(when_u32, maybe_periodic, priority, runtime_call);
-	let tx_hash = crate::cli::common::submit_transaction(
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		&keypair,
 		schedule_tx,

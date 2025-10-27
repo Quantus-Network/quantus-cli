@@ -136,7 +136,7 @@ pub async fn schedule_transfer(
 		.schedule_transfer(subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id), amount);
 
 	// Submit the transaction
-	let tx_hash = crate::cli::common::submit_transaction(
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		from_keypair,
 		transfer_call,
@@ -171,7 +171,7 @@ pub async fn cancel_transaction(
 	let cancel_call = quantus_subxt::api::tx().reversible_transfers().cancel(tx_hash);
 
 	// Submit the transaction
-	let tx_hash_result = crate::cli::common::submit_transaction(
+	let tx_hash_result = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		from_keypair,
 		cancel_call,
@@ -228,7 +228,7 @@ pub async fn schedule_transfer_with_delay(
 		);
 
 	// Submit the transaction
-	let tx_hash = crate::cli::common::submit_transaction(
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
 		quantus_client,
 		from_keypair,
 		transfer_call,
