@@ -113,7 +113,7 @@ pub async fn get_incremented_nonce_with_client(
 	Ok(incremented_nonce)
 }
 
-/// Submit transaction and wait for finalization
+/// Default function for transaction submission, waits until transaction is in the best block
 pub async fn submit_transaction<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
@@ -126,8 +126,7 @@ where
 	submit_transaction_with_finalization(quantus_client, from_keypair, call, tip, false).await
 }
 
-/// Helper function to submit transaction with nonce management and retry logic
-/// Submit transaction with best block nonce for better performance on fast chains
+/// Helper function to submit transaction with an optional finalization check
 pub async fn submit_transaction_with_finalization<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
