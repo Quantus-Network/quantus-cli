@@ -1,7 +1,7 @@
 //! `quantus runtime` subcommand - runtime management
 use crate::{
-	chain::quantus_subxt, cli::progress_spinner::wait_for_tx_confirmation, error::QuantusError,
-	log_print, log_success, log_verbose, wallet::QuantumKeyPair,
+	chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
+	wallet::QuantumKeyPair,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -95,18 +95,19 @@ pub async fn update_runtime(
 	log_print!("📡 Submitting runtime update transaction...");
 	log_print!("⏳ This may take longer than usual due to WASM size...");
 
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		true,
+	)
+	.await?;
 
 	log_success!(
 		"✅ SUCCESS Runtime update transaction submitted! Hash: 0x{}",
 		hex::encode(tx_hash)
 	);
-
-	// Wait for finalization
-	wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-	log_success!("✅ 🎉 FINISHED Runtime update completed!");
 
 	Ok(tx_hash)
 }

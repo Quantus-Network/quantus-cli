@@ -2,7 +2,7 @@
 
 use crate::{
 	chain::{client::ChainConfig, quantus_subxt},
-	cli::{address_format::QuantusSS58, progress_spinner::wait_for_tx_confirmation},
+	cli::address_format::QuantusSS58,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 };
@@ -907,17 +907,6 @@ pub async fn handle_storage_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Set storage transaction confirmed!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
 
 			Ok(())
 		},

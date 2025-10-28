@@ -1,11 +1,8 @@
 use crate::{
 	chain::quantus_subxt,
-	cli::{
-		address_format::QuantusSS58, common::resolve_address,
-		progress_spinner::wait_for_tx_confirmation,
-	},
+	cli::{address_format::QuantusSS58, common::resolve_address},
 	error::Result,
-	log_error, log_info, log_print, log_success, log_verbose,
+	log_info, log_print, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -114,6 +111,7 @@ pub async fn schedule_transfer(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	to_address: &str,
 	amount: u128,
+	finalized: bool,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🔄 Creating reversible transfer...");
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
@@ -138,9 +136,14 @@ pub async fn schedule_transfer(
 		.schedule_transfer(subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id), amount);
 
 	// Submit the transaction
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, transfer_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		transfer_call,
+		None,
+		finalized,
+	)
+	.await?;
 
 	log_verbose!("📋 Reversible transfer submitted: {:?}", tx_hash);
 
@@ -152,6 +155,7 @@ pub async fn cancel_transaction(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	tx_id: &str,
+	finalized: bool,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("❌ Cancelling reversible transfer...");
 	log_verbose!("   Transaction ID: {}", tx_id.bright_yellow());
@@ -167,9 +171,14 @@ pub async fn cancel_transaction(
 	let cancel_call = quantus_subxt::api::tx().reversible_transfers().cancel(tx_hash);
 
 	// Submit the transaction
-	let tx_hash_result =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, cancel_call, None)
-			.await?;
+	let tx_hash_result = crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		cancel_call,
+		None,
+		finalized,
+	)
+	.await?;
 
 	log_verbose!("📋 Cancel transaction submitted: {:?}", tx_hash_result);
 
@@ -184,6 +193,7 @@ pub async fn schedule_transfer_with_delay(
 	amount: u128,
 	delay: u64,
 	unit_blocks: bool,
+	finalized: bool,
 ) -> Result<subxt::utils::H256> {
 	let unit_str = if unit_blocks { "blocks" } else { "seconds" };
 	log_verbose!("🔄 Creating reversible transfer with custom delay ...");
@@ -218,9 +228,14 @@ pub async fn schedule_transfer_with_delay(
 		);
 
 	// Submit the transaction
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, transfer_call, None)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		transfer_call,
+		None,
+		finalized,
+	)
+	.await?;
 
 	log_verbose!("📋 Reversible transfer with custom delay submitted: {:?}", tx_hash);
 
@@ -228,7 +243,11 @@ pub async fn schedule_transfer_with_delay(
 }
 
 /// Handle reversible transfer subxt commands
-pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &str) -> Result<()> {
+pub async fn handle_reversible_command(
+	command: ReversibleCommands,
+	node_url: &str,
+	finalized: bool,
+) -> Result<()> {
 	log_print!("🔄 Reversible Transfers");
 
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -262,26 +281,20 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
 			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 			// Submit transaction
-			let tx_hash =
-				schedule_transfer(&quantus_client, &keypair, &resolved_address, raw_amount).await?;
+			let tx_hash = schedule_transfer(
+				&quantus_client,
+				&keypair,
+				&resolved_address,
+				raw_amount,
+				finalized,
+			)
+			.await?;
 
 			log_print!(
 				"✅ {} Reversible transfer scheduled! Hash: {:?}",
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_info!("✅ Reversible transfer scheduled and confirmed on chain");
-				log_success!(
-					"🎉 {} Reversible transfer confirmed!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
 
 			Ok(())
 		},
@@ -297,24 +310,13 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
 			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 			// Submit cancel transaction
-			let tx_hash = cancel_transaction(&quantus_client, &keypair, &tx_id).await?;
+			let tx_hash = cancel_transaction(&quantus_client, &keypair, &tx_id, finalized).await?;
 
 			log_print!(
 				"✅ {} Cancel transaction submitted! Hash: {:?}",
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Cancel transaction confirmed!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
 
 			Ok(())
 		},
@@ -358,6 +360,7 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
 				raw_amount,
 				delay,
 				unit_blocks,
+				finalized,
 			)
 			.await?;
 
@@ -366,29 +369,6 @@ pub async fn handle_reversible_command(command: ReversibleCommands, node_url: &s
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Reversible transfer with custom delay confirmed!",
-					"FINISHED".bright_green().bold()
-				);
-
-				if unit_blocks {
-					log_print!("⏰ Transfer will execute after {} {}", delay, unit_str);
-				} else {
-					let now = chrono::Local::now();
-					let completion_time = now + chrono::Duration::seconds(delay as i64);
-					log_print!(
-						"⏰ Transfer will execute in ~{} seconds, at approximately {}",
-						delay,
-						completion_time.format("%Y-%m-%d %H:%M:%S").to_string().italic().dimmed()
-					);
-				}
-			} else {
-				log_error!("Transaction failed!");
-			}
 
 			Ok(())
 		},

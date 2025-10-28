@@ -106,6 +106,7 @@ async fn schedule_remark(
 	quantus_client: &crate::chain::client::QuantusClient,
 	after: u32,
 	from: &str,
+	finalized: bool,
 ) -> Result<()> {
 	use quantus_subxt::api;
 
@@ -127,21 +128,25 @@ async fn schedule_remark(
 	let keypair = crate::wallet::load_keypair_from_wallet(from, None, None)?;
 	let schedule_tx =
 		api::tx().scheduler().schedule(when_u32, maybe_periodic, priority, runtime_call);
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, &keypair, schedule_tx, None).await?;
+	let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		&keypair,
+		schedule_tx,
+		None,
+		finalized,
+	)
+	.await?;
 	log_success!("📩 Schedule extrinsic submitted: {:?}", tx_hash);
-
-	// Wait for inclusion/finalization (lightweight)
-	let _ =
-		crate::cli::progress_spinner::wait_for_tx_confirmation(quantus_client.client(), tx_hash)
-			.await?;
-	log_success!("✅ Schedule confirmed");
 
 	Ok(())
 }
 
 /// Handle scheduler commands
-pub async fn handle_scheduler_command(command: SchedulerCommands, node_url: &str) -> Result<()> {
+pub async fn handle_scheduler_command(
+	command: SchedulerCommands,
+	node_url: &str,
+	finalized: bool,
+) -> Result<()> {
 	log_print!("🗓️  Scheduler");
 
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -162,6 +167,6 @@ pub async fn handle_scheduler_command(command: SchedulerCommands, node_url: &str
 		},
 		SchedulerCommands::Agenda { range } => list_agenda_range(&quantus_client, &range).await,
 		SchedulerCommands::ScheduleRemark { after, from } =>
-			schedule_remark(&quantus_client, after, &from).await,
+			schedule_remark(&quantus_client, after, &from, finalized).await,
 	}
 }

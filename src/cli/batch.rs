@@ -5,7 +5,7 @@ use crate::{
 		batch_transfer, get_batch_limits, load_transfers_from_file, validate_and_format_amount,
 	},
 	error::Result,
-	log_error, log_info, log_print, log_success,
+	log_info, log_print, log_success,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -60,7 +60,11 @@ pub enum BatchCommands {
 }
 
 /// Handle batch commands
-pub async fn handle_batch_command(command: BatchCommands, node_url: &str) -> Result<()> {
+pub async fn handle_batch_command(
+	command: BatchCommands,
+	node_url: &str,
+	finalized: bool,
+) -> Result<()> {
 	match command {
 		BatchCommands::Send {
 			from,
@@ -82,6 +86,7 @@ pub async fn handle_batch_command(command: BatchCommands, node_url: &str) -> Res
 				count,
 				to,
 				amount,
+				finalized,
 			)
 			.await,
 		BatchCommands::Config { limits, info } =>
@@ -100,6 +105,7 @@ async fn handle_batch_send_command(
 	count: Option<u32>,
 	to: Option<String>,
 	amount: Option<String>,
+	finalized: bool,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -159,7 +165,8 @@ async fn handle_batch_send_command(
 	}
 
 	// Submit batch transaction
-	let tx_hash = batch_transfer(&quantus_client, &keypair, transfers, tip_amount).await?;
+	let tx_hash =
+		batch_transfer(&quantus_client, &keypair, transfers, tip_amount, finalized).await?;
 
 	log_print!(
 		"✅ {} Batch transaction submitted! Hash: {:?}",
@@ -167,22 +174,13 @@ async fn handle_batch_send_command(
 		tx_hash
 	);
 
-	let success =
-		crate::cli::progress_spinner::wait_for_tx_confirmation(quantus_client.client(), tx_hash)
-			.await?;
+	log_success!("🎉 {} Batch transaction confirmed!", "FINISHED".bright_green().bold());
 
-	if success {
-		log_info!("✅ Batch transaction confirmed and finalized on chain");
-		log_success!("🎉 {} Batch transaction confirmed!", "FINISHED".bright_green().bold());
-
-		// Show updated balance
-		let new_balance = crate::cli::send::get_balance(&quantus_client, &from_account_id).await?;
-		let formatted_new_balance =
-			crate::cli::send::format_balance_with_symbol(&quantus_client, new_balance).await?;
-		log_print!("💰 New balance: {}", formatted_new_balance.bright_yellow());
-	} else {
-		log_error!("Batch transaction failed!");
-	}
+	// Show updated balance
+	let new_balance = crate::cli::send::get_balance(&quantus_client, &from_account_id).await?;
+	let formatted_new_balance =
+		crate::cli::send::format_balance_with_symbol(&quantus_client, new_balance).await?;
+	log_print!("💰 New balance: {}", formatted_new_balance.bright_yellow());
 
 	Ok(())
 }

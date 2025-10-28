@@ -15,6 +15,7 @@ pub async fn execute_generic_call(
 	args: Vec<Value>,
 	from_keypair: &QuantumKeyPair,
 	tip: Option<String>,
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
 	log_print!("🚀 Executing generic call");
 	log_print!("Pallet: {}", pallet.bright_green());
@@ -53,28 +54,46 @@ pub async fn execute_generic_call(
 	let tx_hash = match (pallet, call) {
 		// Balances pallet calls
 		("Balances", "transfer_allow_death") =>
-			submit_balance_transfer(quantus_client, from_keypair, &args, false, tip_amount).await?,
+			submit_balance_transfer(
+				quantus_client,
+				from_keypair,
+				&args,
+				false,
+				tip_amount,
+				finalized,
+			)
+			.await?,
 		("Balances", "transfer_keep_alive") =>
-			submit_balance_transfer(quantus_client, from_keypair, &args, true, tip_amount).await?,
+			submit_balance_transfer(
+				quantus_client,
+				from_keypair,
+				&args,
+				true,
+				tip_amount,
+				finalized,
+			)
+			.await?,
 
 		// System pallet calls
 		("System", "remark") =>
-			submit_system_remark(quantus_client, from_keypair, &args, tip_amount).await?,
+			submit_system_remark(quantus_client, from_keypair, &args, tip_amount, finalized).await?,
 
 		// Sudo pallet calls
 		("Sudo", "sudo") => submit_sudo_call(quantus_client, from_keypair, &args).await?,
 
 		// TechCollective pallet calls
 		("TechCollective", "add_member") =>
-			submit_tech_collective_add_member(quantus_client, from_keypair, &args).await?,
+			submit_tech_collective_add_member(quantus_client, from_keypair, &args, finalized)
+				.await?,
 		("TechCollective", "remove_member") =>
-			submit_tech_collective_remove_member(quantus_client, from_keypair, &args).await?,
+			submit_tech_collective_remove_member(quantus_client, from_keypair, &args, finalized)
+				.await?,
 		("TechCollective", "vote") =>
-			submit_tech_collective_vote(quantus_client, from_keypair, &args).await?,
+			submit_tech_collective_vote(quantus_client, from_keypair, &args, finalized).await?,
 
 		// ReversibleTransfers pallet calls
 		("ReversibleTransfers", "schedule_transfer") =>
-			submit_reversible_transfer(quantus_client, from_keypair, &args).await?,
+			submit_reversible_transfer(quantus_client, from_keypair, &args, finalized).await?,
 
 		// Scheduler pallet calls
 		("Scheduler", "schedule") =>
@@ -116,6 +135,7 @@ async fn submit_balance_transfer(
 	args: &[Value],
 	keep_alive: bool,
 	tip: Option<u128>,
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 2 {
 		return Err(QuantusError::Generic(
@@ -152,8 +172,14 @@ async fn submit_balance_transfer(
 			subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id_subxt),
 			amount,
 		);
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, transfer_call, tip)
-			.await
+		crate::cli::common::submit_transaction_with_finalization(
+			quantus_client,
+			from_keypair,
+			transfer_call,
+			tip,
+			finalized,
+		)
+		.await
 	}
 }
 
@@ -163,6 +189,7 @@ async fn submit_system_remark(
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
 	tip: Option<u128>,
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 1 {
 		return Err(QuantusError::Generic(
@@ -176,7 +203,14 @@ async fn submit_system_remark(
 
 	let remark_call = quantus_subxt::api::tx().system().remark(remark.as_bytes().to_vec());
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, remark_call, tip).await
+	crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		remark_call,
+		tip,
+		finalized,
+	)
+	.await
 }
 
 /// Submit sudo call
@@ -198,6 +232,7 @@ async fn submit_tech_collective_add_member(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 1 {
 		return Err(QuantusError::Generic(
@@ -224,7 +259,14 @@ async fn submit_tech_collective_add_member(
 		},
 	));
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None).await
+	crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		finalized,
+	)
+	.await
 }
 
 /// Submit tech collective remove member
@@ -232,6 +274,7 @@ async fn submit_tech_collective_remove_member(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 1 {
 		return Err(QuantusError::Generic(
@@ -259,7 +302,14 @@ async fn submit_tech_collective_remove_member(
 		},
 	));
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None).await
+	crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		finalized,
+	)
+	.await
 }
 
 /// Submit tech collective vote
@@ -267,6 +317,7 @@ async fn submit_tech_collective_vote(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 2 {
 		return Err(QuantusError::Generic(
@@ -279,7 +330,14 @@ async fn submit_tech_collective_vote(
 
 	let vote_call = quantus_subxt::api::tx().tech_collective().vote(referendum_index, aye);
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, vote_call, None).await
+	crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		vote_call,
+		None,
+		finalized,
+	)
+	.await
 }
 
 /// Submit reversible transfer
@@ -287,6 +345,7 @@ async fn submit_reversible_transfer(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
+	finalized: bool,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 2 {
 		return Err(QuantusError::Generic(
@@ -315,7 +374,14 @@ async fn submit_reversible_transfer(
 		amount,
 	);
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, schedule_call, None).await
+	crate::cli::common::submit_transaction_with_finalization(
+		quantus_client,
+		from_keypair,
+		schedule_call,
+		None,
+		finalized,
+	)
+	.await
 }
 
 /// Submit scheduler schedule
@@ -352,12 +418,13 @@ pub async fn handle_generic_call(
 	keypair: &QuantumKeyPair,
 	tip: Option<String>,
 	node_url: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	log_print!("🚀 Generic Call");
 
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
-	execute_generic_call(&quantus_client, pallet, call, args, keypair, tip).await?;
+	execute_generic_call(&quantus_client, pallet, call, args, keypair, tip, finalized).await?;
 
 	Ok(())
 }

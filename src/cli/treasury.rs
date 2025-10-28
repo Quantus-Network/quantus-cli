@@ -1,9 +1,5 @@
 //! `quantus treasury` subcommand - manage Treasury
-use crate::{
-	chain::quantus_subxt,
-	cli::{common::submit_transaction, progress_spinner::wait_for_tx_confirmation},
-	log_print, log_success,
-};
+use crate::{chain::quantus_subxt, cli::common::submit_transaction, log_print, log_success};
 use clap::Subcommand;
 use colored::Colorize;
 
@@ -13,7 +9,7 @@ pub enum TreasuryCommands {
 	/// Check current Treasury balance
 	Balance,
 
-	/// Get Treasury configuration  
+	/// Get Treasury configuration
 	Config,
 
 	/// Show Treasury information and how to spend from it
@@ -344,9 +340,8 @@ async fn submit_spend_referendum(
 	let preimage_call = quantus_subxt::api::tx().preimage().note_preimage(encoded_call.clone());
 	let preimage_tx_hash =
 		submit_transaction(quantus_client, &keypair, preimage_call, None).await?;
-	let _ = wait_for_tx_confirmation(quantus_client.client(), preimage_tx_hash).await?;
 
-	log_print!("✅ Preimage created");
+	log_print!("✅ Preimage created {:?}", preimage_tx_hash);
 
 	// Determine the origin based on track
 	let origin_caller = match track.to_lowercase().as_str() {
@@ -387,9 +382,12 @@ async fn submit_spend_referendum(
 	let submit_call =
 		quantus_subxt::api::tx().referenda().submit(origin_caller, proposal, enactment);
 	let submit_tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None).await?;
-	let _ = wait_for_tx_confirmation(quantus_client.client(), submit_tx_hash).await?;
 
-	log_print!("✅ {} Treasury spend referendum submitted!", "SUCCESS".bright_green().bold());
+	log_print!(
+		"✅ {} Treasury spend referendum submitted! {:?}",
+		"SUCCESS".bright_green().bold(),
+		submit_tx_hash
+	);
 	log_print!("💡 Next steps:");
 	log_print!("   1. Place decision deposit: quantus referenda place-decision-deposit --index <INDEX> --from {}", from);
 	log_print!(
@@ -426,7 +424,6 @@ async fn payout_spend(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 	log_success!("🎉 {} Treasury spend paid out!", "FINISHED".bright_green().bold());
 	log_print!("💡 Use 'quantus treasury check-status --index {}' to cleanup", index);
 
@@ -456,7 +453,6 @@ async fn check_spend_status(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 	log_success!("🎉 {} Spend status checked and cleaned up!", "FINISHED".bright_green().bold());
 
 	Ok(())
@@ -566,7 +562,6 @@ async fn spend_sudo(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 	log_success!("🎉 {} Treasury spend created via sudo!", "FINISHED".bright_green().bold());
 	log_print!("💡 Next step: quantus treasury list-spends");
 	log_print!("💡 Then payout: quantus treasury payout --index <INDEX> --from {}", beneficiary);

@@ -1,9 +1,7 @@
 //! `quantus referenda` subcommand - manage standard Referenda proposals
 use crate::{
-	chain::quantus_subxt,
-	cli::{common::submit_transaction, progress_spinner::wait_for_tx_confirmation},
-	error::QuantusError,
-	log_error, log_print, log_success, log_verbose,
+	chain::quantus_subxt, cli::common::submit_transaction, error::QuantusError, log_error,
+	log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -279,8 +277,6 @@ async fn submit_remark_proposal(
 
 	// Wait for preimage transaction confirmation
 	log_print!("⏳ Waiting for preimage transaction confirmation...");
-	let _ = wait_for_tx_confirmation(quantus_client.client(), preimage_tx_hash).await?;
-	log_print!("✅ Preimage transaction confirmed!");
 
 	// Build Referenda::submit call using Lookup preimage reference
 	type ProposalBounded =
@@ -339,8 +335,6 @@ async fn submit_remark_proposal(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-	log_success!("🎉 {} Proposal created!", "FINISHED".bright_green().bold());
 	log_print!("💡 Use 'quantus referenda list' to see active proposals");
 	Ok(())
 }
@@ -456,8 +450,6 @@ async fn submit_proposal(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-	log_success!("🎉 {} Proposal created!", "FINISHED".bright_green().bold());
 	log_print!("💡 Use 'quantus referenda list' to see active proposals");
 	Ok(())
 }
@@ -670,7 +662,6 @@ async fn place_decision_deposit(
 	let deposit_call = quantus_subxt::api::tx().referenda().place_decision_deposit(index);
 	let tx_hash = submit_transaction(quantus_client, &keypair, deposit_call, None).await?;
 	log_success!("✅ Decision deposit placed! Hash: {:?}", tx_hash.to_string().bright_yellow());
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 	Ok(())
 }
 
@@ -723,7 +714,6 @@ async fn vote_on_referendum(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
 	log_success!("🎉 {} Vote submitted!", "FINISHED".bright_green().bold());
 	Ok(())
 }
@@ -791,8 +781,6 @@ async fn refund_submission_deposit(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-	log_success!("🎉 {} Submission deposit refunded!", "FINISHED".bright_green().bold());
 	log_print!("💡 Check your balance to confirm the refund");
 	Ok(())
 }
@@ -821,8 +809,6 @@ async fn refund_decision_deposit(
 		tx_hash
 	);
 
-	let _ = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-	log_success!("🎉 {} Decision deposit refunded!", "FINISHED".bright_green().bold());
 	log_print!("💡 Check your balance to confirm the refund");
 	Ok(())
 }

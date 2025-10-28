@@ -35,6 +35,11 @@ struct Cli {
 	/// Node endpoint URL
 	#[arg(long, global = true, default_value = "ws://127.0.0.1:9944")]
 	node_url: String,
+
+	/// Transaction finalization
+	/// NOTE: waiting for finalized transaction may take a while in PoW chain
+	#[arg(long, global = true, default_value = "false")]
+	finalized_tx: bool,
 }
 
 #[tokio::main]
@@ -50,8 +55,13 @@ async fn main() -> Result<(), QuantusError> {
 	log_verbose!("{}", "Connecting to the quantum future...".dimmed());
 	log_verbose!("");
 
+	// Display warning about finalization
+	if cli.finalized_tx {
+		log_print!("⚠️ Warning: Waiting for finalized block may take a while in PoW chain.");
+	}
+
 	// Execute the command
-	match cli::execute_command(cli.command, &cli.node_url, cli.verbose).await {
+	match cli::execute_command(cli.command, &cli.node_url, cli.verbose, cli.finalized_tx).await {
 		Ok(_) => {
 			log_verbose!("");
 			log_verbose!("Command executed successfully!");

@@ -11,7 +11,6 @@ pub mod generic_call;
 pub mod high_security;
 pub mod metadata;
 pub mod preimage;
-pub mod progress_spinner;
 pub mod recovery;
 pub mod referenda;
 pub mod referenda_decode;
@@ -245,6 +244,7 @@ pub async fn execute_command(
 	command: Commands,
 	node_url: &str,
 	verbose: bool,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
@@ -258,23 +258,25 @@ pub async fn execute_command(
 				password_file,
 				tip,
 				nonce,
+				finalized,
 			)
 			.await,
-		Commands::Batch(batch_cmd) => batch::handle_batch_command(batch_cmd, node_url).await,
+		Commands::Batch(batch_cmd) =>
+			batch::handle_batch_command(batch_cmd, node_url, finalized).await,
 		Commands::Reversible(reversible_cmd) =>
-			reversible::handle_reversible_command(reversible_cmd, node_url).await,
+			reversible::handle_reversible_command(reversible_cmd, node_url, finalized).await,
 		Commands::HighSecurity(hs_cmd) =>
-			high_security::handle_high_security_command(hs_cmd, node_url).await,
+			high_security::handle_high_security_command(hs_cmd, node_url, finalized).await,
 		Commands::Recovery(recovery_cmd) =>
-			recovery::handle_recovery_command(recovery_cmd, node_url).await,
+			recovery::handle_recovery_command(recovery_cmd, node_url, finalized).await,
 		Commands::Scheduler(scheduler_cmd) =>
-			scheduler::handle_scheduler_command(scheduler_cmd, node_url).await,
+			scheduler::handle_scheduler_command(scheduler_cmd, node_url, finalized).await,
 		Commands::Storage(storage_cmd) =>
 			storage::handle_storage_command(storage_cmd, node_url).await,
 		Commands::TechCollective(tech_collective_cmd) =>
 			tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await,
 		Commands::Preimage(preimage_cmd) =>
-			preimage::handle_preimage_command(preimage_cmd, node_url).await,
+			preimage::handle_preimage_command(preimage_cmd, node_url, finalized).await,
 		Commands::TechReferenda(tech_referenda_cmd) =>
 			tech_referenda::handle_tech_referenda_command(tech_referenda_cmd, node_url).await,
 		Commands::Referenda(referenda_cmd) =>
@@ -305,6 +307,7 @@ pub async fn execute_command(
 				offline,
 				call_data_only,
 				node_url,
+				finalized,
 			)
 			.await,
 		Commands::Balance { address } => {
@@ -357,6 +360,7 @@ pub async fn execute_command(
 }
 
 /// Handle generic extrinsic call command
+#[allow(clippy::too_many_arguments)]
 async fn handle_generic_call_command(
 	pallet: String,
 	call: String,
@@ -368,6 +372,7 @@ async fn handle_generic_call_command(
 	offline: bool,
 	call_data_only: bool,
 	node_url: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	// For now, we only support live submission (not offline or call-data-only)
 	if offline {
@@ -392,7 +397,8 @@ async fn handle_generic_call_command(
 		vec![]
 	};
 
-	generic_call::handle_generic_call(&pallet, &call, args_vec, &keypair, tip, node_url).await
+	generic_call::handle_generic_call(&pallet, &call, args_vec, &keypair, tip, node_url, finalized)
+		.await
 }
 
 /// Handle developer subcommands

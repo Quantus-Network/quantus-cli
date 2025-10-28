@@ -1,12 +1,9 @@
 //! `quantus tech-collective` subcommand - tech collective management
 use crate::{
 	chain::quantus_subxt,
-	cli::{
-		address_format::QuantusSS58, common::resolve_address,
-		progress_spinner::wait_for_tx_confirmation,
-	},
+	cli::{address_format::QuantusSS58, common::resolve_address},
 	error::QuantusError,
-	log_error, log_print, log_success, log_verbose,
+	log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -359,19 +356,6 @@ pub async fn handle_tech_collective_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Member added to Tech Collective!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::RemoveMember { who, from, password, password_file } => {
@@ -390,19 +374,6 @@ pub async fn handle_tech_collective_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!(
-					"🎉 {} Member removed from Tech Collective!",
-					"FINISHED".bright_green().bold()
-				);
-			} else {
-				log_error!("Transaction failed!");
-			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::Vote { referendum_index, aye, from, password, password_file } => {
@@ -425,16 +396,6 @@ pub async fn handle_tech_collective_command(
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-
-			if success {
-				log_success!("🎉 {} Vote submitted!", "FINISHED".bright_green().bold());
-			} else {
-				log_error!("Transaction failed!");
-			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::ListMembers => {
@@ -487,8 +448,6 @@ pub async fn handle_tech_collective_command(
 			log_print!(
 				"   quantus tech-collective add-member --who <ADDRESS> --from <SUDO_WALLET>"
 			);
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::IsMember { address } => {
@@ -506,8 +465,6 @@ pub async fn handle_tech_collective_command(
 				log_print!("❌ Address is NOT a member of Tech Collective");
 				log_print!("💡 No membership record found for this address");
 			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::CheckSudo { address } => {
@@ -544,8 +501,6 @@ pub async fn handle_tech_collective_command(
 					log_verbose!("💡 The network may not have sudo configured");
 				},
 			}
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::ListReferenda => {
@@ -556,8 +511,6 @@ pub async fn handle_tech_collective_command(
 			log_print!(
                 "💡 Use 'quantus call --pallet TechReferenda --call <method>' for direct interaction"
             );
-
-			Ok(())
 		},
 
 		TechCollectiveCommands::GetReferendum { index } => {
@@ -566,8 +519,8 @@ pub async fn handle_tech_collective_command(
 
 			log_print!("💡 Referendum details require TechReferenda storage access");
 			log_print!("💡 Query ReferendumInfoFor storage with index {}", index);
-
-			Ok(())
 		},
-	}
+	};
+
+	Ok(())
 }

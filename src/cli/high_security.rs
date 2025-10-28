@@ -1,7 +1,6 @@
 use crate::{
-	chain::quantus_subxt,
-	cli::{address_format::QuantusSS58, progress_spinner::wait_for_tx_confirmation},
-	log_error, log_print, log_success, log_verbose,
+	chain::quantus_subxt, cli::address_format::QuantusSS58, log_error, log_print, log_success,
+	log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -49,6 +48,7 @@ pub enum HighSecurityCommands {
 pub async fn handle_high_security_command(
 	command: HighSecurityCommands,
 	node_url: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -160,18 +160,16 @@ pub async fn handle_high_security_command(
 				.reversible_transfers()
 				.set_high_security(delay_value, interceptor_subxt);
 
-			let tx_hash =
-				crate::cli::common::submit_transaction(&quantus_client, &keypair, tx_call, None)
-					.await?;
+			let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+				&quantus_client,
+				&keypair,
+				tx_call,
+				None,
+				finalized,
+			)
+			.await?;
 
 			log_success!("✅ SUCCESS High security set! Hash: 0x{}", hex::encode(tx_hash.as_ref()));
-
-			let success = wait_for_tx_confirmation(quantus_client.client(), tx_hash).await?;
-			if success {
-				log_success!("🎉 FINISHED High security configuration confirmed on-chain");
-			} else {
-				log_error!("❌ Transaction failed or not included");
-			}
 
 			Ok(())
 		},
