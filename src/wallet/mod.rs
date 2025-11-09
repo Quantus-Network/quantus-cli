@@ -600,8 +600,7 @@ mod tests {
 
 		// Create test wallet data
 		let entropy = [1u8; 32]; // Use fixed entropy for deterministic tests
-		let dilithium_keypair =
-			qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
+		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(&entropy);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		let mut metadata = std::collections::HashMap::new();
@@ -651,8 +650,7 @@ mod tests {
 	async fn test_quantum_keypair_address_generation() {
 		// Generate keypair
 		let entropy = [2u8; 32]; // Use different entropy for variety
-		let dilithium_keypair =
-			qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
+		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(&entropy);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Test address generation
@@ -676,8 +674,7 @@ mod tests {
 
 		// Create and encrypt wallet data
 		let entropy = [3u8; 32]; // Use different entropy for each test
-		let dilithium_keypair =
-			qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(Some(&entropy));
+		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(&entropy);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		let wallet_data = keystore::WalletData {
@@ -770,14 +767,28 @@ mod tests {
 
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
-		let expected_address = "qzjtZjisjHH71BBCzoPV2taXyanMqzXQSZsi9kVpDBRkEGL24";
+		let expected_address = "qznMJss7Ls1SWBhvvL2CSHVbgTxEfnL9GgpvMTq5CWMEwfCoe"; // default derivation path index 0
+		let expected_address_no_derive = "qznBvupPsA9T8VJDuTDokKPiNUe88zMMUtHGA1AsGc8fXKSSA";
 
 		let imported_wallet = wallet_manager
 			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))
 			.await
 			.expect("Failed to import wallet");
 
-		assert_eq!(imported_wallet.address, expected_address);
+		let imported_wallet_no_derive = wallet_manager
+			.import_wallet_no_derivation(
+				"imported-test-wallet_no_derive",
+				test_mnemonic,
+				Some("import-password"),
+			)
+			.await
+			.expect("Failed to import wallet");
+
+		assert_eq!(imported_wallet.address, expected_address, "address at index 0 is wrong");
+		assert_eq!(
+			imported_wallet_no_derive.address, expected_address_no_derive,
+			"no-derivation address is wrong"
+		);
 	}
 
 	#[tokio::test]

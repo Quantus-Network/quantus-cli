@@ -32,6 +32,6 @@ echo "Generating SubXT types to src/chain/quantus_subxt.rs..."
 subxt codegen --url "$NODE_URL" > src/chain/quantus_subxt.rs
 
 echo "Formatting generated code..."
-cargo fmt -- src/chain/quantus_subxt.rs
+cargo +nightly fmt -- src/chain/quantus_subxt.rs
 
 echo "Done!"
