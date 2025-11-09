@@ -785,7 +785,7 @@ pub mod api {
 			use super::{root_mod, runtime_types};
 			pub struct QPoWApi;
 			impl QPoWApi {
-				#[doc = " calculate distance header with nonce to with nonce"]
+				#[doc = " calculate hash of header with nonce using Bitcoin-style double Poseidon2"]
 				pub fn get_nonce_distance(
 					&self,
 					block_hash: types::get_nonce_distance::BlockHash,
@@ -824,21 +824,22 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Get the max possible distance_threshold for work calculation"]
-				pub fn get_max_distance(
+				#[doc = " Get the max possible difficulty for work calculation"]
+				pub fn get_max_difficulty(
 					&self,
 				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
-					types::GetMaxDistance,
-					types::get_max_distance::output::Output,
+					types::GetMaxDifficulty,
+					types::get_max_difficulty::output::Output,
 				> {
 					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
 						"QPoWApi",
-						"get_max_distance",
-						types::GetMaxDistance {},
+						"get_max_difficulty",
+						types::GetMaxDifficulty {},
 						[
-							228u8, 221u8, 157u8, 71u8, 206u8, 66u8, 16u8, 79u8, 17u8, 1u8, 0u8,
-							134u8, 36u8, 195u8, 232u8, 254u8, 165u8, 162u8, 169u8, 184u8, 85u8,
-							136u8, 11u8, 10u8, 40u8, 197u8, 225u8, 249u8, 240u8, 43u8, 120u8, 45u8,
+							80u8, 167u8, 109u8, 28u8, 239u8, 113u8, 166u8, 222u8, 53u8, 68u8,
+							129u8, 222u8, 208u8, 165u8, 8u8, 147u8, 243u8, 80u8, 207u8, 207u8,
+							108u8, 203u8, 208u8, 95u8, 34u8, 193u8, 15u8, 61u8, 116u8, 109u8,
+							144u8, 217u8,
 						],
 					)
 				}
@@ -858,24 +859,6 @@ pub mod api {
 							148u8, 6u8, 174u8, 121u8, 38u8, 103u8, 46u8, 5u8, 235u8, 20u8, 133u8,
 							207u8, 67u8, 211u8, 25u8, 112u8, 83u8, 196u8, 118u8, 66u8, 118u8,
 							179u8,
-						],
-					)
-				}
-				#[doc = " Get the current distance_threshold target for proof generation"]
-				pub fn get_distance_threshold(
-					&self,
-				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
-					types::GetDistanceThreshold,
-					types::get_distance_threshold::output::Output,
-				> {
-					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
-						"QPoWApi",
-						"get_distance_threshold",
-						types::GetDistanceThreshold {},
-						[
-							84u8, 236u8, 60u8, 104u8, 10u8, 61u8, 150u8, 165u8, 61u8, 214u8, 204u8,
-							210u8, 47u8, 211u8, 67u8, 136u8, 243u8, 72u8, 252u8, 132u8, 128u8,
-							28u8, 166u8, 87u8, 131u8, 48u8, 61u8, 109u8, 115u8, 66u8, 190u8, 201u8,
 						],
 					)
 				}
@@ -968,47 +951,6 @@ pub mod api {
 						],
 					)
 				}
-				pub fn get_random_rsa(
-					&self,
-					block_hash: types::get_random_rsa::BlockHash,
-				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
-					types::GetRandomRsa,
-					types::get_random_rsa::output::Output,
-				> {
-					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
-						"QPoWApi",
-						"get_random_rsa",
-						types::GetRandomRsa { block_hash },
-						[
-							179u8, 195u8, 121u8, 252u8, 235u8, 176u8, 160u8, 58u8, 188u8, 236u8,
-							106u8, 222u8, 47u8, 7u8, 73u8, 89u8, 186u8, 175u8, 25u8, 77u8, 196u8,
-							68u8, 111u8, 186u8, 181u8, 178u8, 2u8, 205u8, 215u8, 142u8, 157u8,
-							160u8,
-						],
-					)
-				}
-				pub fn hash_to_group_bigint(
-					&self,
-					h: types::hash_to_group_bigint::H,
-					m: types::hash_to_group_bigint::M,
-					n: types::hash_to_group_bigint::N,
-					solution: types::hash_to_group_bigint::Solution,
-				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
-					types::HashToGroupBigint,
-					types::hash_to_group_bigint::output::Output,
-				> {
-					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
-						"QPoWApi",
-						"hash_to_group_bigint",
-						types::HashToGroupBigint { h, m, n, solution },
-						[
-							117u8, 71u8, 148u8, 115u8, 194u8, 210u8, 59u8, 139u8, 102u8, 255u8,
-							55u8, 207u8, 118u8, 114u8, 98u8, 151u8, 147u8, 99u8, 142u8, 158u8,
-							185u8, 151u8, 118u8, 31u8, 192u8, 26u8, 63u8, 150u8, 50u8, 123u8, 40u8,
-							163u8,
-						],
-					)
-				}
 				pub fn verify_nonce_on_import_block(
 					&self,
 					block_hash: types::verify_nonce_on_import_block::BlockHash,
@@ -1093,7 +1035,7 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				pub struct GetMaxReorgDepth {}
-				pub mod get_max_distance {
+				pub mod get_max_difficulty {
 					use super::runtime_types;
 					pub mod output {
 						use super::runtime_types;
@@ -1111,7 +1053,7 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				pub struct GetMaxDistance {}
+				pub struct GetMaxDifficulty {}
 				pub mod get_difficulty {
 					use super::runtime_types;
 					pub mod output {
@@ -1131,25 +1073,6 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				pub struct GetDifficulty {}
-				pub mod get_distance_threshold {
-					use super::runtime_types;
-					pub mod output {
-						use super::runtime_types;
-						pub type Output = runtime_types::primitive_types::U512;
-					}
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct GetDistanceThreshold {}
 				pub mod get_total_work {
 					use super::runtime_types;
 					pub mod output {
@@ -1245,59 +1168,6 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				pub struct GetChainHeight {}
-				pub mod get_random_rsa {
-					use super::runtime_types;
-					pub type BlockHash = [::core::primitive::u8; 32usize];
-					pub mod output {
-						use super::runtime_types;
-						pub type Output = (
-							runtime_types::primitive_types::U512,
-							runtime_types::primitive_types::U512,
-						);
-					}
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct GetRandomRsa {
-					pub block_hash: get_random_rsa::BlockHash,
-				}
-				pub mod hash_to_group_bigint {
-					use super::runtime_types;
-					pub type H = runtime_types::primitive_types::U512;
-					pub type M = runtime_types::primitive_types::U512;
-					pub type N = runtime_types::primitive_types::U512;
-					pub type Solution = runtime_types::primitive_types::U512;
-					pub mod output {
-						use super::runtime_types;
-						pub type Output = runtime_types::primitive_types::U512;
-					}
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct HashToGroupBigint {
-					pub h: hash_to_group_bigint::H,
-					pub m: hash_to_group_bigint::M,
-					pub n: hash_to_group_bigint::N,
-					pub solution: hash_to_group_bigint::Solution,
-				}
 				pub mod verify_nonce_on_import_block {
 					use super::runtime_types;
 					pub type BlockHash = [::core::primitive::u8; 32usize];
@@ -2127,9 +1997,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				233u8, 139u8, 33u8, 121u8, 216u8, 140u8, 113u8, 170u8, 4u8, 134u8, 193u8, 169u8,
-				110u8, 254u8, 201u8, 203u8, 231u8, 65u8, 233u8, 128u8, 43u8, 145u8, 115u8, 113u8,
-				30u8, 109u8, 204u8, 62u8, 103u8, 201u8, 165u8, 102u8,
+				194u8, 46u8, 30u8, 103u8, 67u8, 25u8, 224u8, 42u8, 104u8, 224u8, 105u8, 213u8,
+				149u8, 58u8, 199u8, 151u8, 221u8, 215u8, 141u8, 247u8, 109u8, 85u8, 204u8, 202u8,
+				96u8, 104u8, 173u8, 94u8, 198u8, 124u8, 113u8, 174u8,
 			]
 	}
 	pub mod system {
@@ -3228,9 +3098,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							207u8, 151u8, 186u8, 46u8, 5u8, 145u8, 47u8, 183u8, 65u8, 63u8, 69u8,
-							242u8, 0u8, 124u8, 212u8, 46u8, 191u8, 190u8, 44u8, 102u8, 148u8, 97u8,
-							2u8, 120u8, 238u8, 231u8, 7u8, 101u8, 157u8, 45u8, 72u8, 226u8,
+							153u8, 144u8, 222u8, 32u8, 219u8, 80u8, 161u8, 232u8, 120u8, 168u8,
+							102u8, 147u8, 49u8, 48u8, 3u8, 26u8, 255u8, 126u8, 218u8, 117u8, 254u8,
+							217u8, 170u8, 206u8, 182u8, 174u8, 251u8, 53u8, 253u8, 242u8, 26u8,
+							74u8,
 						],
 					)
 				}
@@ -5801,8 +5672,6 @@ pub mod api {
 	}
 	pub mod q_po_w {
 		use super::{root_mod, runtime_types};
-		#[doc = "The `Error` enum of this pallet."]
-		pub type Error = runtime_types::pallet_qpow::pallet::Error;
 		#[doc = "The `Event` enum of this pallet"]
 		pub type Event = runtime_types::pallet_qpow::pallet::Event;
 		pub mod events {
@@ -5817,13 +5686,13 @@ pub mod api {
 			pub struct ProofSubmitted {
 				pub nonce: proof_submitted::Nonce,
 				pub difficulty: proof_submitted::Difficulty,
-				pub distance_achieved: proof_submitted::DistanceAchieved,
+				pub hash_achieved: proof_submitted::HashAchieved,
 			}
 			pub mod proof_submitted {
 				use super::runtime_types;
 				pub type Nonce = [::core::primitive::u8; 64usize];
 				pub type Difficulty = runtime_types::primitive_types::U512;
-				pub type DistanceAchieved = runtime_types::primitive_types::U512;
+				pub type HashAchieved = runtime_types::primitive_types::U512;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProofSubmitted {
 				const PALLET: &'static str = "QPoW";
@@ -5836,20 +5705,20 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct DistanceThresholdAdjusted {
-				pub old_distance_threshold: distance_threshold_adjusted::OldDistanceThreshold,
-				pub new_distance_threshold: distance_threshold_adjusted::NewDistanceThreshold,
-				pub observed_block_time: distance_threshold_adjusted::ObservedBlockTime,
+			pub struct DifficultyAdjusted {
+				pub old_difficulty: difficulty_adjusted::OldDifficulty,
+				pub new_difficulty: difficulty_adjusted::NewDifficulty,
+				pub observed_block_time: difficulty_adjusted::ObservedBlockTime,
 			}
-			pub mod distance_threshold_adjusted {
+			pub mod difficulty_adjusted {
 				use super::runtime_types;
-				pub type OldDistanceThreshold = runtime_types::primitive_types::U512;
-				pub type NewDistanceThreshold = runtime_types::primitive_types::U512;
+				pub type OldDifficulty = runtime_types::primitive_types::U512;
+				pub type NewDifficulty = runtime_types::primitive_types::U512;
 				pub type ObservedBlockTime = ::core::primitive::u64;
 			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for DistanceThresholdAdjusted {
+			impl ::subxt::ext::subxt_core::events::StaticEvent for DifficultyAdjusted {
 				const PALLET: &'static str = "QPoW";
-				const EVENT: &'static str = "DistanceThresholdAdjusted";
+				const EVENT: &'static str = "DifficultyAdjusted";
 			}
 		}
 		pub mod storage {
@@ -5864,26 +5733,13 @@ pub mod api {
 					use super::runtime_types;
 					pub type LastBlockDuration = ::core::primitive::u64;
 				}
-				pub mod current_distance_threshold {
+				pub mod current_difficulty {
 					use super::runtime_types;
-					pub type CurrentDistanceThreshold = runtime_types::primitive_types::U512;
+					pub type CurrentDifficulty = runtime_types::primitive_types::U512;
 				}
 				pub mod total_work {
 					use super::runtime_types;
 					pub type TotalWork = runtime_types::primitive_types::U512;
-				}
-				pub mod blocks_in_period {
-					use super::runtime_types;
-					pub type BlocksInPeriod = ::core::primitive::u32;
-				}
-				pub mod block_time_history {
-					use super::runtime_types;
-					pub type BlockTimeHistory = ::core::primitive::u64;
-					pub type Param0 = ::core::primitive::u32;
-				}
-				pub mod history_index {
-					use super::runtime_types;
-					pub type HistoryIndex = ::core::primitive::u32;
 				}
 				pub mod block_time_ema {
 					use super::runtime_types;
@@ -5933,24 +5789,23 @@ pub mod api {
 						],
 					)
 				}
-				pub fn current_distance_threshold(
+				pub fn current_difficulty(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					(),
-					types::current_distance_threshold::CurrentDistanceThreshold,
+					types::current_difficulty::CurrentDifficulty,
 					::subxt::ext::subxt_core::utils::Yes,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"QPoW",
-						"CurrentDistanceThreshold",
+						"CurrentDifficulty",
 						(),
 						[
-							241u8, 84u8, 91u8, 177u8, 115u8, 209u8, 7u8, 88u8, 15u8, 186u8, 180u8,
-							244u8, 29u8, 198u8, 42u8, 162u8, 144u8, 70u8, 255u8, 39u8, 235u8,
-							121u8, 239u8, 136u8, 137u8, 171u8, 183u8, 245u8, 158u8, 225u8, 244u8,
-							147u8,
+							130u8, 252u8, 118u8, 64u8, 64u8, 105u8, 70u8, 33u8, 78u8, 161u8, 9u8,
+							26u8, 68u8, 38u8, 223u8, 64u8, 19u8, 4u8, 249u8, 112u8, 193u8, 122u8,
+							16u8, 149u8, 46u8, 50u8, 227u8, 225u8, 5u8, 47u8, 227u8, 169u8,
 						],
 					)
 				}
@@ -5971,93 +5826,6 @@ pub mod api {
 							184u8, 29u8, 54u8, 146u8, 220u8, 155u8, 103u8, 67u8, 21u8, 188u8, 53u8,
 							160u8, 171u8, 107u8, 52u8, 211u8, 251u8, 52u8, 192u8, 227u8, 150u8,
 							156u8, 172u8, 1u8, 233u8, 37u8, 49u8, 13u8, 213u8, 104u8, 10u8, 134u8,
-						],
-					)
-				}
-				pub fn blocks_in_period(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::blocks_in_period::BlocksInPeriod,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"BlocksInPeriod",
-						(),
-						[
-							151u8, 58u8, 246u8, 176u8, 204u8, 107u8, 224u8, 209u8, 240u8, 52u8,
-							246u8, 45u8, 69u8, 123u8, 23u8, 193u8, 126u8, 200u8, 131u8, 199u8,
-							65u8, 39u8, 43u8, 20u8, 18u8, 4u8, 13u8, 120u8, 115u8, 31u8, 204u8,
-							134u8,
-						],
-					)
-				}
-				pub fn block_time_history_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::block_time_history::BlockTimeHistory,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"BlockTimeHistory",
-						(),
-						[
-							149u8, 198u8, 140u8, 12u8, 144u8, 112u8, 153u8, 141u8, 207u8, 242u8,
-							220u8, 87u8, 63u8, 234u8, 158u8, 87u8, 143u8, 186u8, 111u8, 14u8, 94u8,
-							134u8, 215u8, 201u8, 141u8, 196u8, 39u8, 107u8, 113u8, 219u8, 41u8,
-							58u8,
-						],
-					)
-				}
-				pub fn block_time_history(
-					&self,
-					_0: types::block_time_history::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::block_time_history::Param0,
-					>,
-					types::block_time_history::BlockTimeHistory,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"BlockTimeHistory",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							149u8, 198u8, 140u8, 12u8, 144u8, 112u8, 153u8, 141u8, 207u8, 242u8,
-							220u8, 87u8, 63u8, 234u8, 158u8, 87u8, 143u8, 186u8, 111u8, 14u8, 94u8,
-							134u8, 215u8, 201u8, 141u8, 196u8, 39u8, 107u8, 113u8, 219u8, 41u8,
-							58u8,
-						],
-					)
-				}
-				pub fn history_index(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::history_index::HistoryIndex,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"HistoryIndex",
-						(),
-						[
-							86u8, 246u8, 20u8, 135u8, 119u8, 68u8, 164u8, 167u8, 110u8, 235u8,
-							121u8, 151u8, 221u8, 179u8, 25u8, 155u8, 187u8, 30u8, 43u8, 45u8,
-							220u8, 156u8, 218u8, 20u8, 78u8, 59u8, 41u8, 144u8, 124u8, 166u8, 84u8,
-							149u8,
 						],
 					)
 				}
@@ -6088,35 +5856,34 @@ pub mod api {
 			pub struct ConstantsApi;
 			impl ConstantsApi {
 				#[doc = " Pallet's weight info"]
-				pub fn initial_distance_threshold_exponent(
+				pub fn initial_difficulty(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
+					runtime_types::primitive_types::U512,
 				> {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"QPoW",
-						"InitialDistanceThresholdExponent",
+						"InitialDifficulty",
 						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
+							20u8, 85u8, 224u8, 179u8, 96u8, 72u8, 114u8, 236u8, 59u8, 214u8, 15u8,
+							55u8, 76u8, 43u8, 109u8, 39u8, 42u8, 74u8, 194u8, 175u8, 2u8, 22u8,
+							208u8, 96u8, 61u8, 112u8, 226u8, 124u8, 66u8, 243u8, 48u8, 212u8,
 						],
 					)
 				}
 				pub fn difficulty_adjust_percent_clamp(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u8,
+					runtime_types::sp_arithmetic::fixed_point::FixedU128,
 				> {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"QPoW",
 						"DifficultyAdjustPercentClamp",
 						[
-							141u8, 130u8, 11u8, 35u8, 226u8, 114u8, 92u8, 179u8, 168u8, 110u8,
-							28u8, 91u8, 221u8, 64u8, 4u8, 148u8, 201u8, 193u8, 185u8, 66u8, 226u8,
-							114u8, 97u8, 79u8, 62u8, 212u8, 202u8, 114u8, 237u8, 228u8, 183u8,
-							165u8,
+							62u8, 145u8, 102u8, 227u8, 159u8, 92u8, 27u8, 54u8, 159u8, 228u8,
+							193u8, 99u8, 75u8, 196u8, 26u8, 250u8, 229u8, 230u8, 88u8, 109u8,
+							246u8, 100u8, 152u8, 158u8, 14u8, 25u8, 224u8, 173u8, 224u8, 41u8,
+							105u8, 231u8,
 						],
 					)
 				}
@@ -6182,23 +5949,6 @@ pub mod api {
 							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
 							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
 							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " Maximum distance threshold multiplier (default: 4)"]
-				pub fn max_distance_multiplier(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"QPoW",
-						"MaxDistanceMultiplier",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
 						],
 					)
 				}
@@ -11612,6 +11362,24 @@ pub mod api {
 							59u8, 226u8, 157u8, 101u8, 103u8, 117u8, 249u8, 65u8, 18u8, 191u8,
 							103u8, 119u8, 53u8, 85u8, 81u8, 96u8, 220u8, 42u8, 184u8, 239u8, 42u8,
 							246u8,
+						],
+					)
+				}
+				#[doc = " Volume fee taken from reversed transactions for high-security accounts only,"]
+				#[doc = " expressed as a Permill (e.g., Permill::from_percent(1) = 1%). Regular accounts incur no"]
+				#[doc = " fees."]
+				pub fn volume_fee(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					runtime_types::sp_arithmetic::per_things::Permill,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"ReversibleTransfers",
+						"VolumeFee",
+						[
+							65u8, 93u8, 120u8, 165u8, 204u8, 81u8, 159u8, 163u8, 93u8, 135u8,
+							114u8, 121u8, 147u8, 35u8, 215u8, 213u8, 4u8, 223u8, 83u8, 37u8, 225u8,
+							200u8, 189u8, 156u8, 140u8, 36u8, 58u8, 46u8, 42u8, 232u8, 155u8, 0u8,
 						],
 					)
 				}
@@ -24562,36 +24330,18 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "The `Error` enum of this pallet."]
-				pub enum Error {
-					#[codec(index = 0)]
-					InvalidSolution,
-					#[codec(index = 1)]
-					ArithmeticOverflow,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
 					ProofSubmitted {
 						nonce: [::core::primitive::u8; 64usize],
 						difficulty: runtime_types::primitive_types::U512,
-						distance_achieved: runtime_types::primitive_types::U512,
+						hash_achieved: runtime_types::primitive_types::U512,
 					},
 					#[codec(index = 1)]
-					DistanceThresholdAdjusted {
-						old_distance_threshold: runtime_types::primitive_types::U512,
-						new_distance_threshold: runtime_types::primitive_types::U512,
+					DifficultyAdjusted {
+						old_difficulty: runtime_types::primitive_types::U512,
+						new_difficulty: runtime_types::primitive_types::U512,
 						observed_block_time: ::core::primitive::u64,
 					},
 				}
@@ -27715,8 +27465,6 @@ pub mod api {
 				Balances(runtime_types::pallet_balances::pallet::Error),
 				#[codec(index = 4)]
 				Sudo(runtime_types::pallet_sudo::pallet::Error),
-				#[codec(index = 5)]
-				QPoW(runtime_types::pallet_qpow::pallet::Error),
 				#[codec(index = 8)]
 				Vesting(runtime_types::pallet_vesting::pallet::Error),
 				#[codec(index = 9)]

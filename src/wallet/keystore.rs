@@ -279,7 +279,7 @@ mod tests {
 	fn test_quantum_keypair_from_dilithium_keypair() {
 		// Generate a test keypair
 		let entropy = [1u8; 32];
-		let dilithium_keypair = Keypair::generate(Some(&entropy));
+		let dilithium_keypair = Keypair::generate(&entropy);
 
 		// Convert to QuantumKeyPair
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
@@ -293,7 +293,7 @@ mod tests {
 	fn test_quantum_keypair_to_dilithium_keypair_roundtrip() {
 		// Generate a test keypair
 		let entropy = [2u8; 32];
-		let original_keypair = Keypair::generate(Some(&entropy));
+		let original_keypair = Keypair::generate(&entropy);
 
 		// Convert to QuantumKeyPair and back
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&original_keypair);
@@ -403,7 +403,7 @@ mod tests {
 		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 
 		let entropy = [3u8; 32];
-		let dilithium_keypair = Keypair::generate(Some(&entropy));
+		let dilithium_keypair = Keypair::generate(&entropy);
 
 		// Convert through different paths
 		let quantum_from_dilithium = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
@@ -635,7 +635,7 @@ mod tests {
 		// Generate multiple keypairs and verify they maintain data integrity
 		for i in 0..5 {
 			let entropy = [i as u8; 32];
-			let dilithium_keypair = Keypair::generate(Some(&entropy));
+			let dilithium_keypair = Keypair::generate(&entropy);
 			let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 			// Print actual key sizes for debugging (first iteration only)
