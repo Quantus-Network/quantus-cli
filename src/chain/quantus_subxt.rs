@@ -8103,7 +8103,7 @@ pub mod api {
 								[::core::primitive::u8; 32usize],
 								runtime_types::frame_support::traits::preimages::Bounded<
 									runtime_types::quantus_runtime::RuntimeCall,
-									runtime_types::qp_poseidon::PoseidonHasher,
+									runtime_types::quantus_runtime::PoseidonHeaderHasher,
 								>,
 								::core::primitive::u32,
 								runtime_types::quantus_runtime::OriginCaller,
@@ -9174,7 +9174,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::qp_poseidon::PoseidonHasher,
+						runtime_types::quantus_runtime::PoseidonHeaderHasher,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -9665,7 +9665,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::quantus_runtime::PoseidonHeaderHasher,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -9759,7 +9759,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::quantus_runtime::PoseidonHeaderHasher,
 				>;
 				pub type Tally =
 					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
@@ -10016,7 +10016,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::qp_poseidon::PoseidonHasher,
+								runtime_types::quantus_runtime::PoseidonHeaderHasher,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_conviction_voting::types::Tally<
@@ -10916,7 +10916,7 @@ pub mod api {
 							::core::primitive::u128,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::qp_poseidon::PoseidonHasher,
+								runtime_types::quantus_runtime::PoseidonHeaderHasher,
 							>,
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::H256;
@@ -13176,7 +13176,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::qp_poseidon::PoseidonHasher,
+						runtime_types::quantus_runtime::PoseidonHeaderHasher,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -13667,7 +13667,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::quantus_runtime::PoseidonHeaderHasher,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -13761,7 +13761,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::quantus_runtime::PoseidonHeaderHasher,
 				>;
 				pub type Tally = runtime_types::pallet_ranked_collective::Tally;
 			}
@@ -14012,7 +14012,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::qp_poseidon::PoseidonHasher,
+								runtime_types::quantus_runtime::PoseidonHeaderHasher,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_ranked_collective::Tally,
@@ -24993,7 +24993,7 @@ pub mod api {
 						>,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::quantus_runtime::PoseidonHeaderHasher,
 						>,
 						enactment_moment:
 							runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -25150,7 +25150,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::quantus_runtime::PoseidonHeaderHasher,
 						>,
 					},
 					#[codec(index = 1)]
@@ -25180,7 +25180,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::quantus_runtime::PoseidonHeaderHasher,
 						>,
 						tally: runtime_types::pallet_conviction_voting::types::Tally<
 							::core::primitive::u128,
@@ -25273,7 +25273,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::quantus_runtime::PoseidonHeaderHasher,
 						>,
 					},
 					#[codec(index = 1)]
@@ -25303,7 +25303,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::quantus_runtime::PoseidonHeaderHasher,
 						>,
 						tally: runtime_types::pallet_ranked_collective::Tally,
 					},
@@ -27287,17 +27287,6 @@ pub mod api {
 				}
 			}
 		}
-		pub mod qp_poseidon {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct PoseidonHasher;
-		}
 		pub mod qp_scheduler {
 			use super::runtime_types;
 			#[derive(
@@ -27400,6 +27389,14 @@ pub mod api {
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub enum OriginCaller {
 				# [codec (index = 0)] system (runtime_types :: frame_support :: dispatch :: RawOrigin < :: subxt :: ext :: subxt_core :: utils :: AccountId32 > ,) , # [codec (index = 19)] Origins (runtime_types :: quantus_runtime :: governance :: origins :: pallet_custom_origins :: Origin ,) , }
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct PoseidonHeaderHasher;
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
 				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
