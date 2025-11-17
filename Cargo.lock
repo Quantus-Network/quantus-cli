@@ -3363,7 +3363,7 @@ checksum = "fb2f13d8793f7a79c42d33e4ebe9d470fe938dc55592ef97ef42d4298aa6a976"
 dependencies = [
  "log",
  "parity-scale-codec",
- "qp-poseidon 1.0.1",
+ "qp-poseidon",
  "qp-rusty-crystals-dilithium",
  "qp-rusty-crystals-hdwallet",
  "scale-info",
@@ -3371,25 +3371,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "thiserror 1.0.69",
-]
-
-[[package]]
-name = "qp-poseidon"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33181134496120c212a0a2098215cf45a68d50fe656de6fb30b31e73babe9383"
-dependencies = [
- "log",
- "p3-field",
- "p3-goldilocks",
- "parity-scale-codec",
- "qp-poseidon-core 0.9.5",
- "scale-info",
- "serde",
- "sp-core",
- "sp-runtime",
- "sp-storage",
- "sp-trie",
 ]
 
 [[package]]
@@ -3402,7 +3383,7 @@ dependencies = [
  "p3-field",
  "p3-goldilocks",
  "parity-scale-codec",
- "qp-poseidon-core 1.0.1",
+ "qp-poseidon-core",
  "scale-info",
  "serde",
  "sp-core",
@@ -3420,20 +3401,6 @@ dependencies = [
  "p3-field",
  "p3-goldilocks",
  "p3-poseidon2",
- "rand 0.9.2",
- "rand_chacha 0.9.0",
-]
-
-[[package]]
-name = "qp-poseidon-core"
-version = "0.9.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec326fc2631a929de09a38af2613a3db5230882c12a2f68205693ec632751e8b"
-dependencies = [
- "p3-field",
- "p3-goldilocks",
- "p3-poseidon2",
- "p3-symmetric",
  "rand 0.9.2",
  "rand_chacha 0.9.0",
 ]
@@ -3474,7 +3441,7 @@ dependencies = [
  "hex",
  "hex-literal",
  "nam-tiny-hderive",
- "qp-poseidon-core 1.0.1",
+ "qp-poseidon-core",
  "qp-rusty-crystals-dilithium",
  "rand_chacha 0.9.0",
  "rand_core 0.9.3",
@@ -3497,7 +3464,7 @@ dependencies = [
  "jsonrpsee",
  "parity-scale-codec",
  "qp-dilithium-crypto",
- "qp-poseidon 0.9.5",
+ "qp-poseidon",
  "qp-rusty-crystals-dilithium",
  "qp-rusty-crystals-hdwallet",
  "rand 0.9.2",
