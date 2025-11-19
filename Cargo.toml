@@ -62,7 +62,7 @@ codec = { package = "parity-scale-codec", version = "3.7", features = [
 ] }
 sp-core = { version = "37.0.0" }
 sp-runtime = { version = "42.0.0" }
-frame-support = { version = "40.0.0" }
+frame-support = { version = "41.0.0" }
 subxt = "0.43.0"
 jsonrpsee = { version = "0.24", features = ["client"] }
 
