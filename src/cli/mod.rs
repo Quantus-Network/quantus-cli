@@ -21,6 +21,7 @@ pub mod system;
 pub mod tech_collective;
 pub mod treasury;
 pub mod wallet;
+pub mod wormhole;
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
@@ -221,6 +222,10 @@ pub enum Commands {
 	/// Block management and analysis commands
 	#[command(subcommand)]
 	Block(block::BlockCommands),
+
+	/// Wormhole proof generation and verification
+	#[command(subcommand)]
+	Wormhole(wormhole::WormholeCommands),
 }
 
 /// Developer subcommands
@@ -343,6 +348,7 @@ pub async fn execute_command(
 		},
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
+		Commands::Wormhole(wormhole_cmd) => wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
 	}
 }
 

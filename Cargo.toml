@@ -68,5 +68,13 @@ jsonrpsee = { version = "0.24", features = ["client"] }
 # Needed for implementing custom Subxt hasher
 subxt-metadata = "0.43.0"
 
+# ZK proof generation
+anyhow = "1.0"
+qp-wormhole-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits.git", branch = "feat/block-header-proof", default-features = false }
+qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits.git", branch = "feat/block-header-proof", default-features = false }
+qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits.git", branch = "feat/block-header-proof", default-features = false }
+plonky2 = { package = "qp-plonky2", git = "https://github.com/Quantus-Network/qp-plonky2", default-features = false, features = ["no_random"] }
+qp-poseidon-core = { git = "https://github.com/Quantus-Network/qp-poseidon.git", branch = "feat/plonky2-update", default-features = false, features = ["p3"] }
+
 [dev-dependencies]
 tempfile = "3.8"
