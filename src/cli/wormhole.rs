@@ -1,27 +1,37 @@
-use crate::chain::client::{ChainConfig, QuantusClient};
-use crate::chain::quantus_subxt as quantus_node;
-use crate::chain::quantus_subxt::api::balances;
-use crate::cli::common::submit_transaction;
-use crate::wallet::QuantumKeyPair;
-use crate::{log_print, log_success, log_verbose};
+use crate::{
+	chain::{
+		client::{ChainConfig, QuantusClient},
+		quantus_subxt as quantus_node,
+		quantus_subxt::api::balances,
+	},
+	cli::common::submit_transaction,
+	log_print, log_success, log_verbose,
+	wallet::QuantumKeyPair,
+};
 use anyhow::anyhow;
 use clap::Subcommand;
-use plonky2::plonk::circuit_data::CircuitConfig;
-use plonky2::plonk::proof::ProofWithPublicInputs;
+use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
 use qp_poseidon::PoseidonHasher;
-use qp_wormhole_circuit::inputs::{CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs};
-use qp_wormhole_circuit::nullifier::Nullifier;
+use qp_wormhole_circuit::{
+	inputs::{CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs},
+	nullifier::Nullifier,
+};
 use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::utils::{BytesDigest, Digest};
-use sp_core::crypto::{AccountId32, Ss58Codec};
-use sp_core::Hasher;
-use subxt::backend::legacy::rpc_methods::{Bytes, ReadProof};
-use subxt::blocks::Block;
-use subxt::ext::codec::Encode;
-use subxt::ext::jsonrpsee::core::client::ClientT;
-use subxt::ext::jsonrpsee::rpc_params;
-use subxt::utils::{to_hex, AccountId32 as SubxtAccountId};
-use subxt::OnlineClient;
+use sp_core::{
+	crypto::{AccountId32, Ss58Codec},
+	Hasher,
+};
+use subxt::{
+	backend::legacy::rpc_methods::{Bytes, ReadProof},
+	blocks::Block,
+	ext::{
+		codec::Encode,
+		jsonrpsee::{core::client::ClientT, rpc_params},
+	},
+	utils::{to_hex, AccountId32 as SubxtAccountId},
+	OnlineClient,
+};
 
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
@@ -70,7 +80,7 @@ pub async fn handle_wormhole_command(
 			password,
 			password_file,
 			output,
-		} => {
+		} =>
 			generate_proof(
 				secret,
 				amount,
@@ -81,8 +91,7 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await
-		},
+			.await,
 	}
 }
 
