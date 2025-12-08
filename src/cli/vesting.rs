@@ -275,13 +275,13 @@ async fn block_to_utc(
 		.number();
 
 	// Calculate time difference in milliseconds
-	let block_diff =
-		if block_number > current_block { (block_number - current_block) as i64 } else { 0i64 };
+	// Can be negative (past) or positive (future)
+	let block_diff = (block_number as i64) - (current_block as i64);
 
 	let time_diff_ms = block_diff * (BLOCK_TIME_MS as i64);
-	let future_time = Utc::now() + chrono::Duration::milliseconds(time_diff_ms);
+	let timestamp = Utc::now() + chrono::Duration::milliseconds(time_diff_ms);
 
-	Ok(future_time)
+	Ok(timestamp)
 }
 
 /// Format duration in a human-readable way
@@ -783,9 +783,6 @@ async fn handle_calculate(
 	};
 
 	let start_block = starting_block.unwrap_or(current_block + 10);
-
-	// Calculate per_block from duration
-	let per_block_planck = locked_planck / duration_blocks as u128;
 	let end_block = start_block + duration_blocks;
 
 	log_print!("Input:");
