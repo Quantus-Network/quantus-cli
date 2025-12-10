@@ -169,9 +169,10 @@ pub enum RecoveryCommands {
 pub async fn handle_recovery_command(
 	command: RecoveryCommands,
 	node_url: &str,
-	finalized: bool,
+	tx_options: &crate::cli::common::TransactionOptions,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+	let finalized = tx_options.finalized;
 
 	match command {
 		RecoveryCommands::Initiate { rescuer, lost, password, password_file } => {

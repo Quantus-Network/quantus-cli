@@ -334,6 +334,7 @@ pub async fn get_sudo_account(
 pub async fn handle_tech_collective_command(
 	command: TechCollectiveCommands,
 	node_url: &str,
+	_tx_options: &crate::cli::common::TransactionOptions,
 ) -> crate::error::Result<()> {
 	log_print!("🏛️  Tech Collective");
 

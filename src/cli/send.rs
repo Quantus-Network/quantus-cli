@@ -162,6 +162,7 @@ pub async fn transfer(
 		.await
 }
 
+
 /// Transfer tokens with manual nonce override
 pub async fn transfer_with_nonce(
 	quantus_client: &QuantusClient,
@@ -338,7 +339,7 @@ pub async fn handle_send_command(
 	password_file: Option<String>,
 	tip: Option<String>,
 	nonce: Option<u32>,
-	finalized: bool,
+	tx_options: &crate::cli::common::TransactionOptions,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -377,9 +378,6 @@ pub async fn handle_send_command(
 		});
 	}
 
-	// Create and submit transaction
-	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
-
 	// Parse tip amount if provided
 	let tip_amount = if let Some(tip_str) = &tip {
 		// Get chain properties for proper decimal parsing
@@ -389,20 +387,32 @@ pub async fn handle_send_command(
 		None
 	};
 
-	// Submit transaction
-	let tx_hash = transfer_with_nonce(
+	// Create the transfer call
+	let (to_account_id_sp, _) = SpAccountId32::from_ss58check_with_version(&resolved_address)
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
+		})?;
+	let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
+	let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
+
+	let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
+		subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
+		amount,
+	);
+
+	// Handle transaction output (either submit or export unsigned)
+	let tx_result = crate::cli::common::handle_transaction_output(
 		&quantus_client,
 		&keypair,
-		&resolved_address,
-		amount,
+		transfer_call,
 		tip_amount,
-		nonce,
-		finalized,
-	)
-	.await?;
+		tx_options,
+	).await?;
 
-	log_print!("✅ {} Transaction submitted! Hash: {:?}", "SUCCESS".bright_green().bold(), tx_hash);
-	log_success!("🎉 {} Transaction confirmed!", "FINISHED".bright_green().bold());
+	if let Some(tx_hash) = tx_result {
+		log_print!("✅ {} Transaction submitted! Hash: {:?}", "SUCCESS".bright_green().bold(), tx_hash);
+		log_success!("🎉 {} Transaction confirmed!", "FINISHED".bright_green().bold());
+	}
 
 	// Show updated balance with proper formatting
 	let new_balance = get_balance(&quantus_client, &from_account_id).await?;

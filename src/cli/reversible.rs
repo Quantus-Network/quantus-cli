@@ -246,11 +246,12 @@ pub async fn schedule_transfer_with_delay(
 pub async fn handle_reversible_command(
 	command: ReversibleCommands,
 	node_url: &str,
-	finalized: bool,
+	tx_options: &crate::cli::common::TransactionOptions,
 ) -> Result<()> {
 	log_print!("🔄 Reversible Transfers");
 
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+	let finalized = tx_options.finalized;
 
 	match command {
 		ReversibleCommands::ListPending { address, from, password, password_file } =>

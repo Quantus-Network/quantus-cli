@@ -799,6 +799,7 @@ async fn get_storage_by_parts(
 pub async fn handle_storage_command(
 	command: StorageCommands,
 	node_url: &str,
+	_tx_options: &crate::cli::common::TransactionOptions,
 ) -> crate::error::Result<()> {
 	log_print!("🗄️  Storage");
 

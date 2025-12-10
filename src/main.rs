@@ -40,12 +40,25 @@ struct Cli {
 	/// NOTE: waiting for finalized transaction may take a while in PoW chain
 	#[arg(long, global = true, default_value = "false")]
 	finalized_tx: bool,
+
+	/// Output unsigned transaction as SCALE-encoded hex instead of submitting
+	/// Useful for hardware wallet signing workflows
+	#[arg(long, global = true, default_value = "false")]
+	output_unsigned: bool,
+
+	/// Wait for transaction progress and inclusion in block
+	/// By default, transactions are submitted and hash is shown immediately
+	#[arg(long, global = true, default_value = "false")]
+	progress: bool,
 }
 
 #[tokio::main]
 async fn main() -> Result<(), QuantusError> {
 	sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 	let cli = Cli::parse();
+
+	let tx_options =
+		crate::cli::common::TransactionOptions::new(cli.output_unsigned, cli.progress, cli.finalized_tx);
 
 	// Set up our custom logging
 	log::set_verbose(cli.verbose);
@@ -61,7 +74,7 @@ async fn main() -> Result<(), QuantusError> {
 	}
 
 	// Execute the command
-	match cli::execute_command(cli.command, &cli.node_url, cli.verbose, cli.finalized_tx).await {
+	match cli::execute_command(cli.command, &cli.node_url, cli.verbose, &tx_options).await {
 		Ok(_) => {
 			log_verbose!("");
 			log_verbose!("Command executed successfully!");

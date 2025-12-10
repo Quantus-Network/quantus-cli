@@ -116,6 +116,7 @@ pub enum TreasuryCommands {
 pub async fn handle_treasury_command(
 	command: TreasuryCommands,
 	node_url: &str,
+	_tx_options: &crate::cli::common::TransactionOptions,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 

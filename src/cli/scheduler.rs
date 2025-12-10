@@ -145,11 +145,12 @@ async fn schedule_remark(
 pub async fn handle_scheduler_command(
 	command: SchedulerCommands,
 	node_url: &str,
-	finalized: bool,
+	tx_options: &crate::cli::common::TransactionOptions,
 ) -> Result<()> {
 	log_print!("🗓️  Scheduler");
 
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+	let finalized = tx_options.finalized;
 
 	match command {
 		SchedulerCommands::GetLastProcessedTimestamp => {

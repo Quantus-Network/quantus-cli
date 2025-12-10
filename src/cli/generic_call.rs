@@ -418,13 +418,22 @@ pub async fn handle_generic_call(
 	keypair: &QuantumKeyPair,
 	tip: Option<String>,
 	node_url: &str,
-	finalized: bool,
+	tx_options: &crate::cli::common::TransactionOptions,
 ) -> crate::error::Result<()> {
 	log_print!("🚀 Generic Call");
 
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
-	execute_generic_call(&quantus_client, pallet, call, args, keypair, tip, finalized).await?;
+	execute_generic_call(
+		&quantus_client,
+		pallet,
+		call,
+		args,
+		keypair,
+		tip,
+		tx_options.finalized,
+	)
+	.await?;
 
 	Ok(())
 }

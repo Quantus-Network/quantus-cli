@@ -1,11 +1,30 @@
 //! Common SubXT utilities and functions shared across CLI commands
-use crate::{chain::client::ChainConfig, error::Result, log_error, log_verbose};
+use crate::{chain::client::ChainConfig, error::Result, log_error, log_info, log_print, log_success, log_verbose};
+use codec::Encode;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::{
 	tx::{TxProgress, TxStatus},
 	OnlineClient,
 };
+
+/// Global transaction configuration flags
+#[derive(Debug, Clone)]
+pub struct TransactionOptions {
+	pub output_unsigned: bool,
+	pub progress: bool,
+	pub finalized: bool,
+}
+
+impl TransactionOptions {
+	pub fn new(output_unsigned: bool, progress: bool, finalized: bool) -> Self {
+		Self {
+			output_unsigned,
+			progress,
+			finalized,
+		}
+	}
+}
 
 /// Resolve address - if it's a wallet name, return the wallet's address
 /// If it's already an SS58 address, return it as is
@@ -356,4 +375,113 @@ async fn wait_tx_inclusion(
 	}
 
 	Ok(())
+}
+
+/// Handle transaction submission or unsigned output based on global flags
+pub async fn handle_transaction_output<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: Call,
+	tip: Option<u128>,
+	options: &TransactionOptions,
+) -> crate::error::Result<Option<subxt::utils::H256>>
+where
+	Call: subxt::tx::Payload,
+{
+	if options.output_unsigned {
+		// Output unsigned transaction as SCALE-encoded hex
+		log_verbose!("📤 Creating unsigned transaction for external signing...");
+
+		// Get fresh nonce for the account
+		let nonce = get_fresh_nonce_with_client(quantus_client, from_keypair).await?;
+
+		// For offline transactions, create params without mortality settings
+		use subxt::config::DefaultExtrinsicParamsBuilder;
+		let mut params_builder = DefaultExtrinsicParamsBuilder::new()
+			.nonce(nonce);
+
+		if let Some(tip_amount) = tip {
+			params_builder = params_builder.tip(tip_amount);
+			log_verbose!("💰 Using tip: {} to increase priority", tip_amount);
+		}
+
+		let params = params_builder.build();
+
+		// Create partial (unsigned) transaction
+		let partial_tx = quantus_client
+			.client()
+			.tx()
+			.create_partial_offline(&call, params)
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to create partial transaction: {e:?}"
+				))
+			})?;
+
+		// Get the signer payload (the data that needs to be signed)
+		let signer_payload = partial_tx.signer_payload();
+		let payload_bytes = signer_payload.encode();
+
+		log_print!("{}", hex::encode(&payload_bytes));
+		log_success!("📋 Unsigned transaction payload exported as hex");
+		log_info!("💡 Use this payload with your hardware wallet or signing tool");
+
+		Ok(None)
+	} else if options.progress {
+		// Submit transaction and wait for inclusion
+		let tx_hash = submit_transaction_with_finalization(quantus_client, from_keypair, call, tip, options.finalized).await?;
+		Ok(Some(tx_hash))
+	} else {
+		// Submit transaction and show hash immediately (don't wait)
+		let tx_hash = submit_transaction_immediately(quantus_client, from_keypair, call, tip).await?;
+		Ok(Some(tx_hash))
+	}
+}
+
+/// Submit transaction immediately without waiting for inclusion
+pub async fn submit_transaction_immediately<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: Call,
+	tip: Option<u128>,
+) -> crate::error::Result<subxt::utils::H256>
+where
+	Call: subxt::tx::Payload,
+{
+	let signer = from_keypair.to_subxt_signer().map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
+	})?;
+
+	// Get fresh nonce for the account
+	let nonce = get_fresh_nonce_with_client(quantus_client, from_keypair).await?;
+
+	// Create custom params with fresh nonce and optional tip
+	use subxt::config::DefaultExtrinsicParamsBuilder;
+	let mut params_builder = DefaultExtrinsicParamsBuilder::new()
+		.mortal(256) // Value higher than our finalization - TODO: should come from config
+		.nonce(nonce);
+
+	if let Some(tip_amount) = tip {
+		params_builder = params_builder.tip(tip_amount);
+		log_verbose!("💰 Using tip: {} to increase priority", tip_amount);
+	}
+
+	let params = params_builder.build();
+
+	// Submit the transaction without waiting
+	let tx_progress: TxProgress<ChainConfig, OnlineClient<ChainConfig>> = quantus_client
+		.client()
+		.tx()
+		.sign_and_submit_then_watch(&call, &signer, params)
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Failed to submit transaction: {e:?}"
+			))
+		})?;
+
+	let tx_hash = tx_progress.extrinsic_hash();
+	log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
+
+	Ok(tx_hash)
 }
