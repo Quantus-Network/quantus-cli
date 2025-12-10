@@ -3,7 +3,7 @@ use crate::{chain::client::ChainConfig, error::Result, log_error, log_verbose};
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::{
-	tx::{TxProgress, TxStatus},
+	tx::{TxProgress, TxStatus, PartialExtrinsic},
 	OnlineClient,
 };
 
@@ -356,4 +356,196 @@ async fn wait_tx_inclusion(
 	}
 
 	Ok(())
+}
+
+/// Hardware wallet support: Create unsigned transaction ready for external signing
+pub async fn create_unsigned_transaction<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: Call,
+	tip: Option<u128>,
+) -> crate::error::Result<PartialExtrinsic<ChainConfig, OnlineClient<ChainConfig>>>
+where
+	Call: subxt::tx::Payload,
+{
+	log_verbose!("🔓 Creating unsigned transaction for hardware wallet signing...");
+
+	// Get fresh nonce for the account
+	let nonce = get_fresh_nonce_with_client(quantus_client, from_keypair).await?;
+
+	// Get current block for logging
+	let latest_block_hash = quantus_client.get_latest_block().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {e:?}"))
+	})?;
+
+	log_verbose!("🔗 Latest block hash: {:?}", latest_block_hash);
+
+	// Create custom params with nonce and optional tip
+	use subxt::config::DefaultExtrinsicParamsBuilder;
+	let mut params_builder = DefaultExtrinsicParamsBuilder::new()
+		.mortal(256) // Value higher than our finalization - TODO: should come from config
+		.nonce(nonce);
+
+	if let Some(tip_amount) = tip {
+		params_builder = params_builder.tip(tip_amount);
+		log_verbose!("💰 Using tip: {} to increase priority", tip_amount);
+	} else {
+		log_verbose!("💰 No tip specified, using default priority");
+	}
+
+	let params = params_builder.build();
+
+	log_verbose!("🔢 Using nonce: {}", nonce);
+	log_verbose!("📋 Transaction parameters prepared for hardware signing");
+
+	// Create partial (unsigned) transaction
+	let partial_tx = quantus_client
+		.client()
+		.tx()
+		.create_partial_offline(&call, params)
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Failed to create partial transaction: {e:?}"
+			))
+		})?;
+
+	log_verbose!("✅ Unsigned transaction created successfully");
+	Ok(partial_tx)
+}
+
+/// Hardware wallet support: Export signing payload as SCALE-encoded bytes
+pub fn export_signing_payload(
+	partial_tx: &PartialExtrinsic<ChainConfig, OnlineClient<ChainConfig>>,
+) -> Vec<u8> {
+	log_verbose!("📤 Exporting signing payload for hardware wallet...");
+
+	// Get the signer payload (the data that needs to be signed)
+	let signer_payload = partial_tx.signer_payload();
+
+	// The payload is already SCALE-encoded and ready for signing
+	let payload_bytes = signer_payload.encode();
+
+	log_verbose!("📦 Signing payload exported: {} bytes", payload_bytes.len());
+	log_verbose!("🔍 Payload hash: {:?}", sp_core::blake2_256(&payload_bytes));
+
+	payload_bytes
+}
+
+/// Hardware wallet support: Submit transaction with externally provided signature
+pub async fn submit_signed_transaction(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	partial_tx: PartialExtrinsic<ChainConfig, OnlineClient<ChainConfig>>,
+	signature: &[u8],
+	finalized: bool,
+) -> crate::error::Result<subxt::utils::H256> {
+	log_verbose!("🔐 Submitting transaction with hardware wallet signature...");
+
+	// Convert signature bytes to the expected signature type
+	let signature = <ChainConfig as subxt::Config>::Signature::decode(&mut &signature[..])
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Failed to decode signature: {e:?}"
+			))
+		})?;
+
+	// Get the account ID from the keypair
+	let account_id = from_keypair.to_account_id_32();
+
+	// Attach the signature and account ID to create the signed transaction
+	let signed_tx = partial_tx.sign_with_account_and_signature(&account_id, &signature);
+
+	log_verbose!("✅ Signature attached to transaction");
+
+	// Submit the signed transaction
+	let mut tx_progress = signed_tx.submit().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!(
+			"Failed to submit signed transaction: {e:?}"
+		))
+	})?;
+
+	let tx_hash = tx_progress.extrinsic_hash();
+	log_verbose!("📋 Transaction submitted with hash: {:?}", tx_hash);
+
+	// Wait for inclusion
+	wait_tx_inclusion(&mut tx_progress, finalized).await?;
+
+	Ok(tx_hash)
+}
+
+/// Hardware wallet support: Get transaction details for display/debugging
+pub fn get_transaction_details(
+	partial_tx: &PartialExtrinsic<ChainConfig, OnlineClient<ChainConfig>>,
+	from_address: &str,
+) -> serde_json::Value {
+	log_verbose!("📋 Gathering transaction details for hardware wallet...");
+
+	let signer_payload = partial_tx.signer_payload();
+	let payload_bytes = signer_payload.encode();
+
+	serde_json::json!({
+		"from_address": from_address,
+		"payload_length": payload_bytes.len(),
+		"payload_hash": hex::encode(sp_core::blake2_256(&payload_bytes)),
+		"payload_hex": hex::encode(&payload_bytes),
+		"era": "Immortal", // For now, using immortal era
+		"nonce_required": true,
+		"tip_included": signer_payload.tip().is_some(),
+		"genesis_hash": hex::encode(signer_payload.genesis_hash().as_ref()),
+		"spec_version": signer_payload.spec_version(),
+		"transaction_version": signer_payload.transaction_version(),
+	})
+}
+
+/// Hardware wallet support: Generate QR code for signing payload
+pub fn generate_qr_code_for_signing(payload_bytes: &[u8]) -> Result<String> {
+	log_verbose!("📱 Generating QR code for signing payload...");
+
+	// Encode the payload as hex for QR code
+	let hex_payload = hex::encode(payload_bytes);
+
+	// Generate QR code
+	let code = qrcode::QrCode::new(hex_payload.as_bytes()).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to generate QR code: {e:?}"))
+	})?;
+
+	// Render the QR code as ASCII art
+	let qr_string = code.render::<char>()
+		.quiet_zone(false)
+		.module_dimensions(2, 1)
+		.build();
+
+	log_verbose!("📱 QR code generated successfully ({} bytes of payload)", payload_bytes.len());
+
+	Ok(qr_string)
+}
+
+/// Hardware wallet support: Display comprehensive hardware signing information
+pub fn display_hardware_signing_info(
+	partial_tx: &PartialExtrinsic<ChainConfig, OnlineClient<ChainConfig>>,
+	from_address: &str,
+	payload_bytes: &[u8],
+	qr_code: Option<&str>,
+) {
+	log_info!("🔐 Hardware Wallet Signing Information");
+	log_print!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+	log_print!("📤 From Address: {}", from_address.bright_cyan());
+	log_print!("📦 Payload Size: {} bytes", payload_bytes.len());
+	log_print!("🔍 Payload Hash: {}", hex::encode(sp_core::blake2_256(payload_bytes)).bright_yellow());
+	log_print!("");
+
+	if let Some(qr) = qr_code {
+		log_print!("📱 Scan this QR code with your hardware wallet:");
+		log_print!("");
+		log_print!("{}", qr);
+		log_print!("");
+	}
+
+	log_print!("📋 Raw Payload (hex): {}", hex::encode(payload_bytes));
+	log_print!("");
+	log_print!("💡 Instructions:");
+	log_print!("   1. Use your hardware wallet to sign the above payload");
+	log_print!("   2. The wallet should return the signature in hex format");
+	log_print!("   3. Use the signature with the 'submit-signed' command");
+	log_print!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 }

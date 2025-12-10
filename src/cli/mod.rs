@@ -8,6 +8,7 @@ pub mod block;
 pub mod common;
 pub mod events;
 pub mod generic_call;
+pub mod hardware;
 pub mod high_security;
 pub mod metadata;
 pub mod preimage;
@@ -31,6 +32,10 @@ pub enum Commands {
 	/// Wallet management commands
 	#[command(subcommand)]
 	Wallet(wallet::WalletCommands),
+
+	/// Hardware wallet signing commands
+	#[command(subcommand)]
+	Hardware(hardware::HardwareCommands),
 
 	/// Send tokens to another account
 	Send {
@@ -245,9 +250,11 @@ pub async fn execute_command(
 	node_url: &str,
 	verbose: bool,
 	finalized: bool,
+	output_unsigned: bool,
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
+		Commands::Hardware(hardware_cmd) => hardware::handle_hardware_command(hardware_cmd, node_url).await,
 		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
 			send::handle_send_command(
 				from,
