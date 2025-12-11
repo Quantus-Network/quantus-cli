@@ -165,14 +165,20 @@ async fn submit_balance_transfer(
 			subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id_subxt),
 			amount,
 		);
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, transfer_call, tip)
-			.await
+		crate::cli::common::submit_transaction(
+			quantus_client,
+			from_keypair,
+			transfer_call,
+			tip,
+			finalized,
+		)
+		.await
 	} else {
 		let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
 			subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id_subxt),
 			amount,
 		);
-		crate::cli::common::submit_transaction_with_finalization(
+		crate::cli::common::submit_transaction(
 			quantus_client,
 			from_keypair,
 			transfer_call,
@@ -203,7 +209,7 @@ async fn submit_system_remark(
 
 	let remark_call = quantus_subxt::api::tx().system().remark(remark.as_bytes().to_vec());
 
-	crate::cli::common::submit_transaction_with_finalization(
+	crate::cli::common::submit_transaction(
 		quantus_client,
 		from_keypair,
 		remark_call,
@@ -259,14 +265,8 @@ async fn submit_tech_collective_add_member(
 		},
 	));
 
-	crate::cli::common::submit_transaction_with_finalization(
-		quantus_client,
-		from_keypair,
-		sudo_call,
-		None,
-		finalized,
-	)
-	.await
+	crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None, finalized)
+		.await
 }
 
 /// Submit tech collective remove member
@@ -302,14 +302,8 @@ async fn submit_tech_collective_remove_member(
 		},
 	));
 
-	crate::cli::common::submit_transaction_with_finalization(
-		quantus_client,
-		from_keypair,
-		sudo_call,
-		None,
-		finalized,
-	)
-	.await
+	crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None, finalized)
+		.await
 }
 
 /// Submit tech collective vote
@@ -330,14 +324,8 @@ async fn submit_tech_collective_vote(
 
 	let vote_call = quantus_subxt::api::tx().tech_collective().vote(referendum_index, aye);
 
-	crate::cli::common::submit_transaction_with_finalization(
-		quantus_client,
-		from_keypair,
-		vote_call,
-		None,
-		finalized,
-	)
-	.await
+	crate::cli::common::submit_transaction(quantus_client, from_keypair, vote_call, None, finalized)
+		.await
 }
 
 /// Submit reversible transfer
@@ -374,7 +362,7 @@ async fn submit_reversible_transfer(
 		amount,
 	);
 
-	crate::cli::common::submit_transaction_with_finalization(
+	crate::cli::common::submit_transaction(
 		quantus_client,
 		from_keypair,
 		schedule_call,
