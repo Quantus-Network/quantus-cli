@@ -400,8 +400,7 @@ pub async fn handle_send_command(
 		amount,
 	);
 
-	// Handle transaction output (either submit or export unsigned)
-	let tx_result = crate::cli::common::handle_transaction_output(
+	let tx_result = crate::cli::common::handle_transaction_execution(
 		&quantus_client,
 		&keypair,
 		transfer_call,

@@ -32,7 +32,7 @@ pub async fn decode_preimage(
 }
 
 /// Decode RuntimeCall directly using Decode trait
-fn decode_runtime_call_direct(data: &[u8]) -> crate::error::Result<String> {
+pub fn decode_runtime_call_direct(data: &[u8]) -> crate::error::Result<String> {
 	// First, let's try to understand the call structure by reading indices
 	if data.len() < 3 {
 		return Err(QuantusError::Generic("Call data too short".to_string()));

@@ -202,7 +202,7 @@ async fn handle_batch_send_command(
 	// Create the batch call using utility pallet
 	let batch_call = quantus_subxt::api::tx().utility().batch(calls);
 
-	let tx_result = crate::cli::common::handle_transaction_output(
+	let tx_result = crate::cli::common::handle_transaction_execution(
 		&quantus_client,
 		&keypair,
 		batch_call,

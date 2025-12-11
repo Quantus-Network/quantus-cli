@@ -1,9 +1,9 @@
 //! Common SubXT utilities and functions shared across CLI commands
 use crate::{chain::client::ChainConfig, error::Result, log_error, log_info, log_print, log_success, log_verbose};
-use codec::Encode;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::{
+	client::{ClientState, RuntimeVersion},
 	tx::{TxProgress, TxStatus},
 	OnlineClient,
 };
@@ -378,7 +378,7 @@ async fn wait_tx_inclusion(
 }
 
 /// Handle transaction submission or unsigned output based on global flags
-pub async fn handle_transaction_output<Call>(
+pub async fn handle_transaction_execution<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	call: Call,
@@ -407,24 +407,64 @@ where
 
 		let params = params_builder.build();
 
-		// Create partial (unsigned) transaction
-		let partial_tx = quantus_client
-			.client()
-			.tx()
-			.create_partial_offline(&call, params)
-			.map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!(
-					"Failed to create partial transaction: {e:?}"
-				))
-			})?;
+		// Create ClientState for manual transaction construction
+		let metadata = quantus_client.client().metadata();
+		let genesis_hash = quantus_client.get_genesis_hash().await?;
+		let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
 
-		// Get the full unsigned extrinsic bytes for hardware wallet signing
-		let unsigned_tx = partial_tx.to_transaction();
-		let payload_bytes = unsigned_tx.into_encoded();
+		let client_state = ClientState {
+			metadata: metadata.clone(),
+			genesis_hash,
+			runtime_version: RuntimeVersion {
+				spec_version,
+				transaction_version,
+			},
+		};
+
+		// Determine transaction version: use V5 if transaction_version >= 5, otherwise V4
+		let version_byte = if transaction_version >= 5 { 0x05u8 } else { 0x04u8 };
+
+		// Build the custom payload for HW wallet: 
+		// V4: Version(0x04) | Compact(CallLen) | Call | Compact(ExtraLen) | Extra | Compact(ImplicitLen) | Implicit
+		// V5: Version(0x05) | Compact(CallLen) | Call | Compact(ExtraLen) | Extra | Compact(ImplicitLen) | Implicit
+		use codec::{Compact, Encode};
+		use subxt::config::{ExtrinsicParams, ExtrinsicParamsEncoder};
+
+		let mut payload_bytes = Vec::new();
+		
+		// Encode Call
+		let call_bytes = <_ as subxt::tx::Payload>::encode_call_data(&call, &metadata)
+			.map_err(|e| crate::error::QuantusError::NetworkError(format!("Failed to encode call data: {e:?}")))?;
+
+		// Instantiate ExtrinsicParams to get Extra and Implicit params
+		// Note: We use ChainConfig::ExtrinsicParams which should match what we need
+		let extrinsic_params = <ChainConfig as subxt::Config>::ExtrinsicParams::new(&client_state, params)
+			.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to create extrinsic params: {e:?}")))?;
+
+		let mut extra_bytes = Vec::new();
+		extrinsic_params.encode_signer_payload_value_to(&mut extra_bytes);
+
+		let mut implicit_bytes = Vec::new();
+		extrinsic_params.encode_implicit_to(&mut implicit_bytes);
+
+		// 1. Version
+		payload_bytes.push(version_byte);
+
+		// 2. Call Data (prefixed with length)
+		Compact(call_bytes.len() as u32).encode_to(&mut payload_bytes);
+		payload_bytes.extend_from_slice(&call_bytes);
+
+		// 3. Extra Params (prefixed with length)
+		Compact(extra_bytes.len() as u32).encode_to(&mut payload_bytes);
+		payload_bytes.extend_from_slice(&extra_bytes);
+
+		// 4. Implicit Params (prefixed with length)
+		Compact(implicit_bytes.len() as u32).encode_to(&mut payload_bytes);
+		payload_bytes.extend_from_slice(&implicit_bytes);
 
 		log_print!("{}", hex::encode(&payload_bytes));
-		log_success!("📋 Unsigned transaction payload exported as hex");
-		log_info!("💡 Use this payload with your hardware wallet or signing tool");
+		log_success!("📋 Unsigned transaction payload exported as hex (Custom format for HW wallet)");
+		log_info!("💡 Contains: Version | Call | Extra | Implicit (all length-prefixed)");
 
 		Ok(None)
 	} else if options.progress {
@@ -482,6 +522,62 @@ where
 
 	let tx_hash = tx_progress.extrinsic_hash();
 	log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
+
+	Ok(tx_hash)
+}
+
+/// Submit transaction immediately with manual nonce (no waiting)
+pub async fn submit_transaction_immediately_with_nonce<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: Call,
+	tip: Option<u128>,
+	nonce: u32,
+) -> crate::error::Result<subxt::utils::H256>
+where
+	Call: subxt::tx::Payload,
+{
+	let signer = from_keypair.to_subxt_signer().map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
+	})?;
+
+	// Get current block for logging using latest block hash
+	let latest_block_hash = quantus_client.get_latest_block().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {e:?}"))
+	})?;
+
+	log_verbose!("🔗 Latest block hash: {:?}", latest_block_hash);
+
+	// Create custom params with manual nonce and optional tip
+	use subxt::config::DefaultExtrinsicParamsBuilder;
+	let mut params_builder = DefaultExtrinsicParamsBuilder::new()
+		.mortal(256) // Value higher than our finalization - TODO: should come from config
+		.nonce(nonce.into());
+
+	if let Some(tip_amount) = tip {
+		params_builder = params_builder.tip(tip_amount);
+		log_verbose!("💰 Using tip: {} to increase priority", tip_amount);
+	}
+
+	let params = params_builder.build();
+
+	log_verbose!("🔢 Using manual nonce: {}", nonce);
+	log_verbose!("📤 Submitting transaction with manual nonce...");
+
+	// Submit the transaction without waiting
+	let tx_progress: TxProgress<ChainConfig, OnlineClient<ChainConfig>> = quantus_client
+		.client()
+		.tx()
+		.sign_and_submit_then_watch(&call, &signer, params)
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Failed to submit transaction: {e:?}"
+			))
+		})?;
+
+	let tx_hash = tx_progress.extrinsic_hash();
+	log_verbose!("✅ Transaction submitted successfully: {:?}", tx_hash);
 
 	Ok(tx_hash)
 }

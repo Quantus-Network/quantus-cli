@@ -6,6 +6,7 @@ pub mod address_format;
 pub mod batch;
 pub mod block;
 pub mod common;
+pub mod decode_unsigned;
 pub mod events;
 pub mod generic_call;
 pub mod high_security;
@@ -154,6 +155,29 @@ pub enum Commands {
 		/// Account address to query (SS58 format)
 		#[arg(short, long)]
 		address: String,
+	},
+
+	/// Decode an unsigned transaction payload
+	DecodeUnsigned {
+		/// Hex-encoded unsigned transaction payload
+		#[arg(short, long)]
+		hex: String,
+
+		/// Sign and send the decoded transaction using the specified wallet
+		#[arg(long)]
+		sign_and_send: Option<String>,
+
+		/// Hex-encoded signature from hardware wallet (alternative to sign_and_send)
+		#[arg(long)]
+		signature: Option<String>,
+
+		/// Password for the wallet (or use environment variables)
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
 	},
 
 	/// Developer utilities and testing tools
@@ -322,6 +346,8 @@ pub async fn execute_command(
 			log_print!("?? Balance: {}", formatted_balance);
 			Ok(())
 		},
+		Commands::DecodeUnsigned { hex, sign_and_send, signature, password, password_file } =>
+			decode_unsigned::handle_decode_unsigned_command(hex, sign_and_send, signature, password, password_file, node_url).await,
 		Commands::Developer(dev_cmd) => match dev_cmd {
 			DeveloperCommands::CreateTestWallets => {
 				let _ = crate::cli::handle_developer_command(DeveloperCommands::CreateTestWallets)
