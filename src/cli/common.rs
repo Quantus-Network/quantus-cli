@@ -113,21 +113,11 @@ pub async fn get_incremented_nonce_with_client(
 	Ok(incremented_nonce)
 }
 
-/// Default function for transaction submission, waits until transaction is in the best block
+/// Submit transaction with optional finalization check
+///
+/// By default (finalized=false), waits until transaction is in the best block (fast)
+/// With finalized=true, waits until transaction is in a finalized block (slow in PoW chains)
 pub async fn submit_transaction<Call>(
-	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
-	call: Call,
-	tip: Option<u128>,
-) -> crate::error::Result<subxt::utils::H256>
-where
-	Call: subxt::tx::Payload,
-{
-	submit_transaction_with_finalization(quantus_client, from_keypair, call, tip, false).await
-}
-
-/// Helper function to submit transaction with an optional finalization check
-pub async fn submit_transaction_with_finalization<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	call: Call,
@@ -332,23 +322,64 @@ async fn wait_tx_inclusion(
 	tx_progress: &mut TxProgress<ChainConfig, OnlineClient<ChainConfig>>,
 	finalized: bool,
 ) -> Result<()> {
+	use indicatif::{ProgressBar, ProgressStyle};
+
+	// Create spinner (only in non-verbose mode)
+	let spinner = if !crate::log::is_verbose() {
+		let pb = ProgressBar::new_spinner();
+		pb.set_style(
+			ProgressStyle::default_spinner()
+				.tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+				.template("{spinner:.cyan} {msg} {elapsed:.dim}")
+				.unwrap(),
+		);
+
+		if finalized {
+			pb.set_message("Waiting for finalized block...");
+		} else {
+			pb.set_message("Waiting for block inclusion...");
+		}
+
+		pb.enable_steady_tick(std::time::Duration::from_millis(100));
+		Some(pb)
+	} else {
+		None
+	};
+
 	while let Some(Ok(status)) = tx_progress.next().await {
 		crate::log_verbose!("   Transaction status: {:?}", status);
+
 		match status {
+			TxStatus::Validated =>
+				if let Some(ref pb) = spinner {
+					pb.set_message("Transaction validated ✓");
+				},
 			TxStatus::InBestBlock(block_hash) => {
 				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
 				if finalized {
+					if let Some(ref pb) = spinner {
+						pb.set_message("In best block, waiting for finalization...");
+					}
 					continue;
 				} else {
+					if let Some(pb) = spinner {
+						pb.finish_with_message("✅ Transaction included in block!");
+					}
 					break;
 				};
 			},
 			TxStatus::InFinalizedBlock(block_hash) => {
 				crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
+				if let Some(pb) = spinner {
+					pb.finish_with_message("✅ Transaction finalized!");
+				}
 				break;
 			},
 			TxStatus::Error { message } | TxStatus::Invalid { message } => {
 				crate::log_error!("   Transaction error: {}", message);
+				if let Some(pb) = spinner {
+					pb.finish_with_message("❌ Transaction error!");
+				}
 				break;
 			},
 			_ => continue,

@@ -272,19 +272,25 @@ pub async fn execute_command(
 		Commands::Scheduler(scheduler_cmd) =>
 			scheduler::handle_scheduler_command(scheduler_cmd, node_url, finalized).await,
 		Commands::Storage(storage_cmd) =>
-			storage::handle_storage_command(storage_cmd, node_url).await,
+			storage::handle_storage_command(storage_cmd, node_url, finalized).await,
 		Commands::TechCollective(tech_collective_cmd) =>
-			tech_collective::handle_tech_collective_command(tech_collective_cmd, node_url).await,
+			tech_collective::handle_tech_collective_command(
+				tech_collective_cmd,
+				node_url,
+				finalized,
+			)
+			.await,
 		Commands::Preimage(preimage_cmd) =>
 			preimage::handle_preimage_command(preimage_cmd, node_url, finalized).await,
 		Commands::TechReferenda(tech_referenda_cmd) =>
-			tech_referenda::handle_tech_referenda_command(tech_referenda_cmd, node_url).await,
+			tech_referenda::handle_tech_referenda_command(tech_referenda_cmd, node_url, finalized)
+				.await,
 		Commands::Referenda(referenda_cmd) =>
-			referenda::handle_referenda_command(referenda_cmd, node_url).await,
+			referenda::handle_referenda_command(referenda_cmd, node_url, finalized).await,
 		Commands::Treasury(treasury_cmd) =>
-			treasury::handle_treasury_command(treasury_cmd, node_url).await,
+			treasury::handle_treasury_command(treasury_cmd, node_url, finalized).await,
 		Commands::Runtime(runtime_cmd) =>
-			runtime::handle_runtime_command(runtime_cmd, node_url).await,
+			runtime::handle_runtime_command(runtime_cmd, node_url, finalized).await,
 		Commands::Call {
 			pallet,
 			call,

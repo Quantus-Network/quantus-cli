@@ -190,7 +190,7 @@ pub async fn handle_recovery_command(
 				.recovery()
 				.initiate_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
 
-			let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
 				&rescuer_key,
 				call,
@@ -225,7 +225,7 @@ pub async fn handle_recovery_command(
 				subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id),
 				subxt::ext::subxt_core::utils::MultiAddress::Id(rescuer_id),
 			);
-			let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
 				&friend_key,
 				call,
@@ -253,14 +253,19 @@ pub async fn handle_recovery_command(
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.claim_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
-			let tx_hash =
-				crate::cli::common::submit_transaction(&quantus_client, &rescuer_key, call, None)
-					.await
-					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!(
-							"Failed to submit claim_recovery transaction: {e}"
-						))
-					})?;
+			let tx_hash = crate::cli::common::submit_transaction(
+				&quantus_client,
+				&rescuer_key,
+				call,
+				None,
+				finalized,
+			)
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit claim_recovery transaction: {e}"
+				))
+			})?;
 
 			log_success!("✅ Claim submitted successfully {:?}", tx_hash);
 		},
@@ -358,7 +363,7 @@ pub async fn handle_recovery_command(
 				.recovery()
 				.as_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id), inner_call);
 
-			let tx_hash = match crate::cli::common::submit_transaction_with_finalization(
+			let tx_hash = match crate::cli::common::submit_transaction(
 				&quantus_client,
 				&rescuer_key,
 				call,
@@ -469,7 +474,7 @@ pub async fn handle_recovery_command(
 				.recovery()
 				.as_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id), inner_call);
 
-			let tx_hash = match crate::cli::common::submit_transaction_with_finalization(
+			let tx_hash = match crate::cli::common::submit_transaction(
 				&quantus_client,
 				&rescuer_key,
 				call,
@@ -498,7 +503,7 @@ pub async fn handle_recovery_command(
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.close_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(rescuer_id));
-			let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
 				&lost_key,
 				call,
@@ -528,7 +533,7 @@ pub async fn handle_recovery_command(
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.cancel_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
-			let tx_hash = crate::cli::common::submit_transaction_with_finalization(
+			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
 				&rescuer_key,
 				call,
