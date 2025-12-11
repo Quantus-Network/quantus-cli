@@ -418,9 +418,9 @@ where
 				))
 			})?;
 
-		// Get the signer payload (the data that needs to be signed)
-		let signer_payload = partial_tx.signer_payload();
-		let payload_bytes = signer_payload.encode();
+		// Get the full unsigned extrinsic bytes for hardware wallet signing
+		let unsigned_tx = partial_tx.to_transaction();
+		let payload_bytes = unsigned_tx.into_encoded();
 
 		log_print!("{}", hex::encode(&payload_bytes));
 		log_success!("📋 Unsigned transaction payload exported as hex");
