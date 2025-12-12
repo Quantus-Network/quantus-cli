@@ -2,13 +2,12 @@ use crate::{
 	chain::{
 		client::{ChainConfig, QuantusClient},
 		quantus_subxt as quantus_node,
-		quantus_subxt::api::balances,
+		quantus_subxt::api::wormhole,
 	},
 	cli::common::submit_transaction,
 	log_print, log_success, log_verbose,
 	wallet::QuantumKeyPair,
 };
-use anyhow::anyhow;
 use clap::Subcommand;
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
 use qp_poseidon::PoseidonHasher;
@@ -17,13 +16,16 @@ use qp_wormhole_circuit::{
 	nullifier::Nullifier,
 };
 use qp_wormhole_prover::WormholeProver;
-use qp_zk_circuits_common::utils::{BytesDigest, Digest};
+use qp_zk_circuits_common::{
+	storage_proof::prepare_proof_for_circuit,
+	utils::{BytesDigest, Digest},
+};
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
 	Hasher,
 };
 use subxt::{
-	backend::legacy::rpc_methods::{Bytes, ReadProof},
+	backend::legacy::rpc_methods::ReadProof,
 	blocks::Block,
 	ext::{
 		codec::Encode,
@@ -80,7 +82,7 @@ pub async fn handle_wormhole_command(
 			password,
 			password_file,
 			output,
-		} =>
+		} => {
 			generate_proof(
 				secret,
 				amount,
@@ -91,7 +93,8 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await,
+			.await
+		},
 	}
 }
 
@@ -188,7 +191,7 @@ async fn generate_proof(
 
 	let storage_api = client.storage().at(block_hash_pre);
 	let transfer_count_previous = storage_api
-		.fetch(&quantus_node::api::storage().balances().transfer_count())
+		.fetch(&quantus_node::api::storage().wormhole().transfer_count())
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?
 		.unwrap_or_default();
@@ -216,7 +219,7 @@ async fn generate_proof(
 		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
 	let event = events_api
-		.find::<balances::events::TransferProofStored>()
+		.find::<wormhole::events::NativeTransferred>()
 		.next()
 		.ok_or_else(|| {
 			crate::error::QuantusError::Generic("No TransferProofStored event found".to_string())
@@ -225,7 +228,7 @@ async fn generate_proof(
 
 	let storage_api = client.storage().at(block_hash);
 	let transfer_count = storage_api
-		.fetch(&quantus_node::api::storage().balances().transfer_count())
+		.fetch(&quantus_node::api::storage().wormhole().transfer_count())
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?
 		.unwrap_or_default();
@@ -238,14 +241,14 @@ async fn generate_proof(
 
 	// Get storage proof
 	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<AccountId32>(
-		&(event.transfer_count, event.source.clone(), event.dest.clone(), event.funding_amount)
-			.encode(),
+		&(event.transfer_count, event.from.clone(), event.to.clone(), event.amount).encode(),
 	);
-	let proof_address = quantus_node::api::storage().balances().transfer_proof((
+	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
+		0,
 		event.transfer_count,
-		event.source.clone(),
-		event.dest.clone(),
-		event.funding_amount,
+		event.from.clone(),
+		event.to.clone(),
+		event.amount,
 	));
 	let mut final_key = proof_address.to_root_bytes();
 	final_key.extend_from_slice(&leaf_hash);
@@ -280,9 +283,12 @@ async fn generate_proof(
 	let block_number = header.number;
 
 	// Prepare storage proof
-	let processed_storage_proof =
-		prepare_proof_for_circuit(read_proof.proof, hex::encode(header.state_root.0), leaf_hash)
-			.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	let processed_storage_proof = prepare_proof_for_circuit(
+		read_proof.proof.iter().map(|proof| proof.0.clone()).collect(),
+		hex::encode(header.state_root.0),
+		leaf_hash,
+	)
+	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
 	let inputs = CircuitInputs {
 		private: PrivateCircuitInputs {
@@ -305,6 +311,7 @@ async fn generate_proof(
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			parent_hash,
 			block_number,
+			asset_id: 0,
 		},
 	};
 
@@ -339,109 +346,4 @@ async fn at_best_block(
 	let best_block = quantus_client.get_latest_block().await?;
 	let block = quantus_client.client().blocks().at(best_block).await?;
 	Ok(block)
-}
-
-// Utility functions from proof-utils.rs
-fn hash_node_with_poseidon_padded(node_bytes: &[u8]) -> [u8; 32] {
-	use qp_poseidon_core::{hash_padded_bytes, FIELD_ELEMENT_PREIMAGE_PADDING_LEN};
-	hash_padded_bytes::<FIELD_ELEMENT_PREIMAGE_PADDING_LEN>(node_bytes)
-}
-
-fn prepare_proof_for_circuit(
-	proof: Vec<Bytes>,
-	state_root: String,
-	leaf_hash: [u8; 32],
-) -> anyhow::Result<qp_wormhole_circuit::storage_proof::ProcessedStorageProof> {
-	let mut node_map: std::collections::HashMap<String, (usize, Vec<u8>, String)> =
-		std::collections::HashMap::new();
-	for (idx, node) in proof.iter().enumerate() {
-		let hash = hash_node_with_poseidon_padded(&node.0);
-		let hash_hex = hex::encode(hash);
-		let node_hex = hex::encode(&node.0);
-		node_map.insert(hash_hex.clone(), (idx, node.0.clone(), node_hex));
-	}
-
-	let state_root_hex = state_root.trim_start_matches("0x").to_string();
-
-	let root_hash = if node_map.contains_key(&state_root_hex) {
-		state_root_hex.clone()
-	} else {
-		anyhow::bail!("No node hashes to state root!");
-	};
-
-	let root_entry = node_map
-		.get(&root_hash)
-		.ok_or_else(|| anyhow!("Failed to get root entry from map"))?;
-
-	let mut ordered_nodes = vec![root_entry.1.clone()];
-	let mut current_node_hex = root_entry.2.clone();
-
-	const HASH_LENGTH_PREFIX: &str = "2000000000000000";
-
-	loop {
-		let mut found_child = None;
-		for (child_hash, (_, child_bytes, _)) in &node_map {
-			let hash_with_prefix = format!("{}{}", HASH_LENGTH_PREFIX, child_hash);
-			if current_node_hex.contains(&hash_with_prefix) {
-				if !ordered_nodes.iter().any(|n| n == child_bytes) {
-					found_child = Some((child_hash.clone(), child_bytes.clone()));
-					break;
-				}
-			}
-		}
-
-		if let Some((_, child_bytes)) = found_child {
-			ordered_nodes.push(child_bytes.clone());
-			current_node_hex = hex::encode(ordered_nodes.last().unwrap());
-		} else {
-			break;
-		}
-	}
-
-	let mut indices = Vec::<usize>::new();
-
-	for i in 0..ordered_nodes.len() - 1 {
-		let current_hex = hex::encode(&ordered_nodes[i]);
-		let next_node = &ordered_nodes[i + 1];
-		let next_hash = hex::encode(hash_node_with_poseidon_padded(next_node));
-
-		if let Some(hex_idx) = current_hex.find(&next_hash) {
-			indices.push(hex_idx);
-		} else {
-			anyhow::bail!("Could not find child hash in ordered node {}", i);
-		}
-	}
-
-	let (found, last_idx) = check_leaf(&leaf_hash, ordered_nodes.last().unwrap().clone());
-	if !found {
-		anyhow::bail!("Leaf hash suffix not found in leaf node!");
-	}
-
-	indices.push(last_idx);
-
-	if indices.len() != ordered_nodes.len() {
-		log_verbose!(
-			"Warning: indices.len() = {}, ordered_nodes.len() = {}",
-			indices.len(),
-			ordered_nodes.len()
-		);
-	}
-
-	qp_wormhole_circuit::storage_proof::ProcessedStorageProof::new(ordered_nodes, indices)
-}
-
-fn check_leaf(leaf_hash: &[u8; 32], leaf_node: Vec<u8>) -> (bool, usize) {
-	let hash_suffix = &leaf_hash[8..32];
-	let mut last_idx = 0usize;
-	let mut found = false;
-
-	for i in 0..=leaf_node.len().saturating_sub(hash_suffix.len()) {
-		if &leaf_node[i..i + hash_suffix.len()] == hash_suffix {
-			last_idx = i;
-			found = true;
-			break;
-		}
-	}
-
-	(found, (last_idx * 2).saturating_sub(16))
 }
