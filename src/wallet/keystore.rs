@@ -7,6 +7,8 @@
 use crate::error::{Result, WalletError};
 use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
+use sp_core::crypto::Ss58AddressFormat;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
 	ByteArray,
