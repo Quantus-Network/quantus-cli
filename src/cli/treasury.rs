@@ -2,6 +2,7 @@
 use crate::{chain::quantus_subxt, cli::common::submit_transaction, log_print, log_success};
 use clap::Subcommand;
 use colored::Colorize;
+use frame_support::sp_runtime::traits::AccountIdConversion;
 
 /// Treasury management commands
 #[derive(Subcommand, Debug)]
@@ -170,12 +171,13 @@ async fn get_treasury_balance(
 	log_print!("💰 Treasury Balance");
 	log_print!("");
 
-	// Get Treasury account ID
-	// PalletId("py/trsry") converts to account using "modl" prefix
-	let mut full_data = [0u8; 32];
-	full_data[0..4].copy_from_slice(b"modl");
-	full_data[4..12].copy_from_slice(b"py/trsry");
-	let treasury_account = subxt::utils::AccountId32(full_data);
+	// Get Treasury account ID using the same method as runtime
+	let treasury_pallet_id = frame_support::PalletId(*b"py/trsry");
+	let treasury_account_raw: sp_runtime::AccountId32 =
+		treasury_pallet_id.into_account_truncating();
+
+	// Convert to subxt's AccountId32
+	let treasury_account = subxt::utils::AccountId32(*treasury_account_raw.as_ref());
 
 	// Query balance
 	let addr = quantus_subxt::api::storage().system().account(treasury_account.clone());
@@ -197,7 +199,11 @@ async fn get_treasury_balance(
 
 	log_print!("💰 Free Balance: {}", formatted_free_balance);
 	log_print!("💰 Reserved: {}", formatted_reserved_balance);
-	log_print!("📍 Treasury Account: {}", treasury_account.to_string().bright_yellow());
+
+	// Display address in Quantus format (uses default SS58 version 189 set in main.rs)
+	use crate::cli::address_format::QuantusSS58;
+	let treasury_address = treasury_account_raw.to_quantus_ss58();
+	log_print!("📍 Treasury Account: {}", treasury_address.bright_yellow());
 
 	Ok(())
 }
@@ -492,10 +498,11 @@ async fn list_spends(
 		if let Some(spend_status) = storage_at.fetch(&spend_addr).await? {
 			log_print!("💰 Spend #{}", spend_index.to_string().bright_yellow().bold());
 			log_print!("   Amount: {} (raw)", spend_status.amount.to_string().bright_green());
-			log_print!(
-				"   Beneficiary: {}",
-				format!("{:?}", spend_status.beneficiary).bright_cyan()
-			);
+
+			// Format beneficiary address in Quantus SS58 format
+			use crate::cli::address_format::QuantusSS58;
+			let beneficiary_str = spend_status.beneficiary.to_quantus_ss58();
+			log_print!("   Beneficiary: {}", beneficiary_str.bright_cyan());
 			log_print!("   Valid From: Block #{}", spend_status.valid_from);
 			log_print!("   Expires At: Block #{}", spend_status.expire_at);
 			log_print!(
