@@ -124,7 +124,13 @@ impl WalletManager {
 
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
 
-		println!("🔑 Resonance pair: {:?}", resonance_pair.public().into_account().to_ss58check());
+		// Format addresses with SS58 version 189 (Quantus format)
+		use sp_core::crypto::Ss58Codec;
+		let resonance_addr = resonance_pair
+			.public()
+			.into_account()
+			.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+		println!("🔑 Resonance pair: {:?}", resonance_addr);
 		println!("🔑 Quantum keypair: {:?}", quantum_keypair.to_account_id_ss58check());
 
 		// Create wallet data

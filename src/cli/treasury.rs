@@ -481,10 +481,11 @@ async fn list_spends(
 		if let Some(spend_status) = storage_at.fetch(&spend_addr).await? {
 			log_print!("💰 Spend #{}", spend_index.to_string().bright_yellow().bold());
 			log_print!("   Amount: {} (raw)", spend_status.amount.to_string().bright_green());
-			log_print!(
-				"   Beneficiary: {}",
-				format!("{:?}", spend_status.beneficiary).bright_cyan()
-			);
+
+			// Format beneficiary address in Quantus SS58 format
+			use crate::cli::address_format::QuantusSS58;
+			let beneficiary_str = spend_status.beneficiary.to_quantus_ss58();
+			log_print!("   Beneficiary: {}", beneficiary_str.bright_cyan());
 			log_print!("   Valid From: Block #{}", spend_status.valid_from);
 			log_print!("   Expires At: Block #{}", spend_status.expire_at);
 			log_print!(

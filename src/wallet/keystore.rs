@@ -78,8 +78,9 @@ impl QuantumKeyPair {
 	}
 
 	pub fn to_account_id_ss58check(&self) -> String {
+		use crate::cli::address_format::quantus_ss58_format;
 		let account = self.to_account_id_32();
-		account.to_ss58check_with_version(Ss58AddressFormat::custom(189))
+		account.to_ss58check_with_version(quantus_ss58_format())
 	}
 
 	/// Convert to subxt Signer for use
@@ -354,14 +355,18 @@ mod tests {
 			);
 
 			// Verify consistency between methods
+			use crate::cli::address_format::quantus_ss58_format;
 			assert_eq!(
-				account_id.to_ss58check(),
+				account_id.to_ss58check_with_version(quantus_ss58_format()),
 				ss58_address,
 				"Address methods should be consistent for {name}"
 			);
 
 			// Verify it matches the direct DilithiumPair method
-			let expected_address = resonance_pair.public().into_account().to_ss58check();
+			let expected_address = resonance_pair
+				.public()
+				.into_account()
+				.to_ss58check_with_version(quantus_ss58_format());
 			assert_eq!(
 				ss58_address, expected_address,
 				"Address should match DilithiumPair method for {name}"
@@ -373,10 +378,20 @@ mod tests {
 	fn test_ss58_to_account_id_conversion() {
 		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 		// Test with known addresses
+		use crate::cli::address_format::quantus_ss58_format;
 		let test_cases = vec![
-			crystal_alice().public().into_account().to_ss58check(),
-			dilithium_bob().public().into_account().to_ss58check(),
-			crystal_charlie().public().into_account().to_ss58check(),
+			crystal_alice()
+				.public()
+				.into_account()
+				.to_ss58check_with_version(quantus_ss58_format()),
+			dilithium_bob()
+				.public()
+				.into_account()
+				.to_ss58check_with_version(quantus_ss58_format()),
+			crystal_charlie()
+				.public()
+				.into_account()
+				.to_ss58check_with_version(quantus_ss58_format()),
 		];
 
 		for ss58_address in test_cases {
@@ -389,7 +404,8 @@ mod tests {
 			// Convert back to SS58 and verify round-trip
 			let account_id =
 				AccountId32::from_slice(&account_bytes).expect("Should create valid AccountId32");
-			let round_trip_address = account_id.to_ss58check();
+			let round_trip_address =
+				account_id.to_ss58check_with_version(Ss58AddressFormat::custom(189));
 			assert_eq!(
 				ss58_address, round_trip_address,
 				"Round-trip conversion should preserve address"
@@ -414,7 +430,10 @@ mod tests {
 		// All should generate the same address
 		let addr1 = quantum_from_dilithium.to_account_id_ss58check();
 		let addr2 = quantum_from_resonance.to_account_id_ss58check();
-		let addr3 = resonance_from_quantum.public().into_account().to_ss58check();
+		let addr3 = resonance_from_quantum
+			.public()
+			.into_account()
+			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
 
 		assert_eq!(addr1, addr2, "Addresses should be consistent across conversion paths");
 		assert_eq!(addr2, addr3, "Address should match direct DilithiumPair calculation");
@@ -501,7 +520,10 @@ mod tests {
 			Ok(address) => {
 				println!("✅ Address generation successful: {address}");
 				// Verify it matches the expected address
-				let expected = alice_pair.public().into_account().to_ss58check();
+				let expected = alice_pair
+					.public()
+					.into_account()
+					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
 				assert_eq!(address, expected, "Stored wallet should generate correct address");
 			},
 			Err(_) => {
@@ -559,7 +581,10 @@ mod tests {
 			Ok(address) => {
 				println!("✅ Encrypted wallet address generation successful: {address}");
 				// Verify it matches the expected address
-				let expected = alice_pair.public().into_account().to_ss58check();
+				let expected = alice_pair
+					.public()
+					.into_account()
+					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
 				assert_eq!(address, expected, "Decrypted wallet should generate correct address");
 			},
 			Err(_) => {
@@ -617,7 +642,10 @@ mod tests {
 			Ok(address) => {
 				println!("✅ Send command flow works: {address}");
 				// If this passes, the bug is fixed
-				let expected = alice_pair.public().into_account().to_ss58check();
+				let expected = alice_pair
+					.public()
+					.into_account()
+					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
 				assert_eq!(address, expected, "Loaded wallet should generate correct address");
 			},
 			Err(_) => {
