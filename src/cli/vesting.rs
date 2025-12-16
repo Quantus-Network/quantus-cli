@@ -1,7 +1,7 @@
 //! `quantus vesting` subcommand - manage Vesting schedules
 use crate::{
 	chain::{client::QuantusClient, quantus_subxt},
-	cli::common::{resolve_address, submit_transaction_with_finalization},
+	cli::common::{resolve_address, submit_transaction},
 	log_print, log_success,
 	wallet::load_keypair_from_wallet,
 };
@@ -171,9 +171,8 @@ pub async fn handle_vesting_command(
 ) -> crate::error::Result<()> {
 	match command {
 		VestingCommands::Info { address } => handle_info(address, node_url).await,
-		VestingCommands::Unlock { for_account, from, password, password_file } => {
-			handle_unlock(for_account, from, password, password_file, node_url, finalized).await
-		},
+		VestingCommands::Unlock { for_account, from, password, password_file } =>
+			handle_unlock(for_account, from, password, password_file, node_url, finalized).await,
 		VestingCommands::Transfer {
 			to,
 			locked,
@@ -224,10 +223,9 @@ pub async fn handle_vesting_command(
 			)
 			.await
 		},
-		VestingCommands::Merge { schedule1, schedule2, from, password, password_file } => {
+		VestingCommands::Merge { schedule1, schedule2, from, password, password_file } =>
 			handle_merge(schedule1, schedule2, from, password, password_file, node_url, finalized)
-				.await
-		},
+				.await,
 		VestingCommands::List { address } => handle_list(address, node_url).await,
 		VestingCommands::Calculate { locked, duration, unit, starting_block } => {
 			let duration_in_blocks = convert_to_blocks(duration, &unit)?;
@@ -481,8 +479,7 @@ async fn handle_unlock(
 			log_print!("");
 
 			let vest_tx = quantus_subxt::api::tx().vesting().vest();
-			submit_transaction_with_finalization(&client, &keypair, vest_tx, None, finalized)
-				.await?;
+			submit_transaction(&client, &keypair, vest_tx, None, finalized).await?;
 
 			log_success!("✅ Vesting unlock transaction submitted successfully");
 		},
@@ -505,8 +502,7 @@ async fn handle_unlock(
 
 			let vest_other_tx =
 				quantus_subxt::api::tx().vesting().vest_other(target_account_subxt.into());
-			submit_transaction_with_finalization(&client, &keypair, vest_other_tx, None, finalized)
-				.await?;
+			submit_transaction(&client, &keypair, vest_other_tx, None, finalized).await?;
 
 			log_success!("✅ Vesting unlocked for {}", target.bright_cyan());
 		},
@@ -601,7 +597,7 @@ async fn handle_transfer(
 		.vesting()
 		.vested_transfer(target_account_subxt.into(), schedule);
 
-	submit_transaction_with_finalization(&client, &keypair, transfer_tx, None, finalized).await?;
+	submit_transaction(&client, &keypair, transfer_tx, None, finalized).await?;
 
 	log_success!("✅ Vested transfer submitted successfully");
 
@@ -707,8 +703,7 @@ async fn handle_force_transfer(
 		schedule,
 	);
 
-	submit_transaction_with_finalization(&client, &keypair, force_transfer_tx, None, finalized)
-		.await?;
+	submit_transaction(&client, &keypair, force_transfer_tx, None, finalized).await?;
 
 	log_success!("✅ Force vested transfer submitted successfully");
 
@@ -742,7 +737,7 @@ async fn handle_merge(
 
 	let merge_tx = quantus_subxt::api::tx().vesting().merge_schedules(schedule1, schedule2);
 
-	submit_transaction_with_finalization(&client, &keypair, merge_tx, None, finalized).await?;
+	submit_transaction(&client, &keypair, merge_tx, None, finalized).await?;
 
 	log_success!("✅ Vesting schedules merged successfully");
 
@@ -796,12 +791,12 @@ async fn handle_calculate(
 	log_print!("  Duration:        {}", format_duration(duration_blocks).dimmed());
 
 	// Calculate estimated times (offline calculation)
-	let start_time_estimate = Utc::now()
-		+ chrono::Duration::milliseconds(
+	let start_time_estimate = Utc::now() +
+		chrono::Duration::milliseconds(
 			((start_block - current_block) as i64) * (BLOCK_TIME_MS as i64),
 		);
-	let end_time_estimate = Utc::now()
-		+ chrono::Duration::milliseconds(
+	let end_time_estimate = Utc::now() +
+		chrono::Duration::milliseconds(
 			((end_block - current_block) as i64) * (BLOCK_TIME_MS as i64),
 		);
 
