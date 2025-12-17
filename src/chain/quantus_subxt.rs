@@ -1472,10 +1472,10 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							166u8, 173u8, 176u8, 212u8, 240u8, 248u8, 215u8, 188u8, 215u8, 21u8,
-							209u8, 116u8, 183u8, 186u8, 201u8, 229u8, 28u8, 26u8, 218u8, 247u8,
-							99u8, 59u8, 155u8, 235u8, 205u8, 76u8, 165u8, 181u8, 148u8, 21u8,
-							122u8, 86u8,
+							110u8, 84u8, 218u8, 161u8, 139u8, 110u8, 45u8, 69u8, 183u8, 176u8,
+							140u8, 28u8, 85u8, 162u8, 71u8, 249u8, 20u8, 199u8, 176u8, 1u8, 221u8,
+							1u8, 93u8, 139u8, 112u8, 210u8, 238u8, 210u8, 137u8, 153u8, 147u8,
+							72u8,
 						],
 					)
 				}
@@ -1493,9 +1493,10 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							18u8, 80u8, 212u8, 196u8, 230u8, 162u8, 108u8, 100u8, 130u8, 14u8,
-							44u8, 76u8, 26u8, 143u8, 202u8, 61u8, 26u8, 132u8, 34u8, 112u8, 49u8,
-							183u8, 31u8, 51u8, 122u8, 49u8, 37u8, 229u8, 87u8, 43u8, 107u8, 82u8,
+							204u8, 2u8, 212u8, 72u8, 18u8, 44u8, 72u8, 227u8, 27u8, 252u8, 27u8,
+							249u8, 21u8, 163u8, 191u8, 202u8, 4u8, 27u8, 150u8, 244u8, 230u8,
+							209u8, 108u8, 110u8, 220u8, 180u8, 195u8, 188u8, 240u8, 66u8, 133u8,
+							153u8,
 						],
 					)
 				}
@@ -1835,9 +1836,6 @@ pub mod api {
 		pub fn mining_rewards(&self) -> mining_rewards::constants::ConstantsApi {
 			mining_rewards::constants::ConstantsApi
 		}
-		pub fn vesting(&self) -> vesting::constants::ConstantsApi {
-			vesting::constants::ConstantsApi
-		}
 		pub fn scheduler(&self) -> scheduler::constants::ConstantsApi {
 			scheduler::constants::ConstantsApi
 		}
@@ -1997,9 +1995,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				194u8, 46u8, 30u8, 103u8, 67u8, 25u8, 224u8, 42u8, 104u8, 224u8, 105u8, 213u8,
-				149u8, 58u8, 199u8, 151u8, 221u8, 215u8, 141u8, 247u8, 109u8, 85u8, 204u8, 202u8,
-				96u8, 104u8, 173u8, 94u8, 198u8, 124u8, 113u8, 174u8,
+				107u8, 19u8, 10u8, 241u8, 82u8, 253u8, 116u8, 209u8, 74u8, 187u8, 41u8, 227u8, 8u8,
+				78u8, 56u8, 136u8, 33u8, 49u8, 68u8, 183u8, 78u8, 157u8, 131u8, 182u8, 204u8, 34u8,
+				226u8, 161u8, 235u8, 173u8, 191u8, 57u8,
 			]
 	}
 	pub mod system {
@@ -3098,10 +3096,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							153u8, 144u8, 222u8, 32u8, 219u8, 80u8, 161u8, 232u8, 120u8, 168u8,
-							102u8, 147u8, 49u8, 48u8, 3u8, 26u8, 255u8, 126u8, 218u8, 117u8, 254u8,
-							217u8, 170u8, 206u8, 182u8, 174u8, 251u8, 53u8, 253u8, 242u8, 26u8,
-							74u8,
+							237u8, 8u8, 236u8, 144u8, 92u8, 39u8, 81u8, 167u8, 254u8, 168u8, 224u8,
+							166u8, 129u8, 197u8, 1u8, 153u8, 231u8, 133u8, 166u8, 173u8, 254u8,
+							71u8, 96u8, 151u8, 124u8, 127u8, 88u8, 7u8, 24u8, 101u8, 171u8, 198u8,
 						],
 					)
 				}
@@ -5463,9 +5460,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							35u8, 97u8, 151u8, 80u8, 160u8, 5u8, 249u8, 161u8, 124u8, 31u8, 46u8,
-							45u8, 205u8, 88u8, 85u8, 115u8, 98u8, 172u8, 229u8, 119u8, 45u8, 74u8,
-							176u8, 35u8, 216u8, 58u8, 23u8, 103u8, 209u8, 201u8, 15u8, 61u8,
+							253u8, 197u8, 139u8, 95u8, 151u8, 114u8, 110u8, 151u8, 160u8, 15u8,
+							243u8, 129u8, 93u8, 238u8, 91u8, 208u8, 198u8, 151u8, 23u8, 212u8,
+							54u8, 135u8, 49u8, 51u8, 139u8, 40u8, 63u8, 152u8, 59u8, 77u8, 237u8,
+							240u8,
 						],
 					)
 				}
@@ -5488,10 +5486,9 @@ pub mod api {
 							weight,
 						},
 						[
-							129u8, 254u8, 188u8, 113u8, 132u8, 176u8, 63u8, 138u8, 200u8, 84u8,
-							62u8, 198u8, 140u8, 161u8, 52u8, 222u8, 184u8, 140u8, 204u8, 144u8,
-							247u8, 118u8, 46u8, 126u8, 211u8, 117u8, 140u8, 227u8, 105u8, 74u8,
-							162u8, 225u8,
+							35u8, 22u8, 192u8, 184u8, 49u8, 180u8, 173u8, 189u8, 211u8, 213u8,
+							20u8, 189u8, 186u8, 193u8, 223u8, 165u8, 81u8, 64u8, 9u8, 22u8, 62u8,
+							188u8, 57u8, 160u8, 149u8, 156u8, 81u8, 18u8, 70u8, 195u8, 6u8, 94u8,
 						],
 					)
 				}
@@ -5529,10 +5526,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							174u8, 114u8, 45u8, 150u8, 219u8, 165u8, 118u8, 166u8, 250u8, 85u8,
-							15u8, 165u8, 148u8, 17u8, 160u8, 123u8, 198u8, 241u8, 78u8, 198u8,
-							206u8, 131u8, 9u8, 107u8, 172u8, 188u8, 83u8, 6u8, 234u8, 14u8, 211u8,
-							76u8,
+							130u8, 4u8, 94u8, 44u8, 207u8, 228u8, 28u8, 173u8, 110u8, 228u8, 203u8,
+							53u8, 42u8, 29u8, 253u8, 212u8, 105u8, 56u8, 137u8, 194u8, 34u8, 37u8,
+							94u8, 227u8, 98u8, 252u8, 35u8, 17u8, 226u8, 195u8, 18u8, 121u8,
 						],
 					)
 				}
@@ -6130,7 +6126,7 @@ pub mod api {
 	}
 	pub mod vesting {
 		use super::{root_mod, runtime_types};
-		#[doc = "Error for the vesting pallet."]
+		#[doc = "The `Error` enum of this pallet."]
 		pub type Error = runtime_types::pallet_vesting::pallet::Error;
 		#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 		pub type Call = runtime_types::pallet_vesting::pallet::Call;
@@ -6150,19 +6146,22 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Unlock any vested funds of the sender account."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_ and the sender must have funds still"]
-				#[doc = "locked under this pallet."]
-				#[doc = ""]
-				#[doc = "Emits either `VestingCompleted` or `VestingUpdated`."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub struct Vest;
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Vest {
+				pub struct CreateVestingSchedule {
+					pub beneficiary: create_vesting_schedule::Beneficiary,
+					pub amount: create_vesting_schedule::Amount,
+					pub start: create_vesting_schedule::Start,
+					pub end: create_vesting_schedule::End,
+				}
+				pub mod create_vesting_schedule {
+					use super::runtime_types;
+					pub type Beneficiary = ::subxt::ext::subxt_core::utils::AccountId32;
+					pub type Amount = ::core::primitive::u128;
+					pub type Start = ::core::primitive::u64;
+					pub type End = ::core::primitive::u64;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CreateVestingSchedule {
 					const PALLET: &'static str = "Vesting";
-					const CALL: &'static str = "vest";
+					const CALL: &'static str = "create_vesting_schedule";
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -6175,30 +6174,16 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Unlock any vested funds of a `target` account."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `target`: The account whose vested funds should be unlocked. Must have funds still"]
-				#[doc = "locked under this pallet."]
-				#[doc = ""]
-				#[doc = "Emits either `VestingCompleted` or `VestingUpdated`."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub struct VestOther {
-					pub target: vest_other::Target,
+				pub struct Claim {
+					pub schedule_id: claim::ScheduleId,
 				}
-				pub mod vest_other {
+				pub mod claim {
 					use super::runtime_types;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
+					pub type ScheduleId = ::core::primitive::u64;
 				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VestOther {
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Claim {
 					const PALLET: &'static str = "Vesting";
-					const CALL: &'static str = "vest_other";
+					const CALL: &'static str = "claim";
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -6211,37 +6196,16 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Create a vested transfer."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `target`: The account receiving the vested funds."]
-				#[doc = "- `schedule`: The vesting schedule attached to the transfer."]
-				#[doc = ""]
-				#[doc = "Emits `VestingCreated`."]
-				#[doc = ""]
-				#[doc = "NOTE: This will unlock all schedules through the current block."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub struct VestedTransfer {
-					pub target: vested_transfer::Target,
-					pub schedule: vested_transfer::Schedule,
+				pub struct CancelVestingSchedule {
+					pub schedule_id: cancel_vesting_schedule::ScheduleId,
 				}
-				pub mod vested_transfer {
+				pub mod cancel_vesting_schedule {
 					use super::runtime_types;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Schedule = runtime_types::pallet_vesting::vesting_info::VestingInfo<
-						::core::primitive::u128,
-						::core::primitive::u32,
-					>;
+					pub type ScheduleId = ::core::primitive::u64;
 				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VestedTransfer {
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CancelVestingSchedule {
 					const PALLET: &'static str = "Vesting";
-					const CALL: &'static str = "vested_transfer";
+					const CALL: &'static str = "cancel_vesting_schedule";
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -6254,43 +6218,22 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Force a vested transfer."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Root_."]
-				#[doc = ""]
-				#[doc = "- `source`: The account whose funds should be transferred."]
-				#[doc = "- `target`: The account that should be transferred the vested funds."]
-				#[doc = "- `schedule`: The vesting schedule attached to the transfer."]
-				#[doc = ""]
-				#[doc = "Emits `VestingCreated`."]
-				#[doc = ""]
-				#[doc = "NOTE: This will unlock all schedules through the current block."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub struct ForceVestedTransfer {
-					pub source: force_vested_transfer::Source,
-					pub target: force_vested_transfer::Target,
-					pub schedule: force_vested_transfer::Schedule,
+				pub struct CreateVestingScheduleWithCliff {
+					pub beneficiary: create_vesting_schedule_with_cliff::Beneficiary,
+					pub amount: create_vesting_schedule_with_cliff::Amount,
+					pub cliff: create_vesting_schedule_with_cliff::Cliff,
+					pub end: create_vesting_schedule_with_cliff::End,
 				}
-				pub mod force_vested_transfer {
+				pub mod create_vesting_schedule_with_cliff {
 					use super::runtime_types;
-					pub type Source = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Schedule = runtime_types::pallet_vesting::vesting_info::VestingInfo<
-						::core::primitive::u128,
-						::core::primitive::u32,
-					>;
+					pub type Beneficiary = ::subxt::ext::subxt_core::utils::AccountId32;
+					pub type Amount = ::core::primitive::u128;
+					pub type Cliff = ::core::primitive::u64;
+					pub type End = ::core::primitive::u64;
 				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceVestedTransfer {
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CreateVestingScheduleWithCliff {
 					const PALLET: &'static str = "Vesting";
-					const CALL: &'static str = "force_vested_transfer";
+					const CALL: &'static str = "create_vesting_schedule_with_cliff";
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -6303,248 +6246,126 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Merge two vesting schedules together, creating a new vesting schedule that unlocks over"]
-				#[doc = "the highest possible start and end blocks. If both schedules have already started the"]
-				#[doc = "current block will be used as the schedule start; with the caveat that if one schedule"]
-				#[doc = "is finished by the current block, the other will be treated as the new merged schedule,"]
-				#[doc = "unmodified."]
-				#[doc = ""]
-				#[doc = "NOTE: If `schedule1_index == schedule2_index` this is a no-op."]
-				#[doc = "NOTE: This will unlock all schedules through the current block prior to merging."]
-				#[doc = "NOTE: If both schedules have ended by the current block, no new schedule will be created"]
-				#[doc = "and both will be removed."]
-				#[doc = ""]
-				#[doc = "Merged schedule attributes:"]
-				#[doc = "- `starting_block`: `MAX(schedule1.starting_block, scheduled2.starting_block,"]
-				#[doc = "  current_block)`."]
-				#[doc = "- `ending_block`: `MAX(schedule1.ending_block, schedule2.ending_block)`."]
-				#[doc = "- `locked`: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `schedule1_index`: index of the first schedule to merge."]
-				#[doc = "- `schedule2_index`: index of the second schedule to merge."]
-				pub struct MergeSchedules {
-					pub schedule1_index: merge_schedules::Schedule1Index,
-					pub schedule2_index: merge_schedules::Schedule2Index,
+				pub struct CreateSteppedVestingSchedule {
+					pub beneficiary: create_stepped_vesting_schedule::Beneficiary,
+					pub amount: create_stepped_vesting_schedule::Amount,
+					pub start: create_stepped_vesting_schedule::Start,
+					pub end: create_stepped_vesting_schedule::End,
+					pub step_duration: create_stepped_vesting_schedule::StepDuration,
 				}
-				pub mod merge_schedules {
+				pub mod create_stepped_vesting_schedule {
 					use super::runtime_types;
-					pub type Schedule1Index = ::core::primitive::u32;
-					pub type Schedule2Index = ::core::primitive::u32;
+					pub type Beneficiary = ::subxt::ext::subxt_core::utils::AccountId32;
+					pub type Amount = ::core::primitive::u128;
+					pub type Start = ::core::primitive::u64;
+					pub type End = ::core::primitive::u64;
+					pub type StepDuration = ::core::primitive::u64;
 				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for MergeSchedules {
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CreateSteppedVestingSchedule {
 					const PALLET: &'static str = "Vesting";
-					const CALL: &'static str = "merge_schedules";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Force remove a vesting schedule"]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Root_."]
-				#[doc = ""]
-				#[doc = "- `target`: An account that has a vesting schedule"]
-				#[doc = "- `schedule_index`: The vesting schedule index that should be removed"]
-				pub struct ForceRemoveVestingSchedule {
-					pub target: force_remove_vesting_schedule::Target,
-					pub schedule_index: force_remove_vesting_schedule::ScheduleIndex,
-				}
-				pub mod force_remove_vesting_schedule {
-					use super::runtime_types;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type ScheduleIndex = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ForceRemoveVestingSchedule {
-					const PALLET: &'static str = "Vesting";
-					const CALL: &'static str = "force_remove_vesting_schedule";
+					const CALL: &'static str = "create_stepped_vesting_schedule";
 				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Unlock any vested funds of the sender account."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_ and the sender must have funds still"]
-				#[doc = "locked under this pallet."]
-				#[doc = ""]
-				#[doc = "Emits either `VestingCompleted` or `VestingUpdated`."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub fn vest(
+				pub fn create_vesting_schedule(
 					&self,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Vest> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Vesting",
-						"vest",
-						types::Vest {},
-						[
-							149u8, 89u8, 178u8, 148u8, 127u8, 127u8, 155u8, 60u8, 114u8, 126u8,
-							204u8, 123u8, 166u8, 70u8, 104u8, 208u8, 186u8, 69u8, 139u8, 181u8,
-							151u8, 154u8, 235u8, 161u8, 191u8, 35u8, 111u8, 60u8, 21u8, 165u8,
-							44u8, 122u8,
-						],
-					)
-				}
-				#[doc = "Unlock any vested funds of a `target` account."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `target`: The account whose vested funds should be unlocked. Must have funds still"]
-				#[doc = "locked under this pallet."]
-				#[doc = ""]
-				#[doc = "Emits either `VestingCompleted` or `VestingUpdated`."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub fn vest_other(
-					&self,
-					target: types::vest_other::Target,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::VestOther> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Vesting",
-						"vest_other",
-						types::VestOther { target },
-						[
-							238u8, 92u8, 25u8, 149u8, 27u8, 211u8, 196u8, 31u8, 211u8, 28u8, 241u8,
-							30u8, 128u8, 35u8, 0u8, 227u8, 202u8, 215u8, 186u8, 69u8, 216u8, 110u8,
-							199u8, 120u8, 134u8, 141u8, 176u8, 224u8, 234u8, 42u8, 152u8, 128u8,
-						],
-					)
-				}
-				#[doc = "Create a vested transfer."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `target`: The account receiving the vested funds."]
-				#[doc = "- `schedule`: The vesting schedule attached to the transfer."]
-				#[doc = ""]
-				#[doc = "Emits `VestingCreated`."]
-				#[doc = ""]
-				#[doc = "NOTE: This will unlock all schedules through the current block."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub fn vested_transfer(
-					&self,
-					target: types::vested_transfer::Target,
-					schedule: types::vested_transfer::Schedule,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::VestedTransfer>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Vesting",
-						"vested_transfer",
-						types::VestedTransfer { target, schedule },
-						[
-							198u8, 133u8, 254u8, 5u8, 22u8, 170u8, 205u8, 79u8, 218u8, 30u8, 81u8,
-							207u8, 227u8, 121u8, 132u8, 14u8, 217u8, 43u8, 66u8, 206u8, 15u8, 80u8,
-							173u8, 208u8, 128u8, 72u8, 223u8, 175u8, 93u8, 69u8, 128u8, 88u8,
-						],
-					)
-				}
-				#[doc = "Force a vested transfer."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Root_."]
-				#[doc = ""]
-				#[doc = "- `source`: The account whose funds should be transferred."]
-				#[doc = "- `target`: The account that should be transferred the vested funds."]
-				#[doc = "- `schedule`: The vesting schedule attached to the transfer."]
-				#[doc = ""]
-				#[doc = "Emits `VestingCreated`."]
-				#[doc = ""]
-				#[doc = "NOTE: This will unlock all schedules through the current block."]
-				#[doc = ""]
-				#[doc = "## Complexity"]
-				#[doc = "- `O(1)`."]
-				pub fn force_vested_transfer(
-					&self,
-					source: types::force_vested_transfer::Source,
-					target: types::force_vested_transfer::Target,
-					schedule: types::force_vested_transfer::Schedule,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ForceVestedTransfer>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Vesting",
-						"force_vested_transfer",
-						types::ForceVestedTransfer { source, target, schedule },
-						[
-							112u8, 17u8, 176u8, 133u8, 169u8, 192u8, 155u8, 217u8, 153u8, 36u8,
-							230u8, 45u8, 9u8, 192u8, 2u8, 201u8, 165u8, 60u8, 206u8, 226u8, 95u8,
-							86u8, 239u8, 196u8, 109u8, 62u8, 224u8, 237u8, 88u8, 74u8, 209u8,
-							251u8,
-						],
-					)
-				}
-				#[doc = "Merge two vesting schedules together, creating a new vesting schedule that unlocks over"]
-				#[doc = "the highest possible start and end blocks. If both schedules have already started the"]
-				#[doc = "current block will be used as the schedule start; with the caveat that if one schedule"]
-				#[doc = "is finished by the current block, the other will be treated as the new merged schedule,"]
-				#[doc = "unmodified."]
-				#[doc = ""]
-				#[doc = "NOTE: If `schedule1_index == schedule2_index` this is a no-op."]
-				#[doc = "NOTE: This will unlock all schedules through the current block prior to merging."]
-				#[doc = "NOTE: If both schedules have ended by the current block, no new schedule will be created"]
-				#[doc = "and both will be removed."]
-				#[doc = ""]
-				#[doc = "Merged schedule attributes:"]
-				#[doc = "- `starting_block`: `MAX(schedule1.starting_block, scheduled2.starting_block,"]
-				#[doc = "  current_block)`."]
-				#[doc = "- `ending_block`: `MAX(schedule1.ending_block, schedule2.ending_block)`."]
-				#[doc = "- `locked`: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `schedule1_index`: index of the first schedule to merge."]
-				#[doc = "- `schedule2_index`: index of the second schedule to merge."]
-				pub fn merge_schedules(
-					&self,
-					schedule1_index: types::merge_schedules::Schedule1Index,
-					schedule2_index: types::merge_schedules::Schedule2Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::MergeSchedules>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Vesting",
-						"merge_schedules",
-						types::MergeSchedules { schedule1_index, schedule2_index },
-						[
-							45u8, 24u8, 13u8, 108u8, 26u8, 99u8, 61u8, 117u8, 195u8, 218u8, 182u8,
-							23u8, 188u8, 157u8, 181u8, 81u8, 38u8, 136u8, 31u8, 226u8, 8u8, 190u8,
-							33u8, 81u8, 86u8, 185u8, 156u8, 77u8, 157u8, 197u8, 41u8, 58u8,
-						],
-					)
-				}
-				#[doc = "Force remove a vesting schedule"]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Root_."]
-				#[doc = ""]
-				#[doc = "- `target`: An account that has a vesting schedule"]
-				#[doc = "- `schedule_index`: The vesting schedule index that should be removed"]
-				pub fn force_remove_vesting_schedule(
-					&self,
-					target: types::force_remove_vesting_schedule::Target,
-					schedule_index: types::force_remove_vesting_schedule::ScheduleIndex,
+					beneficiary: types::create_vesting_schedule::Beneficiary,
+					amount: types::create_vesting_schedule::Amount,
+					start: types::create_vesting_schedule::Start,
+					end: types::create_vesting_schedule::End,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
-					types::ForceRemoveVestingSchedule,
+					types::CreateVestingSchedule,
 				> {
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Vesting",
-						"force_remove_vesting_schedule",
-						types::ForceRemoveVestingSchedule { target, schedule_index },
+						"create_vesting_schedule",
+						types::CreateVestingSchedule { beneficiary, amount, start, end },
 						[
-							211u8, 253u8, 60u8, 15u8, 20u8, 53u8, 23u8, 13u8, 45u8, 223u8, 136u8,
-							183u8, 162u8, 143u8, 196u8, 188u8, 35u8, 64u8, 174u8, 16u8, 47u8, 13u8,
-							147u8, 173u8, 120u8, 143u8, 75u8, 89u8, 128u8, 187u8, 9u8, 18u8,
+							117u8, 76u8, 99u8, 105u8, 93u8, 244u8, 18u8, 212u8, 58u8, 219u8, 204u8,
+							7u8, 65u8, 65u8, 143u8, 173u8, 15u8, 183u8, 49u8, 97u8, 111u8, 75u8,
+							59u8, 133u8, 85u8, 45u8, 171u8, 112u8, 177u8, 167u8, 225u8, 220u8,
+						],
+					)
+				}
+				pub fn claim(
+					&self,
+					schedule_id: types::claim::ScheduleId,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Claim> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Vesting",
+						"claim",
+						types::Claim { schedule_id },
+						[
+							246u8, 17u8, 45u8, 52u8, 1u8, 205u8, 87u8, 47u8, 86u8, 189u8, 101u8,
+							130u8, 68u8, 226u8, 173u8, 13u8, 114u8, 253u8, 28u8, 177u8, 138u8,
+							220u8, 252u8, 229u8, 172u8, 7u8, 10u8, 100u8, 47u8, 99u8, 239u8, 222u8,
+						],
+					)
+				}
+				pub fn cancel_vesting_schedule(
+					&self,
+					schedule_id: types::cancel_vesting_schedule::ScheduleId,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
+					types::CancelVestingSchedule,
+				> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Vesting",
+						"cancel_vesting_schedule",
+						types::CancelVestingSchedule { schedule_id },
+						[
+							79u8, 110u8, 80u8, 93u8, 66u8, 56u8, 94u8, 234u8, 245u8, 75u8, 172u8,
+							145u8, 109u8, 121u8, 181u8, 42u8, 193u8, 231u8, 254u8, 91u8, 46u8,
+							174u8, 118u8, 137u8, 130u8, 37u8, 210u8, 88u8, 120u8, 23u8, 166u8,
+							19u8,
+						],
+					)
+				}
+				pub fn create_vesting_schedule_with_cliff(
+					&self,
+					beneficiary: types::create_vesting_schedule_with_cliff::Beneficiary,
+					amount: types::create_vesting_schedule_with_cliff::Amount,
+					cliff: types::create_vesting_schedule_with_cliff::Cliff,
+					end: types::create_vesting_schedule_with_cliff::End,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
+					types::CreateVestingScheduleWithCliff,
+				> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Vesting",
+						"create_vesting_schedule_with_cliff",
+						types::CreateVestingScheduleWithCliff { beneficiary, amount, cliff, end },
+						[
+							76u8, 25u8, 198u8, 221u8, 136u8, 16u8, 78u8, 94u8, 236u8, 233u8, 165u8,
+							139u8, 198u8, 167u8, 205u8, 113u8, 161u8, 123u8, 175u8, 130u8, 134u8,
+							90u8, 124u8, 211u8, 29u8, 229u8, 73u8, 25u8, 245u8, 103u8, 61u8, 91u8,
+						],
+					)
+				}
+				pub fn create_stepped_vesting_schedule(
+					&self,
+					beneficiary: types::create_stepped_vesting_schedule::Beneficiary,
+					amount: types::create_stepped_vesting_schedule::Amount,
+					start: types::create_stepped_vesting_schedule::Start,
+					end: types::create_stepped_vesting_schedule::End,
+					step_duration: types::create_stepped_vesting_schedule::StepDuration,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
+					types::CreateSteppedVestingSchedule,
+				> {
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Vesting",
+						"create_stepped_vesting_schedule",
+						types::CreateSteppedVestingSchedule {
+							beneficiary,
+							amount,
+							start,
+							end,
+							step_duration,
+						},
+						[
+							105u8, 201u8, 213u8, 124u8, 227u8, 40u8, 182u8, 67u8, 112u8, 169u8,
+							195u8, 56u8, 235u8, 16u8, 194u8, 150u8, 166u8, 239u8, 56u8, 173u8,
+							206u8, 172u8, 120u8, 253u8, 194u8, 191u8, 2u8, 101u8, 97u8, 83u8,
+							127u8, 220u8,
 						],
 					)
 				}
@@ -6561,19 +6382,24 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A vesting schedule has been created."]
-			pub struct VestingCreated {
-				pub account: vesting_created::Account,
-				pub schedule_index: vesting_created::ScheduleIndex,
-			}
-			pub mod vesting_created {
+			pub struct VestingScheduleCreated(
+				pub vesting_schedule_created::Field0,
+				pub vesting_schedule_created::Field1,
+				pub vesting_schedule_created::Field2,
+				pub vesting_schedule_created::Field3,
+				pub vesting_schedule_created::Field4,
+			);
+			pub mod vesting_schedule_created {
 				use super::runtime_types;
-				pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type ScheduleIndex = ::core::primitive::u32;
+				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Field1 = ::core::primitive::u128;
+				pub type Field2 = ::core::primitive::u64;
+				pub type Field3 = ::core::primitive::u64;
+				pub type Field4 = ::core::primitive::u64;
 			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingCreated {
+			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingScheduleCreated {
 				const PALLET: &'static str = "Vesting";
-				const EVENT: &'static str = "VestingCreated";
+				const EVENT: &'static str = "VestingScheduleCreated";
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -6582,20 +6408,20 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The amount vested has been updated. This could indicate a change in funds available."]
-			#[doc = "The balance given is the amount which is left unvested (and thus locked)."]
-			pub struct VestingUpdated {
-				pub account: vesting_updated::Account,
-				pub unvested: vesting_updated::Unvested,
-			}
-			pub mod vesting_updated {
+			pub struct TokensClaimed(
+				pub tokens_claimed::Field0,
+				pub tokens_claimed::Field1,
+				pub tokens_claimed::Field2,
+			);
+			pub mod tokens_claimed {
 				use super::runtime_types;
-				pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Unvested = ::core::primitive::u128;
+				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Field1 = ::core::primitive::u128;
+				pub type Field2 = ::core::primitive::u64;
 			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingUpdated {
+			impl ::subxt::ext::subxt_core::events::StaticEvent for TokensClaimed {
 				const PALLET: &'static str = "Vesting";
-				const EVENT: &'static str = "VestingUpdated";
+				const EVENT: &'static str = "TokensClaimed";
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -6604,145 +6430,104 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An \\[account\\] has become fully vested."]
-			pub struct VestingCompleted {
-				pub account: vesting_completed::Account,
-			}
-			pub mod vesting_completed {
+			pub struct VestingScheduleCancelled(
+				pub vesting_schedule_cancelled::Field0,
+				pub vesting_schedule_cancelled::Field1,
+			);
+			pub mod vesting_schedule_cancelled {
 				use super::runtime_types;
-				pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Field1 = ::core::primitive::u64;
 			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingCompleted {
+			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingScheduleCancelled {
 				const PALLET: &'static str = "Vesting";
-				const EVENT: &'static str = "VestingCompleted";
+				const EVENT: &'static str = "VestingScheduleCancelled";
 			}
 		}
 		pub mod storage {
 			use super::runtime_types;
 			pub mod types {
 				use super::runtime_types;
-				pub mod vesting {
+				pub mod vesting_schedules {
 					use super::runtime_types;
-					pub type Vesting = runtime_types::bounded_collections::bounded_vec::BoundedVec<
-						runtime_types::pallet_vesting::vesting_info::VestingInfo<
+					pub type VestingSchedules =
+						runtime_types::pallet_vesting::pallet::VestingSchedule<
+							::subxt::ext::subxt_core::utils::AccountId32,
 							::core::primitive::u128,
-							::core::primitive::u32,
-						>,
-					>;
-					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+							::core::primitive::u64,
+						>;
+					pub type Param0 = ::core::primitive::u64;
 				}
-				pub mod storage_version {
+				pub mod schedule_counter {
 					use super::runtime_types;
-					pub type StorageVersion = runtime_types::pallet_vesting::Releases;
+					pub type ScheduleCounter = ::core::primitive::u64;
 				}
 			}
 			pub struct StorageApi;
 			impl StorageApi {
-				#[doc = " Information regarding the vesting of a given account."]
-				pub fn vesting_iter(
+				pub fn vesting_schedules_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					(),
-					types::vesting::Vesting,
+					types::vesting_schedules::VestingSchedules,
 					(),
 					(),
 					::subxt::ext::subxt_core::utils::Yes,
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"Vesting",
-						"Vesting",
+						"VestingSchedules",
 						(),
 						[
-							95u8, 168u8, 217u8, 248u8, 149u8, 86u8, 195u8, 93u8, 73u8, 206u8,
-							105u8, 165u8, 33u8, 173u8, 232u8, 81u8, 147u8, 254u8, 50u8, 228u8,
-							156u8, 92u8, 242u8, 149u8, 42u8, 91u8, 58u8, 209u8, 142u8, 221u8,
-							230u8, 112u8,
+							249u8, 29u8, 202u8, 69u8, 251u8, 21u8, 125u8, 13u8, 99u8, 104u8, 22u8,
+							32u8, 137u8, 228u8, 172u8, 118u8, 255u8, 175u8, 130u8, 145u8, 162u8,
+							63u8, 204u8, 37u8, 245u8, 124u8, 110u8, 55u8, 190u8, 185u8, 228u8,
+							64u8,
 						],
 					)
 				}
-				#[doc = " Information regarding the vesting of a given account."]
-				pub fn vesting(
+				pub fn vesting_schedules(
 					&self,
-					_0: types::vesting::Param0,
+					_0: types::vesting_schedules::Param0,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::vesting::Param0,
+						types::vesting_schedules::Param0,
 					>,
-					types::vesting::Vesting,
+					types::vesting_schedules::VestingSchedules,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
 					(),
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"Vesting",
-						"Vesting",
+						"VestingSchedules",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							95u8, 168u8, 217u8, 248u8, 149u8, 86u8, 195u8, 93u8, 73u8, 206u8,
-							105u8, 165u8, 33u8, 173u8, 232u8, 81u8, 147u8, 254u8, 50u8, 228u8,
-							156u8, 92u8, 242u8, 149u8, 42u8, 91u8, 58u8, 209u8, 142u8, 221u8,
-							230u8, 112u8,
+							249u8, 29u8, 202u8, 69u8, 251u8, 21u8, 125u8, 13u8, 99u8, 104u8, 22u8,
+							32u8, 137u8, 228u8, 172u8, 118u8, 255u8, 175u8, 130u8, 145u8, 162u8,
+							63u8, 204u8, 37u8, 245u8, 124u8, 110u8, 55u8, 190u8, 185u8, 228u8,
+							64u8,
 						],
 					)
 				}
-				#[doc = " Storage version of the pallet."]
-				#[doc = ""]
-				#[doc = " New networks start with latest version, as determined by the genesis build."]
-				pub fn storage_version(
+				pub fn schedule_counter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					(),
-					types::storage_version::StorageVersion,
+					types::schedule_counter::ScheduleCounter,
 					::subxt::ext::subxt_core::utils::Yes,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"Vesting",
-						"StorageVersion",
+						"ScheduleCounter",
 						(),
 						[
-							230u8, 137u8, 180u8, 133u8, 142u8, 124u8, 231u8, 234u8, 223u8, 10u8,
-							154u8, 98u8, 158u8, 253u8, 228u8, 80u8, 5u8, 9u8, 91u8, 210u8, 252u8,
-							9u8, 13u8, 195u8, 193u8, 164u8, 129u8, 113u8, 128u8, 218u8, 8u8, 40u8,
-						],
-					)
-				}
-			}
-		}
-		pub mod constants {
-			use super::runtime_types;
-			pub struct ConstantsApi;
-			impl ConstantsApi {
-				#[doc = " The minimum amount transferred to call `vested_transfer`."]
-				pub fn min_vested_transfer(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Vesting",
-						"MinVestedTransfer",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				pub fn max_vesting_schedules(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Vesting",
-						"MaxVestingSchedules",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
+							89u8, 70u8, 162u8, 89u8, 163u8, 229u8, 81u8, 153u8, 145u8, 206u8,
+							110u8, 6u8, 192u8, 112u8, 236u8, 91u8, 80u8, 5u8, 138u8, 182u8, 128u8,
+							168u8, 19u8, 232u8, 225u8, 123u8, 109u8, 66u8, 101u8, 37u8, 26u8,
+							255u8,
 						],
 					)
 				}
@@ -7610,10 +7395,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							171u8, 151u8, 176u8, 198u8, 154u8, 6u8, 181u8, 56u8, 10u8, 6u8, 38u8,
-							136u8, 64u8, 214u8, 145u8, 96u8, 121u8, 125u8, 161u8, 234u8, 247u8,
-							156u8, 152u8, 119u8, 122u8, 165u8, 125u8, 238u8, 12u8, 214u8, 135u8,
-							21u8,
+							173u8, 230u8, 174u8, 217u8, 236u8, 118u8, 170u8, 112u8, 210u8, 0u8,
+							87u8, 78u8, 70u8, 154u8, 193u8, 89u8, 57u8, 214u8, 145u8, 122u8, 3u8,
+							193u8, 53u8, 114u8, 231u8, 99u8, 105u8, 183u8, 216u8, 139u8, 208u8,
+							18u8,
 						],
 					)
 				}
@@ -7655,9 +7440,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							99u8, 222u8, 117u8, 153u8, 121u8, 239u8, 26u8, 216u8, 66u8, 132u8,
-							220u8, 8u8, 92u8, 137u8, 253u8, 47u8, 9u8, 8u8, 103u8, 1u8, 116u8,
-							133u8, 237u8, 51u8, 73u8, 145u8, 141u8, 64u8, 210u8, 10u8, 74u8, 191u8,
+							175u8, 152u8, 228u8, 32u8, 44u8, 167u8, 234u8, 171u8, 206u8, 59u8,
+							173u8, 8u8, 83u8, 184u8, 68u8, 206u8, 244u8, 162u8, 47u8, 106u8, 83u8,
+							36u8, 50u8, 203u8, 172u8, 0u8, 100u8, 81u8, 202u8, 224u8, 223u8, 246u8,
 						],
 					)
 				}
@@ -7696,10 +7481,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							236u8, 32u8, 229u8, 48u8, 43u8, 173u8, 230u8, 106u8, 109u8, 188u8,
-							137u8, 151u8, 188u8, 102u8, 252u8, 210u8, 87u8, 146u8, 152u8, 251u8,
-							128u8, 10u8, 230u8, 228u8, 168u8, 203u8, 77u8, 24u8, 125u8, 18u8, 52u8,
-							201u8,
+							192u8, 141u8, 109u8, 151u8, 52u8, 217u8, 55u8, 117u8, 133u8, 137u8,
+							93u8, 139u8, 110u8, 141u8, 159u8, 3u8, 219u8, 128u8, 161u8, 116u8,
+							163u8, 98u8, 69u8, 175u8, 158u8, 170u8, 150u8, 246u8, 138u8, 232u8,
+							22u8, 180u8,
 						],
 					)
 				}
@@ -7724,9 +7509,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							120u8, 118u8, 201u8, 138u8, 43u8, 75u8, 89u8, 65u8, 107u8, 106u8, 41u8,
-							229u8, 55u8, 6u8, 141u8, 24u8, 116u8, 214u8, 215u8, 1u8, 209u8, 67u8,
-							157u8, 238u8, 147u8, 31u8, 188u8, 133u8, 21u8, 7u8, 199u8, 202u8,
+							217u8, 2u8, 187u8, 135u8, 212u8, 186u8, 132u8, 84u8, 249u8, 105u8,
+							229u8, 106u8, 197u8, 14u8, 12u8, 110u8, 207u8, 135u8, 152u8, 100u8,
+							145u8, 199u8, 114u8, 237u8, 27u8, 33u8, 244u8, 163u8, 29u8, 9u8, 140u8,
+							54u8,
 						],
 					)
 				}
@@ -8754,10 +8540,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							135u8, 106u8, 152u8, 39u8, 199u8, 163u8, 145u8, 186u8, 129u8, 115u8,
-							214u8, 162u8, 12u8, 85u8, 57u8, 122u8, 211u8, 240u8, 143u8, 159u8,
-							138u8, 37u8, 114u8, 8u8, 8u8, 236u8, 197u8, 23u8, 114u8, 2u8, 105u8,
-							174u8,
+							130u8, 29u8, 84u8, 76u8, 150u8, 225u8, 88u8, 20u8, 152u8, 27u8, 168u8,
+							251u8, 150u8, 58u8, 84u8, 196u8, 53u8, 205u8, 153u8, 180u8, 238u8,
+							249u8, 96u8, 190u8, 112u8, 62u8, 4u8, 118u8, 87u8, 223u8, 172u8, 235u8,
 						],
 					)
 				}
@@ -8787,9 +8572,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							3u8, 102u8, 237u8, 140u8, 8u8, 207u8, 27u8, 204u8, 155u8, 162u8, 124u8,
-							141u8, 172u8, 210u8, 89u8, 239u8, 113u8, 175u8, 41u8, 9u8, 150u8,
-							130u8, 205u8, 125u8, 205u8, 199u8, 174u8, 85u8, 24u8, 13u8, 57u8, 19u8,
+							97u8, 150u8, 234u8, 190u8, 160u8, 210u8, 163u8, 130u8, 229u8, 18u8,
+							165u8, 29u8, 46u8, 207u8, 236u8, 107u8, 110u8, 231u8, 42u8, 182u8,
+							183u8, 174u8, 48u8, 110u8, 217u8, 219u8, 93u8, 22u8, 38u8, 1u8, 228u8,
+							180u8,
 						],
 					)
 				}
@@ -8815,9 +8601,10 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							76u8, 242u8, 205u8, 32u8, 158u8, 24u8, 255u8, 12u8, 97u8, 24u8, 211u8,
-							63u8, 119u8, 183u8, 165u8, 217u8, 17u8, 178u8, 254u8, 230u8, 119u8,
-							207u8, 207u8, 103u8, 39u8, 226u8, 55u8, 73u8, 233u8, 79u8, 60u8, 218u8,
+							77u8, 142u8, 71u8, 239u8, 12u8, 52u8, 160u8, 145u8, 47u8, 32u8, 232u8,
+							254u8, 182u8, 99u8, 42u8, 54u8, 200u8, 153u8, 104u8, 122u8, 206u8,
+							240u8, 155u8, 125u8, 110u8, 169u8, 151u8, 202u8, 43u8, 43u8, 182u8,
+							116u8,
 						],
 					)
 				}
@@ -8840,10 +8627,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							32u8, 108u8, 91u8, 136u8, 200u8, 228u8, 95u8, 44u8, 22u8, 92u8, 34u8,
-							234u8, 170u8, 201u8, 4u8, 248u8, 16u8, 209u8, 103u8, 201u8, 207u8,
-							160u8, 165u8, 231u8, 152u8, 222u8, 112u8, 63u8, 133u8, 61u8, 220u8,
-							24u8,
+							191u8, 201u8, 33u8, 81u8, 148u8, 140u8, 206u8, 13u8, 20u8, 122u8,
+							209u8, 66u8, 178u8, 177u8, 41u8, 198u8, 217u8, 15u8, 133u8, 1u8, 10u8,
+							90u8, 68u8, 107u8, 24u8, 108u8, 206u8, 172u8, 82u8, 190u8, 34u8, 62u8,
 						],
 					)
 				}
@@ -8869,9 +8655,10 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							26u8, 82u8, 61u8, 185u8, 19u8, 29u8, 151u8, 192u8, 24u8, 41u8, 115u8,
-							237u8, 7u8, 38u8, 68u8, 5u8, 159u8, 117u8, 47u8, 138u8, 101u8, 126u8,
-							255u8, 137u8, 144u8, 51u8, 244u8, 145u8, 113u8, 21u8, 123u8, 79u8,
+							223u8, 182u8, 88u8, 54u8, 213u8, 67u8, 144u8, 243u8, 10u8, 157u8, 79u8,
+							37u8, 1u8, 164u8, 164u8, 114u8, 159u8, 231u8, 179u8, 212u8, 11u8,
+							224u8, 232u8, 213u8, 152u8, 200u8, 245u8, 26u8, 236u8, 102u8, 145u8,
+							0u8,
 						],
 					)
 				}
@@ -8894,10 +8681,10 @@ pub mod api {
 							weight,
 						},
 						[
-							131u8, 134u8, 250u8, 73u8, 141u8, 137u8, 137u8, 15u8, 206u8, 215u8,
-							199u8, 239u8, 24u8, 84u8, 247u8, 50u8, 135u8, 223u8, 110u8, 205u8,
-							96u8, 170u8, 74u8, 232u8, 152u8, 135u8, 235u8, 62u8, 110u8, 230u8,
-							172u8, 229u8,
+							226u8, 20u8, 215u8, 99u8, 238u8, 233u8, 175u8, 236u8, 194u8, 130u8,
+							250u8, 240u8, 18u8, 52u8, 183u8, 146u8, 117u8, 253u8, 1u8, 239u8,
+							165u8, 169u8, 153u8, 10u8, 57u8, 120u8, 120u8, 208u8, 22u8, 147u8,
+							21u8, 34u8,
 						],
 					)
 				}
@@ -8937,10 +8724,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							195u8, 146u8, 198u8, 20u8, 96u8, 236u8, 218u8, 101u8, 252u8, 17u8,
-							41u8, 246u8, 142u8, 116u8, 243u8, 198u8, 237u8, 168u8, 11u8, 211u8,
-							236u8, 184u8, 71u8, 173u8, 211u8, 0u8, 129u8, 231u8, 99u8, 189u8,
-							229u8, 34u8,
+							203u8, 240u8, 69u8, 118u8, 218u8, 32u8, 162u8, 12u8, 29u8, 152u8,
+							199u8, 248u8, 55u8, 150u8, 33u8, 170u8, 3u8, 98u8, 250u8, 239u8, 136u8,
+							43u8, 59u8, 92u8, 144u8, 218u8, 250u8, 64u8, 196u8, 34u8, 80u8, 68u8,
 						],
 					)
 				}
@@ -8963,9 +8749,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							52u8, 4u8, 122u8, 93u8, 231u8, 186u8, 88u8, 129u8, 36u8, 245u8, 176u8,
-							117u8, 22u8, 203u8, 94u8, 115u8, 19u8, 27u8, 141u8, 63u8, 184u8, 171u8,
-							146u8, 63u8, 124u8, 225u8, 135u8, 73u8, 51u8, 20u8, 60u8, 199u8,
+							109u8, 239u8, 38u8, 131u8, 210u8, 170u8, 58u8, 89u8, 248u8, 200u8,
+							160u8, 156u8, 3u8, 71u8, 17u8, 230u8, 26u8, 187u8, 62u8, 103u8, 198u8,
+							45u8, 179u8, 203u8, 254u8, 206u8, 46u8, 35u8, 67u8, 62u8, 14u8, 97u8,
 						],
 					)
 				}
@@ -16571,10 +16357,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							60u8, 61u8, 138u8, 19u8, 43u8, 218u8, 179u8, 117u8, 205u8, 143u8,
-							128u8, 223u8, 96u8, 166u8, 90u8, 187u8, 255u8, 119u8, 238u8, 209u8,
-							140u8, 58u8, 239u8, 44u8, 153u8, 196u8, 218u8, 155u8, 227u8, 228u8,
-							210u8, 187u8,
+							254u8, 215u8, 236u8, 23u8, 13u8, 183u8, 53u8, 84u8, 78u8, 98u8, 96u8,
+							195u8, 196u8, 32u8, 81u8, 150u8, 35u8, 36u8, 136u8, 141u8, 250u8, 34u8,
+							217u8, 233u8, 46u8, 101u8, 158u8, 53u8, 68u8, 171u8, 62u8, 152u8,
 						],
 					)
 				}
@@ -27023,126 +26808,30 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
-					#[doc = "Unlock any vested funds of the sender account."]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Signed_ and the sender must have funds still"]
-					#[doc = "locked under this pallet."]
-					#[doc = ""]
-					#[doc = "Emits either `VestingCompleted` or `VestingUpdated`."]
-					#[doc = ""]
-					#[doc = "## Complexity"]
-					#[doc = "- `O(1)`."]
-					vest,
+					create_vesting_schedule {
+						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+						start: ::core::primitive::u64,
+						end: ::core::primitive::u64,
+					},
 					#[codec(index = 1)]
-					#[doc = "Unlock any vested funds of a `target` account."]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Signed_."]
-					#[doc = ""]
-					#[doc = "- `target`: The account whose vested funds should be unlocked. Must have funds still"]
-					#[doc = "locked under this pallet."]
-					#[doc = ""]
-					#[doc = "Emits either `VestingCompleted` or `VestingUpdated`."]
-					#[doc = ""]
-					#[doc = "## Complexity"]
-					#[doc = "- `O(1)`."]
-					vest_other {
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
+					claim { schedule_id: ::core::primitive::u64 },
 					#[codec(index = 2)]
-					#[doc = "Create a vested transfer."]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Signed_."]
-					#[doc = ""]
-					#[doc = "- `target`: The account receiving the vested funds."]
-					#[doc = "- `schedule`: The vesting schedule attached to the transfer."]
-					#[doc = ""]
-					#[doc = "Emits `VestingCreated`."]
-					#[doc = ""]
-					#[doc = "NOTE: This will unlock all schedules through the current block."]
-					#[doc = ""]
-					#[doc = "## Complexity"]
-					#[doc = "- `O(1)`."]
-					vested_transfer {
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						schedule: runtime_types::pallet_vesting::vesting_info::VestingInfo<
-							::core::primitive::u128,
-							::core::primitive::u32,
-						>,
-					},
+					cancel_vesting_schedule { schedule_id: ::core::primitive::u64 },
 					#[codec(index = 3)]
-					#[doc = "Force a vested transfer."]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Root_."]
-					#[doc = ""]
-					#[doc = "- `source`: The account whose funds should be transferred."]
-					#[doc = "- `target`: The account that should be transferred the vested funds."]
-					#[doc = "- `schedule`: The vesting schedule attached to the transfer."]
-					#[doc = ""]
-					#[doc = "Emits `VestingCreated`."]
-					#[doc = ""]
-					#[doc = "NOTE: This will unlock all schedules through the current block."]
-					#[doc = ""]
-					#[doc = "## Complexity"]
-					#[doc = "- `O(1)`."]
-					force_vested_transfer {
-						source: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						schedule: runtime_types::pallet_vesting::vesting_info::VestingInfo<
-							::core::primitive::u128,
-							::core::primitive::u32,
-						>,
+					create_vesting_schedule_with_cliff {
+						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+						cliff: ::core::primitive::u64,
+						end: ::core::primitive::u64,
 					},
 					#[codec(index = 4)]
-					#[doc = "Merge two vesting schedules together, creating a new vesting schedule that unlocks over"]
-					#[doc = "the highest possible start and end blocks. If both schedules have already started the"]
-					#[doc = "current block will be used as the schedule start; with the caveat that if one schedule"]
-					#[doc = "is finished by the current block, the other will be treated as the new merged schedule,"]
-					#[doc = "unmodified."]
-					#[doc = ""]
-					#[doc = "NOTE: If `schedule1_index == schedule2_index` this is a no-op."]
-					#[doc = "NOTE: This will unlock all schedules through the current block prior to merging."]
-					#[doc = "NOTE: If both schedules have ended by the current block, no new schedule will be created"]
-					#[doc = "and both will be removed."]
-					#[doc = ""]
-					#[doc = "Merged schedule attributes:"]
-					#[doc = "- `starting_block`: `MAX(schedule1.starting_block, scheduled2.starting_block,"]
-					#[doc = "  current_block)`."]
-					#[doc = "- `ending_block`: `MAX(schedule1.ending_block, schedule2.ending_block)`."]
-					#[doc = "- `locked`: `schedule1.locked_at(current_block) + schedule2.locked_at(current_block)`."]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Signed_."]
-					#[doc = ""]
-					#[doc = "- `schedule1_index`: index of the first schedule to merge."]
-					#[doc = "- `schedule2_index`: index of the second schedule to merge."]
-					merge_schedules {
-						schedule1_index: ::core::primitive::u32,
-						schedule2_index: ::core::primitive::u32,
-					},
-					#[codec(index = 5)]
-					#[doc = "Force remove a vesting schedule"]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Root_."]
-					#[doc = ""]
-					#[doc = "- `target`: An account that has a vesting schedule"]
-					#[doc = "- `schedule_index`: The vesting schedule index that should be removed"]
-					force_remove_vesting_schedule {
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						schedule_index: ::core::primitive::u32,
+					create_stepped_vesting_schedule {
+						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+						start: ::core::primitive::u64,
+						end: ::core::primitive::u64,
+						step_duration: ::core::primitive::u64,
 					},
 				}
 				#[derive(
@@ -27156,24 +26845,18 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Error for the vesting pallet."]
+				#[doc = "The `Error` enum of this pallet."]
 				pub enum Error {
 					#[codec(index = 0)]
-					#[doc = "The account given is not vesting."]
-					NotVesting,
+					NoVestingSchedule,
 					#[codec(index = 1)]
-					#[doc = "The account already has `MaxVestingSchedules` count of schedules and thus"]
-					#[doc = "cannot add another one. Consider merging existing schedules in order to add another."]
-					AtMaxVestingSchedules,
+					InvalidSchedule,
 					#[codec(index = 2)]
-					#[doc = "Amount being transferred is too low to create a vesting schedule."]
-					AmountLow,
+					TooManySchedules,
 					#[codec(index = 3)]
-					#[doc = "An index was out of bounds of the vesting schedules."]
-					ScheduleIndexOutOfBounds,
+					NotCreator,
 					#[codec(index = 4)]
-					#[doc = "Failed to create a new schedule because some parameter was invalid."]
-					InvalidScheduleParams,
+					ScheduleNotFound,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -27189,25 +26872,25 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
-					#[doc = "A vesting schedule has been created."]
-					VestingCreated {
-						account: ::subxt::ext::subxt_core::utils::AccountId32,
-						schedule_index: ::core::primitive::u32,
-					},
+					VestingScheduleCreated(
+						::subxt::ext::subxt_core::utils::AccountId32,
+						::core::primitive::u128,
+						::core::primitive::u64,
+						::core::primitive::u64,
+						::core::primitive::u64,
+					),
 					#[codec(index = 1)]
-					#[doc = "The amount vested has been updated. This could indicate a change in funds available."]
-					#[doc = "The balance given is the amount which is left unvested (and thus locked)."]
-					VestingUpdated {
-						account: ::subxt::ext::subxt_core::utils::AccountId32,
-						unvested: ::core::primitive::u128,
-					},
+					TokensClaimed(
+						::subxt::ext::subxt_core::utils::AccountId32,
+						::core::primitive::u128,
+						::core::primitive::u64,
+					),
 					#[codec(index = 2)]
-					#[doc = "An \\[account\\] has become fully vested."]
-					VestingCompleted { account: ::subxt::ext::subxt_core::utils::AccountId32 },
+					VestingScheduleCancelled(
+						::subxt::ext::subxt_core::utils::AccountId32,
+						::core::primitive::u64,
+					),
 				}
-			}
-			pub mod vesting_info {
-				use super::runtime_types;
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
 					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
@@ -27219,24 +26902,35 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				pub struct VestingInfo<_0, _1> {
-					pub locked: _0,
-					pub per_block: _0,
-					pub starting_block: _1,
+				pub struct VestingSchedule<_0, _1, _2> {
+					pub id: ::core::primitive::u64,
+					pub creator: _0,
+					pub beneficiary: _0,
+					pub amount: _1,
+					pub start: _2,
+					pub end: _2,
+					pub vesting_type: runtime_types::pallet_vesting::pallet::VestingType<_2>,
+					pub claimed: _1,
 				}
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub enum Releases {
-				#[codec(index = 0)]
-				V0,
-				#[codec(index = 1)]
-				V1,
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum VestingType<_0> {
+					#[codec(index = 0)]
+					Linear,
+					#[codec(index = 1)]
+					LinearWithCliff { cliff: _0 },
+					#[codec(index = 2)]
+					Stepped { step_duration: _0 },
+				}
 			}
 		}
 		pub mod primitive_types {

@@ -23,6 +23,7 @@ pub mod system;
 pub mod tech_collective;
 pub mod tech_referenda;
 pub mod treasury;
+pub mod vesting;
 pub mod wallet;
 
 /// Main CLI commands
@@ -104,6 +105,10 @@ pub enum Commands {
 	/// Treasury management commands
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
+
+	/// Vesting management commands
+	#[command(subcommand)]
+	Vesting(vesting::VestingCommands),
 
 	/// Runtime management commands (requires root/sudo permissions)
 	#[command(subcommand)]
@@ -289,6 +294,8 @@ pub async fn execute_command(
 			referenda::handle_referenda_command(referenda_cmd, node_url, finalized).await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, finalized).await,
+		Commands::Vesting(vesting_cmd) =>
+			vesting::handle_vesting_command(vesting_cmd, node_url, finalized).await,
 		Commands::Runtime(runtime_cmd) =>
 			runtime::handle_runtime_command(runtime_cmd, node_url, finalized).await,
 		Commands::Call {
