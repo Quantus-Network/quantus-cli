@@ -82,7 +82,7 @@ pub async fn handle_wormhole_command(
 			password,
 			password_file,
 			output,
-		} => {
+		} =>
 			generate_proof(
 				secret,
 				amount,
@@ -93,8 +93,7 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await
-		},
+			.await,
 	}
 }
 
@@ -201,7 +200,7 @@ async fn generate_proof(
 		private_key: keypair.private_key.clone(),
 	};
 
-	submit_transaction(&quantus_client, &quantum_keypair, transfer_tx, None)
+	submit_transaction(&quantus_client, &quantum_keypair, transfer_tx, None, false)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
