@@ -2,6 +2,7 @@
 use crate::{chain::quantus_subxt, cli::common::submit_transaction, log_print, log_success};
 use clap::Subcommand;
 use colored::Colorize;
+use frame_support::sp_runtime::traits::AccountIdConversion;
 
 /// Treasury management commands
 #[derive(Subcommand, Debug)]
@@ -116,6 +117,7 @@ pub enum TreasuryCommands {
 pub async fn handle_treasury_command(
 	command: TreasuryCommands,
 	node_url: &str,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -139,15 +141,26 @@ pub async fn handle_treasury_command(
 				&from,
 				password,
 				password_file,
+				finalized,
 			)
 			.await,
 		TreasuryCommands::Payout { index, from, password, password_file } =>
-			payout_spend(&quantus_client, index, &from, password, password_file).await,
+			payout_spend(&quantus_client, index, &from, password, password_file, finalized).await,
 		TreasuryCommands::CheckStatus { index, from, password, password_file } =>
-			check_spend_status(&quantus_client, index, &from, password, password_file).await,
+			check_spend_status(&quantus_client, index, &from, password, password_file, finalized)
+				.await,
 		TreasuryCommands::ListSpends => list_spends(&quantus_client).await,
 		TreasuryCommands::SpendSudo { beneficiary, amount, from, password, password_file } =>
-			spend_sudo(&quantus_client, &beneficiary, &amount, &from, password, password_file).await,
+			spend_sudo(
+				&quantus_client,
+				&beneficiary,
+				&amount,
+				&from,
+				password,
+				password_file,
+				finalized,
+			)
+			.await,
 	}
 }
 
@@ -158,12 +171,13 @@ async fn get_treasury_balance(
 	log_print!("💰 Treasury Balance");
 	log_print!("");
 
-	// Get Treasury account ID
-	// PalletId("py/trsry") converts to account using "modl" prefix
-	let mut full_data = [0u8; 32];
-	full_data[0..4].copy_from_slice(b"modl");
-	full_data[4..12].copy_from_slice(b"py/trsry");
-	let treasury_account = subxt::utils::AccountId32(full_data);
+	// Get Treasury account ID using the same method as runtime
+	let treasury_pallet_id = frame_support::PalletId(*b"py/trsry");
+	let treasury_account_raw: sp_runtime::AccountId32 =
+		treasury_pallet_id.into_account_truncating();
+
+	// Convert to subxt's AccountId32
+	let treasury_account = subxt::utils::AccountId32(*treasury_account_raw.as_ref());
 
 	// Query balance
 	let addr = quantus_subxt::api::storage().system().account(treasury_account.clone());
@@ -185,7 +199,11 @@ async fn get_treasury_balance(
 
 	log_print!("💰 Free Balance: {}", formatted_free_balance);
 	log_print!("💰 Reserved: {}", formatted_reserved_balance);
-	log_print!("📍 Treasury Account: {}", treasury_account.to_string().bright_yellow());
+
+	// Display address in Quantus format (uses default SS58 version 189 set in main.rs)
+	use crate::cli::address_format::QuantusSS58;
+	let treasury_address = treasury_account_raw.to_quantus_ss58();
+	log_print!("📍 Treasury Account: {}", treasury_address.bright_yellow());
 
 	Ok(())
 }
@@ -285,6 +303,7 @@ async fn submit_spend_referendum(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	use qp_poseidon::PoseidonHasher;
 	use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
@@ -339,7 +358,7 @@ async fn submit_spend_referendum(
 	// Submit preimage
 	let preimage_call = quantus_subxt::api::tx().preimage().note_preimage(encoded_call.clone());
 	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, preimage_call, None).await?;
+		submit_transaction(quantus_client, &keypair, preimage_call, None, finalized).await?;
 
 	log_print!("✅ Preimage created {:?}", preimage_tx_hash);
 
@@ -381,7 +400,8 @@ async fn submit_spend_referendum(
 		);
 	let submit_call =
 		quantus_subxt::api::tx().referenda().submit(origin_caller, proposal, enactment);
-	let submit_tx_hash = submit_transaction(quantus_client, &keypair, submit_call, None).await?;
+	let submit_tx_hash =
+		submit_transaction(quantus_client, &keypair, submit_call, None, finalized).await?;
 
 	log_print!(
 		"✅ {} Treasury spend referendum submitted! {:?}",
@@ -408,6 +428,7 @@ async fn payout_spend(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	log_print!("💸 Paying out Treasury Spend #{}", index);
 
@@ -417,7 +438,8 @@ async fn payout_spend(
 	// Create payout call
 	let payout_call = quantus_subxt::api::tx().treasury_pallet().payout(index);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, payout_call, None).await?;
+	let tx_hash =
+		submit_transaction(quantus_client, &keypair, payout_call, None, finalized).await?;
 	log_print!(
 		"✅ {} Payout transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -437,6 +459,7 @@ async fn check_spend_status(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	log_print!("🔍 Checking Treasury Spend #{} status", index);
 
@@ -446,7 +469,7 @@ async fn check_spend_status(
 	// Create check_status call
 	let check_call = quantus_subxt::api::tx().treasury_pallet().check_status(index);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, check_call, None).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, check_call, None, finalized).await?;
 	log_print!(
 		"✅ {} Check status transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -475,10 +498,11 @@ async fn list_spends(
 		if let Some(spend_status) = storage_at.fetch(&spend_addr).await? {
 			log_print!("💰 Spend #{}", spend_index.to_string().bright_yellow().bold());
 			log_print!("   Amount: {} (raw)", spend_status.amount.to_string().bright_green());
-			log_print!(
-				"   Beneficiary: {}",
-				format!("{:?}", spend_status.beneficiary).bright_cyan()
-			);
+
+			// Format beneficiary address in Quantus SS58 format
+			use crate::cli::address_format::QuantusSS58;
+			let beneficiary_str = spend_status.beneficiary.to_quantus_ss58();
+			log_print!("   Beneficiary: {}", beneficiary_str.bright_cyan());
 			log_print!("   Valid From: Block #{}", spend_status.valid_from);
 			log_print!("   Expires At: Block #{}", spend_status.expire_at);
 			log_print!(
@@ -514,6 +538,7 @@ async fn spend_sudo(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
+	finalized: bool,
 ) -> crate::error::Result<()> {
 	use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 
@@ -555,7 +580,7 @@ async fn spend_sudo(
 
 	// Submit transaction
 	log_print!("📡 Submitting sudo transaction...");
-	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None).await?;
+	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None, finalized).await?;
 	log_print!(
 		"✅ {} Sudo transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
