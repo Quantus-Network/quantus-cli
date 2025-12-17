@@ -1836,6 +1836,9 @@ pub mod api {
 		pub fn mining_rewards(&self) -> mining_rewards::constants::ConstantsApi {
 			mining_rewards::constants::ConstantsApi
 		}
+		pub fn vesting(&self) -> vesting::constants::ConstantsApi {
+			vesting::constants::ConstantsApi
+		}
 		pub fn scheduler(&self) -> scheduler::constants::ConstantsApi {
 			scheduler::constants::ConstantsApi
 		}
@@ -1995,9 +1998,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				107u8, 19u8, 10u8, 241u8, 82u8, 253u8, 116u8, 209u8, 74u8, 187u8, 41u8, 227u8, 8u8,
-				78u8, 56u8, 136u8, 33u8, 49u8, 68u8, 183u8, 78u8, 157u8, 131u8, 182u8, 204u8, 34u8,
-				226u8, 161u8, 235u8, 173u8, 191u8, 57u8,
+				198u8, 239u8, 48u8, 247u8, 27u8, 175u8, 137u8, 166u8, 146u8, 55u8, 184u8, 217u8,
+				104u8, 165u8, 227u8, 74u8, 163u8, 253u8, 19u8, 101u8, 211u8, 65u8, 98u8, 136u8,
+				234u8, 101u8, 138u8, 172u8, 196u8, 7u8, 184u8, 149u8,
 			]
 	}
 	pub mod system {
@@ -6462,6 +6465,11 @@ pub mod api {
 					use super::runtime_types;
 					pub type ScheduleCounter = ::core::primitive::u64;
 				}
+				pub mod beneficiary_schedule_count {
+					use super::runtime_types;
+					pub type BeneficiaryScheduleCount = ::core::primitive::u32;
+					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
 			}
 			pub struct StorageApi;
 			impl StorageApi {
@@ -6528,6 +6536,76 @@ pub mod api {
 							110u8, 6u8, 192u8, 112u8, 236u8, 91u8, 80u8, 5u8, 138u8, 182u8, 128u8,
 							168u8, 19u8, 232u8, 225u8, 123u8, 109u8, 66u8, 101u8, 37u8, 26u8,
 							255u8,
+						],
+					)
+				}
+				#[doc = " Number of vesting schedules per beneficiary"]
+				pub fn beneficiary_schedule_count_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::beneficiary_schedule_count::BeneficiaryScheduleCount,
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Vesting",
+						"BeneficiaryScheduleCount",
+						(),
+						[
+							145u8, 64u8, 246u8, 7u8, 169u8, 134u8, 78u8, 46u8, 78u8, 33u8, 210u8,
+							136u8, 181u8, 245u8, 221u8, 148u8, 123u8, 182u8, 101u8, 241u8, 29u8,
+							207u8, 242u8, 177u8, 170u8, 24u8, 20u8, 250u8, 43u8, 162u8, 179u8,
+							166u8,
+						],
+					)
+				}
+				#[doc = " Number of vesting schedules per beneficiary"]
+				pub fn beneficiary_schedule_count(
+					&self,
+					_0: types::beneficiary_schedule_count::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::beneficiary_schedule_count::Param0,
+					>,
+					types::beneficiary_schedule_count::BeneficiaryScheduleCount,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Vesting",
+						"BeneficiaryScheduleCount",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							145u8, 64u8, 246u8, 7u8, 169u8, 134u8, 78u8, 46u8, 78u8, 33u8, 210u8,
+							136u8, 181u8, 245u8, 221u8, 148u8, 123u8, 182u8, 101u8, 241u8, 29u8,
+							207u8, 242u8, 177u8, 170u8, 24u8, 20u8, 250u8, 43u8, 162u8, 179u8,
+							166u8,
+						],
+					)
+				}
+			}
+		}
+		pub mod constants {
+			use super::runtime_types;
+			pub struct ConstantsApi;
+			impl ConstantsApi {
+				#[doc = " Maximum number of vesting schedules per beneficiary"]
+				pub fn max_schedules_per_beneficiary(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					::core::primitive::u32,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"Vesting",
+						"MaxSchedulesPerBeneficiary",
+						[
+							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
+							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
+							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
+							145u8,
 						],
 					)
 				}

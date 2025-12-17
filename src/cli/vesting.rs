@@ -223,7 +223,7 @@ pub async fn handle_vesting_command(
 	let quantus_client = QuantusClient::new(node_url).await?;
 
 	match command {
-		VestingCommands::Create { to, amount, start, end, from, password, password_file } =>
+		VestingCommands::Create { to, amount, start, end, from, password, password_file } => {
 			handle_create(
 				&quantus_client,
 				&to,
@@ -235,8 +235,9 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await,
-		VestingCommands::CreateCliff { to, amount, cliff, end, from, password, password_file } =>
+			.await
+		},
+		VestingCommands::CreateCliff { to, amount, cliff, end, from, password, password_file } => {
 			handle_create_cliff(
 				&quantus_client,
 				&to,
@@ -248,7 +249,8 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await,
+			.await
+		},
 		VestingCommands::CreateStepped {
 			to,
 			amount,
@@ -258,7 +260,7 @@ pub async fn handle_vesting_command(
 			from,
 			password,
 			password_file,
-		} =>
+		} => {
 			handle_create_stepped(
 				&quantus_client,
 				&to,
@@ -271,11 +273,13 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await,
-		VestingCommands::Claim { schedule_id, from, password, password_file } =>
+			.await
+		},
+		VestingCommands::Claim { schedule_id, from, password, password_file } => {
 			handle_claim(&quantus_client, schedule_id, &from, password, password_file, finalized)
-				.await,
-		VestingCommands::ClaimAll { beneficiary, from, password, password_file } =>
+				.await
+		},
+		VestingCommands::ClaimAll { beneficiary, from, password, password_file } => {
 			handle_claim_all(
 				&quantus_client,
 				&beneficiary,
@@ -284,21 +288,24 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await,
-		VestingCommands::Cancel { schedule_id, from, password, password_file } =>
+			.await
+		},
+		VestingCommands::Cancel { schedule_id, from, password, password_file } => {
 			handle_cancel(&quantus_client, schedule_id, &from, password, password_file, finalized)
-				.await,
+				.await
+		},
 		VestingCommands::Info { schedule_id } => handle_info(&quantus_client, schedule_id).await,
 		VestingCommands::List { address } => handle_list(&quantus_client, &address).await,
-		VestingCommands::ListCreated { creator } =>
-			handle_list_created(&quantus_client, &creator).await,
+		VestingCommands::ListCreated { creator } => {
+			handle_list_created(&quantus_client, &creator).await
+		},
 		VestingCommands::Calculate {
 			vesting_type,
 			amount,
 			duration_days,
 			cliff_days,
 			step_days,
-		} =>
+		} => {
 			handle_calculate(
 				&quantus_client,
 				&vesting_type,
@@ -307,7 +314,8 @@ pub async fn handle_vesting_command(
 				cliff_days,
 				step_days,
 			)
-			.await,
+			.await
+		},
 	}
 }
 
@@ -346,8 +354,17 @@ fn parse_timestamp(input: &str) -> Result<u64> {
 /// Format timestamp for display
 fn format_timestamp(ms: u64) -> String {
 	use chrono::DateTime;
-	let dt = DateTime::from_timestamp_millis(ms as i64).unwrap_or_default();
-	dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+
+	// Check if timestamp is within valid i64 range to prevent overflow
+	// i64::MAX milliseconds = ~292 million years from epoch
+	if ms > i64::MAX as u64 {
+		return format!("{} ms (out of displayable range)", ms);
+	}
+
+	match DateTime::from_timestamp_millis(ms as i64) {
+		Some(dt) => dt.format("%Y-%m-%d %H:%M:%S UTC").to_string(),
+		None => format!("{} ms (invalid timestamp)", ms),
+	}
 }
 
 /// Create linear vesting schedule
@@ -372,6 +389,15 @@ async fn handle_create(
 	let amount_planck = parse_amount(quantus_client, amount).await?;
 	let start_ms = parse_timestamp(start)?;
 	let end_ms = parse_timestamp(end)?;
+
+	// Validate timestamps
+	if end_ms <= start_ms {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"End timestamp ({}) must be after start timestamp ({})",
+			format_timestamp(end_ms),
+			format_timestamp(start_ms)
+		)));
+	}
 
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
@@ -425,6 +451,15 @@ async fn handle_create_cliff(
 	let amount_planck = parse_amount(quantus_client, amount).await?;
 	let cliff_ms = parse_timestamp(cliff)?;
 	let end_ms = parse_timestamp(end)?;
+
+	// Validate timestamps
+	if end_ms <= cliff_ms {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"End timestamp ({}) must be after cliff timestamp ({})",
+			format_timestamp(end_ms),
+			format_timestamp(cliff_ms)
+		)));
+	}
 
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
@@ -486,6 +521,15 @@ async fn handle_create_stepped(
 	let end_ms = parse_timestamp(end)?;
 	let step_duration_ms = step_days * 24 * 60 * 60 * 1000; // days to milliseconds
 
+	// Validate timestamps
+	if end_ms <= start_ms {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"End timestamp ({}) must be after start timestamp ({})",
+			format_timestamp(end_ms),
+			format_timestamp(start_ms)
+		)));
+	}
+
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
 
@@ -498,7 +542,7 @@ async fn handle_create_stepped(
 		step_duration_ms,
 	);
 
-	let total_duration_ms = end_ms - start_ms;
+	let total_duration_ms = end_ms - start_ms; // Safe now due to validation above
 	let num_steps = (total_duration_ms as f64 / step_duration_ms as f64).ceil() as u64;
 
 	log_verbose!("📋 Schedule parameters:");
@@ -851,6 +895,13 @@ async fn handle_calculate(
 	let amount_planck = parse_amount(quantus_client, amount).await?;
 	let (_, decimals) = get_chain_properties(quantus_client).await?;
 
+	// Validate duration
+	if duration_days == 0 {
+		return Err(crate::error::QuantusError::Generic(
+			"Duration must be greater than 0 days".to_string(),
+		));
+	}
+
 	log_print!("");
 	log_print!("{}", "Vesting Calculation".bright_cyan().bold());
 	log_print!("{}", "─".repeat(60).dimmed());
@@ -897,6 +948,14 @@ async fn handle_calculate(
 				)
 			})?;
 
+			// Validate cliff duration vs total duration
+			if cliff >= duration_days {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Cliff duration ({} days) must be less than total duration ({} days)",
+					cliff, duration_days
+				)));
+			}
+
 			log_print!("  {}: {}", "Type".bright_white(), "Linear with Cliff".bright_cyan());
 			log_print!(
 				"  {}: {}",
@@ -914,7 +973,7 @@ async fn handle_calculate(
 				format_balance(0, decimals).bright_red()
 			);
 
-			let vesting_duration = duration_days - cliff;
+			let vesting_duration = duration_days - cliff; // Safe now due to validation above
 			let vesting_duration_f = vesting_duration as f64;
 
 			for milestone in [0.25, 0.5, 0.75, 1.0] {
@@ -946,6 +1005,20 @@ async fn handle_calculate(
 					"--step-days is required for stepped type".to_string(),
 				)
 			})?;
+
+			// Validate step duration
+			if step == 0 {
+				return Err(crate::error::QuantusError::Generic(
+					"Step duration must be greater than 0 days".to_string(),
+				));
+			}
+
+			if step > duration_days {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Step duration ({} days) must be less than or equal to total duration ({} days)",
+					step, duration_days
+				)));
+			}
 
 			let num_steps = ((duration_days as f64) / (step as f64)).ceil() as u64;
 			let amount_per_step = amount_planck / num_steps as u128;
