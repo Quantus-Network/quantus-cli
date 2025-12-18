@@ -9,6 +9,7 @@ pub mod common;
 pub mod events;
 pub mod generic_call;
 pub mod high_security;
+pub mod merkle_airdrop;
 pub mod metadata;
 pub mod preimage;
 pub mod recovery;
@@ -105,6 +106,10 @@ pub enum Commands {
 	/// Treasury management commands
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
+
+	/// Merkle Airdrop management commands
+	#[command(subcommand)]
+	MerkleAirdrop(merkle_airdrop::MerkleAirdropCommands),
 
 	/// Vesting management commands
 	#[command(subcommand)]
@@ -294,6 +299,9 @@ pub async fn execute_command(
 			referenda::handle_referenda_command(referenda_cmd, node_url, finalized).await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, finalized).await,
+		Commands::MerkleAirdrop(merkle_airdrop_cmd) =>
+			merkle_airdrop::handle_merkle_airdrop_command(merkle_airdrop_cmd, node_url, finalized)
+				.await,
 		Commands::Vesting(vesting_cmd) =>
 			vesting::handle_vesting_command(vesting_cmd, node_url, finalized).await,
 		Commands::Runtime(runtime_cmd) =>

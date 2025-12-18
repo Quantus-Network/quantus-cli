@@ -69,6 +69,7 @@ jsonrpsee = { version = "0.24", features = ["client"] }
 
 # Needed for implementing custom Subxt hasher
 subxt-metadata = "0.43.0"
+sp-io = "38.0.0"
 
 [dev-dependencies]
 tempfile = "3.8"

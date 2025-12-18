@@ -223,7 +223,7 @@ pub async fn handle_vesting_command(
 	let quantus_client = QuantusClient::new(node_url).await?;
 
 	match command {
-		VestingCommands::Create { to, amount, start, end, from, password, password_file } => {
+		VestingCommands::Create { to, amount, start, end, from, password, password_file } =>
 			handle_create(
 				&quantus_client,
 				&to,
@@ -235,9 +235,8 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await
-		},
-		VestingCommands::CreateCliff { to, amount, cliff, end, from, password, password_file } => {
+			.await,
+		VestingCommands::CreateCliff { to, amount, cliff, end, from, password, password_file } =>
 			handle_create_cliff(
 				&quantus_client,
 				&to,
@@ -249,8 +248,7 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await
-		},
+			.await,
 		VestingCommands::CreateStepped {
 			to,
 			amount,
@@ -260,7 +258,7 @@ pub async fn handle_vesting_command(
 			from,
 			password,
 			password_file,
-		} => {
+		} =>
 			handle_create_stepped(
 				&quantus_client,
 				&to,
@@ -273,13 +271,11 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await
-		},
-		VestingCommands::Claim { schedule_id, from, password, password_file } => {
+			.await,
+		VestingCommands::Claim { schedule_id, from, password, password_file } =>
 			handle_claim(&quantus_client, schedule_id, &from, password, password_file, finalized)
-				.await
-		},
-		VestingCommands::ClaimAll { beneficiary, from, password, password_file } => {
+				.await,
+		VestingCommands::ClaimAll { beneficiary, from, password, password_file } =>
 			handle_claim_all(
 				&quantus_client,
 				&beneficiary,
@@ -288,24 +284,21 @@ pub async fn handle_vesting_command(
 				password_file,
 				finalized,
 			)
-			.await
-		},
-		VestingCommands::Cancel { schedule_id, from, password, password_file } => {
+			.await,
+		VestingCommands::Cancel { schedule_id, from, password, password_file } =>
 			handle_cancel(&quantus_client, schedule_id, &from, password, password_file, finalized)
-				.await
-		},
+				.await,
 		VestingCommands::Info { schedule_id } => handle_info(&quantus_client, schedule_id).await,
 		VestingCommands::List { address } => handle_list(&quantus_client, &address).await,
-		VestingCommands::ListCreated { creator } => {
-			handle_list_created(&quantus_client, &creator).await
-		},
+		VestingCommands::ListCreated { creator } =>
+			handle_list_created(&quantus_client, &creator).await,
 		VestingCommands::Calculate {
 			vesting_type,
 			amount,
 			duration_days,
 			cliff_days,
 			step_days,
-		} => {
+		} =>
 			handle_calculate(
 				&quantus_client,
 				&vesting_type,
@@ -314,8 +307,7 @@ pub async fn handle_vesting_command(
 				cliff_days,
 				step_days,
 			)
-			.await
-		},
+			.await,
 	}
 }
 
