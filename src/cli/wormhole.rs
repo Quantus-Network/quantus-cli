@@ -82,7 +82,7 @@ pub async fn handle_wormhole_command(
 			password,
 			password_file,
 			output,
-		} =>
+		} => {
 			generate_proof(
 				secret,
 				amount,
@@ -93,7 +93,8 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await,
+			.await
+		},
 	}
 }
 
@@ -125,8 +126,8 @@ async fn generate_proof(
 	})?;
 
 	// Parse exit account
-	let exit_account_id = if exit_account_str.starts_with("0x") {
-		let exit_account_bytes = hex::decode(&exit_account_str[2..]).map_err(|e| {
+	let exit_account_id = if let Some(exit_account) = exit_account_str.strip_prefix("0x") {
+		let exit_account_bytes = hex::decode(exit_account).map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Invalid exit account hex: {}", e))
 		})?;
 		if exit_account_bytes.len() != 32 {
