@@ -51,10 +51,10 @@ aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 # Quantus crypto dependencies
 qp-rusty-crystals-dilithium = { version = "2.0.0" }
 qp-rusty-crystals-hdwallet = { version = "1.0.0" }
-qp-poseidon = { version = "1.0.4", features = [
+qp-poseidon = { version = "1.0.5", features = [
 	"serde",
 ] }
-qp-poseidon-core = { version = "1.0.4", default-features = false, features = ["p2", "p3"] }
+qp-poseidon-core = { version = "1.0.5", default-features = false, features = ["p2", "p3"] }
 qp-dilithium-crypto = { version = "0.2.0", features = ["serde"] }
 
 # Blockchain and RPC client

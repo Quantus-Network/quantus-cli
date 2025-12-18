@@ -82,7 +82,7 @@ pub async fn handle_wormhole_command(
 			password,
 			password_file,
 			output,
-		} => {
+		} =>
 			generate_proof(
 				secret,
 				amount,
@@ -93,8 +93,7 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await
-		},
+			.await,
 	}
 }
 
