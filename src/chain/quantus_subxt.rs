@@ -1472,10 +1472,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							110u8, 84u8, 218u8, 161u8, 139u8, 110u8, 45u8, 69u8, 183u8, 176u8,
-							140u8, 28u8, 85u8, 162u8, 71u8, 249u8, 20u8, 199u8, 176u8, 1u8, 221u8,
-							1u8, 93u8, 139u8, 112u8, 210u8, 238u8, 210u8, 137u8, 153u8, 147u8,
-							72u8,
+							36u8, 0u8, 94u8, 147u8, 83u8, 82u8, 215u8, 8u8, 21u8, 10u8, 7u8, 147u8,
+							96u8, 221u8, 155u8, 247u8, 43u8, 60u8, 133u8, 126u8, 95u8, 157u8, 62u8,
+							197u8, 45u8, 255u8, 68u8, 90u8, 80u8, 93u8, 69u8, 19u8,
 						],
 					)
 				}
@@ -1493,10 +1492,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							204u8, 2u8, 212u8, 72u8, 18u8, 44u8, 72u8, 227u8, 27u8, 252u8, 27u8,
-							249u8, 21u8, 163u8, 191u8, 202u8, 4u8, 27u8, 150u8, 244u8, 230u8,
-							209u8, 108u8, 110u8, 220u8, 180u8, 195u8, 188u8, 240u8, 66u8, 133u8,
-							153u8,
+							248u8, 73u8, 146u8, 28u8, 146u8, 17u8, 102u8, 40u8, 64u8, 107u8, 186u8,
+							207u8, 222u8, 69u8, 233u8, 8u8, 220u8, 143u8, 85u8, 143u8, 163u8, 61u8,
+							188u8, 16u8, 210u8, 25u8, 198u8, 247u8, 227u8, 26u8, 108u8, 68u8,
 						],
 					)
 				}
@@ -1998,9 +1996,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				198u8, 239u8, 48u8, 247u8, 27u8, 175u8, 137u8, 166u8, 146u8, 55u8, 184u8, 217u8,
-				104u8, 165u8, 227u8, 74u8, 163u8, 253u8, 19u8, 101u8, 211u8, 65u8, 98u8, 136u8,
-				234u8, 101u8, 138u8, 172u8, 196u8, 7u8, 184u8, 149u8,
+				242u8, 184u8, 3u8, 129u8, 92u8, 206u8, 125u8, 16u8, 197u8, 139u8, 43u8, 167u8,
+				129u8, 159u8, 65u8, 180u8, 239u8, 245u8, 159u8, 42u8, 144u8, 153u8, 39u8, 201u8,
+				67u8, 93u8, 246u8, 84u8, 187u8, 180u8, 42u8, 128u8,
 			]
 	}
 	pub mod system {
@@ -3099,9 +3097,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							237u8, 8u8, 236u8, 144u8, 92u8, 39u8, 81u8, 167u8, 254u8, 168u8, 224u8,
-							166u8, 129u8, 197u8, 1u8, 153u8, 231u8, 133u8, 166u8, 173u8, 254u8,
-							71u8, 96u8, 151u8, 124u8, 127u8, 88u8, 7u8, 24u8, 101u8, 171u8, 198u8,
+							59u8, 104u8, 185u8, 170u8, 21u8, 34u8, 120u8, 200u8, 3u8, 182u8, 164u8,
+							170u8, 92u8, 25u8, 70u8, 161u8, 57u8, 163u8, 157u8, 2u8, 230u8, 48u8,
+							91u8, 194u8, 225u8, 17u8, 155u8, 151u8, 77u8, 109u8, 63u8, 0u8,
 						],
 					)
 				}
@@ -4941,9 +4939,10 @@ pub mod api {
 						"Holds",
 						(),
 						[
-							108u8, 118u8, 163u8, 86u8, 4u8, 174u8, 42u8, 210u8, 139u8, 171u8, 15u8,
-							242u8, 10u8, 4u8, 255u8, 205u8, 247u8, 61u8, 236u8, 127u8, 54u8, 175u8,
-							182u8, 131u8, 84u8, 129u8, 78u8, 242u8, 92u8, 143u8, 219u8, 35u8,
+							59u8, 181u8, 70u8, 167u8, 100u8, 227u8, 163u8, 207u8, 68u8, 124u8,
+							41u8, 213u8, 91u8, 80u8, 25u8, 29u8, 243u8, 176u8, 221u8, 126u8, 233u8,
+							135u8, 24u8, 20u8, 247u8, 198u8, 55u8, 188u8, 180u8, 157u8, 102u8,
+							110u8,
 						],
 					)
 				}
@@ -4965,9 +4964,10 @@ pub mod api {
 						"Holds",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							108u8, 118u8, 163u8, 86u8, 4u8, 174u8, 42u8, 210u8, 139u8, 171u8, 15u8,
-							242u8, 10u8, 4u8, 255u8, 205u8, 247u8, 61u8, 236u8, 127u8, 54u8, 175u8,
-							182u8, 131u8, 84u8, 129u8, 78u8, 242u8, 92u8, 143u8, 219u8, 35u8,
+							59u8, 181u8, 70u8, 167u8, 100u8, 227u8, 163u8, 207u8, 68u8, 124u8,
+							41u8, 213u8, 91u8, 80u8, 25u8, 29u8, 243u8, 176u8, 221u8, 126u8, 233u8,
+							135u8, 24u8, 20u8, 247u8, 198u8, 55u8, 188u8, 180u8, 157u8, 102u8,
+							110u8,
 						],
 					)
 				}
@@ -5463,10 +5463,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							253u8, 197u8, 139u8, 95u8, 151u8, 114u8, 110u8, 151u8, 160u8, 15u8,
-							243u8, 129u8, 93u8, 238u8, 91u8, 208u8, 198u8, 151u8, 23u8, 212u8,
-							54u8, 135u8, 49u8, 51u8, 139u8, 40u8, 63u8, 152u8, 59u8, 77u8, 237u8,
-							240u8,
+							184u8, 206u8, 250u8, 67u8, 55u8, 120u8, 253u8, 38u8, 253u8, 121u8,
+							132u8, 62u8, 100u8, 0u8, 207u8, 192u8, 253u8, 53u8, 212u8, 227u8,
+							116u8, 178u8, 14u8, 218u8, 217u8, 6u8, 32u8, 46u8, 124u8, 48u8, 8u8,
+							220u8,
 						],
 					)
 				}
@@ -5489,9 +5489,10 @@ pub mod api {
 							weight,
 						},
 						[
-							35u8, 22u8, 192u8, 184u8, 49u8, 180u8, 173u8, 189u8, 211u8, 213u8,
-							20u8, 189u8, 186u8, 193u8, 223u8, 165u8, 81u8, 64u8, 9u8, 22u8, 62u8,
-							188u8, 57u8, 160u8, 149u8, 156u8, 81u8, 18u8, 70u8, 195u8, 6u8, 94u8,
+							140u8, 206u8, 207u8, 150u8, 171u8, 152u8, 241u8, 64u8, 173u8, 229u8,
+							181u8, 24u8, 137u8, 213u8, 221u8, 102u8, 141u8, 109u8, 224u8, 52u8,
+							23u8, 248u8, 5u8, 107u8, 184u8, 162u8, 11u8, 100u8, 48u8, 158u8, 59u8,
+							69u8,
 						],
 					)
 				}
@@ -5529,9 +5530,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							130u8, 4u8, 94u8, 44u8, 207u8, 228u8, 28u8, 173u8, 110u8, 228u8, 203u8,
-							53u8, 42u8, 29u8, 253u8, 212u8, 105u8, 56u8, 137u8, 194u8, 34u8, 37u8,
-							94u8, 227u8, 98u8, 252u8, 35u8, 17u8, 226u8, 195u8, 18u8, 121u8,
+							122u8, 130u8, 97u8, 54u8, 89u8, 47u8, 57u8, 150u8, 220u8, 156u8, 224u8,
+							6u8, 187u8, 115u8, 212u8, 58u8, 148u8, 96u8, 130u8, 105u8, 121u8, 10u8,
+							47u8, 173u8, 245u8, 44u8, 36u8, 138u8, 173u8, 62u8, 83u8, 75u8,
 						],
 					)
 				}
@@ -6149,11 +6150,24 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
+				#[doc = "Create a linear vesting schedule with lazy funding"]
+				#[doc = ""]
+				#[doc = "# Arguments"]
+				#[doc = "* `origin` - The creator of the vesting schedule"]
+				#[doc = "* `beneficiary` - Who will receive the vested tokens"]
+				#[doc = "* `amount` - Total amount to vest"]
+				#[doc = "* `start` - When vesting begins"]
+				#[doc = "* `end` - When vesting completes"]
+				#[doc = "* `funding_account` - Account from which tokens will be claimed (lazy funding)"]
+				#[doc = ""]
+				#[doc = "Tokens are NOT transferred upfront. They remain in funding_account and are"]
+				#[doc = "automatically frozen to prevent spending. Tokens are transferred only when claimed."]
 				pub struct CreateVestingSchedule {
 					pub beneficiary: create_vesting_schedule::Beneficiary,
 					pub amount: create_vesting_schedule::Amount,
 					pub start: create_vesting_schedule::Start,
 					pub end: create_vesting_schedule::End,
+					pub funding_account: create_vesting_schedule::FundingAccount,
 				}
 				pub mod create_vesting_schedule {
 					use super::runtime_types;
@@ -6161,6 +6175,7 @@ pub mod api {
 					pub type Amount = ::core::primitive::u128;
 					pub type Start = ::core::primitive::u64;
 					pub type End = ::core::primitive::u64;
+					pub type FundingAccount = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CreateVestingSchedule {
 					const PALLET: &'static str = "Vesting";
@@ -6177,6 +6192,11 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
+				#[doc = "Claim vested tokens (lazy transfer from funding_account)"]
+				#[doc = ""]
+				#[doc = "Tokens are transferred from funding_account to beneficiary."]
+				#[doc = "If funding_account has insufficient balance, a partial claim is executed."]
+				#[doc = "Frozen funds are automatically released during claim."]
 				pub struct Claim {
 					pub schedule_id: claim::ScheduleId,
 				}
@@ -6199,6 +6219,11 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
+				#[doc = "Cancel a vesting schedule"]
+				#[doc = ""]
+				#[doc = "Claims any unlocked tokens for the beneficiary, then cancels the schedule."]
+				#[doc = "Remaining obligations are removed and frozen funds are released."]
+				#[doc = "No refund needed - funds never left funding_account."]
 				pub struct CancelVestingSchedule {
 					pub schedule_id: cancel_vesting_schedule::ScheduleId,
 				}
@@ -6221,11 +6246,15 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
+				#[doc = "Create a vesting schedule with cliff (lazy funding)"]
+				#[doc = ""]
+				#[doc = "Nothing unlocks until cliff, then linear vesting begins."]
 				pub struct CreateVestingScheduleWithCliff {
 					pub beneficiary: create_vesting_schedule_with_cliff::Beneficiary,
 					pub amount: create_vesting_schedule_with_cliff::Amount,
 					pub cliff: create_vesting_schedule_with_cliff::Cliff,
 					pub end: create_vesting_schedule_with_cliff::End,
+					pub funding_account: create_vesting_schedule_with_cliff::FundingAccount,
 				}
 				pub mod create_vesting_schedule_with_cliff {
 					use super::runtime_types;
@@ -6233,6 +6262,7 @@ pub mod api {
 					pub type Amount = ::core::primitive::u128;
 					pub type Cliff = ::core::primitive::u64;
 					pub type End = ::core::primitive::u64;
+					pub type FundingAccount = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CreateVestingScheduleWithCliff {
 					const PALLET: &'static str = "Vesting";
@@ -6249,12 +6279,16 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
+				#[doc = "Create a stepped vesting schedule (lazy funding)"]
+				#[doc = ""]
+				#[doc = "Tokens unlock in discrete steps at regular intervals."]
 				pub struct CreateSteppedVestingSchedule {
 					pub beneficiary: create_stepped_vesting_schedule::Beneficiary,
 					pub amount: create_stepped_vesting_schedule::Amount,
 					pub start: create_stepped_vesting_schedule::Start,
 					pub end: create_stepped_vesting_schedule::End,
 					pub step_duration: create_stepped_vesting_schedule::StepDuration,
+					pub funding_account: create_stepped_vesting_schedule::FundingAccount,
 				}
 				pub mod create_stepped_vesting_schedule {
 					use super::runtime_types;
@@ -6263,6 +6297,7 @@ pub mod api {
 					pub type Start = ::core::primitive::u64;
 					pub type End = ::core::primitive::u64;
 					pub type StepDuration = ::core::primitive::u64;
+					pub type FundingAccount = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CreateSteppedVestingSchedule {
 					const PALLET: &'static str = "Vesting";
@@ -6271,26 +6306,50 @@ pub mod api {
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
+				#[doc = "Create a linear vesting schedule with lazy funding"]
+				#[doc = ""]
+				#[doc = "# Arguments"]
+				#[doc = "* `origin` - The creator of the vesting schedule"]
+				#[doc = "* `beneficiary` - Who will receive the vested tokens"]
+				#[doc = "* `amount` - Total amount to vest"]
+				#[doc = "* `start` - When vesting begins"]
+				#[doc = "* `end` - When vesting completes"]
+				#[doc = "* `funding_account` - Account from which tokens will be claimed (lazy funding)"]
+				#[doc = ""]
+				#[doc = "Tokens are NOT transferred upfront. They remain in funding_account and are"]
+				#[doc = "automatically frozen to prevent spending. Tokens are transferred only when claimed."]
 				pub fn create_vesting_schedule(
 					&self,
 					beneficiary: types::create_vesting_schedule::Beneficiary,
 					amount: types::create_vesting_schedule::Amount,
 					start: types::create_vesting_schedule::Start,
 					end: types::create_vesting_schedule::End,
+					funding_account: types::create_vesting_schedule::FundingAccount,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
 					types::CreateVestingSchedule,
 				> {
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Vesting",
 						"create_vesting_schedule",
-						types::CreateVestingSchedule { beneficiary, amount, start, end },
+						types::CreateVestingSchedule {
+							beneficiary,
+							amount,
+							start,
+							end,
+							funding_account,
+						},
 						[
-							117u8, 76u8, 99u8, 105u8, 93u8, 244u8, 18u8, 212u8, 58u8, 219u8, 204u8,
-							7u8, 65u8, 65u8, 143u8, 173u8, 15u8, 183u8, 49u8, 97u8, 111u8, 75u8,
-							59u8, 133u8, 85u8, 45u8, 171u8, 112u8, 177u8, 167u8, 225u8, 220u8,
+							76u8, 123u8, 89u8, 81u8, 103u8, 245u8, 63u8, 178u8, 238u8, 235u8,
+							239u8, 38u8, 59u8, 7u8, 214u8, 122u8, 174u8, 70u8, 17u8, 113u8, 251u8,
+							253u8, 220u8, 240u8, 177u8, 48u8, 20u8, 81u8, 30u8, 47u8, 249u8, 209u8,
 						],
 					)
 				}
+				#[doc = "Claim vested tokens (lazy transfer from funding_account)"]
+				#[doc = ""]
+				#[doc = "Tokens are transferred from funding_account to beneficiary."]
+				#[doc = "If funding_account has insufficient balance, a partial claim is executed."]
+				#[doc = "Frozen funds are automatically released during claim."]
 				pub fn claim(
 					&self,
 					schedule_id: types::claim::ScheduleId,
@@ -6306,6 +6365,11 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = "Cancel a vesting schedule"]
+				#[doc = ""]
+				#[doc = "Claims any unlocked tokens for the beneficiary, then cancels the schedule."]
+				#[doc = "Remaining obligations are removed and frozen funds are released."]
+				#[doc = "No refund needed - funds never left funding_account."]
 				pub fn cancel_vesting_schedule(
 					&self,
 					schedule_id: types::cancel_vesting_schedule::ScheduleId,
@@ -6324,26 +6388,39 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = "Create a vesting schedule with cliff (lazy funding)"]
+				#[doc = ""]
+				#[doc = "Nothing unlocks until cliff, then linear vesting begins."]
 				pub fn create_vesting_schedule_with_cliff(
 					&self,
 					beneficiary: types::create_vesting_schedule_with_cliff::Beneficiary,
 					amount: types::create_vesting_schedule_with_cliff::Amount,
 					cliff: types::create_vesting_schedule_with_cliff::Cliff,
 					end: types::create_vesting_schedule_with_cliff::End,
+					funding_account: types::create_vesting_schedule_with_cliff::FundingAccount,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
 					types::CreateVestingScheduleWithCliff,
 				> {
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Vesting",
 						"create_vesting_schedule_with_cliff",
-						types::CreateVestingScheduleWithCliff { beneficiary, amount, cliff, end },
+						types::CreateVestingScheduleWithCliff {
+							beneficiary,
+							amount,
+							cliff,
+							end,
+							funding_account,
+						},
 						[
-							76u8, 25u8, 198u8, 221u8, 136u8, 16u8, 78u8, 94u8, 236u8, 233u8, 165u8,
-							139u8, 198u8, 167u8, 205u8, 113u8, 161u8, 123u8, 175u8, 130u8, 134u8,
-							90u8, 124u8, 211u8, 29u8, 229u8, 73u8, 25u8, 245u8, 103u8, 61u8, 91u8,
+							73u8, 91u8, 148u8, 128u8, 93u8, 100u8, 8u8, 10u8, 173u8, 47u8, 79u8,
+							2u8, 245u8, 90u8, 205u8, 251u8, 154u8, 69u8, 248u8, 151u8, 187u8, 49u8,
+							220u8, 38u8, 142u8, 206u8, 119u8, 188u8, 97u8, 114u8, 187u8, 83u8,
 						],
 					)
 				}
+				#[doc = "Create a stepped vesting schedule (lazy funding)"]
+				#[doc = ""]
+				#[doc = "Tokens unlock in discrete steps at regular intervals."]
 				pub fn create_stepped_vesting_schedule(
 					&self,
 					beneficiary: types::create_stepped_vesting_schedule::Beneficiary,
@@ -6351,6 +6428,7 @@ pub mod api {
 					start: types::create_stepped_vesting_schedule::Start,
 					end: types::create_stepped_vesting_schedule::End,
 					step_duration: types::create_stepped_vesting_schedule::StepDuration,
+					funding_account: types::create_stepped_vesting_schedule::FundingAccount,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
 					types::CreateSteppedVestingSchedule,
 				> {
@@ -6363,12 +6441,13 @@ pub mod api {
 							start,
 							end,
 							step_duration,
+							funding_account,
 						},
 						[
-							105u8, 201u8, 213u8, 124u8, 227u8, 40u8, 182u8, 67u8, 112u8, 169u8,
-							195u8, 56u8, 235u8, 16u8, 194u8, 150u8, 166u8, 239u8, 56u8, 173u8,
-							206u8, 172u8, 120u8, 253u8, 194u8, 191u8, 2u8, 101u8, 97u8, 83u8,
-							127u8, 220u8,
+							188u8, 233u8, 174u8, 150u8, 82u8, 176u8, 59u8, 175u8, 235u8, 230u8,
+							174u8, 110u8, 69u8, 185u8, 241u8, 126u8, 118u8, 23u8, 141u8, 116u8,
+							235u8, 207u8, 167u8, 222u8, 44u8, 195u8, 21u8, 150u8, 104u8, 224u8,
+							119u8, 104u8,
 						],
 					)
 				}
@@ -6385,20 +6464,23 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct VestingScheduleCreated(
-				pub vesting_schedule_created::Field0,
-				pub vesting_schedule_created::Field1,
-				pub vesting_schedule_created::Field2,
-				pub vesting_schedule_created::Field3,
-				pub vesting_schedule_created::Field4,
-			);
+			#[doc = "Vesting schedule created [beneficiary, amount, start, end, schedule_id, funding_account]"]
+			pub struct VestingScheduleCreated {
+				pub beneficiary: vesting_schedule_created::Beneficiary,
+				pub amount: vesting_schedule_created::Amount,
+				pub start: vesting_schedule_created::Start,
+				pub end: vesting_schedule_created::End,
+				pub schedule_id: vesting_schedule_created::ScheduleId,
+				pub funding_account: vesting_schedule_created::FundingAccount,
+			}
 			pub mod vesting_schedule_created {
 				use super::runtime_types;
-				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Field1 = ::core::primitive::u128;
-				pub type Field2 = ::core::primitive::u64;
-				pub type Field3 = ::core::primitive::u64;
-				pub type Field4 = ::core::primitive::u64;
+				pub type Beneficiary = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Amount = ::core::primitive::u128;
+				pub type Start = ::core::primitive::u64;
+				pub type End = ::core::primitive::u64;
+				pub type ScheduleId = ::core::primitive::u64;
+				pub type FundingAccount = ::subxt::ext::subxt_core::utils::AccountId32;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingScheduleCreated {
 				const PALLET: &'static str = "Vesting";
@@ -6411,16 +6493,17 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct TokensClaimed(
-				pub tokens_claimed::Field0,
-				pub tokens_claimed::Field1,
-				pub tokens_claimed::Field2,
-			);
+			#[doc = "Tokens claimed [beneficiary, amount, schedule_id]"]
+			pub struct TokensClaimed {
+				pub beneficiary: tokens_claimed::Beneficiary,
+				pub amount: tokens_claimed::Amount,
+				pub schedule_id: tokens_claimed::ScheduleId,
+			}
 			pub mod tokens_claimed {
 				use super::runtime_types;
-				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Field1 = ::core::primitive::u128;
-				pub type Field2 = ::core::primitive::u64;
+				pub type Beneficiary = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Amount = ::core::primitive::u128;
+				pub type ScheduleId = ::core::primitive::u64;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for TokensClaimed {
 				const PALLET: &'static str = "Vesting";
@@ -6433,18 +6516,90 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct VestingScheduleCancelled(
-				pub vesting_schedule_cancelled::Field0,
-				pub vesting_schedule_cancelled::Field1,
-			);
+			#[doc = "Partial claim (insufficient funds available) [beneficiary, claimed, remaining_unlocked, schedule_id]"]
+			pub struct PartialClaim {
+				pub beneficiary: partial_claim::Beneficiary,
+				pub claimed: partial_claim::Claimed,
+				pub remaining_unlocked: partial_claim::RemainingUnlocked,
+				pub schedule_id: partial_claim::ScheduleId,
+			}
+			pub mod partial_claim {
+				use super::runtime_types;
+				pub type Beneficiary = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Claimed = ::core::primitive::u128;
+				pub type RemainingUnlocked = ::core::primitive::u128;
+				pub type ScheduleId = ::core::primitive::u64;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for PartialClaim {
+				const PALLET: &'static str = "Vesting";
+				const EVENT: &'static str = "PartialClaim";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Vesting schedule cancelled [creator, schedule_id]"]
+			pub struct VestingScheduleCancelled {
+				pub creator: vesting_schedule_cancelled::Creator,
+				pub schedule_id: vesting_schedule_cancelled::ScheduleId,
+			}
 			pub mod vesting_schedule_cancelled {
 				use super::runtime_types;
-				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Field1 = ::core::primitive::u64;
+				pub type Creator = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type ScheduleId = ::core::primitive::u64;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for VestingScheduleCancelled {
 				const PALLET: &'static str = "Vesting";
 				const EVENT: &'static str = "VestingScheduleCancelled";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Funds frozen for vesting obligations [account, amount, total_frozen]"]
+			pub struct FundsFrozen {
+				pub account: funds_frozen::Account,
+				pub amount: funds_frozen::Amount,
+				pub total_frozen: funds_frozen::TotalFrozen,
+			}
+			pub mod funds_frozen {
+				use super::runtime_types;
+				pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Amount = ::core::primitive::u128;
+				pub type TotalFrozen = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for FundsFrozen {
+				const PALLET: &'static str = "Vesting";
+				const EVENT: &'static str = "FundsFrozen";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Funds unfrozen (obligations decreased) [account, amount, total_frozen]"]
+			pub struct FundsUnfrozen {
+				pub account: funds_unfrozen::Account,
+				pub amount: funds_unfrozen::Amount,
+				pub total_frozen: funds_unfrozen::TotalFrozen,
+			}
+			pub mod funds_unfrozen {
+				use super::runtime_types;
+				pub type Account = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Amount = ::core::primitive::u128;
+				pub type TotalFrozen = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for FundsUnfrozen {
+				const PALLET: &'static str = "Vesting";
+				const EVENT: &'static str = "FundsUnfrozen";
 			}
 		}
 		pub mod storage {
@@ -6470,6 +6625,16 @@ pub mod api {
 					pub type BeneficiaryScheduleCount = ::core::primitive::u32;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
+				pub mod pending_obligations {
+					use super::runtime_types;
+					pub type PendingObligations = ::core::primitive::u128;
+					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
+				pub mod frozen_balance {
+					use super::runtime_types;
+					pub type FrozenBalance = ::core::primitive::u128;
+					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
 			}
 			pub struct StorageApi;
 			impl StorageApi {
@@ -6487,10 +6652,10 @@ pub mod api {
 						"VestingSchedules",
 						(),
 						[
-							249u8, 29u8, 202u8, 69u8, 251u8, 21u8, 125u8, 13u8, 99u8, 104u8, 22u8,
-							32u8, 137u8, 228u8, 172u8, 118u8, 255u8, 175u8, 130u8, 145u8, 162u8,
-							63u8, 204u8, 37u8, 245u8, 124u8, 110u8, 55u8, 190u8, 185u8, 228u8,
-							64u8,
+							87u8, 0u8, 154u8, 122u8, 234u8, 16u8, 139u8, 236u8, 116u8, 251u8,
+							125u8, 237u8, 220u8, 245u8, 190u8, 102u8, 207u8, 126u8, 232u8, 157u8,
+							142u8, 181u8, 48u8, 132u8, 127u8, 81u8, 196u8, 34u8, 12u8, 216u8, 1u8,
+							132u8,
 						],
 					)
 				}
@@ -6511,10 +6676,10 @@ pub mod api {
 						"VestingSchedules",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							249u8, 29u8, 202u8, 69u8, 251u8, 21u8, 125u8, 13u8, 99u8, 104u8, 22u8,
-							32u8, 137u8, 228u8, 172u8, 118u8, 255u8, 175u8, 130u8, 145u8, 162u8,
-							63u8, 204u8, 37u8, 245u8, 124u8, 110u8, 55u8, 190u8, 185u8, 228u8,
-							64u8,
+							87u8, 0u8, 154u8, 122u8, 234u8, 16u8, 139u8, 236u8, 116u8, 251u8,
+							125u8, 237u8, 220u8, 245u8, 190u8, 102u8, 207u8, 126u8, 232u8, 157u8,
+							142u8, 181u8, 48u8, 132u8, 127u8, 81u8, 196u8, 34u8, 12u8, 216u8, 1u8,
+							132u8,
 						],
 					)
 				}
@@ -6583,6 +6748,102 @@ pub mod api {
 							136u8, 181u8, 245u8, 221u8, 148u8, 123u8, 182u8, 101u8, 241u8, 29u8,
 							207u8, 242u8, 177u8, 170u8, 24u8, 20u8, 250u8, 43u8, 162u8, 179u8,
 							166u8,
+						],
+					)
+				}
+				#[doc = " Total pending obligations per funding account"]
+				#[doc = " This tracks how much each account has promised to vest (not yet fully claimed)"]
+				pub fn pending_obligations_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::pending_obligations::PendingObligations,
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Vesting",
+						"PendingObligations",
+						(),
+						[
+							221u8, 45u8, 36u8, 140u8, 185u8, 160u8, 219u8, 182u8, 105u8, 4u8,
+							217u8, 205u8, 148u8, 59u8, 120u8, 184u8, 0u8, 59u8, 31u8, 126u8, 197u8,
+							227u8, 137u8, 29u8, 26u8, 192u8, 113u8, 93u8, 188u8, 5u8, 165u8, 126u8,
+						],
+					)
+				}
+				#[doc = " Total pending obligations per funding account"]
+				#[doc = " This tracks how much each account has promised to vest (not yet fully claimed)"]
+				pub fn pending_obligations(
+					&self,
+					_0: types::pending_obligations::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::pending_obligations::Param0,
+					>,
+					types::pending_obligations::PendingObligations,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Vesting",
+						"PendingObligations",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							221u8, 45u8, 36u8, 140u8, 185u8, 160u8, 219u8, 182u8, 105u8, 4u8,
+							217u8, 205u8, 148u8, 59u8, 120u8, 184u8, 0u8, 59u8, 31u8, 126u8, 197u8,
+							227u8, 137u8, 29u8, 26u8, 192u8, 113u8, 93u8, 188u8, 5u8, 165u8, 126u8,
+						],
+					)
+				}
+				#[doc = " Amount currently frozen per funding account"]
+				#[doc = " This tracks how much is actually frozen (may be less than obligations if insufficient funds)"]
+				pub fn frozen_balance_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::frozen_balance::FrozenBalance,
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Vesting",
+						"FrozenBalance",
+						(),
+						[
+							2u8, 147u8, 15u8, 4u8, 89u8, 233u8, 149u8, 55u8, 63u8, 221u8, 172u8,
+							37u8, 148u8, 83u8, 232u8, 171u8, 234u8, 242u8, 125u8, 98u8, 152u8,
+							121u8, 234u8, 36u8, 19u8, 125u8, 226u8, 104u8, 0u8, 158u8, 101u8,
+							253u8,
+						],
+					)
+				}
+				#[doc = " Amount currently frozen per funding account"]
+				#[doc = " This tracks how much is actually frozen (may be less than obligations if insufficient funds)"]
+				pub fn frozen_balance(
+					&self,
+					_0: types::frozen_balance::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::frozen_balance::Param0,
+					>,
+					types::frozen_balance::FrozenBalance,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Vesting",
+						"FrozenBalance",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							2u8, 147u8, 15u8, 4u8, 89u8, 233u8, 149u8, 55u8, 63u8, 221u8, 172u8,
+							37u8, 148u8, 83u8, 232u8, 171u8, 234u8, 242u8, 125u8, 98u8, 152u8,
+							121u8, 234u8, 36u8, 19u8, 125u8, 226u8, 104u8, 0u8, 158u8, 101u8,
+							253u8,
 						],
 					)
 				}
@@ -7473,10 +7734,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							173u8, 230u8, 174u8, 217u8, 236u8, 118u8, 170u8, 112u8, 210u8, 0u8,
-							87u8, 78u8, 70u8, 154u8, 193u8, 89u8, 57u8, 214u8, 145u8, 122u8, 3u8,
-							193u8, 53u8, 114u8, 231u8, 99u8, 105u8, 183u8, 216u8, 139u8, 208u8,
-							18u8,
+							77u8, 10u8, 4u8, 184u8, 111u8, 43u8, 192u8, 16u8, 248u8, 42u8, 168u8,
+							126u8, 226u8, 116u8, 44u8, 113u8, 78u8, 168u8, 85u8, 186u8, 47u8,
+							135u8, 7u8, 135u8, 85u8, 163u8, 86u8, 5u8, 99u8, 46u8, 247u8, 178u8,
 						],
 					)
 				}
@@ -7518,9 +7778,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							175u8, 152u8, 228u8, 32u8, 44u8, 167u8, 234u8, 171u8, 206u8, 59u8,
-							173u8, 8u8, 83u8, 184u8, 68u8, 206u8, 244u8, 162u8, 47u8, 106u8, 83u8,
-							36u8, 50u8, 203u8, 172u8, 0u8, 100u8, 81u8, 202u8, 224u8, 223u8, 246u8,
+							84u8, 206u8, 12u8, 15u8, 14u8, 98u8, 149u8, 225u8, 109u8, 79u8, 110u8,
+							36u8, 58u8, 235u8, 127u8, 212u8, 98u8, 103u8, 12u8, 2u8, 141u8, 104u8,
+							84u8, 178u8, 207u8, 49u8, 181u8, 174u8, 234u8, 153u8, 102u8, 106u8,
 						],
 					)
 				}
@@ -7559,10 +7819,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							192u8, 141u8, 109u8, 151u8, 52u8, 217u8, 55u8, 117u8, 133u8, 137u8,
-							93u8, 139u8, 110u8, 141u8, 159u8, 3u8, 219u8, 128u8, 161u8, 116u8,
-							163u8, 98u8, 69u8, 175u8, 158u8, 170u8, 150u8, 246u8, 138u8, 232u8,
-							22u8, 180u8,
+							213u8, 145u8, 25u8, 130u8, 126u8, 137u8, 67u8, 83u8, 148u8, 96u8, 1u8,
+							45u8, 237u8, 78u8, 235u8, 105u8, 140u8, 145u8, 57u8, 239u8, 254u8,
+							89u8, 165u8, 94u8, 122u8, 141u8, 201u8, 38u8, 176u8, 40u8, 228u8, 42u8,
 						],
 					)
 				}
@@ -7587,10 +7846,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							217u8, 2u8, 187u8, 135u8, 212u8, 186u8, 132u8, 84u8, 249u8, 105u8,
-							229u8, 106u8, 197u8, 14u8, 12u8, 110u8, 207u8, 135u8, 152u8, 100u8,
-							145u8, 199u8, 114u8, 237u8, 27u8, 33u8, 244u8, 163u8, 29u8, 9u8, 140u8,
-							54u8,
+							27u8, 27u8, 253u8, 247u8, 89u8, 206u8, 175u8, 236u8, 8u8, 46u8, 1u8,
+							82u8, 48u8, 174u8, 222u8, 221u8, 10u8, 215u8, 9u8, 44u8, 221u8, 255u8,
+							169u8, 228u8, 172u8, 32u8, 15u8, 64u8, 179u8, 112u8, 176u8, 106u8,
 						],
 					)
 				}
@@ -8618,9 +8876,10 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							130u8, 29u8, 84u8, 76u8, 150u8, 225u8, 88u8, 20u8, 152u8, 27u8, 168u8,
-							251u8, 150u8, 58u8, 84u8, 196u8, 53u8, 205u8, 153u8, 180u8, 238u8,
-							249u8, 96u8, 190u8, 112u8, 62u8, 4u8, 118u8, 87u8, 223u8, 172u8, 235u8,
+							187u8, 61u8, 145u8, 69u8, 62u8, 57u8, 202u8, 182u8, 180u8, 104u8, 48u8,
+							4u8, 156u8, 226u8, 116u8, 160u8, 59u8, 45u8, 129u8, 105u8, 187u8,
+							213u8, 193u8, 150u8, 193u8, 51u8, 112u8, 25u8, 133u8, 153u8, 145u8,
+							188u8,
 						],
 					)
 				}
@@ -8650,10 +8909,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							97u8, 150u8, 234u8, 190u8, 160u8, 210u8, 163u8, 130u8, 229u8, 18u8,
-							165u8, 29u8, 46u8, 207u8, 236u8, 107u8, 110u8, 231u8, 42u8, 182u8,
-							183u8, 174u8, 48u8, 110u8, 217u8, 219u8, 93u8, 22u8, 38u8, 1u8, 228u8,
-							180u8,
+							242u8, 79u8, 34u8, 124u8, 240u8, 104u8, 142u8, 50u8, 163u8, 234u8,
+							120u8, 13u8, 22u8, 220u8, 113u8, 171u8, 43u8, 36u8, 6u8, 202u8, 252u8,
+							183u8, 39u8, 36u8, 33u8, 44u8, 118u8, 108u8, 205u8, 213u8, 49u8, 193u8,
 						],
 					)
 				}
@@ -8679,10 +8937,10 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							77u8, 142u8, 71u8, 239u8, 12u8, 52u8, 160u8, 145u8, 47u8, 32u8, 232u8,
-							254u8, 182u8, 99u8, 42u8, 54u8, 200u8, 153u8, 104u8, 122u8, 206u8,
-							240u8, 155u8, 125u8, 110u8, 169u8, 151u8, 202u8, 43u8, 43u8, 182u8,
-							116u8,
+							228u8, 55u8, 193u8, 176u8, 66u8, 244u8, 153u8, 251u8, 37u8, 119u8,
+							38u8, 0u8, 103u8, 90u8, 48u8, 116u8, 241u8, 23u8, 39u8, 166u8, 237u8,
+							143u8, 105u8, 13u8, 100u8, 228u8, 96u8, 124u8, 247u8, 5u8, 125u8,
+							223u8,
 						],
 					)
 				}
@@ -8705,9 +8963,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							191u8, 201u8, 33u8, 81u8, 148u8, 140u8, 206u8, 13u8, 20u8, 122u8,
-							209u8, 66u8, 178u8, 177u8, 41u8, 198u8, 217u8, 15u8, 133u8, 1u8, 10u8,
-							90u8, 68u8, 107u8, 24u8, 108u8, 206u8, 172u8, 82u8, 190u8, 34u8, 62u8,
+							148u8, 150u8, 98u8, 210u8, 33u8, 248u8, 101u8, 118u8, 37u8, 54u8, 65u8,
+							249u8, 68u8, 103u8, 40u8, 71u8, 231u8, 4u8, 43u8, 133u8, 246u8, 50u8,
+							36u8, 231u8, 62u8, 229u8, 201u8, 210u8, 114u8, 57u8, 248u8, 195u8,
 						],
 					)
 				}
@@ -8733,10 +8991,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							223u8, 182u8, 88u8, 54u8, 213u8, 67u8, 144u8, 243u8, 10u8, 157u8, 79u8,
-							37u8, 1u8, 164u8, 164u8, 114u8, 159u8, 231u8, 179u8, 212u8, 11u8,
-							224u8, 232u8, 213u8, 152u8, 200u8, 245u8, 26u8, 236u8, 102u8, 145u8,
-							0u8,
+							230u8, 217u8, 162u8, 220u8, 33u8, 119u8, 84u8, 32u8, 15u8, 90u8, 29u8,
+							123u8, 32u8, 135u8, 61u8, 22u8, 183u8, 21u8, 4u8, 190u8, 43u8, 50u8,
+							94u8, 185u8, 138u8, 185u8, 6u8, 244u8, 178u8, 203u8, 140u8, 18u8,
 						],
 					)
 				}
@@ -8759,10 +9016,9 @@ pub mod api {
 							weight,
 						},
 						[
-							226u8, 20u8, 215u8, 99u8, 238u8, 233u8, 175u8, 236u8, 194u8, 130u8,
-							250u8, 240u8, 18u8, 52u8, 183u8, 146u8, 117u8, 253u8, 1u8, 239u8,
-							165u8, 169u8, 153u8, 10u8, 57u8, 120u8, 120u8, 208u8, 22u8, 147u8,
-							21u8, 34u8,
+							87u8, 88u8, 84u8, 58u8, 12u8, 155u8, 243u8, 114u8, 244u8, 229u8, 143u8,
+							181u8, 137u8, 185u8, 86u8, 99u8, 169u8, 252u8, 18u8, 178u8, 102u8,
+							79u8, 235u8, 145u8, 83u8, 32u8, 128u8, 87u8, 202u8, 255u8, 145u8, 19u8,
 						],
 					)
 				}
@@ -8802,9 +9058,10 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							203u8, 240u8, 69u8, 118u8, 218u8, 32u8, 162u8, 12u8, 29u8, 152u8,
-							199u8, 248u8, 55u8, 150u8, 33u8, 170u8, 3u8, 98u8, 250u8, 239u8, 136u8,
-							43u8, 59u8, 92u8, 144u8, 218u8, 250u8, 64u8, 196u8, 34u8, 80u8, 68u8,
+							197u8, 47u8, 62u8, 195u8, 163u8, 51u8, 198u8, 37u8, 46u8, 153u8, 21u8,
+							132u8, 160u8, 34u8, 147u8, 39u8, 116u8, 216u8, 159u8, 164u8, 204u8,
+							38u8, 129u8, 49u8, 222u8, 116u8, 82u8, 225u8, 193u8, 154u8, 72u8,
+							155u8,
 						],
 					)
 				}
@@ -8827,9 +9084,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							109u8, 239u8, 38u8, 131u8, 210u8, 170u8, 58u8, 89u8, 248u8, 200u8,
-							160u8, 156u8, 3u8, 71u8, 17u8, 230u8, 26u8, 187u8, 62u8, 103u8, 198u8,
-							45u8, 179u8, 203u8, 254u8, 206u8, 46u8, 35u8, 67u8, 62u8, 14u8, 97u8,
+							177u8, 76u8, 249u8, 176u8, 11u8, 115u8, 232u8, 185u8, 119u8, 12u8,
+							28u8, 63u8, 125u8, 69u8, 239u8, 0u8, 78u8, 34u8, 176u8, 13u8, 124u8,
+							22u8, 126u8, 177u8, 72u8, 47u8, 241u8, 192u8, 17u8, 94u8, 20u8, 254u8,
 						],
 					)
 				}
@@ -16435,9 +16692,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							254u8, 215u8, 236u8, 23u8, 13u8, 183u8, 53u8, 84u8, 78u8, 98u8, 96u8,
-							195u8, 196u8, 32u8, 81u8, 150u8, 35u8, 36u8, 136u8, 141u8, 250u8, 34u8,
-							217u8, 233u8, 46u8, 101u8, 158u8, 53u8, 68u8, 171u8, 62u8, 152u8,
+							69u8, 138u8, 117u8, 74u8, 240u8, 158u8, 87u8, 96u8, 47u8, 255u8, 145u8,
+							216u8, 179u8, 153u8, 148u8, 192u8, 174u8, 73u8, 152u8, 220u8, 140u8,
+							241u8, 163u8, 193u8, 192u8, 239u8, 83u8, 109u8, 133u8, 104u8, 197u8,
+							59u8,
 						],
 					)
 				}
@@ -20826,10 +21084,9 @@ pub mod api {
 						"Holds",
 						(),
 						[
-							131u8, 85u8, 98u8, 45u8, 101u8, 28u8, 94u8, 4u8, 1u8, 137u8, 126u8,
-							129u8, 241u8, 99u8, 206u8, 145u8, 177u8, 135u8, 27u8, 52u8, 122u8,
-							94u8, 241u8, 29u8, 253u8, 154u8, 158u8, 229u8, 208u8, 129u8, 29u8,
-							41u8,
+							40u8, 29u8, 64u8, 155u8, 57u8, 127u8, 223u8, 152u8, 79u8, 202u8, 146u8,
+							35u8, 8u8, 201u8, 73u8, 97u8, 214u8, 235u8, 169u8, 65u8, 226u8, 144u8,
+							195u8, 221u8, 169u8, 237u8, 142u8, 157u8, 84u8, 217u8, 49u8, 252u8,
 						],
 					)
 				}
@@ -20851,10 +21108,9 @@ pub mod api {
 						"Holds",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							131u8, 85u8, 98u8, 45u8, 101u8, 28u8, 94u8, 4u8, 1u8, 137u8, 126u8,
-							129u8, 241u8, 99u8, 206u8, 145u8, 177u8, 135u8, 27u8, 52u8, 122u8,
-							94u8, 241u8, 29u8, 253u8, 154u8, 158u8, 229u8, 208u8, 129u8, 29u8,
-							41u8,
+							40u8, 29u8, 64u8, 155u8, 57u8, 127u8, 223u8, 152u8, 79u8, 202u8, 146u8,
+							35u8, 8u8, 201u8, 73u8, 97u8, 214u8, 235u8, 169u8, 65u8, 226u8, 144u8,
+							195u8, 221u8, 169u8, 237u8, 142u8, 157u8, 84u8, 217u8, 49u8, 252u8,
 						],
 					)
 				}
@@ -20885,10 +21141,9 @@ pub mod api {
 							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
 						),
 						[
-							131u8, 85u8, 98u8, 45u8, 101u8, 28u8, 94u8, 4u8, 1u8, 137u8, 126u8,
-							129u8, 241u8, 99u8, 206u8, 145u8, 177u8, 135u8, 27u8, 52u8, 122u8,
-							94u8, 241u8, 29u8, 253u8, 154u8, 158u8, 229u8, 208u8, 129u8, 29u8,
-							41u8,
+							40u8, 29u8, 64u8, 155u8, 57u8, 127u8, 223u8, 152u8, 79u8, 202u8, 146u8,
+							35u8, 8u8, 201u8, 73u8, 97u8, 214u8, 235u8, 169u8, 65u8, 226u8, 144u8,
+							195u8, 221u8, 169u8, 237u8, 142u8, 157u8, 84u8, 217u8, 49u8, 252u8,
 						],
 					)
 				}
@@ -26886,30 +27141,61 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
+					#[doc = "Create a linear vesting schedule with lazy funding"]
+					#[doc = ""]
+					#[doc = "# Arguments"]
+					#[doc = "* `origin` - The creator of the vesting schedule"]
+					#[doc = "* `beneficiary` - Who will receive the vested tokens"]
+					#[doc = "* `amount` - Total amount to vest"]
+					#[doc = "* `start` - When vesting begins"]
+					#[doc = "* `end` - When vesting completes"]
+					#[doc = "* `funding_account` - Account from which tokens will be claimed (lazy funding)"]
+					#[doc = ""]
+					#[doc = "Tokens are NOT transferred upfront. They remain in funding_account and are"]
+					#[doc = "automatically frozen to prevent spending. Tokens are transferred only when claimed."]
 					create_vesting_schedule {
 						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
 						amount: ::core::primitive::u128,
 						start: ::core::primitive::u64,
 						end: ::core::primitive::u64,
+						funding_account: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 1)]
+					#[doc = "Claim vested tokens (lazy transfer from funding_account)"]
+					#[doc = ""]
+					#[doc = "Tokens are transferred from funding_account to beneficiary."]
+					#[doc = "If funding_account has insufficient balance, a partial claim is executed."]
+					#[doc = "Frozen funds are automatically released during claim."]
 					claim { schedule_id: ::core::primitive::u64 },
 					#[codec(index = 2)]
+					#[doc = "Cancel a vesting schedule"]
+					#[doc = ""]
+					#[doc = "Claims any unlocked tokens for the beneficiary, then cancels the schedule."]
+					#[doc = "Remaining obligations are removed and frozen funds are released."]
+					#[doc = "No refund needed - funds never left funding_account."]
 					cancel_vesting_schedule { schedule_id: ::core::primitive::u64 },
 					#[codec(index = 3)]
+					#[doc = "Create a vesting schedule with cliff (lazy funding)"]
+					#[doc = ""]
+					#[doc = "Nothing unlocks until cliff, then linear vesting begins."]
 					create_vesting_schedule_with_cliff {
 						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
 						amount: ::core::primitive::u128,
 						cliff: ::core::primitive::u64,
 						end: ::core::primitive::u64,
+						funding_account: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 4)]
+					#[doc = "Create a stepped vesting schedule (lazy funding)"]
+					#[doc = ""]
+					#[doc = "Tokens unlock in discrete steps at regular intervals."]
 					create_stepped_vesting_schedule {
 						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
 						amount: ::core::primitive::u128,
 						start: ::core::primitive::u64,
 						end: ::core::primitive::u64,
 						step_duration: ::core::primitive::u64,
+						funding_account: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 				}
 				#[derive(
@@ -26935,6 +27221,16 @@ pub mod api {
 					NotCreator,
 					#[codec(index = 4)]
 					ScheduleNotFound,
+					#[codec(index = 5)]
+					NothingToClaim,
+					#[codec(index = 6)]
+					NoFundsAvailable,
+					#[codec(index = 7)]
+					ArithmeticError,
+					#[codec(index = 8)]
+					InsufficientFrozen,
+					#[codec(index = 9)]
+					InvalidStepDuration,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26950,24 +27246,65 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
-					VestingScheduleCreated(
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u128,
-						::core::primitive::u64,
-						::core::primitive::u64,
-						::core::primitive::u64,
-					),
+					#[doc = "Vesting schedule created [beneficiary, amount, start, end, schedule_id, funding_account]"]
+					VestingScheduleCreated {
+						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+						start: ::core::primitive::u64,
+						end: ::core::primitive::u64,
+						schedule_id: ::core::primitive::u64,
+						funding_account: ::subxt::ext::subxt_core::utils::AccountId32,
+					},
 					#[codec(index = 1)]
-					TokensClaimed(
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u128,
-						::core::primitive::u64,
-					),
+					#[doc = "Tokens claimed [beneficiary, amount, schedule_id]"]
+					TokensClaimed {
+						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+						schedule_id: ::core::primitive::u64,
+					},
 					#[codec(index = 2)]
-					VestingScheduleCancelled(
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u64,
-					),
+					#[doc = "Partial claim (insufficient funds available) [beneficiary, claimed, remaining_unlocked, schedule_id]"]
+					PartialClaim {
+						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
+						claimed: ::core::primitive::u128,
+						remaining_unlocked: ::core::primitive::u128,
+						schedule_id: ::core::primitive::u64,
+					},
+					#[codec(index = 3)]
+					#[doc = "Vesting schedule cancelled [creator, schedule_id]"]
+					VestingScheduleCancelled {
+						creator: ::subxt::ext::subxt_core::utils::AccountId32,
+						schedule_id: ::core::primitive::u64,
+					},
+					#[codec(index = 4)]
+					#[doc = "Funds frozen for vesting obligations [account, amount, total_frozen]"]
+					FundsFrozen {
+						account: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+						total_frozen: ::core::primitive::u128,
+					},
+					#[codec(index = 5)]
+					#[doc = "Funds unfrozen (obligations decreased) [account, amount, total_frozen]"]
+					FundsUnfrozen {
+						account: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+						total_frozen: ::core::primitive::u128,
+					},
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum HoldReason {
+					#[codec(index = 0)]
+					VestingObligation,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26989,6 +27326,7 @@ pub mod api {
 					pub end: _2,
 					pub vesting_type: runtime_types::pallet_vesting::pallet::VestingType<_2>,
 					pub claimed: _1,
+					pub funding_account: _0,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -27331,6 +27669,8 @@ pub mod api {
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub enum RuntimeHoldReason {
+				#[codec(index = 8)]
+				Vesting(runtime_types::pallet_vesting::pallet::HoldReason),
 				#[codec(index = 9)]
 				Preimage(runtime_types::pallet_preimage::pallet::HoldReason),
 				#[codec(index = 13)]

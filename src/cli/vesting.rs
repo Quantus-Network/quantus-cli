@@ -15,7 +15,7 @@ use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 /// Vesting management commands
 #[derive(Subcommand, Debug)]
 pub enum VestingCommands {
-	/// Create a linear vesting schedule
+	/// Create a linear vesting schedule (with lazy funding)
 	Create {
 		/// Beneficiary address or wallet name
 		#[arg(long)]
@@ -33,6 +33,10 @@ pub enum VestingCommands {
 		#[arg(long)]
 		end: String,
 
+		/// Funding account - where tokens will be claimed from (defaults to creator's account)
+		#[arg(long)]
+		funding_account: Option<String>,
+
 		/// Wallet name to sign with (creator)
 		#[arg(long)]
 		from: String,
@@ -46,7 +50,7 @@ pub enum VestingCommands {
 		password_file: Option<String>,
 	},
 
-	/// Create a vesting schedule with cliff
+	/// Create a vesting schedule with cliff (with lazy funding)
 	CreateCliff {
 		/// Beneficiary address or wallet name
 		#[arg(long)]
@@ -64,6 +68,10 @@ pub enum VestingCommands {
 		#[arg(long)]
 		end: String,
 
+		/// Funding account - where tokens will be claimed from (defaults to creator's account)
+		#[arg(long)]
+		funding_account: Option<String>,
+
 		/// Wallet name to sign with (creator)
 		#[arg(long)]
 		from: String,
@@ -77,7 +85,7 @@ pub enum VestingCommands {
 		password_file: Option<String>,
 	},
 
-	/// Create a stepped vesting schedule (unlocks in equal portions)
+	/// Create a stepped vesting schedule (unlocks in equal portions, with lazy funding)
 	CreateStepped {
 		/// Beneficiary address or wallet name
 		#[arg(long)]
@@ -98,6 +106,10 @@ pub enum VestingCommands {
 		/// Step duration in days (e.g., "30" for monthly)
 		#[arg(long)]
 		step_days: u64,
+
+		/// Funding account - where tokens will be claimed from (defaults to creator's account)
+		#[arg(long)]
+		funding_account: Option<String>,
 
 		/// Wallet name to sign with (creator)
 		#[arg(long)]
@@ -212,6 +224,20 @@ pub enum VestingCommands {
 		#[arg(long)]
 		step_days: Option<u64>,
 	},
+
+	/// Query pending vesting obligations for an account
+	PendingObligations {
+		/// Account address or wallet name
+		#[arg(long)]
+		account: String,
+	},
+
+	/// Query frozen balance for an account (held for vesting obligations)
+	FrozenBalance {
+		/// Account address or wallet name
+		#[arg(long)]
+		account: String,
+	},
 }
 
 /// Handle vesting commands
@@ -223,26 +249,46 @@ pub async fn handle_vesting_command(
 	let quantus_client = QuantusClient::new(node_url).await?;
 
 	match command {
-		VestingCommands::Create { to, amount, start, end, from, password, password_file } =>
+		VestingCommands::Create {
+			to,
+			amount,
+			start,
+			end,
+			funding_account,
+			from,
+			password,
+			password_file,
+		} =>
 			handle_create(
 				&quantus_client,
 				&to,
 				&amount,
 				&start,
 				&end,
+				funding_account.as_deref(),
 				&from,
 				password,
 				password_file,
 				finalized,
 			)
 			.await,
-		VestingCommands::CreateCliff { to, amount, cliff, end, from, password, password_file } =>
+		VestingCommands::CreateCliff {
+			to,
+			amount,
+			cliff,
+			end,
+			funding_account,
+			from,
+			password,
+			password_file,
+		} =>
 			handle_create_cliff(
 				&quantus_client,
 				&to,
 				&amount,
 				&cliff,
 				&end,
+				funding_account.as_deref(),
 				&from,
 				password,
 				password_file,
@@ -255,6 +301,7 @@ pub async fn handle_vesting_command(
 			start,
 			end,
 			step_days,
+			funding_account,
 			from,
 			password,
 			password_file,
@@ -266,6 +313,7 @@ pub async fn handle_vesting_command(
 				&start,
 				&end,
 				step_days,
+				funding_account.as_deref(),
 				&from,
 				password,
 				password_file,
@@ -308,6 +356,10 @@ pub async fn handle_vesting_command(
 				step_days,
 			)
 			.await,
+		VestingCommands::PendingObligations { account } =>
+			handle_pending_obligations(&quantus_client, &account).await,
+		VestingCommands::FrozenBalance { account } =>
+			handle_frozen_balance(&quantus_client, &account).await,
 	}
 }
 
@@ -367,12 +419,13 @@ async fn handle_create(
 	amount: &str,
 	start: &str,
 	end: &str,
+	funding_account: Option<&str>,
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
 	finalized: bool,
 ) -> Result<()> {
-	log_info!("🔒 Creating linear vesting schedule...");
+	log_info!("🔒 Creating linear vesting schedule (lazy funding)...");
 
 	// Parse parameters
 	let beneficiary = resolve_address(to)?;
@@ -393,6 +446,16 @@ async fn handle_create(
 
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	let creator_account_id = keypair.to_account_id_32();
+	let creator_address = creator_account_id.to_ss58check();
+
+	// Resolve funding account (defaults to creator)
+	let funding_addr = match funding_account {
+		Some(addr) => resolve_address(addr)?,
+		None => creator_address.clone(),
+	};
+	let funding_account_id = parse_address_to_account_id(&funding_addr)?;
+	let funding_subxt = account_id_sp_to_subxt(&funding_account_id);
 
 	// Build transaction
 	let tx = quantus_subxt::api::tx().vesting().create_vesting_schedule(
@@ -400,10 +463,12 @@ async fn handle_create(
 		amount_planck,
 		start_ms,
 		end_ms,
+		funding_subxt,
 	);
 
 	log_verbose!("📋 Schedule parameters:");
 	log_verbose!("   Beneficiary: {}", beneficiary.bright_cyan());
+	log_verbose!("   Funding Account: {}", funding_addr.bright_magenta());
 	log_verbose!(
 		"   Amount: {} ({})",
 		format_token_amount(quantus_client, amount_planck).await?,
@@ -416,6 +481,7 @@ async fn handle_create(
 	submit_transaction(quantus_client, &keypair, tx, None, finalized).await?;
 
 	log_success!("✅ Linear vesting schedule created successfully!");
+	log_info!("💡 Tokens will be claimed from: {}", funding_addr.bright_magenta());
 	log_info!("💡 Use 'quantus vesting list --address {}' to see the schedule", to);
 
 	Ok(())
@@ -429,12 +495,13 @@ async fn handle_create_cliff(
 	amount: &str,
 	cliff: &str,
 	end: &str,
+	funding_account: Option<&str>,
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
 	finalized: bool,
 ) -> Result<()> {
-	log_info!("🔒 Creating vesting schedule with cliff...");
+	log_info!("🔒 Creating vesting schedule with cliff (lazy funding)...");
 
 	// Parse parameters
 	let beneficiary = resolve_address(to)?;
@@ -455,6 +522,16 @@ async fn handle_create_cliff(
 
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	let creator_account_id = keypair.to_account_id_32();
+	let creator_address = creator_account_id.to_ss58check();
+
+	// Resolve funding account (defaults to creator)
+	let funding_addr = match funding_account {
+		Some(addr) => resolve_address(addr)?,
+		None => creator_address.clone(),
+	};
+	let funding_account_id = parse_address_to_account_id(&funding_addr)?;
+	let funding_subxt = account_id_sp_to_subxt(&funding_account_id);
 
 	// Build transaction
 	let tx = quantus_subxt::api::tx().vesting().create_vesting_schedule_with_cliff(
@@ -462,10 +539,12 @@ async fn handle_create_cliff(
 		amount_planck,
 		cliff_ms,
 		end_ms,
+		funding_subxt,
 	);
 
 	log_verbose!("📋 Schedule parameters:");
 	log_verbose!("   Beneficiary: {}", beneficiary.bright_cyan());
+	log_verbose!("   Funding Account: {}", funding_addr.bright_magenta());
 	log_verbose!(
 		"   Amount: {} ({})",
 		format_token_amount(quantus_client, amount_planck).await?,
@@ -483,6 +562,7 @@ async fn handle_create_cliff(
 		"💡 No tokens will be available until: {}",
 		format_timestamp(cliff_ms).bright_yellow()
 	);
+	log_info!("💡 Tokens will be claimed from: {}", funding_addr.bright_magenta());
 	log_info!("💡 Use 'quantus vesting list --address {}' to see the schedule", to);
 
 	Ok(())
@@ -497,12 +577,13 @@ async fn handle_create_stepped(
 	start: &str,
 	end: &str,
 	step_days: u64,
+	funding_account: Option<&str>,
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
 	finalized: bool,
 ) -> Result<()> {
-	log_info!("🔒 Creating stepped vesting schedule...");
+	log_info!("🔒 Creating stepped vesting schedule (lazy funding)...");
 
 	// Parse parameters
 	let beneficiary = resolve_address(to)?;
@@ -524,6 +605,16 @@ async fn handle_create_stepped(
 
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	let creator_account_id = keypair.to_account_id_32();
+	let creator_address = creator_account_id.to_ss58check();
+
+	// Resolve funding account (defaults to creator)
+	let funding_addr = match funding_account {
+		Some(addr) => resolve_address(addr)?,
+		None => creator_address.clone(),
+	};
+	let funding_account_id = parse_address_to_account_id(&funding_addr)?;
+	let funding_subxt = account_id_sp_to_subxt(&funding_account_id);
 
 	// Build transaction
 	let tx = quantus_subxt::api::tx().vesting().create_stepped_vesting_schedule(
@@ -532,6 +623,7 @@ async fn handle_create_stepped(
 		start_ms,
 		end_ms,
 		step_duration_ms,
+		funding_subxt,
 	);
 
 	let total_duration_ms = end_ms - start_ms; // Safe now due to validation above
@@ -539,6 +631,7 @@ async fn handle_create_stepped(
 
 	log_verbose!("📋 Schedule parameters:");
 	log_verbose!("   Beneficiary: {}", beneficiary.bright_cyan());
+	log_verbose!("   Funding Account: {}", funding_addr.bright_magenta());
 	log_verbose!(
 		"   Amount: {} ({})",
 		format_token_amount(quantus_client, amount_planck).await?,
@@ -555,6 +648,7 @@ async fn handle_create_stepped(
 
 	log_success!("✅ Stepped vesting schedule created successfully!");
 	log_info!("💡 Tokens will unlock in ~{} steps every {} days", num_steps, step_days);
+	log_info!("💡 Tokens will be claimed from: {}", funding_addr.bright_magenta());
 	log_info!("💡 Use 'quantus vesting list --address {}' to see the schedule", to);
 
 	Ok(())
@@ -705,6 +799,11 @@ async fn handle_info(quantus_client: &QuantusClient, schedule_id: u64) -> Result
 	log_print!("  {}: {}", "Creator".bright_white(), account_id_to_ss58(&schedule.creator));
 	log_print!("  {}: {}", "Beneficiary".bright_white(), account_id_to_ss58(&schedule.beneficiary));
 	log_print!(
+		"  {}: {}",
+		"Funding Account".bright_white(),
+		account_id_to_ss58(&schedule.funding_account).bright_magenta()
+	);
+	log_print!(
 		"  {}: {} ({})",
 		"Total Amount".bright_white(),
 		format_balance(schedule.amount, decimals).bright_green(),
@@ -722,6 +821,43 @@ async fn handle_info(quantus_client: &QuantusClient, schedule_id: u64) -> Result
 		format_balance(schedule.amount.saturating_sub(schedule.claimed), decimals).bright_magenta(),
 		schedule.amount.saturating_sub(schedule.claimed)
 	);
+
+	log_print!("");
+
+	// Funding account info
+	log_print!("  {}", "Funding Status".bright_white().bold());
+	let funding_addr = account_id_to_ss58(&schedule.funding_account);
+
+	// Query pending obligations and frozen balance
+	let pending_obligations = get_pending_obligations(quantus_client, &funding_addr).await?;
+	let frozen_balance = get_frozen_balance(quantus_client, &funding_addr).await?;
+
+	log_print!(
+		"  {}: {} ({})",
+		"Pending Obligations".bright_white(),
+		format_balance(pending_obligations, decimals).bright_yellow(),
+		pending_obligations
+	);
+	log_print!(
+		"  {}: {} ({})",
+		"Frozen Balance".bright_white(),
+		format_balance(frozen_balance, decimals).bright_cyan(),
+		frozen_balance
+	);
+
+	let unfrozen = pending_obligations.saturating_sub(frozen_balance);
+	if unfrozen > 0 {
+		log_print!(
+			"  {}: {} ({})",
+			"Unfrozen Obligations".bright_white(),
+			format_balance(unfrozen, decimals).bright_red(),
+			unfrozen
+		);
+		log_print!(
+			"  ⚠️  {}",
+			"Some obligations are not yet frozen (waiting for funds)".bright_yellow()
+		);
+	}
 
 	log_print!("");
 
@@ -1227,4 +1363,134 @@ fn format_vesting_type(
 			format!("Stepped ({}d)", days)
 		},
 	}
+}
+
+/// Get pending obligations for an account
+async fn get_pending_obligations(quantus_client: &QuantusClient, address: &str) -> Result<u128> {
+	use quantus_subxt::api;
+
+	let account_id = parse_address_to_account_id(address)?;
+	let account_subxt = account_id_sp_to_subxt(&account_id);
+
+	let latest_block = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block);
+
+	let obligations_addr = api::storage().vesting().pending_obligations(account_subxt);
+	let obligations = storage_at.fetch_or_default(&obligations_addr).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!(
+			"Failed to fetch pending obligations: {}",
+			e
+		))
+	})?;
+
+	Ok(obligations)
+}
+
+/// Get frozen balance for an account
+async fn get_frozen_balance(quantus_client: &QuantusClient, address: &str) -> Result<u128> {
+	use quantus_subxt::api;
+
+	let account_id = parse_address_to_account_id(address)?;
+	let account_subxt = account_id_sp_to_subxt(&account_id);
+
+	let latest_block = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block);
+
+	let frozen_addr = api::storage().vesting().frozen_balance(account_subxt);
+	let frozen = storage_at.fetch_or_default(&frozen_addr).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to fetch frozen balance: {}", e))
+	})?;
+
+	Ok(frozen)
+}
+
+/// Handle pending obligations query
+async fn handle_pending_obligations(quantus_client: &QuantusClient, account: &str) -> Result<()> {
+	log_info!("🔍 Querying pending vesting obligations for {}...", account.bright_cyan());
+
+	let resolved_address = resolve_address(account)?;
+	let obligations = get_pending_obligations(quantus_client, &resolved_address).await?;
+	let (symbol, decimals) = get_chain_properties(quantus_client).await?;
+
+	log_print!("");
+	log_print!("{}", "Pending Vesting Obligations".bright_cyan().bold());
+	log_print!("{}", "─".repeat(60).dimmed());
+	log_print!("  {}: {}", "Account".bright_white(), resolved_address.bright_cyan());
+	log_print!(
+		"  {}: {} {}",
+		"Obligations".bright_white(),
+		format_balance(obligations, decimals).bright_yellow(),
+		symbol.dimmed()
+	);
+	log_print!("  {}: {}", "Raw Amount".bright_white(), obligations.to_string().dimmed());
+
+	if obligations == 0 {
+		log_print!("");
+		log_print!("  ℹ️  No pending vesting obligations");
+	} else {
+		log_print!("");
+		log_print!(
+			"  💡 This account has promised to vest {} {} to beneficiaries",
+			format_balance(obligations, decimals).bright_yellow(),
+			symbol
+		);
+	}
+
+	log_print!("");
+
+	Ok(())
+}
+
+/// Handle frozen balance query
+async fn handle_frozen_balance(quantus_client: &QuantusClient, account: &str) -> Result<()> {
+	log_info!("🔍 Querying frozen balance for {}...", account.bright_cyan());
+
+	let resolved_address = resolve_address(account)?;
+	let frozen = get_frozen_balance(quantus_client, &resolved_address).await?;
+	let obligations = get_pending_obligations(quantus_client, &resolved_address).await?;
+	let (symbol, decimals) = get_chain_properties(quantus_client).await?;
+
+	log_print!("");
+	log_print!("{}", "Frozen Balance Status".bright_cyan().bold());
+	log_print!("{}", "─".repeat(60).dimmed());
+	log_print!("  {}: {}", "Account".bright_white(), resolved_address.bright_cyan());
+	log_print!(
+		"  {}: {} {}",
+		"Frozen (Held)".bright_white(),
+		format_balance(frozen, decimals).bright_cyan(),
+		symbol.dimmed()
+	);
+	log_print!(
+		"  {}: {} {}",
+		"Total Obligations".bright_white(),
+		format_balance(obligations, decimals).bright_yellow(),
+		symbol.dimmed()
+	);
+
+	let unfrozen = obligations.saturating_sub(frozen);
+	if unfrozen > 0 {
+		log_print!(
+			"  {}: {} {}",
+			"Unfrozen".bright_white(),
+			format_balance(unfrozen, decimals).bright_red(),
+			symbol.dimmed()
+		);
+		log_print!("");
+		log_print!(
+			"  ⚠️  {} {} obligations are not yet frozen",
+			format_balance(unfrozen, decimals).bright_red(),
+			symbol
+		);
+		log_print!("  💡 Auto-freeze will activate when funds are available");
+	} else if frozen > 0 {
+		log_print!("");
+		log_print!("  ✅ All obligations are fully frozen");
+	} else {
+		log_print!("");
+		log_print!("  ℹ️  No frozen balance or obligations");
+	}
+
+	log_print!("");
+
+	Ok(())
 }
