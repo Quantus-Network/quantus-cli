@@ -150,12 +150,6 @@ where
 
 	loop {
 		attempt += 1;
-
-		crate::log_print!(
-			"submit transaction with wait for transaction: {}",
-			execution_mode.wait_for_transaction
-		);
-
 		// Get fresh nonce for each attempt, or increment if we have a previous nonce
 		let nonce = if let Some(prev_nonce) = current_nonce {
 			// After first failure, try with incremented nonce
