@@ -240,11 +240,11 @@ where
 					let error_msg = format!("{e:?}");
 
 					// Check if it's a retryable error
-					let is_retryable = error_msg.contains("Priority is too low")
-						|| error_msg.contains("Transaction is outdated")
-						|| error_msg.contains("Transaction is temporarily banned")
-						|| error_msg.contains("Transaction has a bad signature")
-						|| error_msg.contains("Invalid Transaction");
+					let is_retryable = error_msg.contains("Priority is too low") ||
+						error_msg.contains("Transaction is outdated") ||
+						error_msg.contains("Transaction is temporarily banned") ||
+						error_msg.contains("Transaction has a bad signature") ||
+						error_msg.contains("Invalid Transaction");
 
 					if is_retryable && attempt < 5 {
 						log_verbose!(
@@ -400,11 +400,10 @@ async fn wait_tx_inclusion(
 		crate::log_verbose!("   Transaction status: {:?} (elapsed: {}s)", status, elapsed_secs);
 
 		match status {
-			TxStatus::Validated => {
+			TxStatus::Validated =>
 				if let Some(ref pb) = spinner {
 					pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
-				}
-			},
+				},
 			TxStatus::InBestBlock(block_hash) => {
 				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
 				if finalized {

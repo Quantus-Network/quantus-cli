@@ -22,9 +22,8 @@ pub async fn decode_preimage(
 
 	let content = match preimage_result {
 		Ok(Some(bounded_vec)) => bounded_vec.0,
-		Ok(None) => {
-			return Err(QuantusError::Generic(format!("Preimage not found for hash {:?}", hash)))
-		},
+		Ok(None) =>
+			return Err(QuantusError::Generic(format!("Preimage not found for hash {:?}", hash))),
 		Err(e) => return Err(QuantusError::Generic(format!("Error fetching preimage: {:?}", e))),
 	};
 
