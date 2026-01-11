@@ -429,7 +429,7 @@ pub async fn handle_tech_collective_command(
 
 			// Get actual member list
 			match get_member_list(&quantus_client).await {
-				Ok(members) =>
+				Ok(members) => {
 					if members.is_empty() {
 						log_print!("📭 No members in Tech Collective");
 					} else {
@@ -443,7 +443,8 @@ pub async fn handle_tech_collective_command(
 								member.to_quantus_ss58().bright_green()
 							);
 						}
-					},
+					}
+				},
 				Err(e) => {
 					log_verbose!("⚠️  Failed to get member list: {:?}", e);
 					// Fallback to member count

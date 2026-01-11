@@ -65,8 +65,8 @@ impl QuantusClient {
 		}
 
 		// Provide helpful hints for common URL issues
-		if node_url.starts_with("ws://") &&
-			(node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm"))
+		if node_url.starts_with("ws://")
+			&& (node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm"))
 		{
 			log_verbose!(
 				"💡 Hint: Remote nodes typically require secure WebSocket connections (wss://)"

@@ -42,7 +42,7 @@ struct Cli {
 	finalized_tx: bool,
 
 	/// Wait for transaction validation/inclusion before returning
-	/// Default: false (fire and forget - return immediately with hash)
+	/// Default: false
 	#[arg(long, global = true, default_value = "false")]
 	wait_for_transaction: bool,
 }

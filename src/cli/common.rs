@@ -151,6 +151,11 @@ where
 	loop {
 		attempt += 1;
 
+		crate::log_print!(
+			"submit transaction with wait for transaction: {}",
+			execution_mode.wait_for_transaction
+		);
+
 		// Get fresh nonce for each attempt, or increment if we have a previous nonce
 		let nonce = if let Some(prev_nonce) = current_nonce {
 			// After first failure, try with incremented nonce
@@ -191,13 +196,13 @@ where
 		}
 
 		// Try to get chain parameters from the client
-		let genesis_hash = quantus_client.get_genesis_hash().await?;
-		let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
+		// let genesis_hash = quantus_client.get_genesis_hash().await?;
+		// let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
 
-		log_verbose!("🔍 Chain parameters:");
-		log_verbose!("   Genesis hash: {:?}", genesis_hash);
-		log_verbose!("   Spec version: {}", spec_version);
-		log_verbose!("   Transaction version: {}", transaction_version);
+		// log_verbose!("🔍 Chain parameters:");
+		// log_verbose!("   Genesis hash: {:?}", genesis_hash);
+		// log_verbose!("   Spec version: {}", spec_version);
+		// log_verbose!("   Transaction version: {}", transaction_version);
 
 		// For now, just use the default params
 		let params = params_builder.build();
@@ -217,55 +222,69 @@ where
 		log_verbose!("🔍 Additional debugging:");
 		log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
 
-		// Submit the transaction with fresh nonce and optional tip
-		match quantus_client
-			.client()
-			.tx()
-			.sign_and_submit_then_watch(&call, &signer, params)
-			.await
-		{
-			Ok(mut tx_progress) => {
-				crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
+		if execution_mode.wait_for_transaction {
+			match quantus_client
+				.client()
+				.tx()
+				.sign_and_submit_then_watch(&call, &signer, params)
+				.await
+			{
+				Ok(mut tx_progress) => {
+					crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
 
-				let tx_hash = tx_progress.extrinsic_hash();
+					let tx_hash = tx_progress.extrinsic_hash();
 
-				if !execution_mode.wait_for_transaction {
+					if !execution_mode.wait_for_transaction {
+						return Ok(tx_hash);
+					}
+
+					wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
+
 					return Ok(tx_hash);
-				}
+				},
+				Err(e) => {
+					let error_msg = format!("{e:?}");
 
-				wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
+					// Check if it's a retryable error
+					let is_retryable = error_msg.contains("Priority is too low")
+						|| error_msg.contains("Transaction is outdated")
+						|| error_msg.contains("Transaction is temporarily banned")
+						|| error_msg.contains("Transaction has a bad signature")
+						|| error_msg.contains("Invalid Transaction");
 
-				return Ok(tx_hash);
-			},
-			Err(e) => {
-				let error_msg = format!("{e:?}");
+					if is_retryable && attempt < 5 {
+						log_verbose!(
+							"⚠️  Transaction error detected (attempt {}/5): {}",
+							attempt,
+							error_msg
+						);
 
-				// Check if it's a retryable error
-				let is_retryable = error_msg.contains("Priority is too low") ||
-					error_msg.contains("Transaction is outdated") ||
-					error_msg.contains("Transaction is temporarily banned") ||
-					error_msg.contains("Transaction has a bad signature") ||
-					error_msg.contains("Invalid Transaction");
-
-				if is_retryable && attempt < 5 {
-					log_verbose!(
-						"⚠️  Transaction error detected (attempt {}/5): {}",
-						attempt,
-						error_msg
-					);
-
-					// Exponential backoff: 2s, 4s, 8s, 16s
-					let delay = std::cmp::min(2u64.pow(attempt as u32), 16);
-					log_verbose!("⏳ Waiting {} seconds before retry...", delay);
-					tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
-					continue;
-				} else {
-					log_verbose!("❌ Final error after {} attempts: {}", attempt, error_msg);
+						// Exponential backoff: 2s, 4s, 8s, 16s
+						let delay = std::cmp::min(2u64.pow(attempt as u32), 16);
+						log_verbose!("⏳ Waiting {} seconds before retry...", delay);
+						tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+						continue;
+					} else {
+						log_verbose!("❌ Final error after {} attempts: {}", attempt, error_msg);
+						return Err(crate::error::QuantusError::NetworkError(format!(
+							"Failed to submit transaction: {e:?}"
+						)));
+					}
+				},
+			}
+		} else {
+			match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
+				Ok(tx_hash) => {
+					crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+					return Ok(tx_hash);
+				},
+				Err(e) => {
+					log_error!("❌ Failed to submit transaction: {e:?}");
 					return Err(crate::error::QuantusError::NetworkError(format!(
 						"Failed to submit transaction: {e:?}"
 					)));
-				}
-			},
+				},
+			}
 		}
 	}
 }
@@ -309,30 +328,42 @@ where
 	log_verbose!("🔢 Using manual nonce: {}", nonce);
 	log_verbose!("📤 Submitting transaction with manual nonce...");
 
+	crate::log_print!("submit with wait for transaction: {}", execution_mode.wait_for_transaction);
 	// Submit the transaction with manual nonce
-	match quantus_client
-		.client()
-		.tx()
-		.sign_and_submit_then_watch(&call, &signer, params)
-		.await
-	{
-		Ok(mut tx_progress) => {
-			let tx_hash = tx_progress.extrinsic_hash();
-			log_verbose!("✅ Transaction submitted successfully: {:?}", tx_hash);
 
-			if !execution_mode.wait_for_transaction {
-				return Ok(tx_hash);
-			}
-
-			wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
-			Ok(tx_hash)
-		},
-		Err(e) => {
-			log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
-			Err(crate::error::QuantusError::NetworkError(format!(
-				"Failed to submit transaction with nonce {nonce}: {e:?}"
-			)))
-		},
+	if execution_mode.wait_for_transaction {
+		match quantus_client
+			.client()
+			.tx()
+			.sign_and_submit_then_watch(&call, &signer, params)
+			.await
+		{
+			Ok(mut tx_progress) => {
+				let tx_hash = tx_progress.extrinsic_hash();
+				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+				wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
+				Ok(tx_hash)
+			},
+			Err(e) => {
+				log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
+				Err(crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit transaction with nonce {nonce}: {e:?}"
+				)))
+			},
+		}
+	} else {
+		match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
+			Ok(tx_hash) => {
+				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+				Ok(tx_hash)
+			},
+			Err(e) => {
+				log_error!("❌ Failed to submit transaction: {e:?}");
+				Err(crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit transaction: {e:?}"
+				)))
+			},
+		}
 	}
 }
 
@@ -375,10 +406,11 @@ async fn wait_tx_inclusion(
 		crate::log_verbose!("   Transaction status: {:?} (elapsed: {}s)", status, elapsed_secs);
 
 		match status {
-			TxStatus::Validated =>
+			TxStatus::Validated => {
 				if let Some(ref pb) = spinner {
 					pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
-				},
+				}
+			},
 			TxStatus::InBestBlock(block_hash) => {
 				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
 				if finalized {

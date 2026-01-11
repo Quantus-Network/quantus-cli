@@ -253,8 +253,9 @@ pub async fn handle_reversible_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		ReversibleCommands::ListPending { address, from, password, password_file } =>
-			list_pending_transactions(&quantus_client, address, from, password, password_file).await,
+		ReversibleCommands::ListPending { address, from, password, password_file } => {
+			list_pending_transactions(&quantus_client, address, from, password, password_file).await
+		},
 		ReversibleCommands::ScheduleTransfer { to, amount, from, password, password_file } => {
 			// Parse and validate the amount
 			let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
