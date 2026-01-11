@@ -318,7 +318,9 @@ pub async fn handle_recovery_command(
 				quantus_client.client().storage().at(latest).fetch(&proxy_storage).await;
 			let proxy_of = match proxy_result {
 				Ok(Some(proxy)) => {
-					log_print!("🧩 Proxy mapping: rescuer proxies -> {}", format!("{}", proxy));
+					let proxy_bytes: &[u8; 32] = proxy.as_ref();
+					let proxy_sp = SpAccountId32::from(*proxy_bytes);
+					log_print!("🧩 Proxy mapping: rescuer proxies -> {}", proxy_sp.to_ss58check());
 					Some(proxy)
 				},
 				Ok(None) => {
@@ -326,7 +328,8 @@ pub async fn handle_recovery_command(
 						"❌ No proxy mapping found for rescuer - recovery not set up properly"
 					);
 					return Err(crate::error::QuantusError::Generic(
-						"Rescuer has no proxy mapping. Recovery process may not be properly set up.".to_string()
+						"Rescuer has no proxy mapping. Recovery process may not be properly set up."
+							.to_string(),
 					));
 				},
 				Err(e) => {
@@ -339,7 +342,9 @@ pub async fn handle_recovery_command(
 
 			// Validate that the proxy points to the correct lost account
 			if let Some(proxy) = proxy_of {
-				let proxy_addr = format!("{proxy}");
+				let proxy_bytes: &[u8; 32] = proxy.as_ref();
+				let proxy_sp = SpAccountId32::from(*proxy_bytes);
+				let proxy_addr = proxy_sp.to_ss58check();
 				if proxy_addr != lost_resolved {
 					log_error!(
 						"❌ Proxy mismatch! Rescuer proxies {} but we're trying to recover {}",
