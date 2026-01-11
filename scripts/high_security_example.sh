@@ -21,31 +21,33 @@ quantus high-security set --from crystal_alice --interceptor crystal_bob --delay
 quantus send --from crystal_alice --to crystal_bob --amount 9999
 
 # fail case 3 also send a reversible with a different delay more or less - should fail
-quantus reversible schedule-transfer-with-delay --from crystal_alice --to crystal_bob --amount 555 --delay-seconds 90
+quantus reversible schedule-transfer-with-delay --from crystal_alice --to crystal_bob --amount 5556 --delay 90
 
 # Check balances of Alice and Charlie
 quantus balance --address crystal_alice
 quantus balance --address crystal_charlie
 
 # Alice sends a reversible transfer to bob over 500000 coins of quantus over 1 hour delay
-quantus reversible schedule-transfer-with-delay --from crystal_alice --to crystal_bob --amount 500000 --delay 3600
+quantus reversible schedule-transfer --from crystal_alice --to crystal_bob --amount 500000
 
-# Alice should be able to cancel the reversible transfer
-# quantus reversible cancel --tx-id <tx-id> --from crystal_alice
+quantus reversible list-pending --from crystal_alice
 
-# Charlie intercepts the transfer and sends it to himself
-quantus reversible schedule-transfer-with-delay --from crystal_charlie --to crystal_charlie --amount 555 --delay 3600
+# Interceptor account charlie reverses transaction 
+quantus reversible cancel --tx-id 0xb8ee1f940e13fbc171481d1b06967760bf1d39f06dbcdb595c02c420aec6a45e --from crystal_charlie
 
 # Check balances of Alice, Bob, and Charlie
 quantus balance --address crystal_alice
 quantus balance --address crystal_bob
 quantus balance --address crystal_charlie
 
+# activate the recovery first vouch then claim.
+ququantus recovery initiate --rescuer crystal_charlie --lost crystal_alice
+quantus recovery active --rescuer crystal_charlie --lost crystal_alice
+quantus recovery vouch --rescuer crystal_charlie --lost crystal_alice --friend crystal_charlie
+quantus recovery claim --rescuer crystal_charlie --lost crystal_alice
+quantus recovery proxy-of --rescuer crystal_charlie
+
 # Charlie pulls all money from Alice's account
-# this is simply done by charlie making a transfer on behalf of alice which sends all money to charlie
-# We need to use the proxy pallet for this
-# because Charlie is a guardian for alice, charlie is also a recoverer through the recovery pallet. 
-# so we can use the recovery pallet to send all money to charlie
 quantus recovery recover-all --rescuer crystal_charlie --lost crystal_alice --dest crystal_charlie
 
 # Check balances of Alice, Bob, and Charlie
