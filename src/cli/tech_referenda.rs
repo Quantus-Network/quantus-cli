@@ -187,7 +187,7 @@ pub enum TechReferendaCommands {
 pub async fn handle_tech_referenda_command(
 	command: TechReferendaCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -199,7 +199,7 @@ pub async fn handle_tech_referenda_command(
 				&from,
 				password,
 				password_file,
-				finalized,
+				execution_mode,
 			)
 			.await,
 		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } =>
@@ -209,7 +209,7 @@ pub async fn handle_tech_referenda_command(
 				&from,
 				password,
 				password_file,
-				finalized,
+				execution_mode,
 			)
 			.await,
 		TechReferendaCommands::List => list_proposals(&quantus_client).await,
@@ -223,15 +223,18 @@ pub async fn handle_tech_referenda_command(
 				&from,
 				password,
 				password_file,
-				finalized,
+				execution_mode,
 			)
 			.await,
 		TechReferendaCommands::Cancel { index, from, password, password_file } =>
-			cancel_proposal(&quantus_client, index, &from, password, password_file, finalized).await,
+			cancel_proposal(&quantus_client, index, &from, password, password_file, execution_mode)
+				.await,
 		TechReferendaCommands::Kill { index, from, password, password_file } =>
-			kill_proposal(&quantus_client, index, &from, password, password_file, finalized).await,
+			kill_proposal(&quantus_client, index, &from, password, password_file, execution_mode)
+				.await,
 		TechReferendaCommands::Nudge { index, from, password, password_file } =>
-			nudge_proposal(&quantus_client, index, &from, password, password_file, finalized).await,
+			nudge_proposal(&quantus_client, index, &from, password, password_file, execution_mode)
+				.await,
 		TechReferendaCommands::RefundSubmissionDeposit { index, from, password, password_file } =>
 			refund_submission_deposit(
 				&quantus_client,
@@ -239,7 +242,7 @@ pub async fn handle_tech_referenda_command(
 				&from,
 				password,
 				password_file,
-				finalized,
+				execution_mode,
 			)
 			.await,
 		TechReferendaCommands::RefundDecisionDeposit { index, from, password, password_file } =>
@@ -249,7 +252,7 @@ pub async fn handle_tech_referenda_command(
 				&from,
 				password,
 				password_file,
-				finalized,
+				execution_mode,
 			)
 			.await,
 		TechReferendaCommands::Config => get_config(&quantus_client).await,
@@ -263,7 +266,7 @@ async fn submit_runtime_upgrade(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("📝 Submitting Runtime Upgrade Proposal to Tech Referenda");
 	log_print!("   🔗 Preimage hash: {}", preimage_hash.bright_cyan());
@@ -337,7 +340,7 @@ async fn submit_runtime_upgrade(
 			.submit(origin_caller, proposal, enactment);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, submit_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Runtime upgrade proposal submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -355,7 +358,7 @@ async fn submit_runtime_upgrade_with_preimage(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	use qp_poseidon::PoseidonHasher;
 
@@ -403,7 +406,8 @@ async fn submit_runtime_upgrade_with_preimage(
 	log_print!("📝 Submitting preimage...");
 	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
 	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, note_preimage_tx, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, note_preimage_tx, None, execution_mode)
+			.await?;
 	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
 
 	// Wait for preimage transaction confirmation
@@ -437,7 +441,7 @@ async fn submit_runtime_upgrade_with_preimage(
 			.submit(origin_caller, proposal, enactment);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, submit_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Runtime upgrade proposal submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -574,7 +578,7 @@ async fn place_decision_deposit(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("📋 Placing decision deposit for Tech Referendum #{}", index);
 	log_print!("   🔑 Placed by: {}", from.bright_yellow());
@@ -583,7 +587,7 @@ async fn place_decision_deposit(
 
 	let deposit_call = quantus_subxt::api::tx().tech_referenda().place_decision_deposit(index);
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, deposit_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, deposit_call, None, execution_mode).await?;
 	log_success!("✅ Decision deposit placed! Hash: {:?}", tx_hash.to_string().bright_yellow());
 	Ok(())
 }
@@ -595,7 +599,7 @@ async fn cancel_proposal(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("❌ Cancelling Tech Referendum #{}", index);
 	log_print!("   🔑 Cancelled by: {}", from.bright_yellow());
@@ -608,7 +612,8 @@ async fn cancel_proposal(
 		});
 	let sudo_call = quantus_subxt::api::tx().sudo().sudo(inner);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None, finalized).await?;
+	let tx_hash =
+		submit_transaction(quantus_client, &keypair, sudo_call, None, execution_mode).await?;
 	log_success!("✅ Referendum cancelled! Hash: {:?}", tx_hash.to_string().bright_yellow());
 	Ok(())
 }
@@ -620,7 +625,7 @@ async fn kill_proposal(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("💀 Killing Tech Referendum #{}", index);
 	log_print!("   🔑 Killed by: {}", from.bright_yellow());
@@ -633,7 +638,8 @@ async fn kill_proposal(
 		});
 	let sudo_call = quantus_subxt::api::tx().sudo().sudo(inner);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None, finalized).await?;
+	let tx_hash =
+		submit_transaction(quantus_client, &keypair, sudo_call, None, execution_mode).await?;
 	log_success!("✅ Referendum killed! Hash: {:?}", tx_hash.to_string().bright_yellow());
 	Ok(())
 }
@@ -645,7 +651,7 @@ async fn nudge_proposal(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("🔄 Nudging Tech Referendum #{}", index);
 	log_print!("   🔑 Nudged by: {}", from.bright_yellow());
@@ -657,7 +663,8 @@ async fn nudge_proposal(
 	);
 	let sudo_call = quantus_subxt::api::tx().sudo().sudo(inner);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None, finalized).await?;
+	let tx_hash =
+		submit_transaction(quantus_client, &keypair, sudo_call, None, execution_mode).await?;
 	log_success!("✅ Referendum nudged! Hash: {:?}", tx_hash.to_string().bright_yellow());
 	Ok(())
 }
@@ -708,7 +715,7 @@ async fn refund_submission_deposit(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("💰 Refunding submission deposit for Tech Referendum #{}", index);
 	log_print!("   🔑 Refund to: {}", from.bright_yellow());
@@ -720,7 +727,7 @@ async fn refund_submission_deposit(
 	let refund_call = quantus_subxt::api::tx().tech_referenda().refund_submission_deposit(index);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, refund_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, refund_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Refund transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -739,7 +746,7 @@ async fn refund_decision_deposit(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("💰 Refunding decision deposit for Tech Referendum #{}", index);
 	log_print!("   🔑 Refund to: {}", from.bright_yellow());
@@ -751,7 +758,7 @@ async fn refund_decision_deposit(
 	let refund_call = quantus_subxt::api::tx().tech_referenda().refund_decision_deposit(index);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, refund_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, refund_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Refund transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),

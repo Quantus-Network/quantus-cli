@@ -7,6 +7,18 @@ use subxt::{
 	OnlineClient,
 };
 
+#[derive(Debug, Clone, Copy)]
+pub struct ExecutionMode {
+	pub finalized: bool,
+	pub wait_for_transaction: bool,
+}
+
+impl Default for ExecutionMode {
+	fn default() -> Self {
+		Self { finalized: false, wait_for_transaction: false }
+	}
+}
+
 /// Resolve address - if it's a wallet name, return the wallet's address
 /// If it's already an SS58 address, return it as is
 pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
@@ -117,12 +129,13 @@ pub async fn get_incremented_nonce_with_client(
 ///
 /// By default (finalized=false), waits until transaction is in the best block (fast)
 /// With finalized=true, waits until transaction is in a finalized block (slow in PoW chains)
+/// With wait_for_transaction=false, returns immediately after submission without waiting
 pub async fn submit_transaction<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	call: Call,
 	tip: Option<u128>,
-	finalized: bool,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256>
 where
 	Call: subxt::tx::Payload,
@@ -215,7 +228,12 @@ where
 				crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
 
 				let tx_hash = tx_progress.extrinsic_hash();
-				wait_tx_inclusion(&mut tx_progress, finalized).await?;
+
+				if !execution_mode.wait_for_transaction {
+					return Ok(tx_hash);
+				}
+
+				wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
 
 				return Ok(tx_hash);
 			},
@@ -259,7 +277,7 @@ pub async fn submit_transaction_with_nonce<Call>(
 	call: Call,
 	tip: Option<u128>,
 	nonce: u32,
-	finalized: bool,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256>
 where
 	Call: subxt::tx::Payload,
@@ -301,7 +319,12 @@ where
 		Ok(mut tx_progress) => {
 			let tx_hash = tx_progress.extrinsic_hash();
 			log_verbose!("✅ Transaction submitted successfully: {:?}", tx_hash);
-			wait_tx_inclusion(&mut tx_progress, finalized).await?;
+
+			if !execution_mode.wait_for_transaction {
+				return Ok(tx_hash);
+			}
+
+			wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
 			Ok(tx_hash)
 		},
 		Err(e) => {
@@ -324,46 +347,54 @@ async fn wait_tx_inclusion(
 ) -> Result<()> {
 	use indicatif::{ProgressBar, ProgressStyle};
 
-	// Create spinner (only in non-verbose mode)
+	let start_time = std::time::Instant::now();
+
 	let spinner = if !crate::log::is_verbose() {
 		let pb = ProgressBar::new_spinner();
 		pb.set_style(
 			ProgressStyle::default_spinner()
 				.tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-				.template("{spinner:.cyan} {msg} {elapsed:.dim}")
+				.template("{spinner:.cyan} {msg}")
 				.unwrap(),
 		);
 
 		if finalized {
-			pb.set_message("Waiting for finalized block...");
+			pb.set_message("Waiting for finalized block... (0s)");
 		} else {
-			pb.set_message("Waiting for block inclusion...");
+			pb.set_message("Waiting for block inclusion... (0s)");
 		}
 
-		pb.enable_steady_tick(std::time::Duration::from_millis(100));
+		pb.enable_steady_tick(std::time::Duration::from_millis(500));
 		Some(pb)
 	} else {
 		None
 	};
 
 	while let Some(Ok(status)) = tx_progress.next().await {
-		crate::log_verbose!("   Transaction status: {:?}", status);
+		let elapsed_secs = start_time.elapsed().as_secs();
+		crate::log_verbose!("   Transaction status: {:?} (elapsed: {}s)", status, elapsed_secs);
 
 		match status {
 			TxStatus::Validated =>
 				if let Some(ref pb) = spinner {
-					pb.set_message("Transaction validated ✓");
+					pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
 				},
 			TxStatus::InBestBlock(block_hash) => {
 				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
 				if finalized {
 					if let Some(ref pb) = spinner {
-						pb.set_message("In best block, waiting for finalization...");
+						pb.set_message(format!(
+							"In best block, waiting for finalization... ({}s)",
+							elapsed_secs
+						));
 					}
 					continue;
 				} else {
 					if let Some(pb) = spinner {
-						pb.finish_with_message("✅ Transaction included in block!");
+						pb.finish_with_message(format!(
+							"✅ Transaction included in block! ({}s)",
+							elapsed_secs
+						));
 					}
 					break;
 				};
@@ -371,18 +402,36 @@ async fn wait_tx_inclusion(
 			TxStatus::InFinalizedBlock(block_hash) => {
 				crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
 				if let Some(pb) = spinner {
-					pb.finish_with_message("✅ Transaction finalized!");
+					pb.finish_with_message(format!(
+						"✅ Transaction finalized! ({}s)",
+						elapsed_secs
+					));
 				}
 				break;
 			},
 			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				crate::log_error!("   Transaction error: {}", message);
+				crate::log_error!("   Transaction error: {} (elapsed: {}s)", message, elapsed_secs);
 				if let Some(pb) = spinner {
-					pb.finish_with_message("❌ Transaction error!");
+					pb.finish_with_message(format!("❌ Transaction error! ({}s)", elapsed_secs));
 				}
 				break;
 			},
-			_ => continue,
+			_ => {
+				if let Some(ref pb) = spinner {
+					if finalized {
+						pb.set_message(format!(
+							"Waiting for finalized block... ({}s)",
+							elapsed_secs
+						));
+					} else {
+						pb.set_message(format!(
+							"Waiting for block inclusion... ({}s)",
+							elapsed_secs
+						));
+					}
+				}
+				continue;
+			},
 		}
 	}
 

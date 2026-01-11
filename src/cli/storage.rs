@@ -257,7 +257,7 @@ pub async fn set_storage_value(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	storage_key: Vec<u8>,
 	value_bytes: Vec<u8>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	log_verbose!("✍️  Creating set_storage transaction...");
 
@@ -275,7 +275,7 @@ pub async fn set_storage_value(
 		from_keypair,
 		sudo_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 
@@ -805,7 +805,7 @@ async fn get_storage_by_parts(
 pub async fn handle_storage_command(
 	command: StorageCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("🗄️  Storage");
 
@@ -906,9 +906,14 @@ pub async fn handle_storage_command(
 			};
 
 			// 4. Submit the set storage transaction
-			let tx_hash =
-				set_storage_value(&quantus_client, &keypair, storage_key, value_bytes, finalized)
-					.await?;
+			let tx_hash = set_storage_value(
+				&quantus_client,
+				&keypair,
+				storage_key,
+				value_bytes,
+				execution_mode,
+			)
+			.await?;
 
 			log_print!(
 				"✅ {} Set storage transaction submitted! Hash: {:?}",

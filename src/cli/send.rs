@@ -156,9 +156,9 @@ pub async fn transfer(
 	to_address: &str,
 	amount: u128,
 	tip: Option<u128>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
-	transfer_with_nonce(quantus_client, from_keypair, to_address, amount, tip, None, finalized)
+	transfer_with_nonce(quantus_client, from_keypair, to_address, amount, tip, None, execution_mode)
 		.await
 }
 
@@ -170,7 +170,7 @@ pub async fn transfer_with_nonce(
 	amount: u128,
 	tip: Option<u128>,
 	nonce: Option<u32>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating transfer transaction...");
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
@@ -212,7 +212,7 @@ pub async fn transfer_with_nonce(
 			transfer_call,
 			Some(tip_to_use),
 			manual_nonce,
-			finalized,
+			execution_mode,
 		)
 		.await?
 	} else {
@@ -221,7 +221,7 @@ pub async fn transfer_with_nonce(
 			from_keypair,
 			transfer_call,
 			Some(tip_to_use),
-			finalized,
+			execution_mode,
 		)
 		.await?
 	};
@@ -237,7 +237,7 @@ pub async fn batch_transfer(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	transfers: Vec<(String, u128)>, // (to_address, amount) pairs
 	tip: Option<u128>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating batch transfer transaction with {} transfers...", transfers.len());
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
@@ -317,7 +317,7 @@ pub async fn batch_transfer(
 		from_keypair,
 		batch_call,
 		Some(tip_to_use),
-		finalized,
+		execution_mode,
 	)
 	.await?;
 
@@ -338,7 +338,7 @@ pub async fn handle_send_command(
 	password_file: Option<String>,
 	tip: Option<String>,
 	nonce: Option<u32>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -397,7 +397,7 @@ pub async fn handle_send_command(
 		amount,
 		tip_amount,
 		nonce,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 

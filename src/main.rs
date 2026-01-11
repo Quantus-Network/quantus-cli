@@ -40,6 +40,11 @@ struct Cli {
 	/// NOTE: waiting for finalized transaction may take a while in PoW chain
 	#[arg(long, global = true, default_value = "false")]
 	finalized_tx: bool,
+
+	/// Wait for transaction validation/inclusion before returning
+	/// Default: false (fire and forget - return immediately with hash)
+	#[arg(long, global = true, default_value = "false")]
+	wait_for_transaction: bool,
 }
 
 #[tokio::main]
@@ -60,8 +65,14 @@ async fn main() -> Result<(), QuantusError> {
 		log_print!("⚠️ Warning: Waiting for finalized block may take a while in PoW chain.");
 	}
 
+	// Create execution mode from CLI args
+	let execution_mode = cli::common::ExecutionMode {
+		finalized: cli.finalized_tx,
+		wait_for_transaction: cli.wait_for_transaction,
+	};
+
 	// Execute the command
-	match cli::execute_command(cli.command, &cli.node_url, cli.verbose, cli.finalized_tx).await {
+	match cli::execute_command(cli.command, &cli.node_url, cli.verbose, execution_mode).await {
 		Ok(_) => {
 			log_verbose!("");
 			log_verbose!("Command executed successfully!");

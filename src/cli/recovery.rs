@@ -169,7 +169,7 @@ pub enum RecoveryCommands {
 pub async fn handle_recovery_command(
 	command: RecoveryCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -195,7 +195,7 @@ pub async fn handle_recovery_command(
 				&rescuer_key,
 				call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await
 			.map_err(|e| {
@@ -230,7 +230,7 @@ pub async fn handle_recovery_command(
 				&friend_key,
 				call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await
 			.map_err(|e| {
@@ -258,7 +258,7 @@ pub async fn handle_recovery_command(
 				&rescuer_key,
 				call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await
 			.map_err(|e| {
@@ -368,7 +368,7 @@ pub async fn handle_recovery_command(
 				&rescuer_key,
 				call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await
 			{
@@ -479,7 +479,7 @@ pub async fn handle_recovery_command(
 				&rescuer_key,
 				call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await
 			{
@@ -508,7 +508,7 @@ pub async fn handle_recovery_command(
 				&lost_key,
 				call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await
 			.map_err(|e| {
@@ -538,7 +538,7 @@ pub async fn handle_recovery_command(
 				&rescuer_key,
 				call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await
 			.map_err(|e| {
