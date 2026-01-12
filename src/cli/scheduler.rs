@@ -106,7 +106,7 @@ async fn schedule_remark(
 	quantus_client: &crate::chain::client::QuantusClient,
 	after: u32,
 	from: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	use quantus_subxt::api;
 
@@ -133,7 +133,7 @@ async fn schedule_remark(
 		&keypair,
 		schedule_tx,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 	log_success!("📩 Schedule extrinsic submitted: {:?}", tx_hash);
@@ -145,7 +145,7 @@ async fn schedule_remark(
 pub async fn handle_scheduler_command(
 	command: SchedulerCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	log_print!("🗓️  Scheduler");
 
@@ -167,6 +167,6 @@ pub async fn handle_scheduler_command(
 		},
 		SchedulerCommands::Agenda { range } => list_agenda_range(&quantus_client, &range).await,
 		SchedulerCommands::ScheduleRemark { after, from } =>
-			schedule_remark(&quantus_client, after, &from, finalized).await,
+			schedule_remark(&quantus_client, after, &from, execution_mode).await,
 	}
 }

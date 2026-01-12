@@ -48,7 +48,7 @@ pub enum HighSecurityCommands {
 pub async fn handle_high_security_command(
 	command: HighSecurityCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -165,7 +165,7 @@ pub async fn handle_high_security_command(
 				&keypair,
 				tx_call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await?;
 

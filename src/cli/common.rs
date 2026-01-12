@@ -7,6 +7,12 @@ use subxt::{
 	OnlineClient,
 };
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ExecutionMode {
+	pub finalized: bool,
+	pub wait_for_transaction: bool,
+}
+
 /// Resolve address - if it's a wallet name, return the wallet's address
 /// If it's already an SS58 address, return it as is
 pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
@@ -117,12 +123,13 @@ pub async fn get_incremented_nonce_with_client(
 ///
 /// By default (finalized=false), waits until transaction is in the best block (fast)
 /// With finalized=true, waits until transaction is in a finalized block (slow in PoW chains)
+/// With wait_for_transaction=false, returns immediately after submission without waiting
 pub async fn submit_transaction<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	call: Call,
 	tip: Option<u128>,
-	finalized: bool,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256>
 where
 	Call: subxt::tx::Payload,
@@ -137,7 +144,6 @@ where
 
 	loop {
 		attempt += 1;
-
 		// Get fresh nonce for each attempt, or increment if we have a previous nonce
 		let nonce = if let Some(prev_nonce) = current_nonce {
 			// After first failure, try with incremented nonce
@@ -178,13 +184,13 @@ where
 		}
 
 		// Try to get chain parameters from the client
-		let genesis_hash = quantus_client.get_genesis_hash().await?;
-		let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
+		// let genesis_hash = quantus_client.get_genesis_hash().await?;
+		// let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
 
-		log_verbose!("🔍 Chain parameters:");
-		log_verbose!("   Genesis hash: {:?}", genesis_hash);
-		log_verbose!("   Spec version: {}", spec_version);
-		log_verbose!("   Transaction version: {}", transaction_version);
+		// log_verbose!("🔍 Chain parameters:");
+		// log_verbose!("   Genesis hash: {:?}", genesis_hash);
+		// log_verbose!("   Spec version: {}", spec_version);
+		// log_verbose!("   Transaction version: {}", transaction_version);
 
 		// For now, just use the default params
 		let params = params_builder.build();
@@ -204,50 +210,69 @@ where
 		log_verbose!("🔍 Additional debugging:");
 		log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
 
-		// Submit the transaction with fresh nonce and optional tip
-		match quantus_client
-			.client()
-			.tx()
-			.sign_and_submit_then_watch(&call, &signer, params)
-			.await
-		{
-			Ok(mut tx_progress) => {
-				crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
+		if execution_mode.wait_for_transaction {
+			match quantus_client
+				.client()
+				.tx()
+				.sign_and_submit_then_watch(&call, &signer, params)
+				.await
+			{
+				Ok(mut tx_progress) => {
+					crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
 
-				let tx_hash = tx_progress.extrinsic_hash();
-				wait_tx_inclusion(&mut tx_progress, finalized).await?;
+					let tx_hash = tx_progress.extrinsic_hash();
 
-				return Ok(tx_hash);
-			},
-			Err(e) => {
-				let error_msg = format!("{e:?}");
+					if !execution_mode.wait_for_transaction {
+						return Ok(tx_hash);
+					}
 
-				// Check if it's a retryable error
-				let is_retryable = error_msg.contains("Priority is too low") ||
-					error_msg.contains("Transaction is outdated") ||
-					error_msg.contains("Transaction is temporarily banned") ||
-					error_msg.contains("Transaction has a bad signature") ||
-					error_msg.contains("Invalid Transaction");
+					wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
 
-				if is_retryable && attempt < 5 {
-					log_verbose!(
-						"⚠️  Transaction error detected (attempt {}/5): {}",
-						attempt,
-						error_msg
-					);
+					return Ok(tx_hash);
+				},
+				Err(e) => {
+					let error_msg = format!("{e:?}");
 
-					// Exponential backoff: 2s, 4s, 8s, 16s
-					let delay = std::cmp::min(2u64.pow(attempt as u32), 16);
-					log_verbose!("⏳ Waiting {} seconds before retry...", delay);
-					tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
-					continue;
-				} else {
-					log_verbose!("❌ Final error after {} attempts: {}", attempt, error_msg);
+					// Check if it's a retryable error
+					let is_retryable = error_msg.contains("Priority is too low") ||
+						error_msg.contains("Transaction is outdated") ||
+						error_msg.contains("Transaction is temporarily banned") ||
+						error_msg.contains("Transaction has a bad signature") ||
+						error_msg.contains("Invalid Transaction");
+
+					if is_retryable && attempt < 5 {
+						log_verbose!(
+							"⚠️  Transaction error detected (attempt {}/5): {}",
+							attempt,
+							error_msg
+						);
+
+						// Exponential backoff: 2s, 4s, 8s, 16s
+						let delay = std::cmp::min(2u64.pow(attempt as u32), 16);
+						log_verbose!("⏳ Waiting {} seconds before retry...", delay);
+						tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
+						continue;
+					} else {
+						log_verbose!("❌ Final error after {} attempts: {}", attempt, error_msg);
+						return Err(crate::error::QuantusError::NetworkError(format!(
+							"Failed to submit transaction: {e:?}"
+						)));
+					}
+				},
+			}
+		} else {
+			match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
+				Ok(tx_hash) => {
+					crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+					return Ok(tx_hash);
+				},
+				Err(e) => {
+					log_error!("❌ Failed to submit transaction: {e:?}");
 					return Err(crate::error::QuantusError::NetworkError(format!(
 						"Failed to submit transaction: {e:?}"
 					)));
-				}
-			},
+				},
+			}
 		}
 	}
 }
@@ -259,7 +284,7 @@ pub async fn submit_transaction_with_nonce<Call>(
 	call: Call,
 	tip: Option<u128>,
 	nonce: u32,
-	finalized: bool,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256>
 where
 	Call: subxt::tx::Payload,
@@ -291,25 +316,42 @@ where
 	log_verbose!("🔢 Using manual nonce: {}", nonce);
 	log_verbose!("📤 Submitting transaction with manual nonce...");
 
+	crate::log_print!("submit with wait for transaction: {}", execution_mode.wait_for_transaction);
 	// Submit the transaction with manual nonce
-	match quantus_client
-		.client()
-		.tx()
-		.sign_and_submit_then_watch(&call, &signer, params)
-		.await
-	{
-		Ok(mut tx_progress) => {
-			let tx_hash = tx_progress.extrinsic_hash();
-			log_verbose!("✅ Transaction submitted successfully: {:?}", tx_hash);
-			wait_tx_inclusion(&mut tx_progress, finalized).await?;
-			Ok(tx_hash)
-		},
-		Err(e) => {
-			log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
-			Err(crate::error::QuantusError::NetworkError(format!(
-				"Failed to submit transaction with nonce {nonce}: {e:?}"
-			)))
-		},
+
+	if execution_mode.wait_for_transaction {
+		match quantus_client
+			.client()
+			.tx()
+			.sign_and_submit_then_watch(&call, &signer, params)
+			.await
+		{
+			Ok(mut tx_progress) => {
+				let tx_hash = tx_progress.extrinsic_hash();
+				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+				wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
+				Ok(tx_hash)
+			},
+			Err(e) => {
+				log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
+				Err(crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit transaction with nonce {nonce}: {e:?}"
+				)))
+			},
+		}
+	} else {
+		match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
+			Ok(tx_hash) => {
+				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+				Ok(tx_hash)
+			},
+			Err(e) => {
+				log_error!("❌ Failed to submit transaction: {e:?}");
+				Err(crate::error::QuantusError::NetworkError(format!(
+					"Failed to submit transaction: {e:?}"
+				)))
+			},
+		}
 	}
 }
 
@@ -324,46 +366,54 @@ async fn wait_tx_inclusion(
 ) -> Result<()> {
 	use indicatif::{ProgressBar, ProgressStyle};
 
-	// Create spinner (only in non-verbose mode)
+	let start_time = std::time::Instant::now();
+
 	let spinner = if !crate::log::is_verbose() {
 		let pb = ProgressBar::new_spinner();
 		pb.set_style(
 			ProgressStyle::default_spinner()
 				.tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
-				.template("{spinner:.cyan} {msg} {elapsed:.dim}")
+				.template("{spinner:.cyan} {msg}")
 				.unwrap(),
 		);
 
 		if finalized {
-			pb.set_message("Waiting for finalized block...");
+			pb.set_message("Waiting for finalized block... (0s)");
 		} else {
-			pb.set_message("Waiting for block inclusion...");
+			pb.set_message("Waiting for block inclusion... (0s)");
 		}
 
-		pb.enable_steady_tick(std::time::Duration::from_millis(100));
+		pb.enable_steady_tick(std::time::Duration::from_millis(500));
 		Some(pb)
 	} else {
 		None
 	};
 
 	while let Some(Ok(status)) = tx_progress.next().await {
-		crate::log_verbose!("   Transaction status: {:?}", status);
+		let elapsed_secs = start_time.elapsed().as_secs();
+		crate::log_verbose!("   Transaction status: {:?} (elapsed: {}s)", status, elapsed_secs);
 
 		match status {
 			TxStatus::Validated =>
 				if let Some(ref pb) = spinner {
-					pb.set_message("Transaction validated ✓");
+					pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
 				},
 			TxStatus::InBestBlock(block_hash) => {
 				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
 				if finalized {
 					if let Some(ref pb) = spinner {
-						pb.set_message("In best block, waiting for finalization...");
+						pb.set_message(format!(
+							"In best block, waiting for finalization... ({}s)",
+							elapsed_secs
+						));
 					}
 					continue;
 				} else {
 					if let Some(pb) = spinner {
-						pb.finish_with_message("✅ Transaction included in block!");
+						pb.finish_with_message(format!(
+							"✅ Transaction included in block! ({}s)",
+							elapsed_secs
+						));
 					}
 					break;
 				};
@@ -371,18 +421,36 @@ async fn wait_tx_inclusion(
 			TxStatus::InFinalizedBlock(block_hash) => {
 				crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
 				if let Some(pb) = spinner {
-					pb.finish_with_message("✅ Transaction finalized!");
+					pb.finish_with_message(format!(
+						"✅ Transaction finalized! ({}s)",
+						elapsed_secs
+					));
 				}
 				break;
 			},
 			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				crate::log_error!("   Transaction error: {}", message);
+				crate::log_error!("   Transaction error: {} (elapsed: {}s)", message, elapsed_secs);
 				if let Some(pb) = spinner {
-					pb.finish_with_message("❌ Transaction error!");
+					pb.finish_with_message(format!("❌ Transaction error! ({}s)", elapsed_secs));
 				}
 				break;
 			},
-			_ => continue,
+			_ => {
+				if let Some(ref pb) = spinner {
+					if finalized {
+						pb.set_message(format!(
+							"Waiting for finalized block... ({}s)",
+							elapsed_secs
+						));
+					} else {
+						pb.set_message(format!(
+							"Waiting for block inclusion... ({}s)",
+							elapsed_secs
+						));
+					}
+				}
+				continue;
+			},
 		}
 	}
 

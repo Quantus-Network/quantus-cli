@@ -117,7 +117,7 @@ pub enum TreasuryCommands {
 pub async fn handle_treasury_command(
 	command: TreasuryCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -141,14 +141,22 @@ pub async fn handle_treasury_command(
 				&from,
 				password,
 				password_file,
-				finalized,
+				execution_mode,
 			)
 			.await,
 		TreasuryCommands::Payout { index, from, password, password_file } =>
-			payout_spend(&quantus_client, index, &from, password, password_file, finalized).await,
-		TreasuryCommands::CheckStatus { index, from, password, password_file } =>
-			check_spend_status(&quantus_client, index, &from, password, password_file, finalized)
+			payout_spend(&quantus_client, index, &from, password, password_file, execution_mode)
 				.await,
+		TreasuryCommands::CheckStatus { index, from, password, password_file } =>
+			check_spend_status(
+				&quantus_client,
+				index,
+				&from,
+				password,
+				password_file,
+				execution_mode,
+			)
+			.await,
 		TreasuryCommands::ListSpends => list_spends(&quantus_client).await,
 		TreasuryCommands::SpendSudo { beneficiary, amount, from, password, password_file } =>
 			spend_sudo(
@@ -158,7 +166,7 @@ pub async fn handle_treasury_command(
 				&from,
 				password,
 				password_file,
-				finalized,
+				execution_mode,
 			)
 			.await,
 	}
@@ -303,7 +311,7 @@ async fn submit_spend_referendum(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	use qp_poseidon::PoseidonHasher;
 	use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
@@ -358,7 +366,7 @@ async fn submit_spend_referendum(
 	// Submit preimage
 	let preimage_call = quantus_subxt::api::tx().preimage().note_preimage(encoded_call.clone());
 	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, preimage_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, preimage_call, None, execution_mode).await?;
 
 	log_print!("✅ Preimage created {:?}", preimage_tx_hash);
 
@@ -401,7 +409,7 @@ async fn submit_spend_referendum(
 	let submit_call =
 		quantus_subxt::api::tx().referenda().submit(origin_caller, proposal, enactment);
 	let submit_tx_hash =
-		submit_transaction(quantus_client, &keypair, submit_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
 
 	log_print!(
 		"✅ {} Treasury spend referendum submitted! {:?}",
@@ -428,7 +436,7 @@ async fn payout_spend(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("💸 Paying out Treasury Spend #{}", index);
 
@@ -439,7 +447,7 @@ async fn payout_spend(
 	let payout_call = quantus_subxt::api::tx().treasury_pallet().payout(index);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, payout_call, None, finalized).await?;
+		submit_transaction(quantus_client, &keypair, payout_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Payout transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -459,7 +467,7 @@ async fn check_spend_status(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("🔍 Checking Treasury Spend #{} status", index);
 
@@ -469,7 +477,8 @@ async fn check_spend_status(
 	// Create check_status call
 	let check_call = quantus_subxt::api::tx().treasury_pallet().check_status(index);
 
-	let tx_hash = submit_transaction(quantus_client, &keypair, check_call, None, finalized).await?;
+	let tx_hash =
+		submit_transaction(quantus_client, &keypair, check_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Check status transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -538,7 +547,7 @@ async fn spend_sudo(
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 
@@ -580,7 +589,8 @@ async fn spend_sudo(
 
 	// Submit transaction
 	log_print!("📡 Submitting sudo transaction...");
-	let tx_hash = submit_transaction(quantus_client, &keypair, sudo_call, None, finalized).await?;
+	let tx_hash =
+		submit_transaction(quantus_client, &keypair, sudo_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Sudo transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
