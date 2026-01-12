@@ -8,16 +8,12 @@ use subxt::{
 };
 
 #[derive(Debug, Clone, Copy)]
+#[derive(Default)]
 pub struct ExecutionMode {
 	pub finalized: bool,
 	pub wait_for_transaction: bool,
 }
 
-impl Default for ExecutionMode {
-	fn default() -> Self {
-		Self { finalized: false, wait_for_transaction: false }
-	}
-}
 
 /// Resolve address - if it's a wallet name, return the wallet's address
 /// If it's already an SS58 address, return it as is
