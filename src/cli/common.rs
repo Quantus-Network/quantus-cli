@@ -212,8 +212,10 @@ where
 		log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
 
 		let metadata = quantus_client.client().metadata();
-		let encoded_call = <_ as subxt::tx::Payload>::encode_call_data(&call, &metadata)
-			.map_err(|e| crate::error::QuantusError::NetworkError(format!("Failed to encode call: {:?}", e)))?;
+		let encoded_call =
+			<_ as subxt::tx::Payload>::encode_call_data(&call, &metadata).map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!("Failed to encode call: {:?}", e))
+			})?;
 		crate::log_print!("📝 Encoded call: 0x{}", hex::encode(&encoded_call));
 		crate::log_print!("📝 Encoded call size: {} bytes", encoded_call.len());
 
@@ -233,7 +235,13 @@ where
 						return Ok(tx_hash);
 					}
 
-					wait_tx_inclusion(&mut tx_progress, quantus_client.client(), &tx_hash, execution_mode.finalized).await?;
+					wait_tx_inclusion(
+						&mut tx_progress,
+						quantus_client.client(),
+						&tx_hash,
+						execution_mode.finalized,
+					)
+					.await?;
 
 					return Ok(tx_hash);
 				},
@@ -336,7 +344,13 @@ where
 			Ok(mut tx_progress) => {
 				let tx_hash = tx_progress.extrinsic_hash();
 				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
-				wait_tx_inclusion(&mut tx_progress, quantus_client.client(), &tx_hash, execution_mode.finalized).await?;
+				wait_tx_inclusion(
+					&mut tx_progress,
+					quantus_client.client(),
+					&tx_hash,
+					execution_mode.finalized,
+				)
+				.await?;
 				Ok(tx_hash)
 			},
 			Err(e) => {
@@ -484,7 +498,7 @@ fn format_dispatch_error(
 				.unwrap_or("Unknown");
 			let error_index = module_error.error[0];
 			format!("{}::Error[{}]", pallet_name, error_index)
-		}
+		},
 		DispatchError::BadOrigin => "BadOrigin".to_string(),
 		DispatchError::CannotLookup => "CannotLookup".to_string(),
 		DispatchError::Other => "Other".to_string(),
@@ -526,7 +540,9 @@ async fn check_execution_success(
 
 			if let subxt::events::Phase::ApplyExtrinsic(event_ext_idx) = event.phase() {
 				if event_ext_idx == ext_idx as u32 {
-					if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) = event.as_event::<ExtrinsicFailed>() {
+					if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
+						event.as_event::<ExtrinsicFailed>()
+					{
 						let error_msg = format_dispatch_error(&dispatch_error, &metadata);
 						crate::log_error!("   Transaction failed: {}", error_msg);
 						return Err(crate::error::QuantusError::NetworkError(format!(
