@@ -1,6 +1,7 @@
 //! Common SubXT utilities and functions shared across CLI commands
 use crate::{chain::client::ChainConfig, error::Result, log_error, log_verbose};
 use colored::Colorize;
+use hex;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::{
 	tx::{TxProgress, TxStatus},
@@ -210,6 +211,12 @@ where
 		log_verbose!("🔍 Additional debugging:");
 		log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
 
+		let metadata = quantus_client.client().metadata();
+		let encoded_call = <_ as subxt::tx::Payload>::encode_call_data(&call, &metadata)
+			.map_err(|e| crate::error::QuantusError::NetworkError(format!("Failed to encode call: {:?}", e)))?;
+		crate::log_print!("📝 Encoded call: 0x{}", hex::encode(&encoded_call));
+		crate::log_print!("📝 Encoded call size: {} bytes", encoded_call.len());
+
 		if execution_mode.wait_for_transaction {
 			match quantus_client
 				.client()
@@ -226,7 +233,7 @@ where
 						return Ok(tx_hash);
 					}
 
-					wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
+					wait_tx_inclusion(&mut tx_progress, quantus_client.client(), &tx_hash, execution_mode.finalized).await?;
 
 					return Ok(tx_hash);
 				},
@@ -329,7 +336,7 @@ where
 			Ok(mut tx_progress) => {
 				let tx_hash = tx_progress.extrinsic_hash();
 				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
-				wait_tx_inclusion(&mut tx_progress, execution_mode.finalized).await?;
+				wait_tx_inclusion(&mut tx_progress, quantus_client.client(), &tx_hash, execution_mode.finalized).await?;
 				Ok(tx_hash)
 			},
 			Err(e) => {
@@ -362,6 +369,8 @@ where
 /// it up to the user to check the status of the transaction.
 async fn wait_tx_inclusion(
 	tx_progress: &mut TxProgress<ChainConfig, OnlineClient<ChainConfig>>,
+	client: &OnlineClient<ChainConfig>,
+	tx_hash: &subxt::utils::H256,
 	finalized: bool,
 ) -> Result<()> {
 	use indicatif::{ProgressBar, ProgressStyle};
@@ -398,8 +407,10 @@ async fn wait_tx_inclusion(
 				if let Some(ref pb) = spinner {
 					pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
 				},
-			TxStatus::InBestBlock(block_hash) => {
+			TxStatus::InBestBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
 				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
+				check_execution_success(client, &block_hash, tx_hash).await?;
 				if finalized {
 					if let Some(ref pb) = spinner {
 						pb.set_message(format!(
@@ -418,8 +429,10 @@ async fn wait_tx_inclusion(
 					break;
 				};
 			},
-			TxStatus::InFinalizedBlock(block_hash) => {
+			TxStatus::InFinalizedBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
 				crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
+				check_execution_success(client, &block_hash, tx_hash).await?;
 				if let Some(pb) = spinner {
 					pb.finish_with_message(format!(
 						"✅ Transaction finalized! ({}s)",
@@ -451,6 +464,78 @@ async fn wait_tx_inclusion(
 				}
 				continue;
 			},
+		}
+	}
+
+	Ok(())
+}
+
+fn format_dispatch_error(
+	error: &crate::chain::quantus_subxt::api::runtime_types::sp_runtime::DispatchError,
+	metadata: &subxt::Metadata,
+) -> String {
+	use crate::chain::quantus_subxt::api::runtime_types::sp_runtime::DispatchError;
+
+	match error {
+		DispatchError::Module(module_error) => {
+			let pallet_name = metadata
+				.pallet_by_index(module_error.index)
+				.map(|p| p.name())
+				.unwrap_or("Unknown");
+			let error_index = module_error.error[0];
+			format!("{}::Error[{}]", pallet_name, error_index)
+		}
+		DispatchError::BadOrigin => "BadOrigin".to_string(),
+		DispatchError::CannotLookup => "CannotLookup".to_string(),
+		DispatchError::Other => "Other".to_string(),
+		_ => format!("{:?}", error),
+	}
+}
+
+async fn check_execution_success(
+	client: &OnlineClient<ChainConfig>,
+	block_hash: &subxt::utils::H256,
+	tx_hash: &subxt::utils::H256,
+) -> Result<()> {
+	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
+
+	let block = client.blocks().at(*block_hash).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to get block: {e:?}"))
+	})?;
+
+	let extrinsics = block.extrinsics().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to get extrinsics: {e:?}"))
+	})?;
+
+	let our_extrinsic_index = extrinsics
+		.iter()
+		.enumerate()
+		.find(|(_, ext)| ext.hash() == *tx_hash)
+		.map(|(idx, _)| idx);
+
+	let events = block.events().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to fetch events: {e:?}"))
+	})?;
+
+	let metadata = client.metadata();
+	if let Some(ext_idx) = our_extrinsic_index {
+		for event_result in events.iter() {
+			let event = event_result.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
+			})?;
+
+			if let subxt::events::Phase::ApplyExtrinsic(event_ext_idx) = event.phase() {
+				if event_ext_idx == ext_idx as u32 {
+					if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) = event.as_event::<ExtrinsicFailed>() {
+						let error_msg = format_dispatch_error(&dispatch_error, &metadata);
+						crate::log_error!("   Transaction failed: {}", error_msg);
+						return Err(crate::error::QuantusError::NetworkError(format!(
+							"Transaction execution failed: {}",
+							error_msg
+						)));
+					}
+				}
+			}
 		}
 	}
 
