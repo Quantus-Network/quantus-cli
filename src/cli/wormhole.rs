@@ -34,6 +34,9 @@ use subxt::{
 	OnlineClient,
 };
 
+/// Native asset id
+const NATIVE_ASSET_ID: u32 = 0;
+
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
 	/// Generate a wormhole proof
@@ -66,6 +69,12 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "proof.hex")]
 		output: String,
 	},
+	/// Verify a wormhole proof on-chain
+	Verify {
+		/// Path to the proof file (hex-encoded)
+		#[arg(short, long, default_value = "proof.hex")]
+		proof: String,
+	},
 }
 
 pub async fn handle_wormhole_command(
@@ -93,8 +102,11 @@ pub async fn handle_wormhole_command(
 				node_url,
 			)
 			.await,
+		WormholeCommands::Verify { proof } => verify_proof(proof, node_url).await,
 	}
 }
+
+pub type TransferProofKey = (u32, u64, AccountId32, AccountId32, u128);
 
 async fn generate_proof(
 	secret_hex: String,
@@ -244,11 +256,18 @@ async fn generate_proof(
 	}
 
 	// Get storage proof
-	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<AccountId32>(
-		&(event.transfer_count, event.from.clone(), event.to.clone(), event.amount).encode(),
+	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofKey>(
+		&(
+			NATIVE_ASSET_ID,
+			event.transfer_count,
+			event.from.clone(),
+			event.to.clone(),
+			event.amount,
+		)
+			.encode(),
 	);
 	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
-		0,
+		NATIVE_ASSET_ID,
 		event.transfer_count,
 		event.from.clone(),
 		event.to.clone(),
@@ -315,7 +334,7 @@ async fn generate_proof(
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			parent_hash,
 			block_number,
-			asset_id: 0,
+			asset_id: NATIVE_ASSET_ID,
 		},
 	};
 
@@ -350,4 +369,70 @@ async fn at_best_block(
 	let best_block = quantus_client.get_latest_block().await?;
 	let block = quantus_client.client().blocks().at(best_block).await?;
 	Ok(block)
+}
+
+async fn verify_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+	use subxt::tx::TxStatus;
+
+	log_print!("Verifying wormhole proof on-chain...");
+
+	// Read proof from file
+	let proof_hex = std::fs::read_to_string(&proof_file).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
+	})?;
+
+	let proof_bytes = hex::decode(proof_hex.trim())
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
+
+	log_verbose!("Proof size: {} bytes", proof_bytes.len());
+
+	// Connect to node
+	let quantus_client = QuantusClient::new(node_url)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+
+	log_verbose!("Connected to node");
+
+	// Create the verify transaction payload
+	let verify_tx = quantus_node::api::tx().wormhole().verify_wormhole_proof(proof_bytes);
+
+	log_verbose!("Submitting unsigned verification transaction...");
+
+	// Submit as unsigned extrinsic
+	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
+	})?;
+
+	let mut tx_progress = unsigned_tx
+		.submit_and_watch()
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
+
+	// Wait for transaction inclusion
+	while let Some(Ok(status)) = tx_progress.next().await {
+		log_verbose!("Transaction status: {:?}", status);
+		match status {
+			TxStatus::InBestBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
+				log_success!("Proof verified successfully on-chain!");
+				log_verbose!("Included in block: {:?}", block_hash);
+				return Ok(());
+			},
+			TxStatus::InFinalizedBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
+				log_success!("Proof verified successfully on-chain!");
+				log_verbose!("Finalized in block: {:?}", block_hash);
+				return Ok(());
+			},
+			TxStatus::Error { message } | TxStatus::Invalid { message } => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Transaction failed: {}",
+					message
+				)));
+			},
+			_ => continue,
+		}
+	}
+
+	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
 }
