@@ -49,7 +49,7 @@ pub async fn update_runtime(
 	wasm_code: Vec<u8>,
 	from_keypair: &QuantumKeyPair,
 	force: bool,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	log_verbose!("🔄 Updating runtime...");
 
@@ -96,7 +96,7 @@ pub async fn update_runtime(
 	log_print!("📡 Submitting runtime update transaction...");
 	log_print!("⏳ This may take longer than usual due to WASM size...");
 
-	if !finalized {
+	if !execution_mode.finalized {
 		log_print!(
 			"💡 Note: Waiting for best block (not finalized) due to PoW chain characteristics"
 		);
@@ -107,7 +107,7 @@ pub async fn update_runtime(
 		from_keypair,
 		sudo_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 
@@ -158,7 +158,7 @@ pub async fn calculate_wasm_hash(wasm_code: &[u8]) -> crate::error::Result<Strin
 pub async fn handle_runtime_command(
 	command: RuntimeCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -195,7 +195,7 @@ pub async fn handle_runtime_command(
 			log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 
 			// Update runtime
-			update_runtime(&quantus_client, wasm_code, &keypair, force, finalized).await?;
+			update_runtime(&quantus_client, wasm_code, &keypair, force, execution_mode).await?;
 
 			log_success!("🎉 Runtime update completed!");
 			log_print!(

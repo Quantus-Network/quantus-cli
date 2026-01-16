@@ -15,7 +15,7 @@ pub async fn execute_generic_call(
 	args: Vec<Value>,
 	from_keypair: &QuantumKeyPair,
 	tip: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	log_print!("🚀 Executing generic call");
 	log_print!("Pallet: {}", pallet.bright_green());
@@ -60,7 +60,7 @@ pub async fn execute_generic_call(
 				&args,
 				false,
 				tip_amount,
-				finalized,
+				execution_mode,
 			)
 			.await?,
 		("Balances", "transfer_keep_alive") =>
@@ -70,30 +70,36 @@ pub async fn execute_generic_call(
 				&args,
 				true,
 				tip_amount,
-				finalized,
+				execution_mode,
 			)
 			.await?,
 
 		// System pallet calls
 		("System", "remark") =>
-			submit_system_remark(quantus_client, from_keypair, &args, tip_amount, finalized).await?,
+			submit_system_remark(quantus_client, from_keypair, &args, tip_amount, execution_mode)
+				.await?,
 
 		// Sudo pallet calls
 		("Sudo", "sudo") => submit_sudo_call(quantus_client, from_keypair, &args).await?,
 
 		// TechCollective pallet calls
 		("TechCollective", "add_member") =>
-			submit_tech_collective_add_member(quantus_client, from_keypair, &args, finalized)
+			submit_tech_collective_add_member(quantus_client, from_keypair, &args, execution_mode)
 				.await?,
 		("TechCollective", "remove_member") =>
-			submit_tech_collective_remove_member(quantus_client, from_keypair, &args, finalized)
-				.await?,
+			submit_tech_collective_remove_member(
+				quantus_client,
+				from_keypair,
+				&args,
+				execution_mode,
+			)
+			.await?,
 		("TechCollective", "vote") =>
-			submit_tech_collective_vote(quantus_client, from_keypair, &args, finalized).await?,
+			submit_tech_collective_vote(quantus_client, from_keypair, &args, execution_mode).await?,
 
 		// ReversibleTransfers pallet calls
 		("ReversibleTransfers", "schedule_transfer") =>
-			submit_reversible_transfer(quantus_client, from_keypair, &args, finalized).await?,
+			submit_reversible_transfer(quantus_client, from_keypair, &args, execution_mode).await?,
 
 		// Scheduler pallet calls
 		("Scheduler", "schedule") =>
@@ -135,7 +141,7 @@ async fn submit_balance_transfer(
 	args: &[Value],
 	keep_alive: bool,
 	tip: Option<u128>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 2 {
 		return Err(QuantusError::Generic(
@@ -170,7 +176,7 @@ async fn submit_balance_transfer(
 			from_keypair,
 			transfer_call,
 			tip,
-			finalized,
+			execution_mode,
 		)
 		.await
 	} else {
@@ -183,7 +189,7 @@ async fn submit_balance_transfer(
 			from_keypair,
 			transfer_call,
 			tip,
-			finalized,
+			execution_mode,
 		)
 		.await
 	}
@@ -195,7 +201,7 @@ async fn submit_system_remark(
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
 	tip: Option<u128>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 1 {
 		return Err(QuantusError::Generic(
@@ -214,7 +220,7 @@ async fn submit_system_remark(
 		from_keypair,
 		remark_call,
 		tip,
-		finalized,
+		execution_mode,
 	)
 	.await
 }
@@ -238,7 +244,7 @@ async fn submit_tech_collective_add_member(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 1 {
 		return Err(QuantusError::Generic(
@@ -265,8 +271,14 @@ async fn submit_tech_collective_add_member(
 		},
 	));
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None, finalized)
-		.await
+	crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		execution_mode,
+	)
+	.await
 }
 
 /// Submit tech collective remove member
@@ -274,7 +286,7 @@ async fn submit_tech_collective_remove_member(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 1 {
 		return Err(QuantusError::Generic(
@@ -302,8 +314,14 @@ async fn submit_tech_collective_remove_member(
 		},
 	));
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, sudo_call, None, finalized)
-		.await
+	crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		sudo_call,
+		None,
+		execution_mode,
+	)
+	.await
 }
 
 /// Submit tech collective vote
@@ -311,7 +329,7 @@ async fn submit_tech_collective_vote(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 2 {
 		return Err(QuantusError::Generic(
@@ -324,8 +342,14 @@ async fn submit_tech_collective_vote(
 
 	let vote_call = quantus_subxt::api::tx().tech_collective().vote(referendum_index, aye);
 
-	crate::cli::common::submit_transaction(quantus_client, from_keypair, vote_call, None, finalized)
-		.await
+	crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		vote_call,
+		None,
+		execution_mode,
+	)
+	.await
 }
 
 /// Submit reversible transfer
@@ -333,7 +357,7 @@ async fn submit_reversible_transfer(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &QuantumKeyPair,
 	args: &[Value],
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	if args.len() != 2 {
 		return Err(QuantusError::Generic(
@@ -367,7 +391,7 @@ async fn submit_reversible_transfer(
 		from_keypair,
 		schedule_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await
 }
@@ -406,13 +430,13 @@ pub async fn handle_generic_call(
 	keypair: &QuantumKeyPair,
 	tip: Option<String>,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("🚀 Generic Call");
 
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
-	execute_generic_call(&quantus_client, pallet, call, args, keypair, tip, finalized).await?;
+	execute_generic_call(&quantus_client, pallet, call, args, keypair, tip, execution_mode).await?;
 
 	Ok(())
 }

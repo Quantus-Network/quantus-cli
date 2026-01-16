@@ -42,13 +42,20 @@ pub enum HighSecurityCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 	},
+
+	/// Show all accounts that this account is guardian for
+	Entrusted {
+		/// Guardian account address (SS58 or wallet name)
+		#[arg(short, long)]
+		from: String,
+	},
 }
 
 /// Handle high security commands
 pub async fn handle_high_security_command(
 	command: HighSecurityCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -165,11 +172,62 @@ pub async fn handle_high_security_command(
 				&keypair,
 				tx_call,
 				None,
-				finalized,
+				execution_mode,
 			)
 			.await?;
 
 			log_success!("✅ SUCCESS High security set! Hash: 0x{}", hex::encode(tx_hash.as_ref()));
+
+			Ok(())
+		},
+
+		HighSecurityCommands::Entrusted { from } => {
+			log_print!("🔍 Checking entrusted accounts");
+
+			// Resolve guardian account address
+			let guardian_resolved = crate::cli::common::resolve_address(&from)?;
+			let guardian_sp = SpAccountId32::from_ss58check(&guardian_resolved).map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Invalid guardian address '{guardian_resolved}': {e:?}"
+				))
+			})?;
+			let guardian_bytes: [u8; 32] = *guardian_sp.as_ref();
+			let guardian_account = subxt::ext::subxt_core::utils::AccountId32::from(guardian_bytes);
+
+			// Convert guardian to Quantus SS58 format
+			let guardian_ss58 = guardian_account.to_quantus_ss58();
+
+			// Query storage for entrusted accounts
+			let storage_addr = quantus_subxt::api::storage()
+				.reversible_transfers()
+				.interceptor_index(guardian_account);
+			let latest = quantus_client.get_latest_block().await?;
+			let value = quantus_client
+				.client()
+				.storage()
+				.at(latest)
+				.fetch(&storage_addr)
+				.await
+				.map_err(|e| {
+					crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
+				})?;
+
+			log_print!("🛡️  Guardian: {}", guardian_ss58.bright_cyan());
+
+			if let Some(entrusted_accounts) = value {
+				if entrusted_accounts.0.is_empty() {
+					log_print!("📋 No entrusted accounts found.");
+				} else {
+					log_success!("✅ Found {} entrusted account(s):", entrusted_accounts.0.len());
+
+					for (index, account_id) in entrusted_accounts.0.iter().enumerate() {
+						let account_ss58 = account_id.to_quantus_ss58();
+						log_print!("  {}. {}", index + 1, account_ss58.bright_green());
+					}
+				}
+			} else {
+				log_print!("📋 No entrusted accounts found.");
+			}
 
 			Ok(())
 		},

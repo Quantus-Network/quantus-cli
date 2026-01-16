@@ -64,15 +64,6 @@ impl QuantusClient {
             )));
 		}
 
-		// Provide helpful hints for common URL issues
-		if node_url.starts_with("ws://") &&
-			(node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm"))
-		{
-			log_verbose!(
-				"💡 Hint: Remote nodes typically require secure WebSocket connections (wss://)"
-			);
-		}
-
 		// Create WS client with custom timeouts
 		let ws_client = WsClientBuilder::default()
             // TODO: Make these configurable in a separate change
@@ -85,11 +76,11 @@ impl QuantusClient {
                 // Provide more helpful error messages for common issues
                 let error_str = format!("{e:?}");
                 let error_msg = if error_str.contains("TimedOut") || error_str.contains("timed out") {
-                    if node_url.starts_with("ws://") && (node_url.contains("a.i.res.fm") || node_url.contains("a.t.res.fm")) {
+                    if node_url.starts_with("ws://") {
                         format!(
-                            "Connection timed out. This remote node requires secure WebSocket connections (wss://). Try using 'wss://{}' instead of 'ws://{}'",
+                            "Connection timed out. Try using 'wss://{}' instead of '{}'",
                             node_url.strip_prefix("ws://").unwrap_or(node_url),
-                            node_url.strip_prefix("ws://").unwrap_or(node_url)
+                            node_url
                         )
                     } else {
                         format!("Connection timed out. Please check if the node is running and accessible at: {node_url}")

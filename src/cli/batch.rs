@@ -63,7 +63,7 @@ pub enum BatchCommands {
 pub async fn handle_batch_command(
 	command: BatchCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	match command {
 		BatchCommands::Send {
@@ -86,7 +86,7 @@ pub async fn handle_batch_command(
 				count,
 				to,
 				amount,
-				finalized,
+				execution_mode,
 			)
 			.await,
 		BatchCommands::Config { limits, info } =>
@@ -105,7 +105,7 @@ async fn handle_batch_send_command(
 	count: Option<u32>,
 	to: Option<String>,
 	amount: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -166,7 +166,7 @@ async fn handle_batch_send_command(
 
 	// Submit batch transaction
 	let tx_hash =
-		batch_transfer(&quantus_client, &keypair, transfers, tip_amount, finalized).await?;
+		batch_transfer(&quantus_client, &keypair, transfers, tip_amount, execution_mode).await?;
 
 	log_print!(
 		"✅ {} Batch transaction submitted! Hash: {:?}",

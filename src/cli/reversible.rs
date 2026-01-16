@@ -111,7 +111,7 @@ pub async fn schedule_transfer(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	to_address: &str,
 	amount: u128,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🔄 Creating reversible transfer...");
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
@@ -141,7 +141,7 @@ pub async fn schedule_transfer(
 		from_keypair,
 		transfer_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 
@@ -155,7 +155,7 @@ pub async fn cancel_transaction(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	tx_id: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("❌ Cancelling reversible transfer...");
 	log_verbose!("   Transaction ID: {}", tx_id.bright_yellow());
@@ -176,7 +176,7 @@ pub async fn cancel_transaction(
 		from_keypair,
 		cancel_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 
@@ -193,7 +193,7 @@ pub async fn schedule_transfer_with_delay(
 	amount: u128,
 	delay: u64,
 	unit_blocks: bool,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	let unit_str = if unit_blocks { "blocks" } else { "seconds" };
 	log_verbose!("🔄 Creating reversible transfer with custom delay ...");
@@ -233,7 +233,7 @@ pub async fn schedule_transfer_with_delay(
 		from_keypair,
 		transfer_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 
@@ -246,7 +246,7 @@ pub async fn schedule_transfer_with_delay(
 pub async fn handle_reversible_command(
 	command: ReversibleCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	log_print!("🔄 Reversible Transfers");
 
@@ -286,7 +286,7 @@ pub async fn handle_reversible_command(
 				&keypair,
 				&resolved_address,
 				raw_amount,
-				finalized,
+				execution_mode,
 			)
 			.await?;
 
@@ -310,7 +310,8 @@ pub async fn handle_reversible_command(
 			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 			// Submit cancel transaction
-			let tx_hash = cancel_transaction(&quantus_client, &keypair, &tx_id, finalized).await?;
+			let tx_hash =
+				cancel_transaction(&quantus_client, &keypair, &tx_id, execution_mode).await?;
 
 			log_print!(
 				"✅ {} Cancel transaction submitted! Hash: {:?}",
@@ -360,7 +361,7 @@ pub async fn handle_reversible_command(
 				raw_amount,
 				delay,
 				unit_blocks,
-				finalized,
+				execution_mode,
 			)
 			.await?;
 

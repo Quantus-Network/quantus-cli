@@ -70,7 +70,7 @@ pub enum PreimageCommands {
 pub async fn handle_preimage_command(
 	command: PreimageCommands,
 	node_url: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -85,14 +85,21 @@ pub async fn handle_preimage_command(
 			list_preimages(&quantus_client).await?;
 		},
 		PreimageCommands::Request { hash, from } => {
-			request_preimage(&quantus_client, &hash, &from, finalized).await?;
+			request_preimage(&quantus_client, &hash, &from, execution_mode).await?;
 		},
 		PreimageCommands::Note { content, from } => {
-			note_preimage(&quantus_client, &content, &from, finalized).await?;
+			note_preimage(&quantus_client, &content, &from, execution_mode).await?;
 		},
 		PreimageCommands::Create { wasm_file, from, password, password_file } => {
-			create_preimage(&quantus_client, wasm_file, &from, password, password_file, finalized)
-				.await?;
+			create_preimage(
+				&quantus_client,
+				wasm_file,
+				&from,
+				password,
+				password_file,
+				execution_mode,
+			)
+			.await?;
 		},
 	}
 
@@ -295,7 +302,7 @@ async fn request_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	hash_str: &str,
 	from_str: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let preimage_hash = parse_hash(hash_str)?;
 
@@ -314,7 +321,7 @@ async fn request_preimage(
 		&keypair,
 		request_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 	log_print!("✅ Preimage request transaction submitted: {:?}", tx_hash);
@@ -331,7 +338,7 @@ async fn note_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	content_str: &str,
 	from_str: &str,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	let content = hex::decode(content_str.trim_start_matches("0x"))
 		.map_err(|e| QuantusError::Generic(format!("Invalid hex content: {}", e)))?;
@@ -351,7 +358,7 @@ async fn note_preimage(
 		&keypair,
 		note_call,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 	log_print!("✅ Preimage note transaction submitted: {:?}", tx_hash);
@@ -370,7 +377,7 @@ async fn create_preimage(
 	from_str: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-	finalized: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	use qp_poseidon::PoseidonHasher;
 
@@ -415,7 +422,7 @@ async fn create_preimage(
 		&keypair,
 		note_preimage_tx,
 		None,
-		finalized,
+		execution_mode,
 	)
 	.await?;
 	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
