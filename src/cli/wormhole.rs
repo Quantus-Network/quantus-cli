@@ -1,10 +1,9 @@
 use crate::{
 	chain::{
 		client::{ChainConfig, QuantusClient},
-		quantus_subxt as quantus_node,
-		quantus_subxt::api::wormhole,
+		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
-	cli::common::submit_transaction,
+	cli::common::{submit_transaction, ExecutionMode},
 	log_print, log_success, log_verbose,
 	wallet::QuantumKeyPair,
 };
@@ -200,9 +199,15 @@ async fn generate_proof(
 		private_key: keypair.private_key.clone(),
 	};
 
-	submit_transaction(&quantus_client, &quantum_keypair, transfer_tx, None, false)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	submit_transaction(
+		&quantus_client,
+		&quantum_keypair,
+		transfer_tx,
+		None,
+		ExecutionMode { finalized: false, wait_for_transaction: true },
+	)
+	.await
+	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
 	let blocks = at_best_block(&quantus_client)
 		.await
