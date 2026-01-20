@@ -254,43 +254,17 @@ async fn generate_proof(
 ) -> crate::error::Result<()> {
 	log_print!("Generating wormhole proof...");
 
-	// Parse secret
-	let secret_bytes = hex::decode(secret_hex.trim_start_matches("0x"))
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid secret hex: {}", e)))?;
-	if secret_bytes.len() != 32 {
-		return Err(crate::error::QuantusError::Generic(
-			"Secret must be exactly 32 bytes".to_string(),
-		));
-	}
-	let secret_array: [u8; 32] = secret_bytes
-		.try_into()
-		.map_err(|_| crate::error::QuantusError::Generic("Failed to convert secret".to_string()))?;
+	// Parse secret using helper function
+	let secret_array =
+		parse_secret_hex(&secret_hex).map_err(|e| crate::error::QuantusError::Generic(e))?;
 	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
 	})?;
 
-	// Parse exit account
-	let exit_account_id = if let Some(exit_account) = exit_account_str.strip_prefix("0x") {
-		let exit_account_bytes = hex::decode(exit_account).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid exit account hex: {}", e))
-		})?;
-		if exit_account_bytes.len() != 32 {
-			return Err(crate::error::QuantusError::Generic(
-				"Exit account must be 32 bytes".to_string(),
-			));
-		}
-		SubxtAccountId(exit_account_bytes.try_into().map_err(|_| {
-			crate::error::QuantusError::Generic("Failed to convert exit account".to_string())
-		})?)
-	} else {
-		// Assume it's a wallet name, resolve it
-		let resolved = crate::cli::common::resolve_address(&exit_account_str)?;
-		let account_id = AccountId32::from_ss58check(&resolved).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid SS58 address: {}", e))
-		})?;
-		let bytes: [u8; 32] = account_id.into();
-		SubxtAccountId(bytes)
-	};
+	// Parse exit account using helper function
+	let exit_account_bytes = parse_exit_account(&exit_account_str)
+		.map_err(|e| crate::error::QuantusError::Generic(e))?;
+	let exit_account_id = SubxtAccountId(exit_account_bytes);
 
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
@@ -434,14 +408,9 @@ async fn generate_proof(
 	)
 	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
-	// Quantize the funding amount (from 12 decimal places to 2)
-	// The circuit expects a u32 value.
-	let input_amount_quantized: u32 =
-		(funding_amount / SCALE_DOWN_FACTOR).try_into().map_err(|_| {
-			crate::error::QuantusError::Generic(
-				"Funding amount too large after quantization".to_string(),
-			)
-		})?;
+	// Quantize the funding amount using helper function
+	let input_amount_quantized: u32 = quantize_funding_amount(funding_amount)
+		.map_err(|e| crate::error::QuantusError::Generic(e))?;
 
 	// Calculate output amount after fee deduction
 	let output_amount_quantized = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
@@ -518,9 +487,9 @@ async fn aggregate_proofs(
 
 	log_print!("Aggregating {} proofs...", proof_files.len());
 
-	if proof_files.is_empty() {
-		return Err(crate::error::QuantusError::Generic("No proof files provided".to_string()));
-	}
+	// Validate aggregation parameters using helper function
+	let max_leaf_proofs = validate_aggregation_params(proof_files.len(), depth, branching_factor)
+		.map_err(|e| crate::error::QuantusError::Generic(e))?;
 
 	// Build the wormhole verifier to get circuit data for parsing proofs
 	let config = CircuitConfig::standard_recursion_zk_config();
@@ -534,36 +503,19 @@ async fn aggregate_proofs(
 		"Aggregation config: branching_factor={}, depth={}, num_leaf_proofs={}",
 		aggregation_config.tree_branching_factor,
 		aggregation_config.tree_depth,
-		aggregation_config.num_leaf_proofs
+		max_leaf_proofs
 	);
-
-	if proof_files.len() > aggregation_config.num_leaf_proofs {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Too many proofs: {} provided, max {} for depth={} branching_factor={}",
-			proof_files.len(),
-			aggregation_config.num_leaf_proofs,
-			depth,
-			branching_factor
-		)));
-	}
 
 	// Create aggregator
 	let mut aggregator =
 		WormholeProofAggregator::new(verifier.circuit_data).with_config(aggregation_config);
 
-	// Load and add proofs
+	// Load and add proofs using helper function
 	for (idx, proof_file) in proof_files.iter().enumerate() {
 		log_verbose!("Loading proof {}/{}: {}", idx + 1, proof_files.len(), proof_file);
 
-		let proof_hex = std::fs::read_to_string(proof_file).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to read {}: {}", proof_file, e))
-		})?;
-
-		let proof_bytes = hex::decode(proof_hex.trim()).map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to decode hex from {}: {}",
-				proof_file, e
-			))
+		let proof_bytes = read_proof_file(proof_file).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to load {}: {}", proof_file, e))
 		})?;
 
 		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes, &common_data)
@@ -609,9 +561,8 @@ async fn aggregate_proofs(
 			))
 		})?;
 
-	// Save aggregated proof
-	let proof_hex = hex::encode(aggregated_proof.proof.to_bytes());
-	std::fs::write(&output_file, proof_hex).map_err(|e| {
+	// Save aggregated proof using helper function
+	write_proof_file(&output_file, &aggregated_proof.proof.to_bytes()).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
 	})?;
 
