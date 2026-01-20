@@ -10,12 +10,14 @@ use crate::{
 use clap::Subcommand;
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
 use qp_poseidon::PoseidonHasher;
-use qp_wormhole_circuit::{
-	inputs::{CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs},
-	nullifier::Nullifier,
+use qp_wormhole_circuit::inputs::{
+	AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
 };
+use qp_wormhole_circuit::nullifier::Nullifier;
 use qp_wormhole_prover::WormholeProver;
+use qp_wormhole_verifier::WormholeVerifier;
 use qp_zk_circuits_common::{
+	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
 	utils::{BytesDigest, Digest},
 };
@@ -35,10 +37,98 @@ use subxt::{
 };
 
 /// Native asset id
-const NATIVE_ASSET_ID: u32 = 0;
+pub const NATIVE_ASSET_ID: u32 = 0;
 
 /// Scale down factor for quantizing amounts (10^10 to go from 12 to 2 decimal places)
-const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
+pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
+
+/// Parse a hex-encoded secret string into a 32-byte array
+pub fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32], String> {
+	let secret_bytes = hex::decode(secret_hex.trim_start_matches("0x"))
+		.map_err(|e| format!("Invalid secret hex: {}", e))?;
+
+	if secret_bytes.len() != 32 {
+		return Err(format!("Secret must be exactly 32 bytes, got {} bytes", secret_bytes.len()));
+	}
+
+	secret_bytes
+		.try_into()
+		.map_err(|_| "Failed to convert secret to 32-byte array".to_string())
+}
+
+/// Parse an exit account from either hex or SS58 format
+pub fn parse_exit_account(exit_account_str: &str) -> Result<[u8; 32], String> {
+	if let Some(hex_str) = exit_account_str.strip_prefix("0x") {
+		let bytes = hex::decode(hex_str).map_err(|e| format!("Invalid exit account hex: {}", e))?;
+
+		if bytes.len() != 32 {
+			return Err(format!("Exit account must be 32 bytes, got {} bytes", bytes.len()));
+		}
+
+		bytes.try_into().map_err(|_| "Failed to convert exit account".to_string())
+	} else {
+		// Try to parse as SS58
+		let account_id = AccountId32::from_ss58check(exit_account_str)
+			.map_err(|e| format!("Invalid SS58 address: {}", e))?;
+
+		Ok(account_id.into())
+	}
+}
+
+/// Quantize a funding amount from 12 decimal places to 2 decimal places
+/// Returns an error if the quantized value doesn't fit in u32
+pub fn quantize_funding_amount(amount: u128) -> Result<u32, String> {
+	let quantized = amount / SCALE_DOWN_FACTOR;
+
+	quantized
+		.try_into()
+		.map_err(|_| format!("Funding amount {} too large after quantization", quantized))
+}
+
+/// Read and decode a hex-encoded proof file
+pub fn read_proof_file(path: &str) -> Result<Vec<u8>, String> {
+	let proof_hex =
+		std::fs::read_to_string(path).map_err(|e| format!("Failed to read proof file: {}", e))?;
+
+	hex::decode(proof_hex.trim()).map_err(|e| format!("Failed to decode proof hex: {}", e))
+}
+
+/// Write a proof to a hex-encoded file
+pub fn write_proof_file(path: &str, proof_bytes: &[u8]) -> Result<(), String> {
+	let proof_hex = hex::encode(proof_bytes);
+	std::fs::write(path, proof_hex).map_err(|e| format!("Failed to write proof file: {}", e))
+}
+
+/// Validate aggregation parameters
+pub fn validate_aggregation_params(
+	num_proofs: usize,
+	depth: usize,
+	branching_factor: usize,
+) -> Result<usize, String> {
+	if num_proofs == 0 {
+		return Err("No proofs provided".to_string());
+	}
+
+	if branching_factor < 2 {
+		return Err("Branching factor must be at least 2".to_string());
+	}
+
+	if depth == 0 {
+		return Err("Depth must be at least 1".to_string());
+	}
+
+	// Calculate max leaf proofs for given depth and branching factor
+	let max_leaf_proofs = branching_factor.pow(depth as u32);
+
+	if num_proofs > max_leaf_proofs {
+		return Err(format!(
+			"Too many proofs: {} provided, max {} for depth={} branching_factor={}",
+			num_proofs, max_leaf_proofs, depth, branching_factor
+		));
+	}
+
+	Ok(max_leaf_proofs)
+}
 
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
@@ -72,10 +162,34 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "proof.hex")]
 		output: String,
 	},
-	/// Verify a wormhole proof on-chain
+	/// Verify a single wormhole proof on-chain
 	Verify {
 		/// Path to the proof file (hex-encoded)
 		#[arg(short, long, default_value = "proof.hex")]
+		proof: String,
+	},
+	/// Aggregate multiple wormhole proofs into a single proof
+	Aggregate {
+		/// Input proof files (hex-encoded)
+		#[arg(short, long, num_args = 1..)]
+		proofs: Vec<String>,
+
+		/// Output file for the aggregated proof (default: aggregated_proof.hex)
+		#[arg(short, long, default_value = "aggregated_proof.hex")]
+		output: String,
+
+		/// Tree depth for aggregation (default: 1)
+		#[arg(long, default_value = "1")]
+		depth: usize,
+
+		/// Branching factor for aggregation tree (default: 2)
+		#[arg(long, default_value = "2")]
+		branching_factor: usize,
+	},
+	/// Verify an aggregated wormhole proof on-chain
+	VerifyAggregated {
+		/// Path to the aggregated proof file (hex-encoded)
+		#[arg(short, long, default_value = "aggregated_proof.hex")]
 		proof: String,
 	},
 }
@@ -107,6 +221,12 @@ pub async fn handle_wormhole_command(
 			.await
 		},
 		WormholeCommands::Verify { proof } => verify_proof(proof, node_url).await,
+		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
+			aggregate_proofs(proofs, output, depth, branching_factor).await
+		},
+		WormholeCommands::VerifyAggregated { proof } => {
+			verify_aggregated_proof(proof, node_url).await
+		},
 	}
 }
 
@@ -305,15 +425,13 @@ async fn generate_proof(
 	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
 	// Quantize the funding amount (from 12 decimal places to 2)
-	// Note: The circuit expects u32 internally but the crates.io version of
-	// qp-wormhole-circuit still uses u128 in PublicCircuitInputs.
-	// The actual quantized value must fit in u32.
-	let funding_amount_quantized: u128 = funding_amount / SCALE_DOWN_FACTOR;
-	if funding_amount_quantized > u32::MAX as u128 {
-		return Err(crate::error::QuantusError::Generic(
-			"Funding amount too large after quantization".to_string(),
-		));
-	}
+	// The circuit expects a u32 value.
+	let funding_amount_quantized: u32 =
+		(funding_amount / SCALE_DOWN_FACTOR).try_into().map_err(|_| {
+			crate::error::QuantusError::Generic(
+				"Funding amount too large after quantization".to_string(),
+			)
+		})?;
 
 	let inputs = CircuitInputs {
 		private: PrivateCircuitInputs {
@@ -341,7 +459,7 @@ async fn generate_proof(
 	};
 
 	log_verbose!("Generating ZK proof...");
-	let config = CircuitConfig::standard_recursion_config();
+	let config = CircuitConfig::standard_recursion_zk_config();
 	let prover = WormholeProver::new(config);
 	let prover_next = prover
 		.commit(&inputs)
@@ -371,6 +489,283 @@ async fn at_best_block(
 	let best_block = quantus_client.get_latest_block().await?;
 	let block = quantus_client.client().blocks().at(best_block).await?;
 	Ok(block)
+}
+
+async fn aggregate_proofs(
+	proof_files: Vec<String>,
+	output_file: String,
+	depth: usize,
+	branching_factor: usize,
+) -> crate::error::Result<()> {
+	use qp_wormhole_aggregator::{
+		aggregator::WormholeProofAggregator, circuits::tree::TreeAggregationConfig,
+	};
+
+	log_print!("Aggregating {} proofs...", proof_files.len());
+
+	if proof_files.is_empty() {
+		return Err(crate::error::QuantusError::Generic("No proof files provided".to_string()));
+	}
+
+	// Build the wormhole verifier to get circuit data for parsing proofs
+	let config = CircuitConfig::standard_recursion_zk_config();
+	let verifier = WormholeVerifier::new(config.clone(), None);
+	let common_data = verifier.circuit_data.common.clone();
+
+	// Configure aggregation
+	let aggregation_config = TreeAggregationConfig::new(branching_factor, depth as u32);
+
+	log_verbose!(
+		"Aggregation config: branching_factor={}, depth={}, num_leaf_proofs={}",
+		aggregation_config.tree_branching_factor,
+		aggregation_config.tree_depth,
+		aggregation_config.num_leaf_proofs
+	);
+
+	if proof_files.len() > aggregation_config.num_leaf_proofs {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Too many proofs: {} provided, max {} for depth={} branching_factor={}",
+			proof_files.len(),
+			aggregation_config.num_leaf_proofs,
+			depth,
+			branching_factor
+		)));
+	}
+
+	// Create aggregator
+	let mut aggregator =
+		WormholeProofAggregator::new(verifier.circuit_data).with_config(aggregation_config);
+
+	// Load and add proofs
+	for (idx, proof_file) in proof_files.iter().enumerate() {
+		log_verbose!("Loading proof {}/{}: {}", idx + 1, proof_files.len(), proof_file);
+
+		let proof_hex = std::fs::read_to_string(proof_file).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to read {}: {}", proof_file, e))
+		})?;
+
+		let proof_bytes = hex::decode(proof_hex.trim()).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to decode hex from {}: {}",
+				proof_file, e
+			))
+		})?;
+
+		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes, &common_data)
+				crate::error::QuantusError::Generic(format!(
+					"Failed to deserialize proof from {}: {}",
+					proof_file, e
+				))
+			})?;
+
+		aggregator.push_proof(proof).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to add proof: {}", e))
+		})?;
+	}
+
+	log_print!("Running aggregation...");
+	let aggregated_proof = aggregator
+		.aggregate()
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
+
+	// Parse and display aggregated public inputs
+	let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_slice(
+		aggregated_proof.proof.public_inputs.as_slice(),
+	)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to parse aggregated public inputs: {}",
+			e
+		))
+	})?;
+
+	log_verbose!("Aggregated public inputs: {:#?}", aggregated_public_inputs);
+
+	// Verify the aggregated proof locally
+	log_verbose!("Verifying aggregated proof locally...");
+	aggregated_proof
+		.circuit_data
+		.verify(aggregated_proof.proof.clone())
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Aggregated proof verification failed: {}",
+				e
+			))
+		})?;
+
+	// Save aggregated proof
+	let proof_hex = hex::encode(aggregated_proof.proof.to_bytes());
+	std::fs::write(&output_file, proof_hex).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
+	})?;
+
+	log_success!("Aggregation complete!");
+	log_success!("Output: {}", output_file);
+	log_print!(
+		"Aggregated {} proofs into 1 proof with {} exit accounts",
+		proof_files.len(),
+		aggregated_public_inputs.account_data.len()
+	);
+
+	Ok(())
+}
+
+async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+	use subxt::tx::TxStatus;
+
+	log_print!("Verifying aggregated wormhole proof on-chain...");
+
+	// Read proof from file
+	let proof_hex = std::fs::read_to_string(&proof_file).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
+	})?;
+
+	let proof_bytes = hex::decode(proof_hex.trim())
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
+
+	log_verbose!("Aggregated proof size: {} bytes", proof_bytes.len());
+
+	// Connect to node
+	let quantus_client = QuantusClient::new(node_url)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+
+	log_verbose!("Connected to node");
+
+	// Create the verify_aggregated_proof transaction payload
+	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
+
+	log_verbose!("Submitting unsigned aggregated verification transaction...");
+
+	// Submit as unsigned extrinsic
+	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
+	})?;
+
+	let mut tx_progress = unsigned_tx
+		.submit_and_watch()
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
+
+	// Wait for transaction inclusion
+	while let Some(Ok(status)) = tx_progress.next().await {
+		log_verbose!("Transaction status: {:?}", status);
+		match status {
+			TxStatus::InBestBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
+				log_success!("Aggregated proof verified successfully on-chain!");
+				log_verbose!("Included in block: {:?}", block_hash);
+				return Ok(());
+			},
+			TxStatus::InFinalizedBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
+				log_success!("Aggregated proof verified successfully on-chain!");
+				log_verbose!("Finalized in block: {:?}", block_hash);
+				return Ok(());
+			},
+			TxStatus::Error { message } | TxStatus::Invalid { message } => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Transaction failed: {}",
+					message
+				)));
+			},
+			_ => continue,
+		}
+	}
+
+	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use tempfile::NamedTempFile;
+
+	#[test]
+	fn test_parse_secret_hex() {
+		// Valid hex with and without 0x prefix
+		let secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+		assert!(parse_secret_hex(secret).is_ok());
+		assert!(parse_secret_hex(&format!("0x{}", secret)).is_ok());
+
+		// Wrong length
+		assert!(parse_secret_hex("0123456789abcdef").unwrap_err().contains("32 bytes"));
+
+		// Invalid hex characters
+		assert!(parse_secret_hex("ghij".repeat(16).as_str())
+			.unwrap_err()
+			.contains("Invalid secret hex"));
+	}
+
+	#[test]
+	fn test_parse_exit_account() {
+		// Valid hex account
+		let hex = "0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+		assert!(parse_exit_account(hex).is_ok());
+
+		// Wrong length
+		assert!(parse_exit_account("0x0123456789abcdef").unwrap_err().contains("32 bytes"));
+
+		// Invalid SS58
+		assert!(parse_exit_account("not_valid").unwrap_err().contains("Invalid SS58"));
+	}
+
+	#[test]
+	fn test_quantize_funding_amount() {
+		// Basic quantization: 1 token (12 decimals) -> 100 (2 decimals)
+		assert_eq!(quantize_funding_amount(1_000_000_000_000).unwrap(), 100);
+
+		// Zero and small amounts
+		assert_eq!(quantize_funding_amount(0).unwrap(), 0);
+		assert_eq!(quantize_funding_amount(5_000_000_000).unwrap(), 0); // < 10^10
+
+		// Max valid and overflow
+		let max_valid = (u32::MAX as u128) * SCALE_DOWN_FACTOR;
+		assert_eq!(quantize_funding_amount(max_valid).unwrap(), u32::MAX);
+		assert!(quantize_funding_amount(max_valid + SCALE_DOWN_FACTOR)
+			.unwrap_err()
+			.contains("too large"));
+	}
+
+	#[test]
+	fn test_validate_aggregation_params() {
+		// Valid configurations
+		assert_eq!(validate_aggregation_params(2, 1, 2).unwrap(), 2);
+		assert_eq!(validate_aggregation_params(9, 2, 3).unwrap(), 9); // 3^2 = 9
+
+		// Invalid: no proofs, bad branching factor, zero depth
+		assert!(validate_aggregation_params(0, 1, 2).unwrap_err().contains("No proofs"));
+		assert!(validate_aggregation_params(2, 1, 1).unwrap_err().contains("Branching factor"));
+		assert!(validate_aggregation_params(2, 0, 2).unwrap_err().contains("Depth"));
+
+		// Too many proofs for tree size
+		assert!(validate_aggregation_params(3, 1, 2).unwrap_err().contains("Too many proofs"));
+	}
+
+	#[test]
+	fn test_proof_file_roundtrip() {
+		let temp_file = NamedTempFile::new().unwrap();
+		let path = temp_file.path().to_str().unwrap();
+		let proof_bytes = vec![0x01, 0x02, 0x03, 0xaa, 0xbb, 0xcc];
+
+		write_proof_file(path, &proof_bytes).unwrap();
+		assert_eq!(read_proof_file(path).unwrap(), proof_bytes);
+	}
+
+	#[test]
+	fn test_read_proof_file_errors() {
+		// File not found
+		assert!(read_proof_file("/nonexistent/path/proof.hex")
+			.unwrap_err()
+			.contains("Failed to read"));
+
+		// Invalid hex content
+		let temp_file = NamedTempFile::new().unwrap();
+		std::fs::write(temp_file.path(), "not valid hex!").unwrap();
+		assert!(read_proof_file(temp_file.path().to_str().unwrap())
+			.unwrap_err()
+			.contains("Failed to decode"));
+	}
 }
 
 async fn verify_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
