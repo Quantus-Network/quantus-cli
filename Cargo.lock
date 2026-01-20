@@ -3886,8 +3886,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-aggregator"
-version = "0.1.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git#e164f3703293c4cdcd97608252b9c4fac358e8bf"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3901,8 +3900,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit"
-version = "0.1.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git#e164f3703293c4cdcd97608252b9c4fac358e8bf"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "hex",
@@ -3912,8 +3910,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-prover"
-version = "0.1.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git#e164f3703293c4cdcd97608252b9c4fac358e8bf"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3923,8 +3920,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-verifier"
-version = "0.1.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git#e164f3703293c4cdcd97608252b9c4fac358e8bf"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3934,8 +3930,7 @@ dependencies = [
 
 [[package]]
 name = "qp-zk-circuits-common"
-version = "0.1.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git#e164f3703293c4cdcd97608252b9c4fac358e8bf"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "hex",
@@ -3981,6 +3976,7 @@ dependencies = [
  "subxt",
  "subxt-metadata",
  "tempfile",
+ "test-helpers",
  "thiserror 2.0.16",
  "tokio",
  "toml 0.9.5",
@@ -5685,8 +5681,7 @@ dependencies = [
 
 [[package]]
 name = "test-helpers"
-version = "0.1.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git#e164f3703293c4cdcd97608252b9c4fac358e8bf"
+version = "0.1.8"
 dependencies = [
  "anyhow",
  "hex",

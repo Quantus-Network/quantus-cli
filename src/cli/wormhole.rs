@@ -42,6 +42,16 @@ pub const NATIVE_ASSET_ID: u32 = 0;
 /// Scale down factor for quantizing amounts (10^10 to go from 12 to 2 decimal places)
 pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
 
+/// Volume fee rate in basis points (10 bps = 0.1%)
+/// This must match the on-chain VolumeFeeRateBps configuration
+pub const VOLUME_FEE_BPS: u32 = 10;
+
+/// Compute output amount after fee deduction
+/// output = input * (10000 - fee_bps) / 10000
+pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
+	((input_amount as u64) * (10000 - fee_bps as u64) / 10000) as u32
+}
+
 /// Parse a hex-encoded secret string into a 32-byte array
 pub fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32], String> {
 	let secret_bytes = hex::decode(secret_hex.trim_start_matches("0x"))
@@ -426,12 +436,15 @@ async fn generate_proof(
 
 	// Quantize the funding amount (from 12 decimal places to 2)
 	// The circuit expects a u32 value.
-	let funding_amount_quantized: u32 =
+	let input_amount_quantized: u32 =
 		(funding_amount / SCALE_DOWN_FACTOR).try_into().map_err(|_| {
 			crate::error::QuantusError::Generic(
 				"Funding amount too large after quantization".to_string(),
 			)
 		})?;
+
+	// Calculate output amount after fee deduction
+	let output_amount_quantized = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
 
 	let inputs = CircuitInputs {
 		private: PrivateCircuitInputs {
@@ -444,9 +457,11 @@ async fn generate_proof(
 			state_root,
 			extrinsics_root,
 			digest,
+			input_amount: input_amount_quantized,
 		},
 		public: PublicCircuitInputs {
-			funding_amount: funding_amount_quantized,
+			output_amount: output_amount_quantized,
+			volume_fee_bps: VOLUME_FEE_BPS,
 			nullifier: Nullifier::from_preimage(secret, event.transfer_count).hash.into(),
 			exit_account: BytesDigest::try_from(exit_account_id.as_ref() as &[u8])
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
@@ -552,6 +567,7 @@ async fn aggregate_proofs(
 		})?;
 
 		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes, &common_data)
+			.map_err(|e| {
 				crate::error::QuantusError::Generic(format!(
 					"Failed to deserialize proof from {}: {}",
 					proof_file, e
@@ -679,7 +695,38 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use plonky2::plonk::circuit_data::CircuitConfig;
+	use qp_wormhole_circuit::inputs::{
+		AggregatedPublicCircuitInputs, CircuitInputs, PublicCircuitInputs,
+	};
+	use qp_wormhole_prover::WormholeProver;
+	use qp_wormhole_test_helpers::TestInputs;
+	use qp_wormhole_verifier::WormholeVerifier;
 	use tempfile::NamedTempFile;
+
+	/// Helper to get a standard circuit config for tests
+	fn test_circuit_config() -> CircuitConfig {
+		CircuitConfig::standard_recursion_zk_config()
+	}
+
+	#[test]
+	fn test_compute_output_amount() {
+		// 0.1% fee (10 bps): output = input * 9990 / 10000
+		assert_eq!(compute_output_amount(1000, 10), 999);
+		assert_eq!(compute_output_amount(10000, 10), 9990);
+
+		// 1% fee (100 bps): output = input * 9900 / 10000
+		assert_eq!(compute_output_amount(1000, 100), 990);
+		assert_eq!(compute_output_amount(10000, 100), 9900);
+
+		// 0% fee
+		assert_eq!(compute_output_amount(1000, 0), 1000);
+
+		// Edge cases
+		assert_eq!(compute_output_amount(0, 10), 0);
+		assert_eq!(compute_output_amount(1, 10), 0); // rounds down
+		assert_eq!(compute_output_amount(100, 10), 99);
+	}
 
 	#[test]
 	fn test_parse_secret_hex() {
@@ -765,6 +812,365 @@ mod tests {
 		assert!(read_proof_file(temp_file.path().to_str().unwrap())
 			.unwrap_err()
 			.contains("Failed to decode"));
+	}
+
+	#[test]
+	fn test_fee_calculation_edge_cases() {
+		// Test the circuit fee constraint: output_amount * 10000 <= input_amount * (10000 - volume_fee_bps)
+		// This is equivalent to: output <= input * (1 - fee_rate)
+
+		// Small amounts where fee rounds to zero
+		let input_small: u32 = 100;
+		let output_small = compute_output_amount(input_small, VOLUME_FEE_BPS);
+		assert_eq!(output_small, 99);
+		// Verify constraint: 99 * 10000 = 990000 <= 100 * 9990 = 999000 ✓
+		assert!(
+			(output_small as u64) * 10000 <= (input_small as u64) * (10000 - VOLUME_FEE_BPS as u64)
+		);
+
+		// Medium amounts
+		let input_medium: u32 = 10000;
+		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
+		assert_eq!(output_medium, 9990);
+		assert!(
+			(output_medium as u64) * 10000
+				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+		);
+
+		// Large amounts near u32::MAX
+		let input_large: u32 = u32::MAX / 2;
+		let output_large = compute_output_amount(input_large, VOLUME_FEE_BPS);
+		assert!(
+			(output_large as u64) * 10000 <= (input_large as u64) * (10000 - VOLUME_FEE_BPS as u64)
+		);
+
+		// Test with different fee rates
+		for fee_bps in [0u32, 1, 10, 50, 100, 500, 1000] {
+			let input: u32 = 100000;
+			let output = compute_output_amount(input, fee_bps);
+			assert!(
+				(output as u64) * 10000 <= (input as u64) * (10000 - fee_bps as u64),
+				"Fee constraint violated for fee_bps={}: {} * 10000 > {} * {}",
+				fee_bps,
+				output,
+				input,
+				10000 - fee_bps
+			);
+		}
+	}
+
+	#[test]
+	fn test_nullifier_determinism() {
+		use qp_wormhole_circuit::nullifier::Nullifier;
+		use qp_zk_circuits_common::utils::BytesDigest;
+
+		let secret: BytesDigest = [1u8; 32].try_into().expect("valid secret");
+		let transfer_count = 42u64;
+
+		// Generate nullifier multiple times - should be identical
+		let nullifier1 = Nullifier::from_preimage(secret, transfer_count);
+		let nullifier2 = Nullifier::from_preimage(secret, transfer_count);
+		let nullifier3 = Nullifier::from_preimage(secret, transfer_count);
+
+		assert_eq!(nullifier1.hash, nullifier2.hash);
+		assert_eq!(nullifier2.hash, nullifier3.hash);
+
+		// Different transfer count should produce different nullifier
+		let nullifier_different = Nullifier::from_preimage(secret, transfer_count + 1);
+		assert_ne!(nullifier1.hash, nullifier_different.hash);
+
+		// Different secret should produce different nullifier
+		let different_secret: BytesDigest = [2u8; 32].try_into().expect("valid secret");
+		let nullifier_different_secret = Nullifier::from_preimage(different_secret, transfer_count);
+		assert_ne!(nullifier1.hash, nullifier_different_secret.hash);
+	}
+
+	#[test]
+	fn test_unspendable_account_determinism() {
+		use qp_wormhole_circuit::unspendable_account::UnspendableAccount;
+		use qp_zk_circuits_common::utils::BytesDigest;
+
+		let secret: BytesDigest = [1u8; 32].try_into().expect("valid secret");
+
+		// Generate unspendable account multiple times - should be identical
+		let account1 = UnspendableAccount::from_secret(secret);
+		let account2 = UnspendableAccount::from_secret(secret);
+
+		assert_eq!(account1.account_id, account2.account_id);
+
+		// Different secret should produce different account
+		let different_secret: BytesDigest = [2u8; 32].try_into().expect("valid secret");
+		let account_different = UnspendableAccount::from_secret(different_secret);
+		assert_ne!(account1.account_id, account_different.account_id);
+	}
+
+	/// Integration test: Generate a real ZK proof using test fixtures and verify it
+	#[test]
+	#[ignore] // This test is slow (~30s) - run with `cargo test -- --ignored`
+	fn test_full_proof_generation_and_verification() {
+		// Use test fixtures from qp-wormhole-test-helpers
+		let inputs = CircuitInputs::test_inputs_0();
+
+		// Verify the test inputs have correct fee configuration
+		assert_eq!(inputs.public.volume_fee_bps, VOLUME_FEE_BPS);
+		assert_eq!(inputs.public.asset_id, NATIVE_ASSET_ID);
+
+		// Verify fee constraint is satisfied in test inputs
+		let input_amount = inputs.private.input_amount;
+		let output_amount = inputs.public.output_amount;
+		assert!(
+			(output_amount as u64) * 10000
+				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			"Test inputs violate fee constraint"
+		);
+
+		// Create prover and generate proof
+		let config = test_circuit_config();
+		let prover = WormholeProver::new(config.clone());
+		let prover_committed = prover.commit(&inputs).expect("Failed to commit inputs");
+		let proof = prover_committed.prove().expect("Failed to generate proof");
+
+		// Parse and verify public inputs from proof
+		let parsed_public_inputs =
+			PublicCircuitInputs::try_from(&proof).expect("Failed to parse public inputs");
+
+		assert_eq!(parsed_public_inputs.asset_id, inputs.public.asset_id);
+		assert_eq!(parsed_public_inputs.output_amount, inputs.public.output_amount);
+		assert_eq!(parsed_public_inputs.volume_fee_bps, inputs.public.volume_fee_bps);
+		assert_eq!(parsed_public_inputs.nullifier, inputs.public.nullifier);
+		assert_eq!(parsed_public_inputs.exit_account, inputs.public.exit_account);
+		assert_eq!(parsed_public_inputs.block_hash, inputs.public.block_hash);
+		assert_eq!(parsed_public_inputs.parent_hash, inputs.public.parent_hash);
+		assert_eq!(parsed_public_inputs.block_number, inputs.public.block_number);
+
+		// Create verifier and verify proof
+		let verifier = WormholeVerifier::new(config, None);
+		verifier.verify(proof).expect("Proof verification failed");
+	}
+
+	/// Integration test: Generate proof, serialize/deserialize, then verify
+	#[test]
+	#[ignore] // This test is slow - run with `cargo test -- --ignored`
+	fn test_proof_serialization_roundtrip() {
+		let inputs = CircuitInputs::test_inputs_0();
+		let config = test_circuit_config();
+
+		// Generate proof
+		let prover = WormholeProver::new(config.clone());
+		let proof = prover.commit(&inputs).unwrap().prove().unwrap();
+
+		// Serialize to bytes
+		let proof_bytes = proof.to_bytes();
+
+		// Write to temp file and read back
+		let temp_file = NamedTempFile::new().unwrap();
+		let path = temp_file.path().to_str().unwrap();
+		write_proof_file(path, &proof_bytes).unwrap();
+		let read_bytes = read_proof_file(path).unwrap();
+
+		assert_eq!(proof_bytes, read_bytes, "Proof bytes should match after file roundtrip");
+
+		// Deserialize and verify
+		let verifier = WormholeVerifier::new(config, None);
+		let deserialized_proof = plonky2::plonk::proof::ProofWithPublicInputs::<
+			qp_zk_circuits_common::circuit::F,
+			qp_zk_circuits_common::circuit::C,
+			{ qp_zk_circuits_common::circuit::D },
+		>::from_bytes(read_bytes, &verifier.circuit_data.common)
+		.expect("Failed to deserialize proof");
+
+		verifier
+			.verify(deserialized_proof)
+			.expect("Deserialized proof verification failed");
+	}
+
+	/// Integration test: Generate multiple proofs with different inputs
+	#[test]
+	#[ignore] // This test is slow - run with `cargo test -- --ignored`
+	fn test_multiple_proof_generation() {
+		let config = test_circuit_config();
+
+		// Generate proofs for both test input sets
+		let inputs_0 = CircuitInputs::test_inputs_0();
+		let inputs_1 = CircuitInputs::test_inputs_1();
+
+		let prover_0 = WormholeProver::new(config.clone());
+		let proof_0 = prover_0.commit(&inputs_0).unwrap().prove().unwrap();
+
+		let prover_1 = WormholeProver::new(config.clone());
+		let proof_1 = prover_1.commit(&inputs_1).unwrap().prove().unwrap();
+
+		// Verify both proofs
+		let verifier = WormholeVerifier::new(config, None);
+		verifier.verify(proof_0.clone()).expect("Proof 0 verification failed");
+		verifier.verify(proof_1.clone()).expect("Proof 1 verification failed");
+
+		// Verify public inputs are different (different nullifiers, etc.)
+		let public_0 = PublicCircuitInputs::try_from(&proof_0).unwrap();
+		let public_1 = PublicCircuitInputs::try_from(&proof_1).unwrap();
+
+		assert_ne!(public_0.nullifier, public_1.nullifier, "Nullifiers should be different");
+		assert_ne!(public_0.block_hash, public_1.block_hash, "Block hashes should be different");
+	}
+
+	/// Integration test: Aggregate proofs and verify aggregated proof
+	#[test]
+	#[ignore] // This test is slow (~60s) - run with `cargo test -- --ignored`
+	fn test_proof_aggregation() {
+		use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
+
+		let config = test_circuit_config();
+
+		// Generate a proof
+		let inputs = CircuitInputs::test_inputs_0();
+		let prover = WormholeProver::new(config.clone());
+		let proof = prover.commit(&inputs).unwrap().prove().unwrap();
+
+		// Create aggregator with default config (branching_factor=2, depth=1)
+		let verifier = WormholeVerifier::new(config, None);
+		let mut aggregator = WormholeProofAggregator::new(verifier.circuit_data);
+
+		// Add proof to aggregator
+		aggregator.push_proof(proof.clone()).expect("Failed to push proof");
+
+		// Aggregate
+		let aggregated_result = aggregator.aggregate().expect("Aggregation failed");
+
+		// Parse aggregated public inputs
+		let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_slice(
+			aggregated_result.proof.public_inputs.as_slice(),
+		)
+		.expect("Failed to parse aggregated public inputs");
+
+		// Verify aggregated proof structure
+		assert_eq!(aggregated_public_inputs.asset_id, NATIVE_ASSET_ID, "Asset ID should be native");
+		assert_eq!(
+			aggregated_public_inputs.volume_fee_bps, VOLUME_FEE_BPS,
+			"Volume fee BPS should match"
+		);
+		assert!(
+			!aggregated_public_inputs.nullifiers.is_empty(),
+			"Should have at least one nullifier"
+		);
+		assert!(
+			!aggregated_public_inputs.account_data.is_empty(),
+			"Should have at least one account"
+		);
+
+		// Verify the aggregated proof locally
+		aggregated_result
+			.circuit_data
+			.verify(aggregated_result.proof)
+			.expect("Aggregated proof verification failed");
+	}
+
+	/// Integration test: Aggregate multiple proofs with different exit accounts
+	#[test]
+	#[ignore] // This test is very slow (~120s) - run with `cargo test -- --ignored`
+	fn test_proof_aggregation_multiple_accounts() {
+		use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
+
+		let config = test_circuit_config();
+
+		// Generate proofs with different inputs (different exit accounts)
+		let inputs_0 = CircuitInputs::test_inputs_0();
+		let inputs_1 = CircuitInputs::test_inputs_1();
+
+		let prover_0 = WormholeProver::new(config.clone());
+		let proof_0 = prover_0.commit(&inputs_0).unwrap().prove().unwrap();
+
+		let prover_1 = WormholeProver::new(config.clone());
+		let proof_1 = prover_1.commit(&inputs_1).unwrap().prove().unwrap();
+
+		// Create aggregator
+		let verifier = WormholeVerifier::new(config, None);
+		let mut aggregator = WormholeProofAggregator::new(verifier.circuit_data);
+
+		// Add both proofs
+		aggregator.push_proof(proof_0).expect("Failed to push proof 0");
+		aggregator.push_proof(proof_1).expect("Failed to push proof 1");
+
+		// Aggregate
+		let aggregated_result = aggregator.aggregate().expect("Aggregation failed");
+
+		// Parse aggregated public inputs
+		let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_slice(
+			aggregated_result.proof.public_inputs.as_slice(),
+		)
+		.expect("Failed to parse aggregated public inputs");
+
+		// Verify we have 2 nullifiers (one per proof)
+		assert_eq!(
+			aggregated_public_inputs.nullifiers.len(),
+			2,
+			"Should have 2 nullifiers for 2 proofs"
+		);
+
+		// Verify all nullifiers are unique
+		assert_ne!(
+			aggregated_public_inputs.nullifiers[0], aggregated_public_inputs.nullifiers[1],
+			"Nullifiers should be unique"
+		);
+
+		// Verify the aggregated proof
+		aggregated_result
+			.circuit_data
+			.verify(aggregated_result.proof)
+			.expect("Aggregated proof verification failed");
+	}
+
+	/// Test that public inputs parsing matches expected structure
+	#[test]
+	fn test_public_inputs_structure() {
+		use qp_wormhole_circuit::inputs::{
+			ASSET_ID_INDEX, BLOCK_HASH_END_INDEX, BLOCK_HASH_START_INDEX, BLOCK_NUMBER_INDEX,
+			EXIT_ACCOUNT_END_INDEX, EXIT_ACCOUNT_START_INDEX, NULLIFIER_END_INDEX,
+			NULLIFIER_START_INDEX, OUTPUT_AMOUNT_INDEX, PARENT_HASH_END_INDEX,
+			PARENT_HASH_START_INDEX, PUBLIC_INPUTS_FELTS_LEN, VOLUME_FEE_BPS_INDEX,
+		};
+
+		// Verify expected public inputs layout
+		assert_eq!(PUBLIC_INPUTS_FELTS_LEN, 20, "Public inputs should be 20 field elements");
+		assert_eq!(ASSET_ID_INDEX, 0, "Asset ID should be first");
+		assert_eq!(OUTPUT_AMOUNT_INDEX, 1, "Output amount should be second");
+		assert_eq!(VOLUME_FEE_BPS_INDEX, 2, "Volume fee BPS should be third");
+		assert_eq!(NULLIFIER_START_INDEX, 3, "Nullifier should start at index 3");
+		assert_eq!(NULLIFIER_END_INDEX, 7, "Nullifier should end at index 7");
+		assert_eq!(EXIT_ACCOUNT_START_INDEX, 7, "Exit account should start at index 7");
+		assert_eq!(EXIT_ACCOUNT_END_INDEX, 11, "Exit account should end at index 11");
+		assert_eq!(BLOCK_HASH_START_INDEX, 11, "Block hash should start at index 11");
+		assert_eq!(BLOCK_HASH_END_INDEX, 15, "Block hash should end at index 15");
+		assert_eq!(PARENT_HASH_START_INDEX, 15, "Parent hash should start at index 15");
+		assert_eq!(PARENT_HASH_END_INDEX, 19, "Parent hash should end at index 19");
+		assert_eq!(BLOCK_NUMBER_INDEX, 19, "Block number should be at index 19");
+	}
+
+	/// Test that constants match expected on-chain configuration
+	#[test]
+	fn test_constants_match_chain_config() {
+		// Volume fee rate should be 10 bps (0.1%)
+		assert_eq!(VOLUME_FEE_BPS, 10, "Volume fee should be 10 bps");
+
+		// Native asset ID should be 0
+		assert_eq!(NATIVE_ASSET_ID, 0, "Native asset ID should be 0");
+
+		// Scale down factor should be 10^10 (12 decimals -> 2 decimals)
+		assert_eq!(SCALE_DOWN_FACTOR, 10_000_000_000, "Scale down factor should be 10^10");
+
+		// Verify scale down: 1 token with 12 decimals = 10^12 units
+		// After quantization: 10^12 / 10^10 = 100 (which is 1.00 in 2 decimal places)
+		let one_token_12_decimals: u128 = 1_000_000_000_000;
+		let quantized = quantize_funding_amount(one_token_12_decimals).unwrap();
+		assert_eq!(quantized, 100, "1 token should quantize to 100 (1.00 with 2 decimals)");
+	}
+
+	#[test]
+	fn test_volume_fee_bps_constant() {
+		// Ensure VOLUME_FEE_BPS matches expected value (10 bps = 0.1%)
+		assert_eq!(VOLUME_FEE_BPS, 10);
+
+		// Verify it's a reasonable value (less than 100% = 10000 bps)
+		assert!(VOLUME_FEE_BPS < 10000);
 	}
 }
 
