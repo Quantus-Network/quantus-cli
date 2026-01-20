@@ -37,6 +37,9 @@ use subxt::{
 /// Native asset id
 const NATIVE_ASSET_ID: u32 = 0;
 
+/// Scale down factor for quantizing amounts (10^10 to go from 12 to 2 decimal places)
+const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
+
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
 	/// Generate a wormhole proof
@@ -90,7 +93,7 @@ pub async fn handle_wormhole_command(
 			password,
 			password_file,
 			output,
-		} =>
+		} => {
 			generate_proof(
 				secret,
 				amount,
@@ -101,7 +104,8 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await,
+			.await
+		},
 		WormholeCommands::Verify { proof } => verify_proof(proof, node_url).await,
 	}
 }
@@ -186,25 +190,13 @@ async fn generate_proof(
 	log_verbose!("Unspendable account: {:?}", &unspendable_account_id);
 	log_verbose!("Exit account: {:?}", &exit_account_id);
 
-	// Transfer to unspendable account
-	let transfer_tx = quantus_node::api::tx().balances().transfer_keep_alive(
+	// Transfer to unspendable account using wormhole pallet
+	let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(unspendable_account_id.clone()),
 		funding_amount,
 	);
 
 	log_verbose!("Submitting transfer to unspendable account...");
-
-	let blocks = at_best_block(&quantus_client)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let block_hash_pre = blocks.hash();
-
-	let storage_api = client.storage().at(block_hash_pre);
-	let transfer_count_previous = storage_api
-		.fetch(&quantus_node::api::storage().wormhole().transfer_count())
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?
-		.unwrap_or_default();
 
 	let quantum_keypair = QuantumKeyPair {
 		public_key: keypair.public_key.clone(),
@@ -238,30 +230,29 @@ async fn generate_proof(
 		.find::<wormhole::events::NativeTransferred>()
 		.next()
 		.ok_or_else(|| {
-			crate::error::QuantusError::Generic("No TransferProofStored event found".to_string())
+			crate::error::QuantusError::Generic("No NativeTransferred event found".to_string())
 		})?
 		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
-	let storage_api = client.storage().at(block_hash);
-	let transfer_count = storage_api
-		.fetch(&quantus_node::api::storage().wormhole().transfer_count())
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?
-		.unwrap_or_default();
-
-	if transfer_count <= transfer_count_previous {
-		return Err(crate::error::QuantusError::Generic(
-			"Transfer count was not incremented".to_string(),
-		));
-	}
+	log_verbose!(
+		"Transfer event: amount={}, transfer_count={}",
+		event.amount,
+		event.transfer_count
+	);
 
 	// Get storage proof
+	let storage_api = client.storage().at(block_hash);
+
+	// Convert subxt AccountId32 to sp_core AccountId32 for hash_storage
+	let from_account = AccountId32::new(event.from.0);
+	let to_account = AccountId32::new(event.to.0);
+
 	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofKey>(
 		&(
 			NATIVE_ASSET_ID,
 			event.transfer_count,
-			event.from.clone(),
-			event.to.clone(),
+			from_account.clone(),
+			to_account.clone(),
 			event.amount,
 		)
 			.encode(),
@@ -313,6 +304,17 @@ async fn generate_proof(
 	)
 	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
+	// Quantize the funding amount (from 12 decimal places to 2)
+	// Note: The circuit expects u32 internally but the crates.io version of
+	// qp-wormhole-circuit still uses u128 in PublicCircuitInputs.
+	// The actual quantized value must fit in u32.
+	let funding_amount_quantized: u128 = funding_amount / SCALE_DOWN_FACTOR;
+	if funding_amount_quantized > u32::MAX as u128 {
+		return Err(crate::error::QuantusError::Generic(
+			"Funding amount too large after quantization".to_string(),
+		));
+	}
+
 	let inputs = CircuitInputs {
 		private: PrivateCircuitInputs {
 			secret,
@@ -326,7 +328,7 @@ async fn generate_proof(
 			digest,
 		},
 		public: PublicCircuitInputs {
-			funding_amount,
+			funding_amount: funding_amount_quantized,
 			nullifier: Nullifier::from_preimage(secret, event.transfer_count).hash.into(),
 			exit_account: BytesDigest::try_from(exit_account_id.as_ref() as &[u8])
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
