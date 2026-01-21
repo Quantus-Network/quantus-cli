@@ -15,10 +15,12 @@
 //! with valid parent hash linkage. We use batch transfers to ensure same-block proofs.
 
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
-use qp_wormhole_circuit::inputs::{
-	AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
+use qp_wormhole_circuit::{
+	inputs::{
+		AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
+	},
+	nullifier::Nullifier,
 };
-use qp_wormhole_circuit::nullifier::Nullifier;
 use qp_wormhole_prover::WormholeProver;
 use qp_wormhole_verifier::WormholeVerifier;
 use qp_zk_circuits_common::{

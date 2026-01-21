@@ -10,10 +10,12 @@ use crate::{
 use clap::Subcommand;
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
 use qp_poseidon::PoseidonHasher;
-use qp_wormhole_circuit::inputs::{
-	AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
+use qp_wormhole_circuit::{
+	inputs::{
+		AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
+	},
+	nullifier::Nullifier,
 };
-use qp_wormhole_circuit::nullifier::Nullifier;
 use qp_wormhole_prover::WormholeProver;
 use qp_wormhole_verifier::WormholeVerifier;
 use qp_zk_circuits_common::{
@@ -217,7 +219,7 @@ pub async fn handle_wormhole_command(
 			password,
 			password_file,
 			output,
-		} => {
+		} =>
 			generate_proof(
 				secret,
 				amount,
@@ -228,15 +230,12 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await
-		},
+			.await,
 		WormholeCommands::Verify { proof } => verify_proof(proof, node_url).await,
-		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
-			aggregate_proofs(proofs, output, depth, branching_factor).await
-		},
-		WormholeCommands::VerifyAggregated { proof } => {
-			verify_aggregated_proof(proof, node_url).await
-		},
+		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } =>
+			aggregate_proofs(proofs, output, depth, branching_factor).await,
+		WormholeCommands::VerifyAggregated { proof } =>
+			verify_aggregated_proof(proof, node_url).await,
 	}
 }
 
@@ -767,8 +766,8 @@ mod tests {
 
 	#[test]
 	fn test_fee_calculation_edge_cases() {
-		// Test the circuit fee constraint: output_amount * 10000 <= input_amount * (10000 - volume_fee_bps)
-		// This is equivalent to: output <= input * (1 - fee_rate)
+		// Test the circuit fee constraint: output_amount * 10000 <= input_amount * (10000 -
+		// volume_fee_bps) This is equivalent to: output <= input * (1 - fee_rate)
 
 		// Small amounts where fee rounds to zero
 		let input_small: u32 = 100;
@@ -784,8 +783,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000
-				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000 <=
+				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
@@ -870,8 +869,8 @@ mod tests {
 		let input_amount = inputs.private.input_amount;
 		let output_amount = inputs.public.output_amount;
 		assert!(
-			(output_amount as u64) * 10000
-				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			(output_amount as u64) * 10000 <=
+				(input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
 			"Test inputs violate fee constraint"
 		);
 
