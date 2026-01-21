@@ -245,8 +245,8 @@ async fn submit_wormhole_transfer(
 		.expect("BytesDigest is always 32 bytes");
 	let unspendable_account_id = SubxtAccountId(unspendable_account_bytes);
 
-	println!("  Unspendable account: 0x{}", hex::encode(&unspendable_account_bytes));
-	println!("  Exit account: 0x{}", hex::encode(&exit_account_bytes));
+	println!("  Unspendable account: 0x{}", hex::encode(unspendable_account_bytes));
+	println!("  Exit account: 0x{}", hex::encode(exit_account_bytes));
 
 	// Create and submit transfer to unspendable account
 	let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
@@ -648,7 +648,7 @@ async fn test_single_proof_on_chain_verification() {
 
 	println!("3. Generating wormhole proof...");
 	println!("   Funding amount: {} units (1 token)", funding_amount);
-	println!("   Secret: 0x{}", hex::encode(&secret));
+	println!("   Secret: 0x{}", hex::encode(secret));
 
 	let proof_context =
 		generate_wormhole_proof(&quantus_client, &keypair, funding_amount, exit_account, secret)
@@ -713,7 +713,7 @@ async fn test_aggregated_proof_on_chain_verification() {
 		let funding_amount: u128 = 500_000_000_000; // 0.5 tokens
 
 		println!("   Funding amount: {} units (0.5 tokens)", funding_amount);
-		println!("   Secret: 0x{}", hex::encode(&secret));
+		println!("   Secret: 0x{}", hex::encode(secret));
 
 		let transfer_data = submit_wormhole_transfer(
 			&quantus_client,
@@ -982,7 +982,7 @@ async fn test_full_wormhole_workflow() {
 			secret,
 		)
 		.await
-		.expect(&format!("Failed to submit transfer {}", i + 1));
+		.unwrap_or_else(|_| panic!("Failed to submit transfer {}", i + 1));
 
 		transfer_data_list.push(transfer_data);
 	}
@@ -1001,7 +1001,7 @@ async fn test_full_wormhole_workflow() {
 		println!("   Generating proof {}...", i + 1);
 		let proof = generate_proof_from_transfer(&quantus_client, transfer_data, common_block_hash)
 			.await
-			.expect(&format!("Failed to generate proof {}", i + 1));
+			.unwrap_or_else(|_| panic!("Failed to generate proof {}", i + 1));
 		proofs_for_aggregation.push(proof);
 	}
 

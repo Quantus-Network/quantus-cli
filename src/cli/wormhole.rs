@@ -255,14 +255,14 @@ async fn generate_proof(
 
 	// Parse secret using helper function
 	let secret_array =
-		parse_secret_hex(&secret_hex).map_err(|e| crate::error::QuantusError::Generic(e))?;
+		parse_secret_hex(&secret_hex).map_err(crate::error::QuantusError::Generic)?;
 	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
 	})?;
 
 	// Parse exit account using helper function
 	let exit_account_bytes = parse_exit_account(&exit_account_str)
-		.map_err(|e| crate::error::QuantusError::Generic(e))?;
+		.map_err(crate::error::QuantusError::Generic)?;
 	let exit_account_id = SubxtAccountId(exit_account_bytes);
 
 	// Load keypair
@@ -409,7 +409,7 @@ async fn generate_proof(
 
 	// Quantize the funding amount using helper function
 	let input_amount_quantized: u32 = quantize_funding_amount(funding_amount)
-		.map_err(|e| crate::error::QuantusError::Generic(e))?;
+		.map_err(crate::error::QuantusError::Generic)?;
 
 	// Calculate output amount after fee deduction
 	let output_amount_quantized = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
@@ -488,7 +488,7 @@ async fn aggregate_proofs(
 
 	// Validate aggregation parameters using helper function
 	let max_leaf_proofs = validate_aggregation_params(proof_files.len(), depth, branching_factor)
-		.map_err(|e| crate::error::QuantusError::Generic(e))?;
+		.map_err(crate::error::QuantusError::Generic)?;
 
 	// Build the wormhole verifier to get circuit data for parsing proofs
 	let config = CircuitConfig::standard_recursion_zk_config();
@@ -626,6 +626,72 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 			TxStatus::InFinalizedBlock(tx_in_block) => {
 				let block_hash = tx_in_block.block_hash();
 				log_success!("Aggregated proof verified successfully on-chain!");
+				log_verbose!("Finalized in block: {:?}", block_hash);
+				return Ok(());
+			},
+			TxStatus::Error { message } | TxStatus::Invalid { message } => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Transaction failed: {}",
+					message
+				)));
+			},
+			_ => continue,
+		}
+	}
+
+	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+}
+
+async fn verify_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+	use subxt::tx::TxStatus;
+
+	log_print!("Verifying wormhole proof on-chain...");
+
+	// Read proof from file
+	let proof_hex = std::fs::read_to_string(&proof_file).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
+	})?;
+
+	let proof_bytes = hex::decode(proof_hex.trim())
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
+
+	log_verbose!("Proof size: {} bytes", proof_bytes.len());
+
+	// Connect to node
+	let quantus_client = QuantusClient::new(node_url)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+
+	log_verbose!("Connected to node");
+
+	// Create the verify transaction payload
+	let verify_tx = quantus_node::api::tx().wormhole().verify_wormhole_proof(proof_bytes);
+
+	log_verbose!("Submitting unsigned verification transaction...");
+
+	// Submit as unsigned extrinsic
+	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
+	})?;
+
+	let mut tx_progress = unsigned_tx
+		.submit_and_watch()
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
+
+	// Wait for transaction inclusion
+	while let Some(Ok(status)) = tx_progress.next().await {
+		log_verbose!("Transaction status: {:?}", status);
+		match status {
+			TxStatus::InBestBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
+				log_success!("Proof verified successfully on-chain!");
+				log_verbose!("Included in block: {:?}", block_hash);
+				return Ok(());
+			},
+			TxStatus::InFinalizedBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
+				log_success!("Proof verified successfully on-chain!");
 				log_verbose!("Finalized in block: {:?}", block_hash);
 				return Ok(());
 			},
@@ -1118,74 +1184,5 @@ mod tests {
 	fn test_volume_fee_bps_constant() {
 		// Ensure VOLUME_FEE_BPS matches expected value (10 bps = 0.1%)
 		assert_eq!(VOLUME_FEE_BPS, 10);
-
-		// Verify it's a reasonable value (less than 100% = 10000 bps)
-		assert!(VOLUME_FEE_BPS < 10000);
 	}
-}
-
-async fn verify_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
-	use subxt::tx::TxStatus;
-
-	log_print!("Verifying wormhole proof on-chain...");
-
-	// Read proof from file
-	let proof_hex = std::fs::read_to_string(&proof_file).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
-	})?;
-
-	let proof_bytes = hex::decode(proof_hex.trim())
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
-
-	log_verbose!("Proof size: {} bytes", proof_bytes.len());
-
-	// Connect to node
-	let quantus_client = QuantusClient::new(node_url)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
-
-	log_verbose!("Connected to node");
-
-	// Create the verify transaction payload
-	let verify_tx = quantus_node::api::tx().wormhole().verify_wormhole_proof(proof_bytes);
-
-	log_verbose!("Submitting unsigned verification transaction...");
-
-	// Submit as unsigned extrinsic
-	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
-	})?;
-
-	let mut tx_progress = unsigned_tx
-		.submit_and_watch()
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
-
-	// Wait for transaction inclusion
-	while let Some(Ok(status)) = tx_progress.next().await {
-		log_verbose!("Transaction status: {:?}", status);
-		match status {
-			TxStatus::InBestBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				log_success!("Proof verified successfully on-chain!");
-				log_verbose!("Included in block: {:?}", block_hash);
-				return Ok(());
-			},
-			TxStatus::InFinalizedBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				log_success!("Proof verified successfully on-chain!");
-				log_verbose!("Finalized in block: {:?}", block_hash);
-				return Ok(());
-			},
-			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Transaction failed: {}",
-					message
-				)));
-			},
-			_ => continue,
-		}
-	}
-
-	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
 }
