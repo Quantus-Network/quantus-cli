@@ -10,6 +10,7 @@ pub mod events;
 pub mod generic_call;
 pub mod high_security;
 pub mod metadata;
+pub mod multisig;
 pub mod preimage;
 pub mod recovery;
 pub mod referenda;
@@ -78,6 +79,10 @@ pub enum Commands {
 	/// Recovery commands
 	#[command(subcommand)]
 	Recovery(recovery::RecoveryCommands),
+
+	/// Multisig commands (multi-signature wallets)
+	#[command(subcommand)]
+	Multisig(multisig::MultisigCommands),
 
 	/// Scheduler commands
 	#[command(subcommand)]
@@ -269,6 +274,8 @@ pub async fn execute_command(
 			high_security::handle_high_security_command(hs_cmd, node_url, execution_mode).await,
 		Commands::Recovery(recovery_cmd) =>
 			recovery::handle_recovery_command(recovery_cmd, node_url, execution_mode).await,
+		Commands::Multisig(multisig_cmd) =>
+			multisig::handle_multisig_command(multisig_cmd, node_url, execution_mode).await,
 		Commands::Scheduler(scheduler_cmd) =>
 			scheduler::handle_scheduler_command(scheduler_cmd, node_url, execution_mode).await,
 		Commands::Storage(storage_cmd) =>

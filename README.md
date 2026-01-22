@@ -139,6 +139,160 @@ The CLI provides a comprehensive set of commands for blockchain interaction. Sta
 
 The CLI supports both simple commands and complex workflows, with built-in help and error recovery at every level.
 
+## 🔐 Multisig Wallets
+
+The Quantus CLI provides comprehensive support for multi-signature wallets, allowing you to create shared accounts that require multiple approvals before executing transactions.
+
+### Key Features
+
+- **Deterministic Address Generation**: Multisig addresses are derived from signers + nonce
+- **Flexible Threshold**: Configure how many approvals are needed (e.g., 2-of-3, 5-of-7)
+- **Full Call Transparency**: Complete transaction data stored on-chain (not just hashes)
+- **Auto-Execution**: Proposals execute automatically when threshold is reached
+- **Deposit Management**: Refundable deposits incentivize cleanup
+- **Query Support**: Inspect multisig configuration and proposals
+
+### Quick Start Example
+
+```bash
+# 1. Create a 2-of-3 multisig
+quantus multisig create \
+  --signers "alice,bob,charlie" \
+  --threshold 2 \
+  --from alice
+
+# 2. Check the events to get the multisig address
+# Let's say it's: 5GMultiSigAddr...
+
+# 3. Fund the multisig (anyone can send funds)
+quantus send \
+  --from alice \
+  --to 5GMultiSigAddr... \
+  --amount 1000
+
+# 4. Create a proposal to send funds from multisig
+quantus multisig propose \
+  --multisig 5GMultiSigAddr... \
+  --pallet Balances \
+  --call transfer_allow_death \
+  --args '["5GDestination...", "500000000000"]' \
+  --expiry 1000 \
+  --from alice
+
+# 5. Check events for proposal hash
+# Let's say it's: 0xabc123...
+
+# 6. Second signer approves (auto-executes at threshold)
+quantus multisig approve \
+  --multisig 5GMultiSigAddr... \
+  --proposal-hash 0xabc123... \
+  --from bob
+```
+
+### Available Commands
+
+#### Create Multisig
+```bash
+quantus multisig create \
+  --signers "addr1,addr2,addr3" \
+  --threshold 2 \
+  --from creator_wallet
+```
+
+#### Propose Transaction
+```bash
+quantus multisig propose \
+  --multisig <multisig_address> \
+  --pallet Balances \
+  --call transfer_allow_death \
+  --args '["recipient", "amount"]' \
+  --expiry <block_number> \
+  --from signer_wallet
+```
+
+#### Approve Proposal
+```bash
+quantus multisig approve \
+  --multisig <multisig_address> \
+  --proposal-hash <hash> \
+  --from signer_wallet
+```
+
+#### Cancel Proposal (proposer only)
+```bash
+quantus multisig cancel \
+  --multisig <multisig_address> \
+  --proposal-hash <hash> \
+  --from proposer_wallet
+```
+
+#### Query Multisig Info
+```bash
+quantus multisig info \
+  --multisig <multisig_address>
+```
+
+#### List All Proposals
+```bash
+quantus multisig list-proposals \
+  --multisig <multisig_address>
+```
+
+#### Query Specific Proposal
+```bash
+quantus multisig proposal-info \
+  --multisig <multisig_address> \
+  --proposal-hash <hash>
+```
+
+#### Cleanup (Recover Deposits)
+```bash
+# Remove single expired/executed/cancelled proposal
+quantus multisig remove-expired \
+  --multisig <multisig_address> \
+  --proposal-hash <hash> \
+  --from signer_wallet
+
+# Batch cleanup all removable proposals
+quantus multisig claim-deposits \
+  --multisig <multisig_address> \
+  --from proposer_wallet
+```
+
+#### Dissolve Multisig
+```bash
+# Requires: no proposals exist, zero balance
+quantus multisig dissolve \
+  --multisig <multisig_address> \
+  --from creator_or_signer_wallet
+```
+
+### Economics
+
+The multisig pallet uses an economic model to prevent spam and incentivize cleanup:
+
+- **MultisigFee**: Non-refundable fee paid to treasury on creation
+- **MultisigDeposit**: Refundable deposit returned on dissolution
+- **ProposalFee**: Non-refundable fee per proposal (scales with signer count)
+- **ProposalDeposit**: Refundable deposit per proposal (returned after cleanup)
+
+### Best Practices
+
+1. **Use Descriptive Names**: Use wallet names instead of raw addresses for better readability
+2. **Set Reasonable Expiry**: Choose expiry blocks that give enough time for approvals
+3. **Cleanup Regularly**: Remove executed/cancelled proposals to recover deposits
+4. **Monitor Deposits**: Keep track of locked deposits and clean up when done
+5. **High Security**: For high-value multisigs, use higher thresholds (e.g., 5-of-7)
+
+### Security Considerations
+
+- **Immutable Configuration**: Signers and threshold cannot be changed after creation
+- **Full Transparency**: All call data is visible on-chain (no blind signing)
+- **Auto-Execution**: Proposals execute automatically when threshold is reached
+- **Access Control**: Only signers can propose/approve, only proposer can cancel
+
+For more details, see `quantus multisig --help` and explore subcommands with `--help`.
+
 ## 🏗️ Architecture
 
 ### Quantum-Safe Cryptography
