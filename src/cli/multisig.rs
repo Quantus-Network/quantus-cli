@@ -12,20 +12,28 @@ use subxt::utils::H256;
 // Base unit (QUAN) decimals for amount conversions
 const QUAN_DECIMALS: u128 = 1_000_000_000_000; // 10^12
 
-/// Multisig-related commands
+/// Subcommands for proposing transactions
 #[derive(Subcommand, Debug)]
-pub enum MultisigCommands {
-	/// Create a new multisig account
-	Create {
-		/// List of signer addresses (SS58 or wallet names), comma-separated
+pub enum ProposeSubcommand {
+	/// Propose a simple transfer (most common case)
+	Transfer {
+		/// Multisig account address (SS58 format)
 		#[arg(long)]
-		signers: String,
+		address: String,
 
-		/// Number of approvals required to execute transactions
+		/// Recipient address (SS58 format)
 		#[arg(long)]
-		threshold: u32,
+		to: String,
 
-		/// Wallet name to pay for multisig creation
+		/// Amount to transfer (in base units, e.g., 1000000000000 for 1 QUAN)
+		#[arg(long)]
+		amount: String,
+
+		/// Expiry block number (when this proposal expires)
+		#[arg(long)]
+		expiry: u32,
+
+		/// Proposer wallet name (must be a signer)
 		#[arg(long)]
 		from: String,
 
@@ -33,13 +41,13 @@ pub enum MultisigCommands {
 		#[arg(short, long)]
 		password: Option<String>,
 
-		/// Read password from file (for scripting)
+		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
 	},
 
-	/// Propose a transaction to be executed by the multisig
-	Propose {
+	/// Propose a custom transaction (full flexibility)
+	Custom {
 		/// Multisig account address (SS58 format)
 		#[arg(long)]
 		address: String,
@@ -72,6 +80,37 @@ pub enum MultisigCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 	},
+}
+
+/// Multisig-related commands
+#[derive(Subcommand, Debug)]
+pub enum MultisigCommands {
+	/// Create a new multisig account
+	Create {
+		/// List of signer addresses (SS58 or wallet names), comma-separated
+		#[arg(long)]
+		signers: String,
+
+		/// Number of approvals required to execute transactions
+		#[arg(long)]
+		threshold: u32,
+
+		/// Wallet name to pay for multisig creation
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Propose a transaction to be executed by the multisig
+	#[command(subcommand)]
+	Propose(ProposeSubcommand),
 
 	/// Approve a proposed transaction
 	Approve {
@@ -224,17 +263,29 @@ pub async fn handle_multisig_command(
 				execution_mode,
 			)
 			.await,
-		MultisigCommands::Propose {
-			address,
-			pallet,
-			call,
-			args,
-			expiry,
-			from,
-			password,
-			password_file,
-		} =>
-			handle_propose(
+		MultisigCommands::Propose(subcommand) => match subcommand {
+			ProposeSubcommand::Transfer {
+				address,
+				to,
+				amount,
+				expiry,
+				from,
+				password,
+				password_file,
+			} =>
+				handle_propose_transfer(
+					address,
+					to,
+					amount,
+					expiry,
+					from,
+					password,
+					password_file,
+					node_url,
+					execution_mode,
+				)
+				.await,
+			ProposeSubcommand::Custom {
 				address,
 				pallet,
 				call,
@@ -243,10 +294,21 @@ pub async fn handle_multisig_command(
 				from,
 				password,
 				password_file,
-				node_url,
-				execution_mode,
-			)
-			.await,
+			} =>
+				handle_propose(
+					address,
+					pallet,
+					call,
+					args,
+					expiry,
+					from,
+					password,
+					password_file,
+					node_url,
+					execution_mode,
+				)
+				.await,
+		},
 		MultisigCommands::Approve { address, proposal_hash, from, password, password_file } =>
 			handle_approve(
 				address,
@@ -385,6 +447,52 @@ async fn handle_create_multisig(
 }
 
 /// Propose a transaction
+/// Propose a transfer transaction (simplified interface)
+async fn handle_propose_transfer(
+	multisig_address: String,
+	to: String,
+	amount: String,
+	expiry: u32,
+	from: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	node_url: &str,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<()> {
+	log_print!("📝 {} Creating transfer proposal...", "MULTISIG".bright_magenta().bold());
+
+	// Resolve recipient address (wallet name or SS58)
+	let to_address = crate::cli::common::resolve_address(&to)?;
+
+	// Parse amount
+	let amount_u128: u128 = amount
+		.parse()
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid amount: {}", e)))?;
+
+	// Build args as JSON array (using serde_json for proper escaping)
+	let args_json = serde_json::to_string(&vec![
+		serde_json::Value::String(to_address),
+		serde_json::Value::String(amount_u128.to_string()),
+	])
+	.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to serialize args: {}", e)))?;
+
+	// Use the existing handle_propose with Balances::transfer_allow_death
+	handle_propose(
+		multisig_address,
+		"Balances".to_string(),
+		"transfer_allow_death".to_string(),
+		Some(args_json),
+		expiry,
+		from,
+		password,
+		password_file,
+		node_url,
+		execution_mode,
+	)
+	.await
+}
+
+/// Propose a custom transaction
 async fn handle_propose(
 	multisig_address: String,
 	pallet: String,
@@ -757,6 +865,132 @@ async fn handle_info(multisig_address: String, node_url: &str) -> crate::error::
 	Ok(())
 }
 
+/// Decode call data into human-readable format
+async fn decode_call_data(
+	quantus_client: &crate::chain::client::QuantusClient,
+	call_data: &[u8],
+) -> crate::error::Result<String> {
+	use codec::Decode;
+
+	if call_data.len() < 2 {
+		return Ok(format!("   {}  {} bytes (too short)", "Call Size:".dimmed(), call_data.len()));
+	}
+
+	let pallet_index = call_data[0];
+	let call_index = call_data[1];
+	let args = &call_data[2..];
+
+	// Get metadata to find pallet and call names
+	let metadata = quantus_client.client().metadata();
+
+	// Try to find pallet by index
+	let pallet_name = metadata
+		.pallets()
+		.find(|p| p.index() == pallet_index)
+		.map(|p| p.name())
+		.unwrap_or("Unknown");
+
+	// Try to decode based on known patterns
+	match (pallet_index, call_index) {
+		// Balances pallet - typically index 10 or similar
+		(_, idx) if pallet_name == "Balances" && (idx == 0 || idx == 1) => {
+			// transfer_allow_death (0) or transfer_keep_alive (1)
+			if args.len() < 33 {
+				return Ok(format!(
+					"   {}  {}::{} (index {})\n   {}  {} bytes (too short)",
+					"Call:".dimmed(),
+					pallet_name.bright_cyan(),
+					if idx == 0 { "transfer_allow_death" } else { "transfer_keep_alive" }
+						.bright_yellow(),
+					idx,
+					"Args:".dimmed(),
+					args.len()
+				));
+			}
+
+			// Decode MultiAddress::Id (first byte is variant, 0x00 = Id)
+			// Then 32 bytes for AccountId32
+			let address_variant = args[0];
+			if address_variant != 0 {
+				return Ok(format!(
+					"   {}  {}::{} (index {})\n   {}  {} bytes\n   {}  Unknown address variant: {}",
+					"Call:".dimmed(),
+					pallet_name.bright_cyan(),
+					if idx == 0 { "transfer_allow_death" } else { "transfer_keep_alive" }
+						.bright_yellow(),
+					idx,
+					"Args:".dimmed(),
+					args.len(),
+					"Error:".dimmed(),
+					address_variant
+				));
+			}
+
+			let account_bytes: [u8; 32] = args[1..33].try_into().map_err(|_| {
+				crate::error::QuantusError::Generic("Failed to extract account bytes".to_string())
+			})?;
+			let account_id = SpAccountId32::from(account_bytes);
+			let to_address = account_id.to_ss58check();
+
+			// Decode amount (Compact<u128>)
+			let mut cursor = &args[33..];
+			let amount: u128 = match codec::Compact::<u128>::decode(&mut cursor) {
+				Ok(compact) => compact.0,
+				Err(_) => {
+					return Ok(format!(
+						"   {}  {}::{} (index {})\n   {}  {}\n   {}  Failed to decode amount",
+						"Call:".dimmed(),
+						pallet_name.bright_cyan(),
+						if idx == 0 { "transfer_allow_death" } else { "transfer_keep_alive" }
+							.bright_yellow(),
+						idx,
+						"To:".dimmed(),
+						to_address.bright_cyan(),
+						"Error:".dimmed()
+					));
+				},
+			};
+
+			Ok(format!(
+				"   {}  {}::{}\n   {}  {}\n   {}  {}",
+				"Call:".dimmed(),
+				pallet_name.bright_cyan(),
+				if idx == 0 { "transfer_allow_death" } else { "transfer_keep_alive" }
+					.bright_yellow(),
+				"To:".dimmed(),
+				to_address.bright_cyan(),
+				"Amount:".dimmed(),
+				format_balance(amount).bright_green()
+			))
+		},
+		_ => {
+			// Try to get call name from metadata
+			let call_name = metadata
+				.pallets()
+				.find(|p| p.index() == pallet_index)
+				.and_then(|p| {
+					p.call_variants().and_then(|calls| {
+						calls.iter().find(|v| v.index == call_index).map(|v| v.name.as_str())
+					})
+				})
+				.unwrap_or("unknown");
+
+			Ok(format!(
+				"   {}  {}::{} (index {}:{})\n   {}  {} bytes\n   {}  {}",
+				"Call:".dimmed(),
+				pallet_name.bright_cyan(),
+				call_name.bright_yellow(),
+				pallet_index,
+				call_index,
+				"Args:".dimmed(),
+				args.len(),
+				"Raw:".dimmed(),
+				hex::encode(args).bright_green()
+			))
+		},
+	}
+}
+
 /// Query proposal information
 async fn handle_proposal_info(
 	multisig_address: String,
@@ -799,7 +1033,18 @@ async fn handle_proposal_info(
 			let proposer_bytes: &[u8; 32] = data.proposer.as_ref();
 			let proposer_sp = SpAccountId32::from(*proposer_bytes);
 			log_print!("   Proposer: {}", proposer_sp.to_ss58check().bright_cyan());
-			log_print!("   Call Size: {} bytes", data.call.0.len());
+
+			// Decode and display call data
+			match decode_call_data(&quantus_client, &data.call.0).await {
+				Ok(decoded) => {
+					log_print!("{}", decoded);
+				},
+				Err(e) => {
+					log_print!("   Call Size: {} bytes", data.call.0.len());
+					log_verbose!("Failed to decode call data: {:?}", e);
+				},
+			}
+
 			log_print!("   Expiry: block {}", data.expiry);
 			log_print!("   Deposit: {} (locked)", format_balance(data.deposit));
 			log_print!(
@@ -902,6 +1147,21 @@ async fn handle_list_proposals(
 					let proposer_bytes: &[u8; 32] = kv.value.proposer.as_ref();
 					let proposer_sp = SpAccountId32::from(*proposer_bytes);
 					log_print!("   Proposer: {}", proposer_sp.to_ss58check().bright_cyan());
+
+					// Decode and display call data (compact format for list)
+					match decode_call_data(&quantus_client, &kv.value.call.0).await {
+						Ok(decoded) => {
+							// Extract just the call info line for compact display
+							let lines: Vec<&str> = decoded.lines().collect();
+							if !lines.is_empty() {
+								log_print!("   {}", lines[0].trim_start());
+							}
+						},
+						Err(_) => {
+							log_print!("   Call Size: {} bytes", kv.value.call.0.len());
+						},
+					}
+
 					log_print!("   Status: {}", status_str);
 					log_print!("   Approvals: {}", kv.value.approvals.0.len());
 					log_print!("   Expiry: block {}", kv.value.expiry);
@@ -1018,11 +1278,36 @@ async fn build_runtime_call(
 			// Amount must be Compact encoded for Balance type
 			codec::Compact(amount).encode_to(&mut call_data);
 		},
+		("System", "remark") | ("System", "remark_with_event") => {
+			// System::remark takes a Vec<u8> argument
+			if args.len() != 1 {
+				return Err(crate::error::QuantusError::Generic(
+					"System remark requires 1 argument: [hex_data]".to_string(),
+				));
+			}
+
+			let hex_data = args[0].as_str().ok_or_else(|| {
+				crate::error::QuantusError::Generic(
+					"Argument must be a hex string (e.g., \"0x48656c6c6f\")".to_string(),
+				)
+			})?;
+
+			// Remove 0x prefix if present
+			let hex_str = hex_data.trim_start_matches("0x");
+
+			// Decode hex to bytes
+			let data_bytes = hex::decode(hex_str).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Invalid hex data: {}", e))
+			})?;
+
+			// Encode as Vec<u8> (with length prefix)
+			data_bytes.encode_to(&mut call_data);
+		},
 		_ => {
 			return Err(crate::error::QuantusError::Generic(format!(
-				"Building call data for {}.{} is not yet implemented. Use a simpler approach or add support.",
-				pallet, call
-			)));
+			"Building call data for {}.{} is not yet implemented. Use a simpler approach or add support.",
+			pallet, call
+		)));
 		},
 	}
 

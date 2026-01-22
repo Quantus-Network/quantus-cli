@@ -85,8 +85,17 @@ async fn main() -> Result<()> {
 
 	// 5. Example: Create a proposal
 	println!("📝 To create a proposal:");
-	println!("   quantus multisig propose \\");
-	println!("     --multisig <multisig_address> \\");
+	println!("   # Simple transfer (recommended for transfers):");
+	println!("   quantus multisig propose transfer \\");
+	println!("     --address <multisig_address> \\");
+	println!("     --to <recipient> \\");
+	println!("     --amount 1000000000000 \\");
+	println!("     --expiry 1000 \\");
+	println!("     --from alice");
+	println!("");
+	println!("   # Custom transaction (full flexibility):");
+	println!("   quantus multisig propose custom \\");
+	println!("     --address <multisig_address> \\");
 	println!("     --pallet Balances \\");
 	println!("     --call transfer_allow_death \\");
 	println!("     --args '[\"<recipient>\", \"1000000000000\"]' \\");
