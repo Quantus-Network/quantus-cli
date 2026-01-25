@@ -9,6 +9,7 @@ pub mod cli;
 pub mod config;
 pub mod error;
 pub mod log;
+pub mod subsquid;
 pub mod wallet;
 
 // Re-export commonly used types and functions

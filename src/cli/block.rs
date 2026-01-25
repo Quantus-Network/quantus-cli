@@ -79,7 +79,7 @@ pub async fn handle_block_command(
 			extrinsics_details,
 			events,
 			all,
-		} =>
+		} => {
 			handle_block_analyze_command(
 				number,
 				hash,
@@ -91,9 +91,11 @@ pub async fn handle_block_command(
 				all,
 				node_url,
 			)
-			.await,
-		BlockCommands::List { start, end, step } =>
-			handle_block_list_command(start, end, step, node_url).await,
+			.await
+		},
+		BlockCommands::List { start, end, step } => {
+			handle_block_list_command(start, end, step, node_url).await
+		},
 	}
 }
 
@@ -138,7 +140,9 @@ async fn handle_block_analyze_command(
 		})?;
 		(block_num, hash)
 	} else {
-		return Err(QuantusError::Generic("Must specify --number, --hash, or --latest".to_string()));
+		return Err(QuantusError::Generic(
+			"Must specify --number, --hash, or --latest".to_string(),
+		));
 	};
 
 	log_print!("📦 Block #{} - {:#x}", block_number, block_hash);
