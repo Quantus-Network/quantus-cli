@@ -59,6 +59,8 @@ jobs:
       - name: Install dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list
           sudo apt-get update -yqq
           sudo apt-get install -yqq --no-install-recommends \
             libclang-dev \
@@ -86,6 +88,8 @@ jobs:
           components: clippy, rust-src
       - name: Install dependencies
         run: |
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list
           sudo apt-get update -yqq
           sudo apt-get install -yqq --no-install-recommends \
             libclang-dev \
@@ -120,6 +124,8 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - name: Install dependencies
         run: |
+          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
+          sudo rm -f /etc/apt/sources.list.d/azure-cli.list
           sudo apt-get update -yqq
           sudo apt-get install -yqq --no-install-recommends \
             libclang-dev \
