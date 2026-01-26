@@ -58,7 +58,6 @@ qp-dilithium-crypto = { version = "0.2.0", features = ["serde"] }
 # HTTP client for Subsquid queries
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 blake3 = "1.8"
-base64 = "0.22"
 
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
