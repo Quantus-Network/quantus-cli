@@ -27,7 +27,7 @@ async fn main() -> Result<()> {
 	let wallet_manager = WalletManager::new()?;
 
 	println!("📡 Connected to node: {}", node_url);
-	println!("");
+	println!();
 
 	// 2. Create or load test wallets
 	println!("👥 Setting up test wallets...");
@@ -47,7 +47,7 @@ async fn main() -> Result<()> {
 	println!("   Alice: {}", alice_addr);
 	println!("   Bob: {}", bob_addr);
 	println!("   Charlie: {}", charlie_addr);
-	println!("");
+	println!();
 
 	// 3. Create multisig (2-of-3)
 	println!("🔐 Creating 2-of-3 multisig...");
@@ -73,19 +73,19 @@ async fn main() -> Result<()> {
 	.await?;
 
 	println!("✅ Multisig created! Tx hash: 0x{}", hex::encode(tx_hash));
-	println!("");
+	println!();
 	println!("💡 NOTE: The CLI automatically extracts the address from events");
 	println!("   Or use --predict flag for instant (but potentially racy) address");
 	println!("   quantus multisig create --signers <list> --threshold 2 --from alice --predict");
-	println!("");
+	println!();
 
 	// 4. Example: Query multisig info
 	println!("📋 To query multisig information:");
 	println!("   quantus multisig info --address <multisig_address>");
-	println!("");
+	println!();
 	println!("   Or query specific proposal:");
 	println!("   quantus multisig info --address <multisig_address> --proposal-id 0");
-	println!("");
+	println!();
 
 	// 5. Example: Create a proposal
 	println!("📝 To create a proposal:");
@@ -96,7 +96,7 @@ async fn main() -> Result<()> {
 	println!("     --amount 10 \\");
 	println!("     --expiry 1000 \\");
 	println!("     --from alice");
-	println!("");
+	println!();
 	println!("   # Custom transaction (full flexibility):");
 	println!("   quantus multisig propose custom \\");
 	println!("     --address <multisig_address> \\");
@@ -105,10 +105,10 @@ async fn main() -> Result<()> {
 	println!("     --args '[\"Hello from multisig\"]' \\");
 	println!("     --expiry 1000 \\");
 	println!("     --from alice");
-	println!("");
+	println!();
 	println!("   NOTE: Expiry is BLOCK NUMBER, not blocks from now!");
 	println!("         Use a block number in the future (e.g., current + 1000)");
-	println!("");
+	println!();
 
 	// 6. Example: Approve a proposal
 	println!("✅ To approve a proposal (auto-executes at threshold):");
@@ -116,12 +116,12 @@ async fn main() -> Result<()> {
 	println!("     --address <multisig_address> \\");
 	println!("     --proposal-id <id> \\");
 	println!("     --from bob");
-	println!("");
+	println!();
 
 	// 7. Example: List proposals
 	println!("📋 To list all proposals:");
 	println!("   quantus multisig list-proposals --address <multisig_address>");
-	println!("");
+	println!();
 
 	// 8. Example: Cleanup (recover deposits from expired proposals)
 	println!("🧹 To cleanup and recover deposits:");
@@ -130,22 +130,22 @@ async fn main() -> Result<()> {
 	println!("     --address <multisig_address> \\");
 	println!("     --proposal-id <id> \\");
 	println!("     --from alice");
-	println!("");
+	println!();
 	println!("   # Batch cleanup all expired proposals");
 	println!("   quantus multisig claim-deposits \\");
 	println!("     --address <multisig_address> \\");
 	println!("     --from alice");
-	println!("");
+	println!();
 
 	// 9. Example: Dissolve multisig (recover creation deposit)
 	println!("🗑️  To dissolve multisig (requires no proposals, zero balance):");
 	println!("   quantus multisig dissolve \\");
 	println!("     --address <multisig_address> \\");
 	println!("     --from alice");
-	println!("");
+	println!();
 
 	println!("✨ Multisig example complete!");
-	println!("");
+	println!();
 	println!("📚 For more information:");
 	println!("   quantus multisig --help");
 	println!("   quantus multisig <command> --help");
