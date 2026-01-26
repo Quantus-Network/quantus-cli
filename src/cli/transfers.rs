@@ -4,10 +4,12 @@
 //! which allows clients to retrieve their transactions without revealing their
 //! exact addresses to the indexer.
 
-use crate::error::{QuantusError, Result};
-use crate::subsquid::{compute_address_hash, get_hash_prefix, SubsquidClient, TransferQueryParams};
-use crate::wallet::WalletManager;
-use crate::{log_error, log_print, log_success, log_verbose};
+use crate::{
+	error::{QuantusError, Result},
+	log_error, log_print, log_success, log_verbose,
+	subsquid::{compute_address_hash, get_hash_prefix, SubsquidClient, TransferQueryParams},
+	wallet::WalletManager,
+};
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
@@ -75,7 +77,7 @@ pub async fn handle_transfers_command(cmd: TransfersCommands) -> Result<()> {
 			limit,
 			wallet,
 			json,
-		} => {
+		} =>
 			handle_query_command(
 				subsquid_url,
 				prefix_len,
@@ -86,11 +88,9 @@ pub async fn handle_transfers_command(cmd: TransfersCommands) -> Result<()> {
 				wallet,
 				json,
 			)
-			.await
-		},
-		TransfersCommands::HashAddress { address, prefix_len } => {
-			handle_hash_address_command(&address, prefix_len)
-		},
+			.await,
+		TransfersCommands::HashAddress { address, prefix_len } =>
+			handle_hash_address_command(&address, prefix_len),
 	}
 }
 

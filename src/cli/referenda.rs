@@ -178,7 +178,7 @@ pub async fn handle_referenda_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		ReferendaCommands::SubmitRemark { message, from, password, password_file, origin } => {
+		ReferendaCommands::SubmitRemark { message, from, password, password_file, origin } =>
 			submit_remark_proposal(
 				&quantus_client,
 				&message,
@@ -188,9 +188,8 @@ pub async fn handle_referenda_command(
 				&origin,
 				execution_mode,
 			)
-			.await
-		},
-		ReferendaCommands::Submit { preimage_hash, from, password, password_file, origin } => {
+			.await,
+		ReferendaCommands::Submit { preimage_hash, from, password, password_file, origin } =>
 			submit_proposal(
 				&quantus_client,
 				&preimage_hash,
@@ -200,14 +199,12 @@ pub async fn handle_referenda_command(
 				&origin,
 				execution_mode,
 			)
-			.await
-		},
+			.await,
 		ReferendaCommands::List => list_proposals(&quantus_client).await,
-		ReferendaCommands::Get { index, decode } => {
-			get_proposal_details(&quantus_client, index, decode).await
-		},
+		ReferendaCommands::Get { index, decode } =>
+			get_proposal_details(&quantus_client, index, decode).await,
 		ReferendaCommands::Status { index } => get_proposal_status(&quantus_client, index).await,
-		ReferendaCommands::PlaceDecisionDeposit { index, from, password, password_file } => {
+		ReferendaCommands::PlaceDecisionDeposit { index, from, password, password_file } =>
 			place_decision_deposit(
 				&quantus_client,
 				index,
@@ -216,8 +213,7 @@ pub async fn handle_referenda_command(
 				password_file,
 				execution_mode,
 			)
-			.await
-		},
+			.await,
 		ReferendaCommands::Vote {
 			index,
 			aye,
@@ -226,7 +222,7 @@ pub async fn handle_referenda_command(
 			from,
 			password,
 			password_file,
-		} => {
+		} =>
 			vote_on_referendum(
 				&quantus_client,
 				index,
@@ -238,9 +234,8 @@ pub async fn handle_referenda_command(
 				password_file,
 				execution_mode,
 			)
-			.await
-		},
-		ReferendaCommands::RefundSubmissionDeposit { index, from, password, password_file } => {
+			.await,
+		ReferendaCommands::RefundSubmissionDeposit { index, from, password, password_file } =>
 			refund_submission_deposit(
 				&quantus_client,
 				index,
@@ -249,9 +244,8 @@ pub async fn handle_referenda_command(
 				password_file,
 				execution_mode,
 			)
-			.await
-		},
-		ReferendaCommands::RefundDecisionDeposit { index, from, password, password_file } => {
+			.await,
+		ReferendaCommands::RefundDecisionDeposit { index, from, password, password_file } =>
 			refund_decision_deposit(
 				&quantus_client,
 				index,
@@ -260,8 +254,7 @@ pub async fn handle_referenda_command(
 				password_file,
 				execution_mode,
 			)
-			.await
-		},
+			.await,
 		ReferendaCommands::Config => get_config(&quantus_client).await,
 	}
 }
@@ -349,12 +342,11 @@ async fn submit_remark_proposal(
 				quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
 			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
 		},
-		_ => {
+		_ =>
 			return Err(QuantusError::Generic(format!(
 				"Invalid origin type: {}. Must be 'signed', 'none', or 'root'",
 				origin_type
-			)))
-		},
+			))),
 	};
 
 	let enactment =
@@ -467,12 +459,11 @@ async fn submit_proposal(
 				quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
 			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
 		},
-		_ => {
+		_ =>
 			return Err(QuantusError::Generic(format!(
 				"Invalid origin type: {}. Must be 'signed', 'none', or 'root'",
 				origin_type
-			)))
-		},
+			))),
 	};
 
 	let enactment =
@@ -733,8 +724,8 @@ async fn vote_on_referendum(
 	let amount_value: u128 = (amount
 		.parse::<f64>()
 		.map_err(|_| QuantusError::Generic("Invalid amount format".to_string()))?
-		.max(0.0)
-		* 1_000_000_000_000_000_000.0) as u128;
+		.max(0.0) *
+		1_000_000_000_000_000_000.0) as u128;
 
 	// Validate conviction
 	if conviction > 6 {
