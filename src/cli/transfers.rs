@@ -5,6 +5,7 @@
 //! exact addresses to the indexer.
 
 use crate::{
+	cli::send::format_balance,
 	error::{QuantusError, Result},
 	log_error, log_print, log_success, log_verbose,
 	subsquid::{compute_address_hash, get_hash_prefix, SubsquidClient, TransferQueryParams},
@@ -203,9 +204,9 @@ async fn handle_query_command(
 					(false, false) => "???".dimmed(), // Shouldn't happen
 				};
 
-				// Parse and format amount
+				// Parse and format amount (12 decimals is standard for Substrate)
 				let amount: u128 = transfer.amount.parse().unwrap_or(0);
-				let formatted_amount = format_planck_amount(amount);
+				let formatted_amount = format!("{} DEV", format_balance(amount, 12));
 
 				log_print!(
 					"  [{}] {} | Block {} | {} | {} -> {}",
@@ -250,25 +251,6 @@ fn handle_hash_address_command(address: &str, prefix_len: usize) -> Result<()> {
 	);
 
 	Ok(())
-}
-
-/// Format a planck amount to a human-readable string
-fn format_planck_amount(planck: u128) -> String {
-	// Assuming 12 decimal places (standard for Substrate chains)
-	let decimals = 12u32;
-	let divisor = 10u128.pow(decimals);
-	let whole = planck / divisor;
-	let frac = planck % divisor;
-
-	if frac == 0 {
-		format!("{} DEV", whole)
-	} else {
-		// Format with up to 4 decimal places
-		let frac_str = format!("{:012}", frac);
-		let trimmed = frac_str.trim_end_matches('0');
-		let display_frac = if trimmed.len() > 4 { &trimmed[..4] } else { trimmed };
-		format!("{}.{} DEV", whole, display_frac)
-	}
 }
 
 /// Truncate an address for display
