@@ -74,66 +74,73 @@ async fn main() -> Result<()> {
 
 	println!("✅ Multisig created! Tx hash: 0x{}", hex::encode(tx_hash));
 	println!("");
-	println!("💡 NOTE: Check the events to find the multisig address");
-	println!("   The address is deterministically generated from signers + nonce");
+	println!("💡 NOTE: The CLI automatically extracts the address from events");
+	println!("   Or use --predict flag for instant (but potentially racy) address");
+	println!("   quantus multisig create --signers <list> --threshold 2 --from alice --predict");
 	println!("");
 
 	// 4. Example: Query multisig info
 	println!("📋 To query multisig information:");
-	println!("   quantus multisig info --multisig <multisig_address>");
+	println!("   quantus multisig info --address <multisig_address>");
+	println!("");
+	println!("   Or query specific proposal:");
+	println!("   quantus multisig info --address <multisig_address> --proposal-id 0");
 	println!("");
 
 	// 5. Example: Create a proposal
 	println!("📝 To create a proposal:");
-	println!("   # Simple transfer (recommended for transfers):");
+	println!("   # Simple transfer (recommended - human-readable amounts):");
 	println!("   quantus multisig propose transfer \\");
 	println!("     --address <multisig_address> \\");
 	println!("     --to <recipient> \\");
-	println!("     --amount 1000000000000 \\");
+	println!("     --amount 10 \\");
 	println!("     --expiry 1000 \\");
 	println!("     --from alice");
 	println!("");
 	println!("   # Custom transaction (full flexibility):");
 	println!("   quantus multisig propose custom \\");
 	println!("     --address <multisig_address> \\");
-	println!("     --pallet Balances \\");
-	println!("     --call transfer_allow_death \\");
-	println!("     --args '[\"<recipient>\", \"1000000000000\"]' \\");
+	println!("     --pallet System \\");
+	println!("     --call remark \\");
+	println!("     --args '[\"Hello from multisig\"]' \\");
 	println!("     --expiry 1000 \\");
 	println!("     --from alice");
 	println!("");
+	println!("   NOTE: Expiry is BLOCK NUMBER, not blocks from now!");
+	println!("         Use a block number in the future (e.g., current + 1000)");
+	println!("");
 
 	// 6. Example: Approve a proposal
-	println!("✅ To approve a proposal:");
+	println!("✅ To approve a proposal (auto-executes at threshold):");
 	println!("   quantus multisig approve \\");
-	println!("     --multisig <multisig_address> \\");
-	println!("     --proposal-hash <hash> \\");
+	println!("     --address <multisig_address> \\");
+	println!("     --proposal-id <id> \\");
 	println!("     --from bob");
 	println!("");
 
 	// 7. Example: List proposals
 	println!("📋 To list all proposals:");
-	println!("   quantus multisig list-proposals --multisig <multisig_address>");
+	println!("   quantus multisig list-proposals --address <multisig_address>");
 	println!("");
 
-	// 8. Example: Cleanup
+	// 8. Example: Cleanup (recover deposits from expired proposals)
 	println!("🧹 To cleanup and recover deposits:");
-	println!("   # Remove single proposal");
+	println!("   # Remove single expired proposal");
 	println!("   quantus multisig remove-expired \\");
-	println!("     --multisig <multisig_address> \\");
-	println!("     --proposal-hash <hash> \\");
+	println!("     --address <multisig_address> \\");
+	println!("     --proposal-id <id> \\");
 	println!("     --from alice");
 	println!("");
-	println!("   # Batch cleanup");
+	println!("   # Batch cleanup all expired proposals");
 	println!("   quantus multisig claim-deposits \\");
-	println!("     --multisig <multisig_address> \\");
+	println!("     --address <multisig_address> \\");
 	println!("     --from alice");
 	println!("");
 
-	// 9. Example: Dissolve multisig
+	// 9. Example: Dissolve multisig (recover creation deposit)
 	println!("🗑️  To dissolve multisig (requires no proposals, zero balance):");
 	println!("   quantus multisig dissolve \\");
-	println!("     --multisig <multisig_address> \\");
+	println!("     --address <multisig_address> \\");
 	println!("     --from alice");
 	println!("");
 

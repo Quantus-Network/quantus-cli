@@ -1469,9 +1469,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							108u8, 157u8, 154u8, 122u8, 44u8, 54u8, 12u8, 126u8, 145u8, 198u8,
-							44u8, 53u8, 68u8, 109u8, 166u8, 12u8, 170u8, 151u8, 215u8, 251u8, 1u8,
-							137u8, 149u8, 132u8, 0u8, 125u8, 80u8, 96u8, 85u8, 240u8, 232u8, 109u8,
+							200u8, 246u8, 119u8, 11u8, 15u8, 39u8, 4u8, 32u8, 250u8, 233u8, 49u8,
+							214u8, 226u8, 114u8, 235u8, 182u8, 6u8, 159u8, 60u8, 126u8, 214u8,
+							47u8, 184u8, 212u8, 106u8, 4u8, 167u8, 20u8, 224u8, 134u8, 167u8, 37u8,
 						],
 					)
 				}
@@ -1489,10 +1489,10 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							129u8, 124u8, 124u8, 57u8, 194u8, 127u8, 113u8, 187u8, 194u8, 36u8,
-							47u8, 108u8, 27u8, 56u8, 137u8, 101u8, 40u8, 20u8, 106u8, 64u8, 56u8,
-							119u8, 182u8, 172u8, 22u8, 250u8, 20u8, 175u8, 144u8, 225u8, 126u8,
-							56u8,
+							232u8, 99u8, 125u8, 48u8, 238u8, 249u8, 221u8, 214u8, 95u8, 163u8,
+							102u8, 195u8, 154u8, 131u8, 100u8, 54u8, 201u8, 60u8, 169u8, 189u8,
+							223u8, 173u8, 13u8, 76u8, 108u8, 120u8, 171u8, 5u8, 121u8, 35u8, 36u8,
+							218u8,
 						],
 					)
 				}
@@ -1985,9 +1985,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				3u8, 233u8, 219u8, 118u8, 195u8, 79u8, 113u8, 105u8, 239u8, 120u8, 33u8, 65u8,
-				180u8, 110u8, 1u8, 16u8, 112u8, 215u8, 110u8, 116u8, 222u8, 216u8, 186u8, 54u8,
-				251u8, 178u8, 62u8, 225u8, 227u8, 123u8, 143u8, 218u8,
+				67u8, 50u8, 35u8, 34u8, 220u8, 220u8, 198u8, 52u8, 94u8, 20u8, 184u8, 166u8, 50u8,
+				155u8, 167u8, 22u8, 51u8, 90u8, 10u8, 216u8, 223u8, 113u8, 230u8, 34u8, 116u8,
+				224u8, 247u8, 158u8, 0u8, 120u8, 98u8, 45u8,
 			]
 	}
 	pub mod system {
@@ -3086,9 +3086,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							234u8, 110u8, 83u8, 79u8, 105u8, 7u8, 155u8, 40u8, 40u8, 74u8, 149u8,
-							106u8, 29u8, 18u8, 32u8, 68u8, 102u8, 126u8, 237u8, 28u8, 186u8, 138u8,
-							66u8, 173u8, 75u8, 8u8, 167u8, 18u8, 145u8, 12u8, 180u8, 247u8,
+							150u8, 146u8, 83u8, 76u8, 57u8, 169u8, 39u8, 237u8, 122u8, 140u8,
+							157u8, 117u8, 33u8, 59u8, 136u8, 201u8, 170u8, 116u8, 185u8, 117u8,
+							246u8, 157u8, 116u8, 231u8, 205u8, 239u8, 61u8, 140u8, 109u8, 126u8,
+							105u8, 99u8,
 						],
 					)
 				}
@@ -5156,6 +5157,25 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = " Account ID used as the \"from\" account when creating transfer proofs for minted tokens"]
+				#[doc = " (e.g., genesis balances, mining rewards). This should be a well-known address that"]
+				#[doc = " represents \"minted from nothing\"."]
+				pub fn minting_account(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					::subxt::ext::subxt_core::utils::AccountId32,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"Balances",
+						"MintingAccount",
+						[
+							115u8, 233u8, 13u8, 223u8, 88u8, 20u8, 202u8, 139u8, 153u8, 28u8,
+							155u8, 157u8, 224u8, 66u8, 3u8, 250u8, 23u8, 53u8, 88u8, 168u8, 211u8,
+							204u8, 122u8, 166u8, 248u8, 23u8, 174u8, 225u8, 99u8, 108u8, 89u8,
+							135u8,
+						],
+					)
+				}
 			}
 		}
 	}
@@ -5450,9 +5470,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							0u8, 189u8, 255u8, 87u8, 49u8, 109u8, 97u8, 93u8, 217u8, 6u8, 104u8,
-							114u8, 251u8, 50u8, 3u8, 179u8, 114u8, 195u8, 122u8, 26u8, 173u8, 63u8,
-							97u8, 46u8, 58u8, 217u8, 65u8, 16u8, 16u8, 30u8, 60u8, 138u8,
+							223u8, 68u8, 19u8, 56u8, 15u8, 57u8, 58u8, 42u8, 108u8, 1u8, 113u8,
+							221u8, 178u8, 16u8, 75u8, 68u8, 149u8, 211u8, 61u8, 184u8, 17u8, 240u8,
+							208u8, 219u8, 59u8, 86u8, 84u8, 94u8, 162u8, 126u8, 185u8, 184u8,
 						],
 					)
 				}
@@ -5475,9 +5495,10 @@ pub mod api {
 							weight,
 						},
 						[
-							191u8, 114u8, 71u8, 98u8, 82u8, 90u8, 113u8, 173u8, 56u8, 179u8, 119u8,
-							29u8, 110u8, 249u8, 9u8, 69u8, 236u8, 66u8, 198u8, 102u8, 154u8, 48u8,
-							129u8, 13u8, 216u8, 130u8, 166u8, 68u8, 33u8, 230u8, 113u8, 118u8,
+							48u8, 14u8, 241u8, 181u8, 10u8, 128u8, 243u8, 143u8, 170u8, 154u8,
+							74u8, 29u8, 125u8, 164u8, 180u8, 121u8, 12u8, 163u8, 188u8, 179u8,
+							25u8, 68u8, 76u8, 77u8, 142u8, 245u8, 141u8, 33u8, 251u8, 19u8, 181u8,
+							85u8,
 						],
 					)
 				}
@@ -5515,9 +5536,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							193u8, 94u8, 70u8, 20u8, 210u8, 85u8, 93u8, 91u8, 137u8, 46u8, 88u8,
-							5u8, 86u8, 196u8, 245u8, 69u8, 56u8, 3u8, 165u8, 170u8, 92u8, 202u8,
-							57u8, 36u8, 188u8, 184u8, 7u8, 1u8, 104u8, 131u8, 68u8, 0u8,
+							10u8, 155u8, 110u8, 205u8, 59u8, 195u8, 7u8, 222u8, 169u8, 255u8, 92u8,
+							242u8, 253u8, 58u8, 248u8, 212u8, 239u8, 236u8, 194u8, 71u8, 153u8,
+							142u8, 219u8, 65u8, 75u8, 119u8, 82u8, 65u8, 68u8, 59u8, 157u8, 133u8,
 						],
 					)
 				}
@@ -6974,9 +6995,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							98u8, 65u8, 33u8, 92u8, 233u8, 1u8, 246u8, 164u8, 26u8, 150u8, 53u8,
-							4u8, 168u8, 83u8, 171u8, 92u8, 124u8, 171u8, 212u8, 27u8, 103u8, 13u8,
-							250u8, 15u8, 87u8, 62u8, 134u8, 75u8, 133u8, 159u8, 124u8, 35u8,
+							85u8, 158u8, 105u8, 109u8, 132u8, 82u8, 60u8, 133u8, 15u8, 227u8,
+							239u8, 229u8, 236u8, 198u8, 32u8, 194u8, 42u8, 27u8, 250u8, 108u8, 9u8,
+							147u8, 84u8, 189u8, 1u8, 1u8, 230u8, 194u8, 49u8, 249u8, 94u8, 153u8,
 						],
 					)
 				}
@@ -7018,9 +7039,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							100u8, 205u8, 203u8, 161u8, 31u8, 57u8, 31u8, 115u8, 134u8, 81u8,
-							236u8, 40u8, 95u8, 37u8, 38u8, 27u8, 67u8, 89u8, 33u8, 185u8, 24u8,
-							165u8, 246u8, 246u8, 48u8, 67u8, 177u8, 12u8, 46u8, 141u8, 11u8, 25u8,
+							254u8, 212u8, 47u8, 162u8, 236u8, 238u8, 242u8, 135u8, 208u8, 62u8,
+							68u8, 91u8, 107u8, 86u8, 146u8, 63u8, 108u8, 3u8, 61u8, 101u8, 173u8,
+							90u8, 203u8, 90u8, 253u8, 130u8, 236u8, 119u8, 137u8, 143u8, 23u8,
+							101u8,
 						],
 					)
 				}
@@ -7059,10 +7081,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							210u8, 55u8, 125u8, 95u8, 253u8, 110u8, 140u8, 205u8, 186u8, 161u8,
-							76u8, 252u8, 207u8, 226u8, 159u8, 234u8, 124u8, 20u8, 188u8, 213u8,
-							104u8, 205u8, 206u8, 71u8, 35u8, 142u8, 97u8, 154u8, 74u8, 93u8, 233u8,
-							20u8,
+							191u8, 55u8, 201u8, 33u8, 218u8, 232u8, 254u8, 190u8, 178u8, 212u8,
+							177u8, 55u8, 123u8, 193u8, 192u8, 168u8, 191u8, 152u8, 114u8, 219u8,
+							36u8, 16u8, 169u8, 153u8, 177u8, 252u8, 155u8, 86u8, 6u8, 84u8, 15u8,
+							138u8,
 						],
 					)
 				}
@@ -7087,10 +7109,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							179u8, 212u8, 93u8, 228u8, 136u8, 199u8, 98u8, 22u8, 251u8, 201u8,
-							147u8, 72u8, 198u8, 144u8, 244u8, 0u8, 108u8, 133u8, 204u8, 248u8,
-							18u8, 181u8, 195u8, 254u8, 232u8, 242u8, 5u8, 197u8, 213u8, 106u8,
-							197u8, 81u8,
+							196u8, 7u8, 166u8, 8u8, 233u8, 74u8, 187u8, 62u8, 55u8, 71u8, 143u8,
+							206u8, 254u8, 189u8, 104u8, 165u8, 210u8, 41u8, 142u8, 62u8, 113u8,
+							106u8, 114u8, 199u8, 72u8, 76u8, 154u8, 217u8, 15u8, 219u8, 40u8,
+							139u8,
 						],
 					)
 				}
@@ -8118,9 +8140,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							59u8, 61u8, 45u8, 32u8, 55u8, 82u8, 67u8, 35u8, 143u8, 52u8, 8u8, 28u8,
-							92u8, 204u8, 254u8, 33u8, 146u8, 112u8, 54u8, 88u8, 99u8, 151u8, 59u8,
-							234u8, 170u8, 65u8, 108u8, 203u8, 38u8, 120u8, 69u8, 236u8,
+							29u8, 28u8, 25u8, 61u8, 37u8, 229u8, 210u8, 111u8, 193u8, 52u8, 8u8,
+							21u8, 8u8, 77u8, 157u8, 19u8, 69u8, 118u8, 208u8, 3u8, 236u8, 225u8,
+							131u8, 77u8, 233u8, 125u8, 14u8, 47u8, 149u8, 143u8, 196u8, 180u8,
 						],
 					)
 				}
@@ -8150,9 +8172,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							49u8, 98u8, 158u8, 227u8, 229u8, 93u8, 55u8, 48u8, 105u8, 191u8, 169u8,
-							209u8, 42u8, 128u8, 36u8, 126u8, 212u8, 58u8, 177u8, 230u8, 82u8, 50u8,
-							221u8, 25u8, 197u8, 14u8, 165u8, 215u8, 204u8, 67u8, 26u8, 237u8,
+							78u8, 75u8, 127u8, 252u8, 226u8, 106u8, 177u8, 111u8, 109u8, 35u8,
+							226u8, 24u8, 240u8, 125u8, 95u8, 164u8, 6u8, 131u8, 118u8, 140u8,
+							133u8, 52u8, 134u8, 121u8, 19u8, 176u8, 158u8, 218u8, 160u8, 219u8,
+							235u8, 233u8,
 						],
 					)
 				}
@@ -8178,10 +8201,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							81u8, 126u8, 134u8, 19u8, 154u8, 25u8, 143u8, 199u8, 235u8, 33u8,
-							106u8, 108u8, 24u8, 240u8, 142u8, 226u8, 51u8, 81u8, 87u8, 122u8,
-							238u8, 215u8, 16u8, 104u8, 138u8, 48u8, 213u8, 130u8, 185u8, 53u8,
-							180u8, 201u8,
+							56u8, 130u8, 125u8, 42u8, 220u8, 133u8, 183u8, 94u8, 13u8, 103u8, 16u8,
+							149u8, 44u8, 225u8, 125u8, 36u8, 46u8, 223u8, 93u8, 153u8, 156u8, 2u8,
+							2u8, 76u8, 46u8, 82u8, 216u8, 16u8, 63u8, 192u8, 243u8, 174u8,
 						],
 					)
 				}
@@ -8204,9 +8226,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							1u8, 7u8, 40u8, 151u8, 90u8, 139u8, 3u8, 204u8, 72u8, 237u8, 200u8,
-							69u8, 65u8, 140u8, 122u8, 94u8, 185u8, 164u8, 101u8, 197u8, 33u8, 9u8,
-							34u8, 144u8, 16u8, 149u8, 33u8, 17u8, 171u8, 154u8, 137u8, 18u8,
+							24u8, 158u8, 80u8, 1u8, 187u8, 72u8, 32u8, 2u8, 113u8, 167u8, 122u8,
+							47u8, 26u8, 118u8, 234u8, 203u8, 254u8, 191u8, 117u8, 108u8, 172u8,
+							111u8, 220u8, 55u8, 232u8, 14u8, 119u8, 92u8, 36u8, 201u8, 27u8, 49u8,
 						],
 					)
 				}
@@ -8232,10 +8254,10 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							229u8, 139u8, 136u8, 184u8, 120u8, 148u8, 128u8, 70u8, 246u8, 115u8,
-							103u8, 48u8, 127u8, 189u8, 22u8, 96u8, 160u8, 139u8, 72u8, 218u8,
-							253u8, 243u8, 228u8, 10u8, 143u8, 23u8, 92u8, 132u8, 80u8, 22u8, 12u8,
-							21u8,
+							50u8, 50u8, 57u8, 73u8, 93u8, 223u8, 143u8, 109u8, 123u8, 36u8, 226u8,
+							101u8, 212u8, 87u8, 211u8, 231u8, 76u8, 118u8, 19u8, 234u8, 244u8,
+							218u8, 116u8, 201u8, 212u8, 141u8, 240u8, 165u8, 58u8, 16u8, 59u8,
+							170u8,
 						],
 					)
 				}
@@ -8258,10 +8280,10 @@ pub mod api {
 							weight,
 						},
 						[
-							123u8, 89u8, 82u8, 198u8, 245u8, 59u8, 229u8, 118u8, 168u8, 163u8,
-							239u8, 132u8, 42u8, 50u8, 117u8, 205u8, 110u8, 229u8, 143u8, 194u8,
-							25u8, 176u8, 2u8, 35u8, 231u8, 250u8, 98u8, 251u8, 144u8, 23u8, 35u8,
-							2u8,
+							125u8, 121u8, 97u8, 244u8, 194u8, 123u8, 194u8, 45u8, 174u8, 151u8,
+							149u8, 196u8, 231u8, 109u8, 100u8, 158u8, 48u8, 243u8, 3u8, 132u8,
+							18u8, 3u8, 158u8, 108u8, 106u8, 73u8, 112u8, 93u8, 70u8, 50u8, 79u8,
+							44u8,
 						],
 					)
 				}
@@ -8301,9 +8323,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							62u8, 66u8, 121u8, 77u8, 185u8, 44u8, 169u8, 244u8, 134u8, 153u8, 43u8,
-							220u8, 186u8, 3u8, 188u8, 16u8, 1u8, 115u8, 152u8, 34u8, 149u8, 48u8,
-							157u8, 165u8, 214u8, 37u8, 115u8, 252u8, 176u8, 195u8, 134u8, 213u8,
+							58u8, 160u8, 8u8, 132u8, 95u8, 63u8, 112u8, 54u8, 218u8, 35u8, 188u8,
+							230u8, 236u8, 48u8, 141u8, 98u8, 9u8, 203u8, 228u8, 216u8, 127u8, 17u8,
+							244u8, 220u8, 43u8, 36u8, 48u8, 88u8, 36u8, 134u8, 179u8, 166u8,
 						],
 					)
 				}
@@ -8326,9 +8348,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							238u8, 235u8, 190u8, 150u8, 221u8, 200u8, 0u8, 102u8, 43u8, 253u8,
-							193u8, 207u8, 100u8, 94u8, 235u8, 93u8, 88u8, 135u8, 32u8, 85u8, 7u8,
-							4u8, 43u8, 129u8, 4u8, 29u8, 183u8, 81u8, 81u8, 76u8, 123u8, 216u8,
+							16u8, 203u8, 2u8, 142u8, 9u8, 0u8, 98u8, 108u8, 243u8, 189u8, 154u8,
+							255u8, 212u8, 133u8, 216u8, 99u8, 123u8, 165u8, 94u8, 36u8, 17u8,
+							171u8, 255u8, 183u8, 195u8, 149u8, 196u8, 174u8, 151u8, 59u8, 99u8,
+							98u8,
 						],
 					)
 				}
@@ -10730,7 +10753,7 @@ pub mod api {
 				}
 				#[doc = " Volume fee taken from reversed transactions for high-security accounts only,"]
 				#[doc = " expressed as a Permill (e.g., Permill::from_percent(1) = 1%). Regular accounts incur no"]
-				#[doc = " fees."]
+				#[doc = " fees. The fee is burned (removed from total issuance)."]
 				pub fn volume_fee(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
@@ -15295,10 +15318,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							96u8, 65u8, 213u8, 54u8, 132u8, 243u8, 226u8, 209u8, 189u8, 106u8,
-							220u8, 118u8, 51u8, 43u8, 78u8, 247u8, 125u8, 239u8, 232u8, 150u8,
-							123u8, 220u8, 122u8, 68u8, 65u8, 92u8, 99u8, 207u8, 126u8, 58u8, 105u8,
-							128u8,
+							93u8, 43u8, 222u8, 117u8, 210u8, 66u8, 22u8, 189u8, 131u8, 103u8,
+							143u8, 248u8, 204u8, 35u8, 51u8, 12u8, 218u8, 193u8, 15u8, 152u8, 2u8,
+							224u8, 7u8, 28u8, 80u8, 94u8, 14u8, 18u8, 147u8, 138u8, 124u8, 171u8,
 						],
 					)
 				}
@@ -19937,15 +19959,17 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
-				#[doc = "- `proposal_hash`: Hash of the proposal to approve"]
+				#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
+				#[doc = ""]
+				#[doc = "Weight: Charges for MAX call size, but refunds based on actual call size"]
 				pub struct Approve {
 					pub multisig_address: approve::MultisigAddress,
-					pub proposal_hash: approve::ProposalHash,
+					pub proposal_id: approve::ProposalId,
 				}
 				pub mod approve {
 					use super::runtime_types;
 					pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+					pub type ProposalId = ::core::primitive::u32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Approve {
 					const PALLET: &'static str = "Multisig";
@@ -19966,15 +19990,17 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
-				#[doc = "- `proposal_hash`: Hash of the proposal to cancel"]
+				#[doc = "- `proposal_id`: ID (nonce) of the proposal to cancel"]
+				#[doc = ""]
+				#[doc = "Weight: Charges for MAX call size, but refunds based on actual call size"]
 				pub struct Cancel {
 					pub multisig_address: cancel::MultisigAddress,
-					pub proposal_hash: cancel::ProposalHash,
+					pub proposal_id: cancel::ProposalId,
 				}
 				pub mod cancel {
 					use super::runtime_types;
 					pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+					pub type ProposalId = ::core::primitive::u32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Cancel {
 					const PALLET: &'static str = "Multisig";
@@ -19991,27 +20017,22 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Remove a proposal and return deposit to proposer"]
+				#[doc = "Remove expired proposals and return deposits to proposers"]
 				#[doc = ""]
 				#[doc = "Can only be called by signers of the multisig."]
-				#[doc = ""]
-				#[doc = "Can be used to clean up proposals that are:"]
-				#[doc = "- Active and expired (past expiry block)"]
-				#[doc = "- Executed (status changed to Executed)"]
-				#[doc = "- Cancelled (status changed to Cancelled)"]
+				#[doc = "Only removes Active proposals that have expired (past expiry block)."]
+				#[doc = "Executed and Cancelled proposals are automatically cleaned up immediately."]
 				#[doc = ""]
 				#[doc = "The deposit is always returned to the original proposer, not the caller."]
-				#[doc = "This allows signers to help clean up storage even if proposer is inactive."]
-				#[doc = ""]
-				#[doc = "This enforces storage cleanup - users must remove old proposals to recover deposits."]
+				#[doc = "This allows any signer to help clean up storage even if proposer is inactive."]
 				pub struct RemoveExpired {
 					pub multisig_address: remove_expired::MultisigAddress,
-					pub proposal_hash: remove_expired::ProposalHash,
+					pub proposal_id: remove_expired::ProposalId,
 				}
 				pub mod remove_expired {
 					use super::runtime_types;
 					pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+					pub type ProposalId = ::core::primitive::u32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for RemoveExpired {
 					const PALLET: &'static str = "Multisig";
@@ -20028,15 +20049,16 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Claim all deposits from cancelled, executed, and expired proposals"]
+				#[doc = "Claim all deposits from expired proposals"]
 				#[doc = ""]
-				#[doc = "This is a batch operation that removes all proposals where:"]
+				#[doc = "This is a batch operation that removes all expired proposals where:"]
 				#[doc = "- Caller is the proposer"]
-				#[doc = "- Proposal is Executed, Cancelled, or Active+Expired"]
-				#[doc = "- Grace period has elapsed since status changed"]
+				#[doc = "- Proposal is Active and past expiry block"]
+				#[doc = ""]
+				#[doc = "Note: Executed and Cancelled proposals are automatically cleaned up immediately,"]
+				#[doc = "so only Active+Expired proposals need manual cleanup."]
 				#[doc = ""]
 				#[doc = "Returns all proposal deposits to the proposer in a single transaction."]
-				#[doc = "This enforces storage cleanup - users must actively clean up to recover deposits."]
 				pub struct ClaimDeposits {
 					pub multisig_address: claim_deposits::MultisigAddress,
 				}
@@ -20144,21 +20166,22 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
-				#[doc = "- `proposal_hash`: Hash of the proposal to approve"]
+				#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
+				#[doc = ""]
+				#[doc = "Weight: Charges for MAX call size, but refunds based on actual call size"]
 				pub fn approve(
 					&self,
 					multisig_address: types::approve::MultisigAddress,
-					proposal_hash: types::approve::ProposalHash,
+					proposal_id: types::approve::ProposalId,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Approve> {
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Multisig",
 						"approve",
-						types::Approve { multisig_address, proposal_hash },
+						types::Approve { multisig_address, proposal_id },
 						[
-							238u8, 153u8, 178u8, 75u8, 231u8, 35u8, 44u8, 235u8, 156u8, 34u8,
-							178u8, 246u8, 232u8, 103u8, 83u8, 175u8, 172u8, 172u8, 143u8, 11u8,
-							92u8, 150u8, 49u8, 101u8, 59u8, 90u8, 240u8, 255u8, 215u8, 247u8, 19u8,
-							30u8,
+							9u8, 56u8, 186u8, 135u8, 222u8, 23u8, 37u8, 64u8, 123u8, 199u8, 205u8,
+							29u8, 216u8, 128u8, 37u8, 185u8, 170u8, 121u8, 75u8, 100u8, 198u8,
+							80u8, 16u8, 249u8, 170u8, 91u8, 162u8, 201u8, 215u8, 81u8, 87u8, 190u8,
 						],
 					)
 				}
@@ -20166,62 +20189,60 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
-				#[doc = "- `proposal_hash`: Hash of the proposal to cancel"]
+				#[doc = "- `proposal_id`: ID (nonce) of the proposal to cancel"]
+				#[doc = ""]
+				#[doc = "Weight: Charges for MAX call size, but refunds based on actual call size"]
 				pub fn cancel(
 					&self,
 					multisig_address: types::cancel::MultisigAddress,
-					proposal_hash: types::cancel::ProposalHash,
+					proposal_id: types::cancel::ProposalId,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Cancel> {
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Multisig",
 						"cancel",
-						types::Cancel { multisig_address, proposal_hash },
+						types::Cancel { multisig_address, proposal_id },
 						[
-							8u8, 55u8, 236u8, 245u8, 9u8, 186u8, 177u8, 255u8, 176u8, 215u8, 18u8,
-							221u8, 16u8, 31u8, 93u8, 224u8, 218u8, 147u8, 100u8, 128u8, 16u8,
-							251u8, 173u8, 46u8, 186u8, 2u8, 146u8, 210u8, 111u8, 39u8, 60u8, 171u8,
+							83u8, 189u8, 89u8, 213u8, 70u8, 183u8, 216u8, 57u8, 226u8, 67u8, 212u8,
+							60u8, 59u8, 44u8, 49u8, 165u8, 181u8, 189u8, 26u8, 92u8, 49u8, 185u8,
+							224u8, 47u8, 81u8, 111u8, 51u8, 142u8, 165u8, 219u8, 103u8, 82u8,
 						],
 					)
 				}
-				#[doc = "Remove a proposal and return deposit to proposer"]
+				#[doc = "Remove expired proposals and return deposits to proposers"]
 				#[doc = ""]
 				#[doc = "Can only be called by signers of the multisig."]
-				#[doc = ""]
-				#[doc = "Can be used to clean up proposals that are:"]
-				#[doc = "- Active and expired (past expiry block)"]
-				#[doc = "- Executed (status changed to Executed)"]
-				#[doc = "- Cancelled (status changed to Cancelled)"]
+				#[doc = "Only removes Active proposals that have expired (past expiry block)."]
+				#[doc = "Executed and Cancelled proposals are automatically cleaned up immediately."]
 				#[doc = ""]
 				#[doc = "The deposit is always returned to the original proposer, not the caller."]
-				#[doc = "This allows signers to help clean up storage even if proposer is inactive."]
-				#[doc = ""]
-				#[doc = "This enforces storage cleanup - users must remove old proposals to recover deposits."]
+				#[doc = "This allows any signer to help clean up storage even if proposer is inactive."]
 				pub fn remove_expired(
 					&self,
 					multisig_address: types::remove_expired::MultisigAddress,
-					proposal_hash: types::remove_expired::ProposalHash,
+					proposal_id: types::remove_expired::ProposalId,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::RemoveExpired>
 				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Multisig",
 						"remove_expired",
-						types::RemoveExpired { multisig_address, proposal_hash },
+						types::RemoveExpired { multisig_address, proposal_id },
 						[
-							226u8, 97u8, 94u8, 56u8, 242u8, 15u8, 151u8, 120u8, 156u8, 64u8, 92u8,
-							126u8, 230u8, 75u8, 171u8, 15u8, 76u8, 89u8, 211u8, 85u8, 129u8, 123u8,
-							9u8, 93u8, 157u8, 237u8, 76u8, 218u8, 55u8, 76u8, 204u8, 240u8,
+							94u8, 78u8, 117u8, 103u8, 202u8, 220u8, 114u8, 15u8, 215u8, 2u8, 39u8,
+							23u8, 128u8, 151u8, 103u8, 78u8, 66u8, 116u8, 182u8, 1u8, 28u8, 44u8,
+							111u8, 170u8, 201u8, 171u8, 248u8, 36u8, 71u8, 228u8, 85u8, 82u8,
 						],
 					)
 				}
-				#[doc = "Claim all deposits from cancelled, executed, and expired proposals"]
+				#[doc = "Claim all deposits from expired proposals"]
 				#[doc = ""]
-				#[doc = "This is a batch operation that removes all proposals where:"]
+				#[doc = "This is a batch operation that removes all expired proposals where:"]
 				#[doc = "- Caller is the proposer"]
-				#[doc = "- Proposal is Executed, Cancelled, or Active+Expired"]
-				#[doc = "- Grace period has elapsed since status changed"]
+				#[doc = "- Proposal is Active and past expiry block"]
+				#[doc = ""]
+				#[doc = "Note: Executed and Cancelled proposals are automatically cleaned up immediately,"]
+				#[doc = "so only Active+Expired proposals need manual cleanup."]
 				#[doc = ""]
 				#[doc = "Returns all proposal deposits to the proposer in a single transaction."]
-				#[doc = "This enforces storage cleanup - users must actively clean up to recover deposits."]
 				pub fn claim_deposits(
 					&self,
 					multisig_address: types::claim_deposits::MultisigAddress,
@@ -20310,13 +20331,13 @@ pub mod api {
 			pub struct ProposalCreated {
 				pub multisig_address: proposal_created::MultisigAddress,
 				pub proposer: proposal_created::Proposer,
-				pub proposal_hash: proposal_created::ProposalHash,
+				pub proposal_id: proposal_created::ProposalId,
 			}
 			pub mod proposal_created {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Proposer = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+				pub type ProposalId = ::core::primitive::u32;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProposalCreated {
 				const PALLET: &'static str = "Multisig";
@@ -20333,14 +20354,14 @@ pub mod api {
 			pub struct ProposalApproved {
 				pub multisig_address: proposal_approved::MultisigAddress,
 				pub approver: proposal_approved::Approver,
-				pub proposal_hash: proposal_approved::ProposalHash,
+				pub proposal_id: proposal_approved::ProposalId,
 				pub approvals_count: proposal_approved::ApprovalsCount,
 			}
 			pub mod proposal_approved {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Approver = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+				pub type ProposalId = ::core::primitive::u32;
 				pub type ApprovalsCount = ::core::primitive::u32;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProposalApproved {
@@ -20358,7 +20379,7 @@ pub mod api {
 			#[doc = "Contains all data needed for indexing by SubSquid"]
 			pub struct ProposalExecuted {
 				pub multisig_address: proposal_executed::MultisigAddress,
-				pub proposal_hash: proposal_executed::ProposalHash,
+				pub proposal_id: proposal_executed::ProposalId,
 				pub proposer: proposal_executed::Proposer,
 				pub call: proposal_executed::Call,
 				pub approvers: proposal_executed::Approvers,
@@ -20367,7 +20388,7 @@ pub mod api {
 			pub mod proposal_executed {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+				pub type ProposalId = ::core::primitive::u32;
 				pub type Proposer = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Call = ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
 				pub type Approvers = ::subxt::ext::subxt_core::alloc::vec::Vec<
@@ -20391,13 +20412,13 @@ pub mod api {
 			pub struct ProposalCancelled {
 				pub multisig_address: proposal_cancelled::MultisigAddress,
 				pub proposer: proposal_cancelled::Proposer,
-				pub proposal_hash: proposal_cancelled::ProposalHash,
+				pub proposal_id: proposal_cancelled::ProposalId,
 			}
 			pub mod proposal_cancelled {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Proposer = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+				pub type ProposalId = ::core::primitive::u32;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProposalCancelled {
 				const PALLET: &'static str = "Multisig";
@@ -20413,14 +20434,14 @@ pub mod api {
 			#[doc = "Expired proposal was removed from storage"]
 			pub struct ProposalRemoved {
 				pub multisig_address: proposal_removed::MultisigAddress,
-				pub proposal_hash: proposal_removed::ProposalHash,
+				pub proposal_id: proposal_removed::ProposalId,
 				pub proposer: proposal_removed::Proposer,
 				pub removed_by: proposal_removed::RemovedBy,
 			}
 			pub mod proposal_removed {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type ProposalHash = ::subxt::ext::subxt_core::utils::H256;
+				pub type ProposalId = ::core::primitive::u32;
 				pub type Proposer = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type RemovedBy = ::subxt::ext::subxt_core::utils::AccountId32;
 			}
@@ -20496,6 +20517,10 @@ pub mod api {
 							::subxt::ext::subxt_core::utils::AccountId32,
 						>,
 						::core::primitive::u128,
+						runtime_types::bounded_collections::bounded_btree_map::BoundedBTreeMap<
+							::subxt::ext::subxt_core::utils::AccountId32,
+							::core::primitive::u32,
+						>,
 					>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
@@ -20513,7 +20538,7 @@ pub mod api {
 						>,
 					>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type Param1 = ::subxt::ext::subxt_core::utils::H256;
+					pub type Param1 = ::core::primitive::u32;
 				}
 			}
 			pub struct StorageApi;
@@ -20554,10 +20579,9 @@ pub mod api {
 						"Multisigs",
 						(),
 						[
-							234u8, 188u8, 39u8, 221u8, 0u8, 221u8, 250u8, 110u8, 209u8, 84u8,
-							132u8, 110u8, 2u8, 89u8, 153u8, 228u8, 59u8, 5u8, 8u8, 33u8, 85u8,
-							129u8, 131u8, 102u8, 242u8, 134u8, 183u8, 172u8, 12u8, 102u8, 130u8,
-							199u8,
+							95u8, 91u8, 215u8, 222u8, 132u8, 122u8, 22u8, 101u8, 197u8, 243u8,
+							217u8, 12u8, 255u8, 230u8, 38u8, 200u8, 69u8, 179u8, 47u8, 227u8, 70u8,
+							230u8, 25u8, 50u8, 224u8, 85u8, 127u8, 189u8, 241u8, 183u8, 21u8, 32u8,
 						],
 					)
 				}
@@ -20579,14 +20603,13 @@ pub mod api {
 						"Multisigs",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							234u8, 188u8, 39u8, 221u8, 0u8, 221u8, 250u8, 110u8, 209u8, 84u8,
-							132u8, 110u8, 2u8, 89u8, 153u8, 228u8, 59u8, 5u8, 8u8, 33u8, 85u8,
-							129u8, 131u8, 102u8, 242u8, 134u8, 183u8, 172u8, 12u8, 102u8, 130u8,
-							199u8,
+							95u8, 91u8, 215u8, 222u8, 132u8, 122u8, 22u8, 101u8, 197u8, 243u8,
+							217u8, 12u8, 255u8, 230u8, 38u8, 200u8, 69u8, 179u8, 47u8, 227u8, 70u8,
+							230u8, 25u8, 50u8, 224u8, 85u8, 127u8, 189u8, 241u8, 183u8, 21u8, 32u8,
 						],
 					)
 				}
-				#[doc = " Proposals indexed by (multisig_address, proposal_hash)"]
+				#[doc = " Proposals indexed by (multisig_address, proposal_nonce)"]
 				pub fn proposals_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -20601,14 +20624,13 @@ pub mod api {
 						"Proposals",
 						(),
 						[
-							236u8, 76u8, 63u8, 186u8, 167u8, 133u8, 151u8, 75u8, 46u8, 48u8, 84u8,
-							214u8, 219u8, 224u8, 189u8, 213u8, 2u8, 165u8, 43u8, 197u8, 153u8,
-							118u8, 17u8, 249u8, 238u8, 109u8, 252u8, 214u8, 166u8, 25u8, 67u8,
-							187u8,
+							91u8, 232u8, 160u8, 102u8, 108u8, 104u8, 162u8, 6u8, 45u8, 30u8, 146u8,
+							207u8, 18u8, 43u8, 197u8, 37u8, 166u8, 99u8, 30u8, 17u8, 46u8, 210u8,
+							56u8, 209u8, 9u8, 35u8, 221u8, 140u8, 178u8, 248u8, 249u8, 214u8,
 						],
 					)
 				}
-				#[doc = " Proposals indexed by (multisig_address, proposal_hash)"]
+				#[doc = " Proposals indexed by (multisig_address, proposal_nonce)"]
 				pub fn proposals_iter1(
 					&self,
 					_0: types::proposals::Param0,
@@ -20626,14 +20648,13 @@ pub mod api {
 						"Proposals",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							236u8, 76u8, 63u8, 186u8, 167u8, 133u8, 151u8, 75u8, 46u8, 48u8, 84u8,
-							214u8, 219u8, 224u8, 189u8, 213u8, 2u8, 165u8, 43u8, 197u8, 153u8,
-							118u8, 17u8, 249u8, 238u8, 109u8, 252u8, 214u8, 166u8, 25u8, 67u8,
-							187u8,
+							91u8, 232u8, 160u8, 102u8, 108u8, 104u8, 162u8, 6u8, 45u8, 30u8, 146u8,
+							207u8, 18u8, 43u8, 197u8, 37u8, 166u8, 99u8, 30u8, 17u8, 46u8, 210u8,
+							56u8, 209u8, 9u8, 35u8, 221u8, 140u8, 178u8, 248u8, 249u8, 214u8,
 						],
 					)
 				}
-				#[doc = " Proposals indexed by (multisig_address, proposal_hash)"]
+				#[doc = " Proposals indexed by (multisig_address, proposal_nonce)"]
 				pub fn proposals(
 					&self,
 					_0: types::proposals::Param0,
@@ -20660,10 +20681,9 @@ pub mod api {
 							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
 						),
 						[
-							236u8, 76u8, 63u8, 186u8, 167u8, 133u8, 151u8, 75u8, 46u8, 48u8, 84u8,
-							214u8, 219u8, 224u8, 189u8, 213u8, 2u8, 165u8, 43u8, 197u8, 153u8,
-							118u8, 17u8, 249u8, 238u8, 109u8, 252u8, 214u8, 166u8, 25u8, 67u8,
-							187u8,
+							91u8, 232u8, 160u8, 102u8, 108u8, 104u8, 162u8, 6u8, 45u8, 30u8, 146u8,
+							207u8, 18u8, 43u8, 197u8, 37u8, 166u8, 99u8, 30u8, 17u8, 46u8, 210u8,
+							56u8, 209u8, 9u8, 35u8, 221u8, 140u8, 178u8, 248u8, 249u8, 214u8,
 						],
 					)
 				}
@@ -20871,6 +20891,23 @@ pub mod api {
 		use super::runtime_types;
 		pub mod bounded_collections {
 			use super::runtime_types;
+			pub mod bounded_btree_map {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct BoundedBTreeMap<_0, _1>(
+					pub ::subxt::ext::subxt_core::utils::KeyedVec<_0, _1>,
+				);
+			}
 			pub mod bounded_vec {
 				use super::runtime_types;
 				#[derive(
@@ -23773,49 +23810,49 @@ pub mod api {
 					#[doc = ""]
 					#[doc = "Parameters:"]
 					#[doc = "- `multisig_address`: The multisig account"]
-					#[doc = "- `proposal_hash`: Hash of the proposal to approve"]
+					#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
+					#[doc = ""]
+					#[doc = "Weight: Charges for MAX call size, but refunds based on actual call size"]
 					approve {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 					},
 					#[codec(index = 3)]
 					#[doc = "Cancel a proposed transaction (only by proposer)"]
 					#[doc = ""]
 					#[doc = "Parameters:"]
 					#[doc = "- `multisig_address`: The multisig account"]
-					#[doc = "- `proposal_hash`: Hash of the proposal to cancel"]
+					#[doc = "- `proposal_id`: ID (nonce) of the proposal to cancel"]
+					#[doc = ""]
+					#[doc = "Weight: Charges for MAX call size, but refunds based on actual call size"]
 					cancel {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 					},
 					#[codec(index = 4)]
-					#[doc = "Remove a proposal and return deposit to proposer"]
+					#[doc = "Remove expired proposals and return deposits to proposers"]
 					#[doc = ""]
 					#[doc = "Can only be called by signers of the multisig."]
-					#[doc = ""]
-					#[doc = "Can be used to clean up proposals that are:"]
-					#[doc = "- Active and expired (past expiry block)"]
-					#[doc = "- Executed (status changed to Executed)"]
-					#[doc = "- Cancelled (status changed to Cancelled)"]
+					#[doc = "Only removes Active proposals that have expired (past expiry block)."]
+					#[doc = "Executed and Cancelled proposals are automatically cleaned up immediately."]
 					#[doc = ""]
 					#[doc = "The deposit is always returned to the original proposer, not the caller."]
-					#[doc = "This allows signers to help clean up storage even if proposer is inactive."]
-					#[doc = ""]
-					#[doc = "This enforces storage cleanup - users must remove old proposals to recover deposits."]
+					#[doc = "This allows any signer to help clean up storage even if proposer is inactive."]
 					remove_expired {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 					},
 					#[codec(index = 5)]
-					#[doc = "Claim all deposits from cancelled, executed, and expired proposals"]
+					#[doc = "Claim all deposits from expired proposals"]
 					#[doc = ""]
-					#[doc = "This is a batch operation that removes all proposals where:"]
+					#[doc = "This is a batch operation that removes all expired proposals where:"]
 					#[doc = "- Caller is the proposer"]
-					#[doc = "- Proposal is Executed, Cancelled, or Active+Expired"]
-					#[doc = "- Grace period has elapsed since status changed"]
+					#[doc = "- Proposal is Active and past expiry block"]
+					#[doc = ""]
+					#[doc = "Note: Executed and Cancelled proposals are automatically cleaned up immediately,"]
+					#[doc = "so only Active+Expired proposals need manual cleanup."]
 					#[doc = ""]
 					#[doc = "Returns all proposal deposits to the proposer in a single transaction."]
-					#[doc = "This enforces storage cleanup - users must actively clean up to recover deposits."]
 					claim_deposits {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
@@ -23903,21 +23940,24 @@ pub mod api {
 					#[doc = "Too many total proposals in storage for this multisig (cleanup required)"]
 					TooManyProposalsInStorage,
 					#[codec(index = 19)]
+					#[doc = "This signer has too many proposals in storage (filibuster protection)"]
+					TooManyProposalsPerSigner,
+					#[codec(index = 20)]
 					#[doc = "Insufficient balance for deposit"]
 					InsufficientBalance,
-					#[codec(index = 20)]
+					#[codec(index = 21)]
 					#[doc = "Proposal has active deposit"]
 					ProposalHasDeposit,
-					#[codec(index = 21)]
+					#[codec(index = 22)]
 					#[doc = "Proposal has not expired yet"]
 					ProposalNotExpired,
-					#[codec(index = 22)]
+					#[codec(index = 23)]
 					#[doc = "Proposal is not active (already executed or cancelled)"]
 					ProposalNotActive,
-					#[codec(index = 23)]
+					#[codec(index = 24)]
 					#[doc = "Cannot dissolve multisig with existing proposals (clear them first)"]
 					ProposalsExist,
-					#[codec(index = 24)]
+					#[codec(index = 25)]
 					#[doc = "Multisig account must have zero balance before dissolution"]
 					MultisigAccountNotZero,
 				}
@@ -23951,14 +23991,14 @@ pub mod api {
 					ProposalCreated {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposer: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 					},
 					#[codec(index = 2)]
 					#[doc = "A proposal has been approved by a signer"]
 					ProposalApproved {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						approver: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 						approvals_count: ::core::primitive::u32,
 					},
 					#[codec(index = 3)]
@@ -23966,7 +24006,7 @@ pub mod api {
 					#[doc = "Contains all data needed for indexing by SubSquid"]
 					ProposalExecuted {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 						proposer: ::subxt::ext::subxt_core::utils::AccountId32,
 						call: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
 						approvers: ::subxt::ext::subxt_core::alloc::vec::Vec<
@@ -23980,13 +24020,13 @@ pub mod api {
 					ProposalCancelled {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposer: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 					},
 					#[codec(index = 5)]
 					#[doc = "Expired proposal was removed from storage"]
 					ProposalRemoved {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						proposal_hash: ::subxt::ext::subxt_core::utils::H256,
+						proposal_id: ::core::primitive::u32,
 						proposer: ::subxt::ext::subxt_core::utils::AccountId32,
 						removed_by: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
@@ -24015,7 +24055,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct MultisigData<_0, _1, _2, _3> {
+			pub struct MultisigData<_0, _1, _2, _3, _4> {
 				pub signers: _2,
 				pub threshold: ::core::primitive::u32,
 				pub nonce: ::core::primitive::u64,
@@ -24024,6 +24064,7 @@ pub mod api {
 				pub deposit: _3,
 				pub last_activity: _0,
 				pub active_proposals: ::core::primitive::u32,
+				pub proposals_per_signer: _4,
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,

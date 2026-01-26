@@ -147,45 +147,54 @@ The Quantus CLI provides comprehensive support for multi-signature wallets, allo
 
 - **Deterministic Address Generation**: Multisig addresses are derived from signers + nonce
 - **Flexible Threshold**: Configure how many approvals are needed (e.g., 2-of-3, 5-of-7)
-- **Full Call Transparency**: Complete transaction data stored on-chain (not just hashes)
+- **Full Call Transparency**: Complete transaction data stored on-chain (no blind signing)
 - **Auto-Execution**: Proposals execute automatically when threshold is reached
+- **Human-Readable Amounts**: Use simple formats like `10` instead of `10000000000000`
+- **Smart Address Display**: Automatic SS58 formatting with proper network prefix (`qz...`)
+- **Balance Tracking**: View multisig balance directly in `info` command
+- **Expiry Validation**: Client-side checks prevent expired proposals
 - **Deposit Management**: Refundable deposits incentivize cleanup
-- **Query Support**: Inspect multisig configuration and proposals
+- **Query Support**: Inspect multisig configuration, proposals, and balances
 
 ### Quick Start Example
 
 ```bash
-# 1. Create a 2-of-3 multisig
+# 1. Create a 2-of-3 multisig (waits for confirmation by default)
 quantus multisig create \
   --signers "alice,bob,charlie" \
   --threshold 2 \
-  --from alice
+  --from alice \
+  --wait-for-transaction
 
-# 2. Check the events to get the multisig address
-# Let's say it's: 5GMultiSigAddr...
+# Output: 📍 Multisig address: qz... (with proper network prefix)
 
-# 3. Fund the multisig (anyone can send funds)
+# 2. Fund the multisig (anyone can send funds)
 quantus send \
   --from alice \
-  --to 5GMultiSigAddr... \
+  --to qz... \
   --amount 1000
 
-# 4. Create a proposal to send funds from multisig
-quantus multisig propose \
-  --multisig 5GMultiSigAddr... \
-  --pallet Balances \
-  --call transfer_allow_death \
-  --args '["5GDestination...", "500000000000"]' \
-  --expiry 1000 \
+# 3. Create a transfer proposal (human-readable amount)
+quantus multisig propose transfer \
+  --address qz... \
+  --to dave \
+  --amount 10 \
+  --expiry 1500 \
   --from alice
 
-# 5. Check events for proposal hash
-# Let's say it's: 0xabc123...
+# Note: Expiry is BLOCK NUMBER (e.g., current block + 1000)
 
-# 6. Second signer approves (auto-executes at threshold)
+# 4. Check proposal details (shows current block + blocks remaining)
+quantus multisig info --address qz... --proposal-id 0
+
+# Output shows:
+#   Current Block: 450
+#   Expiry: block 1500 (1050 blocks remaining)
+
+# 5. Second signer approves (auto-executes at threshold)
 quantus multisig approve \
-  --multisig 5GMultiSigAddr... \
-  --proposal-hash 0xabc123... \
+  --address qz... \
+  --proposal-id 0 \
   --from bob
 ```
 
@@ -193,77 +202,96 @@ quantus multisig approve \
 
 #### Create Multisig
 ```bash
+# Default: Wait for transaction and extract address from event
 quantus multisig create \
   --signers "addr1,addr2,addr3" \
   --threshold 2 \
   --from creator_wallet
+
+# Fast mode: Predict address immediately (may be wrong if concurrent creation)
+quantus multisig create \
+  --signers "addr1,addr2,addr3" \
+  --threshold 2 \
+  --from creator_wallet \
+  --predict
 ```
 
-#### Propose Transaction
+#### Propose Transfer (Recommended for simple transfers)
 ```bash
-quantus multisig propose \
-  --multisig <multisig_address> \
-  --pallet Balances \
-  --call transfer_allow_death \
-  --args '["recipient", "amount"]' \
-  --expiry <block_number> \
+quantus multisig propose transfer \
+  --address <multisig_address> \
+  --to <recipient> \
+  --amount 10 \
+  --expiry <future_block_number> \
+  --from signer_wallet
+
+# Amount formats supported:
+#   10       → 10 QUAN
+#   10.5     → 10.5 QUAN
+#   0.001    → 0.001 QUAN
+#   10000000000000 → raw format (auto-detected)
+```
+
+#### Propose Custom Transaction (Full flexibility)
+```bash
+quantus multisig propose custom \
+  --address <multisig_address> \
+  --pallet System \
+  --call remark \
+  --args '["Hello from multisig"]' \
+  --expiry <future_block_number> \
   --from signer_wallet
 ```
 
 #### Approve Proposal
 ```bash
 quantus multisig approve \
-  --multisig <multisig_address> \
-  --proposal-hash <hash> \
+  --address <multisig_address> \
+  --proposal-id <id> \
   --from signer_wallet
 ```
 
 #### Cancel Proposal (proposer only)
 ```bash
 quantus multisig cancel \
-  --multisig <multisig_address> \
-  --proposal-hash <hash> \
+  --address <multisig_address> \
+  --proposal-id <id> \
   --from proposer_wallet
 ```
 
 #### Query Multisig Info
 ```bash
-quantus multisig info \
-  --multisig <multisig_address>
+# Show multisig details (signers, threshold, balance, etc.)
+quantus multisig info --address <multisig_address>
+
+# Show specific proposal details (includes current block + time remaining)
+quantus multisig info --address <multisig_address> --proposal-id <id>
 ```
 
 #### List All Proposals
 ```bash
-quantus multisig list-proposals \
-  --multisig <multisig_address>
-```
-
-#### Query Specific Proposal
-```bash
-quantus multisig proposal-info \
-  --multisig <multisig_address> \
-  --proposal-hash <hash>
+quantus multisig list-proposals --address <multisig_address>
 ```
 
 #### Cleanup (Recover Deposits)
 ```bash
-# Remove single expired/executed/cancelled proposal
+# Remove single expired proposal
 quantus multisig remove-expired \
-  --multisig <multisig_address> \
-  --proposal-hash <hash> \
+  --address <multisig_address> \
+  --proposal-id <id> \
   --from signer_wallet
 
-# Batch cleanup all removable proposals
+# Batch cleanup all expired proposals
 quantus multisig claim-deposits \
-  --multisig <multisig_address> \
-  --from proposer_wallet
+  --address <multisig_address> \
+  --from any_signer_wallet
 ```
 
 #### Dissolve Multisig
 ```bash
 # Requires: no proposals exist, zero balance
 quantus multisig dissolve \
-  --multisig <multisig_address> \
+  --address <multisig_address> \
   --from creator_or_signer_wallet
 ```
 
@@ -272,24 +300,51 @@ quantus multisig dissolve \
 The multisig pallet uses an economic model to prevent spam and incentivize cleanup:
 
 - **MultisigFee**: Non-refundable fee paid to treasury on creation
-- **MultisigDeposit**: Refundable deposit returned on dissolution
+- **MultisigDeposit**: Refundable deposit (locked, returned on dissolution)
 - **ProposalFee**: Non-refundable fee per proposal (scales with signer count)
-- **ProposalDeposit**: Refundable deposit per proposal (returned after cleanup)
+- **ProposalDeposit**: Refundable deposit per proposal (locked, returned after cleanup)
+
+**Deposits are visible in `multisig info` output:**
+```
+Balance: 1000 QUAN          ← Spendable balance
+Deposit: 0.5 QUAN (locked)  ← Refundable creation deposit
+```
 
 ### Best Practices
 
 1. **Use Descriptive Names**: Use wallet names instead of raw addresses for better readability
-2. **Set Reasonable Expiry**: Choose expiry blocks that give enough time for approvals
-3. **Cleanup Regularly**: Remove executed/cancelled proposals to recover deposits
-4. **Monitor Deposits**: Keep track of locked deposits and clean up when done
-5. **High Security**: For high-value multisigs, use higher thresholds (e.g., 5-of-7)
+2. **Set Reasonable Expiry**: Use future block numbers (current + 1000 for ~3.3 hours at 12s/block)
+3. **Verify Proposals**: Use `info --proposal-id` to decode and verify proposal contents before approving
+4. **Cleanup Regularly**: Use `claim-deposits` to recover deposits from expired proposals
+5. **Monitor Balances**: Check multisig balance with `info --address` command
+6. **High Security**: For high-value multisigs, use higher thresholds (e.g., 5-of-7 or 4-of-6)
 
 ### Security Considerations
 
 - **Immutable Configuration**: Signers and threshold cannot be changed after creation
-- **Full Transparency**: All call data is visible on-chain (no blind signing)
+- **Full Transparency**: All call data is stored and decoded on-chain (no blind signing)
 - **Auto-Execution**: Proposals execute automatically when threshold is reached
 - **Access Control**: Only signers can propose/approve, only proposer can cancel
+- **Expiry Protection**: Client validates expiry before submission to prevent wasted fees
+- **Deterministic Addresses**: Multisig addresses are deterministic and verifiable
+
+### Advanced Features
+
+**Decoding Proposals**: The CLI automatically decodes common call types:
+```bash
+$ quantus multisig info --address qz... --proposal-id 0
+
+📝 PROPOSAL Information:
+   Current Block: 450
+   Call:  Balances::transfer_allow_death
+   To:  qzmqr...
+   Amount:  10 QUAN
+   Expiry: block 1500 (1050 blocks remaining)
+```
+
+**SS58 Address Format**: All addresses use the Quantus network prefix (`qz...` for prefix 189) automatically.
+
+**Password Convenience**: Omit `--password ""` for wallets with no password.
 
 For more details, see `quantus multisig --help` and explore subcommands with `--help`.
 
