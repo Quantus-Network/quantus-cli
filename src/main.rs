@@ -13,6 +13,7 @@ mod cli;
 mod config;
 mod error;
 mod log;
+mod subsquid;
 mod wallet;
 
 use cli::Commands;
