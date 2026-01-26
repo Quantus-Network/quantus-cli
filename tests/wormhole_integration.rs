@@ -39,8 +39,9 @@ use rand::{rng, RngCore};
 use serial_test::serial;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
-	Hasher,
+	Decode, Hasher,
 };
+use sp_runtime::Permill;
 use std::time::Duration;
 use subxt::{
 	backend::legacy::rpc_methods::ReadProof,
@@ -613,6 +614,44 @@ async fn submit_aggregated_proof_for_verification(
 	Err("Transaction stream ended unexpectedly".to_string())
 }
 
+fn author_from_header_digest(
+	header_digest: &subxt::config::substrate::Digest,
+) -> Option<SubxtAccountId> {
+	header_digest.logs.iter().find_map(|item| match item {
+		subxt::config::substrate::DigestItem::PreRuntime(_engine_id, data) =>
+			SubxtAccountId::decode(&mut &data[..]).ok(),
+		_ => None,
+	})
+}
+
+/// fee = exit * fee_bps / (10000 - fee_bps)
+/// miner_fee = fee - burn_rate*fee
+fn expected_miner_fee_u128(total_exit_amount_u128: u128, fee_bps: u32) -> u128 {
+	let fee_bps_u128 = fee_bps as u128;
+
+	let fee_u128 = total_exit_amount_u128
+		.saturating_mul(fee_bps_u128)
+		.checked_div(10_000u128.saturating_sub(fee_bps_u128))
+		.unwrap_or(0);
+
+	let burn_rate: Permill = Permill::from_percent(50);
+	let burn_amount_u128 = burn_rate * fee_u128;
+	fee_u128.saturating_sub(burn_amount_u128)
+}
+
+async fn free_balance_at(
+	client: &QuantusClient,
+	at: sp_core::H256,
+	who: &SubxtAccountId,
+) -> anyhow::Result<u128> {
+	let api = client.client();
+	let storage = api.storage().at(at);
+	let addr = quantus_node::api::storage().system().account(who.clone());
+	let info = storage.fetch(&addr).await?;
+	let free: u128 = info.map(|i| i.data.free).unwrap_or(0u128);
+	Ok(free)
+}
+
 /// Integration test: Generate and verify a single wormhole proof on-chain
 ///
 /// This test:
@@ -620,6 +659,7 @@ async fn submit_aggregated_proof_for_verification(
 /// 2. Uses a developer wallet (crystal_alice) to fund an unspendable account
 /// 3. Generates a ZK proof of the transfer
 /// 4. Submits the proof for on-chain verification
+/// 5. Miner fee is paid.
 #[tokio::test]
 #[serial]
 #[ignore] // Requires running local node - run with `cargo test -- --ignored`
@@ -662,9 +702,48 @@ async fn test_single_proof_on_chain_verification() {
 
 	// Submit for on-chain verification
 	println!("4. Verifying proof on-chain...");
-	submit_single_proof_for_verification(&quantus_client, proof_context.proof_bytes)
+
+	// Submit extrinsic
+	submit_single_proof_for_verification(&quantus_client, proof_context.proof_bytes.clone())
 		.await
 		.expect("On-chain verification failed");
+
+	// Find the block that executed verification
+	let verify_block_hash = quantus_client
+		.get_latest_block()
+		.await
+		.expect("Failed to get latest block hash");
+
+	// Extract author from block digest
+	let verify_block = quantus_client.client().blocks().at(verify_block_hash).await.unwrap();
+	let header = verify_block.header();
+	let parent_hash = header.parent_hash;
+	let author = author_from_header_digest(&header.digest)
+		.expect("could not decode author from pre-runtime digest");
+
+	// Compute expected miner fee from public inputs (single proof)
+	let fee_bps = proof_context.public_inputs.volume_fee_bps;
+	let exit_u128 = (proof_context.public_inputs.output_amount as u128) * SCALE_DOWN_FACTOR;
+	let expected_miner_fee = expected_miner_fee_u128(exit_u128, fee_bps);
+
+	assert!(expected_miner_fee > 0, "expected miner fee should be > 0");
+
+	// Balance delta check
+	let before = free_balance_at(&quantus_client, parent_hash, &author).await.unwrap();
+	let after = free_balance_at(&quantus_client, verify_block_hash, &author).await.unwrap();
+	let delta = after.saturating_sub(before);
+
+	println!(
+		"Miner fee check: author={:?} before={} after={} delta={} expected_miner_fee={}",
+		author, before, after, delta, expected_miner_fee
+	);
+
+	assert!(
+		delta >= expected_miner_fee,
+		"author balance delta ({}) did not cover expected miner fee ({})",
+		delta,
+		expected_miner_fee
+	);
 
 	println!("\n=== Single Proof Test PASSED ===\n");
 }
@@ -677,6 +756,7 @@ async fn test_single_proof_on_chain_verification() {
 /// 3. Generates ZK proofs for each transfer (all from the same block for aggregation)
 /// 4. Aggregates the proofs into a single proof
 /// 5. Submits the aggregated proof for on-chain verification
+/// 6. Miner fee is paid.
 #[tokio::test]
 #[serial]
 #[ignore] // Requires running local node - run with `cargo test -- --ignored`
@@ -772,9 +852,58 @@ async fn test_aggregated_proof_on_chain_verification() {
 
 	// Verify aggregated proof on-chain
 	println!("5. Verifying aggregated proof on-chain...");
-	submit_aggregated_proof_for_verification(&quantus_client, aggregated_context.proof_bytes)
+
+	// Submit aggregated verification
+	submit_aggregated_proof_for_verification(
+		&quantus_client,
+		aggregated_context.proof_bytes.clone(),
+	)
+	.await
+	.expect("On-chain aggregated verification failed");
+
+	// Identify verification block
+	let verify_block_hash = quantus_client
+		.get_latest_block()
 		.await
-		.expect("On-chain aggregated verification failed");
+		.expect("Failed to get latest block hash");
+
+	// Extract author
+	let verify_block = quantus_client.client().blocks().at(verify_block_hash).await.unwrap();
+	let header = verify_block.header();
+	let parent_hash = header.parent_hash;
+	let author = author_from_header_digest(&header.digest)
+		.expect("could not decode author from pre-runtime digest");
+
+	// Compute total exit amount (sum of quantized outputs) scaled up
+	let fee_bps = aggregated_context.public_inputs.volume_fee_bps;
+	let total_output_quantized: u128 = aggregated_context
+		.public_inputs
+		.account_data
+		.iter()
+		.map(|a| a.summed_output_amount as u128)
+		.sum();
+
+	let total_exit_u128 = total_output_quantized * SCALE_DOWN_FACTOR;
+	let expected_miner_fee = expected_miner_fee_u128(total_exit_u128, fee_bps);
+
+	assert!(expected_miner_fee > 0, "expected miner fee should be > 0");
+
+	// Balance delta check
+	let before = free_balance_at(&quantus_client, parent_hash, &author).await.unwrap();
+	let after = free_balance_at(&quantus_client, verify_block_hash, &author).await.unwrap();
+	let delta = after.saturating_sub(before);
+
+	println!(
+		"Miner fee check (agg): author={:?} before={} after={} delta={} expected_miner_fee={}",
+		author, before, after, delta, expected_miner_fee
+	);
+
+	assert!(
+		delta >= expected_miner_fee,
+		"author balance delta ({}) did not cover expected miner fee ({})",
+		delta,
+		expected_miner_fee
+	);
 
 	println!("\n=== Aggregated Proof Test PASSED ===\n");
 }

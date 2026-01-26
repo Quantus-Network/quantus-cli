@@ -261,8 +261,8 @@ async fn generate_proof(
 	})?;
 
 	// Parse exit account using helper function
-	let exit_account_bytes = parse_exit_account(&exit_account_str)
-		.map_err(crate::error::QuantusError::Generic)?;
+	let exit_account_bytes =
+		parse_exit_account(&exit_account_str).map_err(crate::error::QuantusError::Generic)?;
 	let exit_account_id = SubxtAccountId(exit_account_bytes);
 
 	// Load keypair
@@ -408,8 +408,8 @@ async fn generate_proof(
 	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
 	// Quantize the funding amount using helper function
-	let input_amount_quantized: u32 = quantize_funding_amount(funding_amount)
-		.map_err(crate::error::QuantusError::Generic)?;
+	let input_amount_quantized: u32 =
+		quantize_funding_amount(funding_amount).map_err(crate::error::QuantusError::Generic)?;
 
 	// Calculate output amount after fee deduction
 	let output_amount_quantized = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
