@@ -261,13 +261,13 @@ fn format_planck_amount(planck: u128) -> String {
 	let frac = planck % divisor;
 
 	if frac == 0 {
-		format!("{} QTM", whole)
+		format!("{} DEV", whole)
 	} else {
 		// Format with up to 4 decimal places
 		let frac_str = format!("{:012}", frac);
 		let trimmed = frac_str.trim_end_matches('0');
 		let display_frac = if trimmed.len() > 4 { &trimmed[..4] } else { trimmed };
-		format!("{}.{} QTM", whole, display_frac)
+		format!("{}.{} DEV", whole, display_frac)
 	}
 }
 
