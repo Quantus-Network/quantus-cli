@@ -32,14 +32,6 @@ pub fn get_hash_prefix(hash: &str, prefix_len: usize) -> String {
 	hash.chars().take(prefix_len).collect()
 }
 
-/// Compute the hash prefix for a raw address with the specified prefix length.
-///
-/// Convenience function combining `compute_address_hash` and `get_hash_prefix`.
-pub fn compute_address_prefix(raw_address: &[u8; 32], prefix_len: usize) -> String {
-	let hash = compute_address_hash(raw_address);
-	get_hash_prefix(&hash, prefix_len)
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;

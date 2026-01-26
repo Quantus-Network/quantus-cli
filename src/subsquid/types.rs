@@ -105,6 +105,7 @@ impl TransferQueryParams {
 		self
 	}
 
+	#[allow(dead_code)]
 	pub fn with_offset(mut self, offset: u32) -> Self {
 		self.offset = offset;
 		self
@@ -125,6 +126,7 @@ impl TransferQueryParams {
 		self
 	}
 
+	#[allow(dead_code)]
 	pub fn with_max_amount(mut self, amount: u128) -> Self {
 		self.max_amount = Some(amount);
 		self
