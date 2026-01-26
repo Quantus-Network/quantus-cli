@@ -291,6 +291,220 @@ The library is designed to be thread-safe:
 - `QuantusClient` can be shared using `Arc<RwLock<QuantusClient>>`
 - Wallet operations are safe to call concurrently
 
+### Multisig Operations
+
+The library provides full programmatic access to multisig functionality.
+
+#### Creating a Multisig
+
+```rust
+use quantus_cli::{create_multisig, QuantusClient};
+
+async fn create_multisig_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    
+    // Parse signer addresses
+    let alice_account = parse_address("qzkaf...")?;
+    let bob_account = parse_address("qzmqr...")?;
+    let charlie_account = parse_address("qzo4j...")?;
+    
+    let signers = vec![alice_account, bob_account, charlie_account];
+    let threshold = 2; // 2-of-3
+    
+    // Create multisig (wait_for_inclusion=true to get address)
+    let (tx_hash, multisig_address) = create_multisig(
+        &client,
+        &keypair,
+        signers,
+        threshold,
+        true // wait for address from event
+    ).await?;
+    
+    println!("Multisig created at: {:?}", multisig_address);
+    Ok(())
+}
+
+fn parse_address(ss58: &str) -> Result<subxt::utils::AccountId32, Box<dyn std::error::Error>> {
+    use sp_core::crypto::{AccountId32, Ss58Codec};
+    let (account_id, _) = AccountId32::from_ss58check_with_version(ss58)?;
+    let bytes: [u8; 32] = *account_id.as_ref();
+    Ok(subxt::utils::AccountId32::from(bytes))
+}
+```
+
+#### Querying Multisig Info
+
+```rust
+use quantus_cli::{get_multisig_info, MultisigInfo};
+
+async fn query_multisig() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let multisig_account = parse_address("qz...")?;
+    
+    if let Some(info) = get_multisig_info(&client, multisig_account).await? {
+        println!("Address: {}", info.address);
+        println!("Balance: {} (raw units)", info.balance);
+        println!("Threshold: {}", info.threshold);
+        println!("Signers: {:?}", info.signers);
+        println!("Active Proposals: {}", info.active_proposals);
+        println!("Deposit: {} (locked)", info.deposit);
+    }
+    
+    Ok(())
+}
+```
+
+#### Creating a Transfer Proposal
+
+```rust
+use quantus_cli::{propose_transfer, parse_multisig_amount};
+
+async fn create_proposal() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    
+    let multisig_account = parse_address("qz...")?;
+    let recipient = parse_address("qzmqr...")?;
+    
+    // Parse amount (supports "10", "10.5", "0.001" format)
+    let amount = parse_multisig_amount("10")?; // 10 QUAN
+    
+    let expiry = 1000; // Block number
+    
+    let tx_hash = propose_transfer(
+        &client,
+        &keypair,
+        multisig_account,
+        recipient,
+        amount,
+        expiry
+    ).await?;
+    
+    println!("Proposal created: 0x{}", hex::encode(tx_hash));
+    Ok(())
+}
+```
+
+#### Approving a Proposal
+
+```rust
+use quantus_cli::approve_proposal;
+
+async fn approve_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("bob", None, None)?;
+    
+    let multisig_account = parse_address("qz...")?;
+    let proposal_id = 0u32;
+    
+    let tx_hash = approve_proposal(
+        &client,
+        &keypair,
+        multisig_account,
+        proposal_id
+    ).await?;
+    
+    println!("Approval submitted: 0x{}", hex::encode(tx_hash));
+    println!("(Will auto-execute at threshold)");
+    Ok(())
+}
+```
+
+#### Listing Proposals
+
+```rust
+use quantus_cli::{list_proposals, ProposalInfo, ProposalStatus};
+
+async fn list_all_proposals() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let multisig_account = parse_address("qz...")?;
+    
+    let proposals = list_proposals(&client, multisig_account).await?;
+    
+    println!("Found {} proposal(s)", proposals.len());
+    for proposal in proposals {
+        println!("Proposal #{}:", proposal.id);
+        println!("  Proposer: {}", proposal.proposer);
+        println!("  Expiry: block {}", proposal.expiry);
+        println!("  Status: {:?}", proposal.status);
+        println!("  Approvals: {}", proposal.approvals.len());
+    }
+    
+    Ok(())
+}
+```
+
+#### Getting Specific Proposal Info
+
+```rust
+use quantus_cli::get_proposal_info;
+
+async fn query_proposal() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let multisig_account = parse_address("qz...")?;
+    let proposal_id = 0u32;
+    
+    if let Some(proposal) = get_proposal_info(&client, multisig_account, proposal_id).await? {
+        println!("Proposer: {}", proposal.proposer);
+        println!("Call data size: {} bytes", proposal.call_data.len());
+        println!("Expiry: block {}", proposal.expiry);
+        println!("Approvals: {:?}", proposal.approvals);
+        println!("Status: {:?}", proposal.status);
+    }
+    
+    Ok(())
+}
+```
+
+#### Canceling a Proposal
+
+```rust
+use quantus_cli::cancel_proposal;
+
+async fn cancel_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    
+    let multisig_account = parse_address("qz...")?;
+    let proposal_id = 0u32;
+    
+    let tx_hash = cancel_proposal(
+        &client,
+        &keypair,
+        multisig_account,
+        proposal_id
+    ).await?;
+    
+    println!("Proposal canceled: 0x{}", hex::encode(tx_hash));
+    Ok(())
+}
+```
+
+#### Dissolving a Multisig
+
+```rust
+use quantus_cli::dissolve_multisig;
+
+async fn dissolve_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    
+    let multisig_account = parse_address("qz...")?;
+    
+    // Requires: no proposals, zero balance
+    let tx_hash = dissolve_multisig(
+        &client,
+        &keypair,
+        multisig_account
+    ).await?;
+    
+    println!("Multisig dissolved: 0x{}", hex::encode(tx_hash));
+    println!("(Creation deposit returned to creator)");
+    Ok(())
+}
+```
+
 ## Examples
 
 See the `examples/` directory for complete working examples:
@@ -298,6 +512,8 @@ See the `examples/` directory for complete working examples:
 - `examples/basic_usage.rs` - Basic library usage
 - `examples/wallet_ops.rs` - Advanced wallet operations
 - `examples/service.rs` - Service architecture example
+- `examples/multisig_library_usage.rs` - Multisig operations
+- `examples/multisig_usage.rs` - Multisig CLI usage reference
 
 ## Running Examples
 
@@ -310,6 +526,9 @@ cargo run --example wallet_ops
 
 # Run service example
 cargo run --example service
+
+# Run multisig library usage example
+cargo run --example multisig_library_usage
 ```
 
 ## Key Features

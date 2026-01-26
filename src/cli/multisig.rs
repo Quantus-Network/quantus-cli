@@ -11,9 +11,72 @@ use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 // Base unit (QUAN) decimals for amount conversions
 const QUAN_DECIMALS: u128 = 1_000_000_000_000; // 10^12
 
+// ============================================================================
+// PUBLIC LIBRARY API - Data Structures
+// ============================================================================
+
+/// Multisig account information
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct MultisigInfo {
+	/// Multisig address (SS58 format)
+	pub address: String,
+	/// Current balance (spendable)
+	pub balance: u128,
+	/// Approval threshold
+	pub threshold: u32,
+	/// List of signer addresses (SS58 format)
+	pub signers: Vec<String>,
+	/// Creation nonce
+	pub nonce: u64,
+	/// Next proposal ID
+	pub proposal_nonce: u32,
+	/// Creator address (SS58 format)
+	pub creator: String,
+	/// Locked deposit amount
+	pub deposit: u128,
+	/// Last activity block number
+	pub last_activity: u32,
+	/// Number of active proposals
+	pub active_proposals: u32,
+}
+
+/// Proposal status
+#[allow(dead_code)]
+#[derive(Debug, Clone, PartialEq)]
+pub enum ProposalStatus {
+	Active,
+	Executed,
+	Cancelled,
+}
+
+/// Proposal information
+#[allow(dead_code)]
+#[derive(Debug, Clone)]
+pub struct ProposalInfo {
+	/// Proposal ID
+	pub id: u32,
+	/// Proposer address (SS58 format)
+	pub proposer: String,
+	/// Encoded call data
+	pub call_data: Vec<u8>,
+	/// Expiry block number
+	pub expiry: u32,
+	/// List of approver addresses (SS58 format)
+	pub approvals: Vec<String>,
+	/// Locked deposit amount
+	pub deposit: u128,
+	/// Proposal status
+	pub status: ProposalStatus,
+}
+
+// ============================================================================
+// PUBLIC LIBRARY API - Helper Functions
+// ============================================================================
+
 /// Parse amount from human-readable format (e.g., "10", "10.5", "0.001")
 /// or raw format (e.g., "10000000000000")
-fn parse_amount(amount: &str) -> crate::error::Result<u128> {
+pub fn parse_amount(amount: &str) -> crate::error::Result<u128> {
 	// If contains decimal point, parse as float and multiply by QUAN_DECIMALS
 	if amount.contains('.') {
 		let amount_f64: f64 = amount
@@ -274,6 +337,391 @@ pub enum MultisigCommands {
 		address: String,
 	},
 }
+
+// ============================================================================
+// PUBLIC LIBRARY API - Core Functions
+// ============================================================================
+// Note: These functions are public library API and may not be used by the CLI binary
+
+/// Create a multisig account
+///
+/// # Arguments
+/// * `quantus_client` - Connected Quantus client
+/// * `creator_keypair` - Keypair of the account creating the multisig
+/// * `signers` - List of signer addresses (AccountId32)
+/// * `threshold` - Number of approvals required
+/// * `wait_for_inclusion` - Whether to wait for transaction inclusion
+///
+/// # Returns
+/// Transaction hash and optionally the multisig address (if wait_for_inclusion=true)
+#[allow(dead_code)]
+pub async fn create_multisig(
+	quantus_client: &crate::chain::client::QuantusClient,
+	creator_keypair: &crate::wallet::QuantumKeyPair,
+	signers: Vec<subxt::ext::subxt_core::utils::AccountId32>,
+	threshold: u32,
+	wait_for_inclusion: bool,
+) -> crate::error::Result<(subxt::utils::H256, Option<String>)> {
+	// Build transaction
+	let create_tx = quantus_subxt::api::tx().multisig().create_multisig(signers.clone(), threshold);
+
+	// Submit transaction
+	let execution_mode =
+		ExecutionMode { finalized: false, wait_for_transaction: wait_for_inclusion };
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		creator_keypair,
+		create_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+
+	// If waiting, extract address from events
+	let multisig_address = if wait_for_inclusion {
+		let latest_block_hash = quantus_client.get_latest_block().await?;
+		let events = quantus_client.client().events().at(latest_block_hash).await?;
+
+		let mut multisig_events =
+			events.find::<quantus_subxt::api::multisig::events::MultisigCreated>();
+
+		let address: Option<String> = if let Some(Ok(ev)) = multisig_events.next() {
+			let addr_bytes: &[u8; 32] = ev.multisig_address.as_ref();
+			let addr = SpAccountId32::from(*addr_bytes);
+			Some(addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189)))
+		} else {
+			None
+		};
+		address
+	} else {
+		None
+	};
+
+	Ok((tx_hash, multisig_address))
+}
+
+/// Propose a transfer from multisig
+///
+/// # Returns
+/// Transaction hash
+#[allow(dead_code)]
+pub async fn propose_transfer(
+	quantus_client: &crate::chain::client::QuantusClient,
+	proposer_keypair: &crate::wallet::QuantumKeyPair,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+	to_address: subxt::ext::subxt_core::utils::AccountId32,
+	amount: u128,
+	expiry: u32,
+) -> crate::error::Result<subxt::utils::H256> {
+	use codec::{Compact, Encode};
+
+	// Build Balances::transfer_allow_death call
+	let pallet_index = 5u8; // Balances pallet
+	let call_index = 0u8; // transfer_allow_death
+
+	let mut call_data = Vec::new();
+	call_data.push(pallet_index);
+	call_data.push(call_index);
+
+	// Encode destination (MultiAddress::Id)
+	call_data.push(0u8); // MultiAddress::Id variant
+	call_data.extend_from_slice(to_address.as_ref());
+
+	// Encode amount (Compact<u128>)
+	Compact(amount).encode_to(&mut call_data);
+
+	// Build propose transaction
+	let propose_tx =
+		quantus_subxt::api::tx().multisig().propose(multisig_address, call_data, expiry);
+
+	// Submit transaction
+	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		proposer_keypair,
+		propose_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+
+	Ok(tx_hash)
+}
+
+/// Propose a custom call from multisig
+///
+/// # Returns
+/// Transaction hash
+#[allow(dead_code)]
+pub async fn propose_custom(
+	quantus_client: &crate::chain::client::QuantusClient,
+	proposer_keypair: &crate::wallet::QuantumKeyPair,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+	call_data: Vec<u8>,
+	expiry: u32,
+) -> crate::error::Result<subxt::utils::H256> {
+	// Build propose transaction
+	let propose_tx =
+		quantus_subxt::api::tx().multisig().propose(multisig_address, call_data, expiry);
+
+	// Submit transaction
+	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		proposer_keypair,
+		propose_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+
+	Ok(tx_hash)
+}
+
+/// Approve a proposal
+///
+/// # Returns
+/// Transaction hash
+#[allow(dead_code)]
+pub async fn approve_proposal(
+	quantus_client: &crate::chain::client::QuantusClient,
+	approver_keypair: &crate::wallet::QuantumKeyPair,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+	proposal_id: u32,
+) -> crate::error::Result<subxt::utils::H256> {
+	let approve_tx = quantus_subxt::api::tx().multisig().approve(multisig_address, proposal_id);
+
+	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		approver_keypair,
+		approve_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+
+	Ok(tx_hash)
+}
+
+/// Cancel a proposal (only by proposer)
+///
+/// # Returns
+/// Transaction hash
+#[allow(dead_code)]
+pub async fn cancel_proposal(
+	quantus_client: &crate::chain::client::QuantusClient,
+	proposer_keypair: &crate::wallet::QuantumKeyPair,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+	proposal_id: u32,
+) -> crate::error::Result<subxt::utils::H256> {
+	let cancel_tx = quantus_subxt::api::tx().multisig().cancel(multisig_address, proposal_id);
+
+	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		proposer_keypair,
+		cancel_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+
+	Ok(tx_hash)
+}
+
+/// Get multisig information
+///
+/// # Returns
+/// Multisig information or None if not found
+#[allow(dead_code)]
+pub async fn get_multisig_info(
+	quantus_client: &crate::chain::client::QuantusClient,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+) -> crate::error::Result<Option<MultisigInfo>> {
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	// Query multisig data
+	let storage_query =
+		quantus_subxt::api::storage().multisig().multisigs(multisig_address.clone());
+	let multisig_data = storage_at.fetch(&storage_query).await?;
+
+	if let Some(data) = multisig_data {
+		// Query balance
+		let balance_query =
+			quantus_subxt::api::storage().system().account(multisig_address.clone());
+		let account_info = storage_at.fetch(&balance_query).await?;
+		let balance = account_info.map(|info| info.data.free).unwrap_or(0);
+
+		// Convert to SS58
+		let multisig_bytes: &[u8; 32] = multisig_address.as_ref();
+		let multisig_sp = SpAccountId32::from(*multisig_bytes);
+		let address =
+			multisig_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+		let creator_bytes: &[u8; 32] = data.creator.as_ref();
+		let creator_sp = SpAccountId32::from(*creator_bytes);
+		let creator =
+			creator_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+		let signers: Vec<String> = data
+			.signers
+			.0
+			.iter()
+			.map(|signer| {
+				let signer_bytes: &[u8; 32] = signer.as_ref();
+				let signer_sp = SpAccountId32::from(*signer_bytes);
+				signer_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
+			})
+			.collect();
+
+		Ok(Some(MultisigInfo {
+			address,
+			balance,
+			threshold: data.threshold,
+			signers,
+			nonce: data.nonce,
+			proposal_nonce: data.proposal_nonce,
+			creator,
+			deposit: data.deposit,
+			last_activity: data.last_activity,
+			active_proposals: data.active_proposals,
+		}))
+	} else {
+		Ok(None)
+	}
+}
+
+/// Get proposal information
+///
+/// # Returns
+/// Proposal information or None if not found
+#[allow(dead_code)]
+pub async fn get_proposal_info(
+	quantus_client: &crate::chain::client::QuantusClient,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+	proposal_id: u32,
+) -> crate::error::Result<Option<ProposalInfo>> {
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let storage_query = quantus_subxt::api::storage()
+		.multisig()
+		.proposals(multisig_address, proposal_id);
+
+	let proposal_data = storage_at.fetch(&storage_query).await?;
+
+	if let Some(data) = proposal_data {
+		let proposer_bytes: &[u8; 32] = data.proposer.as_ref();
+		let proposer_sp = SpAccountId32::from(*proposer_bytes);
+		let proposer =
+			proposer_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+		let approvals: Vec<String> = data
+			.approvals
+			.0
+			.iter()
+			.map(|approver| {
+				let approver_bytes: &[u8; 32] = approver.as_ref();
+				let approver_sp = SpAccountId32::from(*approver_bytes);
+				approver_sp
+					.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
+			})
+			.collect();
+
+		let status = match data.status {
+			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
+				ProposalStatus::Active,
+			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
+				ProposalStatus::Executed,
+			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
+				ProposalStatus::Cancelled,
+		};
+
+		Ok(Some(ProposalInfo {
+			id: proposal_id,
+			proposer,
+			call_data: data.call.0,
+			expiry: data.expiry,
+			approvals,
+			deposit: data.deposit,
+			status,
+		}))
+	} else {
+		Ok(None)
+	}
+}
+
+/// List all proposals for a multisig
+///
+/// # Returns
+/// List of proposals
+#[allow(dead_code)]
+pub async fn list_proposals(
+	quantus_client: &crate::chain::client::QuantusClient,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+) -> crate::error::Result<Vec<ProposalInfo>> {
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage = quantus_client.client().storage().at(latest_block_hash);
+
+	let address = quantus_subxt::api::storage()
+		.multisig()
+		.proposals_iter1(multisig_address.clone());
+	let mut proposals_iter = storage.iter(address).await?;
+
+	let mut proposals = Vec::new();
+
+	while let Some(result) = proposals_iter.next().await {
+		if let Ok(kv) = result {
+			// Extract proposal_id from key
+			let key_bytes = kv.key_bytes;
+			if key_bytes.len() >= 4 {
+				let id_bytes = &key_bytes[key_bytes.len() - 4..];
+				let proposal_id =
+					u32::from_le_bytes([id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]]);
+
+				// Get full proposal info
+				if let Some(proposal) =
+					get_proposal_info(quantus_client, multisig_address.clone(), proposal_id).await?
+				{
+					proposals.push(proposal);
+				}
+			}
+		}
+	}
+
+	Ok(proposals)
+}
+
+/// Dissolve a multisig (requires no proposals, zero balance)
+///
+/// # Returns
+/// Transaction hash
+#[allow(dead_code)]
+pub async fn dissolve_multisig(
+	quantus_client: &crate::chain::client::QuantusClient,
+	caller_keypair: &crate::wallet::QuantumKeyPair,
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+) -> crate::error::Result<subxt::utils::H256> {
+	let dissolve_tx = quantus_subxt::api::tx().multisig().dissolve_multisig(multisig_address);
+
+	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		caller_keypair,
+		dissolve_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+
+	Ok(tx_hash)
+}
+
+// ============================================================================
+// CLI HANDLERS (Internal)
+// ============================================================================
 
 /// Handle multisig command
 pub async fn handle_multisig_command(
