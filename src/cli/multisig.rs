@@ -681,12 +681,45 @@ pub async fn list_proposals(
 				let proposal_id =
 					u32::from_le_bytes([id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]]);
 
-				// Get full proposal info
-				if let Some(proposal) =
-					get_proposal_info(quantus_client, multisig_address.clone(), proposal_id).await?
-				{
-					proposals.push(proposal);
-				}
+				// Use value directly from iterator (more efficient)
+				let data = kv.value;
+
+				let proposer_bytes: &[u8; 32] = data.proposer.as_ref();
+				let proposer_sp = SpAccountId32::from(*proposer_bytes);
+				let proposer = proposer_sp
+					.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+				let approvals: Vec<String> = data
+					.approvals
+					.0
+					.iter()
+					.map(|approver| {
+						let approver_bytes: &[u8; 32] = approver.as_ref();
+						let approver_sp = SpAccountId32::from(*approver_bytes);
+						approver_sp.to_ss58check_with_version(
+							sp_core::crypto::Ss58AddressFormat::custom(189),
+						)
+					})
+					.collect();
+
+				let status = match data.status {
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
+						ProposalStatus::Active,
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
+						ProposalStatus::Executed,
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
+						ProposalStatus::Cancelled,
+				};
+
+				proposals.push(ProposalInfo {
+					id: proposal_id,
+					proposer,
+					call_data: data.call.0,
+					expiry: data.expiry,
+					approvals,
+					deposit: data.deposit,
+					status,
+				});
 			}
 		}
 	}
@@ -1103,6 +1136,34 @@ async fn handle_propose(
 
 	log_verbose!("Current block: {}, expiry valid", current_block_number);
 
+	// Validate proposer is a signer (client-side check before submitting)
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+	let multisig_query =
+		quantus_subxt::api::storage().multisig().multisigs(multisig_address.clone());
+	let multisig_data = storage_at.fetch(&multisig_query).await?.ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!(
+			"Multisig not found at address: {}",
+			multisig_ss58
+		))
+	})?;
+
+	// Resolve proposer address
+	let proposer_ss58 = crate::cli::common::resolve_address(&from)?;
+	let (proposer_id, _) =
+		SpAccountId32::from_ss58check_with_version(&proposer_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid proposer address: {:?}", e))
+		})?;
+	let proposer_bytes: [u8; 32] = *proposer_id.as_ref();
+	let proposer_account_id = subxt::ext::subxt_core::utils::AccountId32::from(proposer_bytes);
+
+	// Check if proposer is in signers list
+	if !multisig_data.signers.0.contains(&proposer_account_id) {
+		log_error!("❌ Not authorized: {} is not a signer of this multisig", proposer_ss58);
+		return Err(crate::error::QuantusError::Generic(
+			"Only multisig signers can create proposals".to_string(),
+		));
+	}
+
 	// Build the call data using runtime metadata
 	let call_data = build_runtime_call(&quantus_client, &pallet, &call, args_vec).await?;
 
@@ -1163,6 +1224,58 @@ async fn handle_approve(
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
+	// Validate approver is a signer (client-side check before submitting)
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let multisig_query =
+		quantus_subxt::api::storage().multisig().multisigs(multisig_address.clone());
+	let multisig_data = storage_at.fetch(&multisig_query).await?.ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!(
+			"Multisig not found at address: {}",
+			multisig_ss58
+		))
+	})?;
+
+	// Resolve approver address
+	let approver_ss58 = crate::cli::common::resolve_address(&from)?;
+	let (approver_id, _) =
+		SpAccountId32::from_ss58check_with_version(&approver_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid approver address: {:?}", e))
+		})?;
+	let approver_bytes: [u8; 32] = *approver_id.as_ref();
+	let approver_account_id = subxt::ext::subxt_core::utils::AccountId32::from(approver_bytes);
+
+	// Check if approver is in signers list
+	if !multisig_data.signers.0.contains(&approver_account_id) {
+		log_error!("❌ Not authorized: {} is not a signer of this multisig", approver_ss58);
+		return Err(crate::error::QuantusError::Generic(
+			"Only multisig signers can approve proposals".to_string(),
+		));
+	}
+
+	// Check if proposal exists
+	let proposal_query = quantus_subxt::api::storage()
+		.multisig()
+		.proposals(multisig_address.clone(), proposal_id);
+	let proposal_data = storage_at.fetch(&proposal_query).await?;
+	if proposal_data.is_none() {
+		log_error!("❌ Proposal {} not found", proposal_id);
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Proposal {} does not exist",
+			proposal_id
+		)));
+	}
+	let proposal = proposal_data.unwrap();
+
+	// Check if already approved by this signer
+	if proposal.approvals.0.contains(&approver_account_id) {
+		log_error!("❌ Already approved: you have already approved this proposal");
+		return Err(crate::error::QuantusError::Generic(
+			"You have already approved this proposal".to_string(),
+		));
+	}
+
 	// Build transaction
 	let approve_tx = quantus_subxt::api::tx().multisig().approve(multisig_address, proposal_id);
 
@@ -1210,6 +1323,39 @@ async fn handle_cancel(
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+
+	// Validate caller is the proposer (client-side check before submitting)
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let proposal_query = quantus_subxt::api::storage()
+		.multisig()
+		.proposals(multisig_address.clone(), proposal_id);
+	let proposal_data = storage_at.fetch(&proposal_query).await?.ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!("Proposal {} not found", proposal_id))
+	})?;
+
+	// Resolve canceller address
+	let canceller_ss58 = crate::cli::common::resolve_address(&from)?;
+	let (canceller_id, _) =
+		SpAccountId32::from_ss58check_with_version(&canceller_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid canceller address: {:?}", e))
+		})?;
+	let canceller_bytes: [u8; 32] = *canceller_id.as_ref();
+	let canceller_account_id = subxt::ext::subxt_core::utils::AccountId32::from(canceller_bytes);
+
+	// Check if caller is the proposer
+	if proposal_data.proposer != canceller_account_id {
+		log_error!("❌ Not authorized: only the proposer can cancel this proposal");
+		let proposer_bytes: &[u8; 32] = proposal_data.proposer.as_ref();
+		let proposer_sp = SpAccountId32::from(*proposer_bytes);
+		let proposer_ss58 =
+			proposer_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+		log_print!("   Proposer: {}", proposer_ss58);
+		return Err(crate::error::QuantusError::Generic(
+			"Only the proposer can cancel their proposal".to_string(),
+		));
+	}
 
 	// Build transaction
 	let cancel_tx = quantus_subxt::api::tx().multisig().cancel(multisig_address, proposal_id);
