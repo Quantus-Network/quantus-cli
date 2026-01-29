@@ -505,6 +505,144 @@ async fn dissolve_example() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+#### High-Security Operations for Multisig
+
+Multisig accounts can be configured with high-security mode, which delays all transfers and allows a guardian to intercept suspicious transactions.
+
+##### Checking High-Security Status
+
+```bash
+# CLI usage
+quantus multisig high-security status --address qz...
+```
+
+Example output:
+```
+🔍 MULTISIG Checking High-Security status...
+
+📋 Multisig: qz...
+
+✅ High-Security: ENABLED
+
+🛡️  Guardian/Interceptor: qzmqr...
+⏱️  Delay: 100 blocks
+
+💡 INFO All transfers from this multisig will be delayed and reversible
+   The guardian can intercept suspicious transactions during the delay period
+```
+
+##### Enabling High-Security via Proposal
+
+To enable high-security for a multisig, you need to create a proposal that will call `reversible_transfers.set_high_security`. This requires approval from threshold signers.
+
+```bash
+# CLI usage - Create proposal to enable high-security
+quantus multisig propose high-security \
+  --address qz... \
+  --interceptor qzmqr... \
+  --delay-blocks 100 \
+  --expiry 2000 \
+  --from alice \
+  -p password
+
+# Alternative: delay in seconds instead of blocks
+quantus multisig propose high-security \
+  --address qz... \
+  --interceptor qzmqr... \
+  --delay-seconds 600 \
+  --expiry 2000 \
+  --from alice \
+  -p password
+```
+
+Example workflow:
+```bash
+# 1. Alice (signer) proposes high-security
+quantus multisig propose high-security \
+  --address qz123... \
+  --interceptor qzguardian... \
+  --delay-blocks 100 \
+  --expiry 2000 \
+  --from alice
+
+# 2. Check proposals to find the ID
+quantus multisig list-proposals --address qz123...
+
+# 3. Bob (another signer) approves
+quantus multisig approve \
+  --address qz123... \
+  --proposal-id 0 \
+  --from bob
+
+# 4. Once threshold is reached, high-security is automatically enabled
+# 5. Verify it's enabled
+quantus multisig high-security status --address qz123...
+```
+
+##### Key Concepts
+
+- **Guardian/Interceptor**: An account that can intercept (reverse) transactions during the delay period
+- **Delay**: Time window during which transactions are reversible (in blocks or seconds)
+- **Delayed Transfers**: All transfers from a high-security multisig are scheduled for delayed execution
+- **Interception**: Guardian can cancel suspicious transactions and recover funds
+
+##### Disabling High-Security
+
+**Note:** There is currently no `remove` command for disabling high-security mode. The runtime does not expose a `remove_high_security` extrinsic.
+
+If you need to disable high-security for a multisig:
+1. Create a new multisig without high-security
+2. Transfer funds from the HS multisig to the new one
+3. Dissolve the old HS multisig (after cleanup)
+
+Alternatively, request a runtime upgrade to add `remove_high_security` functionality.
+
+##### Security Considerations
+
+- Choose a trusted guardian account (can be another multisig)
+- Set an appropriate delay period (longer = more secure, but less convenient)
+- Guardian has full control to intercept transactions during delay
+- Once enabled, only whitelisted calls are allowed from high-security multisigs
+- **High-security cannot be disabled** - consider this permanent for the multisig account
+
+##### Programmatic Usage (Library)
+
+Currently, high-security operations are best performed via CLI. For programmatic access, you can build the runtime call manually:
+
+```rust
+use quantus_cli::{chain::client::QuantusClient, chain::quantus_subxt};
+
+async fn enable_hs_via_proposal() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    
+    // Build set_high_security call
+    use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
+    let delay = Delay::BlockNumber(100);
+    let interceptor = parse_address("qzguardian...")?;
+    
+    let set_hs_call = quantus_subxt::api::tx()
+        .reversible_transfers()
+        .set_high_security(delay, interceptor);
+    
+    // Encode as call data
+    use subxt::tx::Payload;
+    let call_data = set_hs_call.encode_call_data(&client.client().metadata())?;
+    
+    // Create multisig proposal with this call
+    let multisig_account = parse_address("qz...")?;
+    let expiry = 2000;
+    
+    let propose_tx = quantus_subxt::api::tx()
+        .multisig()
+        .propose(multisig_account, call_data, expiry);
+    
+    // Submit via your signer keypair
+    // ... (submit transaction)
+    
+    Ok(())
+}
+```
+
 ## Examples
 
 See the `examples/` directory for complete working examples:

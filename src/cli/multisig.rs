@@ -176,6 +176,41 @@ pub enum ProposeSubcommand {
 		#[arg(long)]
 		password_file: Option<String>,
 	},
+
+	/// Propose to enable high-security for this multisig
+	HighSecurity {
+		/// Multisig account address (SS58 format)
+		#[arg(long)]
+		address: String,
+
+		/// Guardian/Interceptor account (SS58 or wallet name)
+		#[arg(long)]
+		interceptor: String,
+
+		/// Delay in blocks (mutually exclusive with --delay-seconds)
+		#[arg(long, conflicts_with = "delay_seconds")]
+		delay_blocks: Option<u32>,
+
+		/// Delay in seconds (mutually exclusive with --delay-blocks)
+		#[arg(long, conflicts_with = "delay_blocks")]
+		delay_seconds: Option<u64>,
+
+		/// Expiry block number (when this proposal expires)
+		#[arg(long)]
+		expiry: u32,
+
+		/// Proposer wallet name (must be a signer)
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
 }
 
 /// Multisig-related commands
@@ -332,6 +367,21 @@ pub enum MultisigCommands {
 
 	/// List all proposals for a multisig
 	ListProposals {
+		/// Multisig account address
+		#[arg(long)]
+		address: String,
+	},
+
+	/// High-Security operations for multisig accounts
+	#[command(subcommand)]
+	HighSecurity(HighSecuritySubcommands),
+}
+
+/// High-Security subcommands for multisig (query only)
+#[derive(Subcommand, Debug)]
+pub enum HighSecuritySubcommands {
+	/// Check if multisig has high-security enabled
+	Status {
 		/// Multisig account address
 		#[arg(long)]
 		address: String,
@@ -820,6 +870,29 @@ pub async fn handle_multisig_command(
 					execution_mode,
 				)
 				.await,
+			ProposeSubcommand::HighSecurity {
+				address,
+				interceptor,
+				delay_blocks,
+				delay_seconds,
+				expiry,
+				from,
+				password,
+				password_file,
+			} =>
+				handle_high_security_set(
+					address,
+					interceptor,
+					delay_blocks,
+					delay_seconds,
+					expiry,
+					from,
+					password,
+					password_file,
+					node_url,
+					execution_mode,
+				)
+				.await,
 		},
 		MultisigCommands::Approve { address, proposal_id, from, password, password_file } =>
 			handle_approve(
@@ -863,6 +936,10 @@ pub async fn handle_multisig_command(
 			handle_info(address, proposal_id, node_url).await,
 		MultisigCommands::ListProposals { address } =>
 			handle_list_proposals(address, node_url).await,
+		MultisigCommands::HighSecurity(subcommand) => match subcommand {
+			HighSecuritySubcommands::Status { address } =>
+				handle_high_security_status(address, node_url).await,
+		},
 	}
 }
 
@@ -1701,6 +1778,98 @@ async fn decode_call_data(
 				format_balance(amount).bright_green()
 			))
 		},
+		// ReversibleTransfers::set_high_security
+		(_, idx) if pallet_name == "ReversibleTransfers" && idx == 0 => {
+			// set_high_security has: delay (enum), interceptor (AccountId32)
+			if args.is_empty() {
+				return Ok(format!(
+					"   {}  {}::set_high_security\n   {}  {} bytes (too short)",
+					"Call:".dimmed(),
+					pallet_name.bright_cyan(),
+					"Args:".dimmed(),
+					args.len()
+				));
+			}
+
+			// Decode delay (BlockNumberOrTimestamp enum)
+			let delay_variant = args[0];
+			let delay_str: String;
+			let offset: usize;
+
+			match delay_variant {
+				0 => {
+					// BlockNumber(u32)
+					if args.len() < 5 {
+						return Ok(format!(
+							"   {}  {}::set_high_security\n   {}  Failed to decode delay (BlockNumber)",
+							"Call:".dimmed(),
+							pallet_name.bright_cyan(),
+							"Error:".dimmed()
+						));
+					}
+					let blocks = u32::from_le_bytes([args[1], args[2], args[3], args[4]]);
+					delay_str = format!("{} blocks", blocks);
+					offset = 5;
+				},
+				1 => {
+					// Timestamp(u64)
+					if args.len() < 9 {
+						return Ok(format!(
+							"   {}  {}::set_high_security\n   {}  Failed to decode delay (Timestamp)",
+							"Call:".dimmed(),
+							pallet_name.bright_cyan(),
+							"Error:".dimmed()
+						));
+					}
+					let millis = u64::from_le_bytes([
+						args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8],
+					]);
+					let seconds = millis / 1000;
+					delay_str = format!("{} seconds ({} ms)", seconds, millis);
+					offset = 9;
+				},
+				_ => {
+					return Ok(format!(
+						"   {}  {}::set_high_security\n   {}  Unknown delay variant: {}",
+						"Call:".dimmed(),
+						pallet_name.bright_cyan(),
+						"Error:".dimmed(),
+						delay_variant
+					));
+				},
+			}
+
+			// Decode interceptor (AccountId32)
+			if args.len() < offset + 32 {
+				return Ok(format!(
+					"   {}  {}::set_high_security\n   {}  {}\n   {}  Failed to decode interceptor",
+					"Call:".dimmed(),
+					pallet_name.bright_cyan(),
+					"Delay:".dimmed(),
+					delay_str.bright_yellow(),
+					"Error:".dimmed()
+				));
+			}
+
+			let interceptor_bytes: [u8; 32] = args[offset..offset + 32]
+				.try_into()
+				.map_err(|_| {
+					crate::error::QuantusError::Generic("Failed to extract interceptor bytes".to_string())
+				})?;
+			let interceptor = SpAccountId32::from(interceptor_bytes);
+			let interceptor_ss58 = interceptor
+				.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+			Ok(format!(
+				"   {}  {}::set_high_security\n   {}  {}\n   {}  {}",
+				"Call:".dimmed(),
+				pallet_name.bright_cyan(),
+				"Delay:".dimmed(),
+				delay_str.bright_yellow(),
+				"Guardian:".dimmed(),
+				interceptor_ss58.bright_green()
+			))
+		},
 		_ => {
 			// Try to get call name from metadata
 			let call_name = metadata
@@ -1767,12 +1936,32 @@ async fn handle_proposal_info(
 
 	match proposal_data {
 		Some(data) => {
+			// Get multisig info for context
+			let multisig_query =
+				quantus_subxt::api::storage().multisig().multisigs(multisig_address.clone());
+			let multisig_info = storage_at.fetch(&multisig_query).await?;
+
 			log_print!("📝 {} Information:", "PROPOSAL".bright_green().bold());
 			log_print!(
 				"   Current Block: {}",
 				current_block_number.to_string().bright_white().bold()
 			);
 			log_print!("   Multisig: {}", multisig_ss58.bright_cyan());
+
+			// Show threshold and approval progress
+			if let Some(ref ms_data) = multisig_info {
+				let progress = format!(
+					"{}/{}",
+					data.approvals.0.len(),
+					ms_data.threshold
+				);
+				log_print!(
+					"   Threshold: {} (progress: {})",
+					ms_data.threshold.to_string().bright_yellow(),
+					progress.bright_cyan()
+				);
+			}
+
 			log_print!("   Proposal ID: {}", proposal_id.to_string().bright_yellow());
 			// Convert proposer to SS58
 			let proposer_bytes: &[u8; 32] = data.proposer.as_ref();
@@ -1780,6 +1969,7 @@ async fn handle_proposal_info(
 			log_print!("   Proposer: {}", proposer_sp.to_ss58check().bright_cyan());
 
 			// Decode and display call data
+			log_print!("");
 			match decode_call_data(&quantus_client, &data.call.0).await {
 				Ok(decoded) => {
 					log_print!("{}", decoded);
@@ -1789,6 +1979,7 @@ async fn handle_proposal_info(
 					log_verbose!("Failed to decode call data: {:?}", e);
 				},
 			}
+			log_print!("");
 
 			// Calculate blocks remaining until expiry
 			if data.expiry > current_block_number {
@@ -1819,6 +2010,29 @@ async fn handle_proposal_info(
 				let approver_bytes: &[u8; 32] = approver.as_ref();
 				let approver_sp = SpAccountId32::from(*approver_bytes);
 				log_print!("     {}. {}", i + 1, approver_sp.to_ss58check().bright_cyan());
+			}
+
+			// Show which signers haven't approved yet
+			if let Some(ms_data) = multisig_info {
+				let pending_signers: Vec<String> = ms_data
+					.signers
+					.0
+					.iter()
+					.filter(|s| !data.approvals.0.contains(s))
+					.map(|s| {
+						let bytes: &[u8; 32] = s.as_ref();
+						let sp = SpAccountId32::from(*bytes);
+						sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
+					})
+					.collect();
+
+				if !pending_signers.is_empty() {
+					log_print!("");
+					log_print!("   Pending Approvals ({}):", pending_signers.len().to_string().bright_red());
+					for (i, signer) in pending_signers.iter().enumerate() {
+						log_print!("     {}. {}", i + 1, signer.bright_red());
+					}
+				}
 			}
 		},
 		None => {
@@ -2083,3 +2297,241 @@ fn format_balance(balance: u128) -> String {
 		format!("{}.{} QUAN", quan, decimal_str)
 	}
 }
+
+// ============================================================================
+// HIGH SECURITY HANDLERS
+// ============================================================================
+
+/// Check high-security status for a multisig
+async fn handle_high_security_status(
+	multisig_address: String,
+	node_url: &str,
+) -> crate::error::Result<()> {
+	log_print!("🔍 {} Checking High-Security status...", "MULTISIG".bright_magenta().bold());
+	log_print!("");
+
+	// Resolve multisig address
+	let multisig_ss58 = crate::cli::common::resolve_address(&multisig_address)?;
+	let (multisig_id, _) =
+		SpAccountId32::from_ss58check_with_version(&multisig_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid multisig address: {:?}", e))
+		})?;
+	let multisig_bytes: [u8; 32] = *multisig_id.as_ref();
+	let multisig_account_id = subxt::ext::subxt_core::utils::AccountId32::from(multisig_bytes);
+
+	// Connect to chain
+	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+
+	// Query high-security status
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let storage_query = quantus_subxt::api::storage()
+		.reversible_transfers()
+		.high_security_accounts(multisig_account_id);
+
+	let high_security_data = storage_at.fetch(&storage_query).await?;
+
+	log_print!("📋 Multisig: {}", multisig_ss58.bright_cyan());
+	log_print!("");
+
+	match high_security_data {
+		Some(data) => {
+			log_success!("✅ High-Security: {}", "ENABLED".bright_green().bold());
+			log_print!("");
+
+			// Convert interceptor to SS58
+			let interceptor_bytes: &[u8; 32] = data.interceptor.as_ref();
+			let interceptor_sp = SpAccountId32::from(*interceptor_bytes);
+			let interceptor_ss58 =
+				interceptor_sp.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+
+			log_print!("🛡️  Guardian/Interceptor: {}", interceptor_ss58.bright_green().bold());
+
+			// Format delay display
+			match data.delay {
+				quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp::BlockNumber(
+					blocks,
+				) => {
+					log_print!("⏱️  Delay: {} blocks", blocks.to_string().bright_yellow());
+				},
+				quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp::Timestamp(
+					ms,
+				) => {
+					let seconds = ms / 1000;
+					log_print!("⏱️  Delay: {} seconds", seconds.to_string().bright_yellow());
+				},
+			}
+
+			log_print!("");
+			log_print!(
+				"💡 {} All transfers from this multisig will be delayed and reversible",
+				"INFO".bright_blue().bold()
+			);
+			log_print!("   The guardian can intercept transactions during the delay period");
+			log_print!("");
+			log_print!(
+				"⚠️  {} Guardian interception requires direct runtime call (not yet in CLI)",
+				"NOTE".bright_yellow().bold()
+			);
+			log_print!("   Use: pallet_reversible_transfers::cancel(tx_id) as guardian account");
+		},
+		None => {
+			log_print!("❌ High-Security: {}", "DISABLED".bright_red().bold());
+			log_print!("");
+			log_print!("💡 This multisig does not have high-security enabled.");
+			log_print!("   Use 'quantus multisig high-security set' to enable it via a proposal.");
+		},
+	}
+
+	log_print!("");
+	Ok(())
+}
+
+/// Enable high-security for a multisig (via proposal)
+async fn handle_high_security_set(
+	multisig_address: String,
+	interceptor: String,
+	delay_blocks: Option<u32>,
+	delay_seconds: Option<u64>,
+	expiry: u32,
+	from: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	node_url: &str,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<()> {
+	log_print!(
+		"🛡️  {} Enabling High-Security (via proposal)...",
+		"MULTISIG".bright_magenta().bold()
+	);
+
+	// Validate delay parameters
+	if delay_blocks.is_none() && delay_seconds.is_none() {
+		log_error!("❌ You must specify either --delay-blocks or --delay-seconds");
+		return Err(crate::error::QuantusError::Generic("Missing delay parameter".to_string()));
+	}
+
+	// Resolve multisig address
+	let multisig_ss58 = crate::cli::common::resolve_address(&multisig_address)?;
+	let (multisig_id, _) =
+		SpAccountId32::from_ss58check_with_version(&multisig_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid multisig address: {:?}", e))
+		})?;
+	let multisig_bytes: [u8; 32] = *multisig_id.as_ref();
+	let multisig_account_id = subxt::ext::subxt_core::utils::AccountId32::from(multisig_bytes);
+
+	// Resolve interceptor address
+	let interceptor_ss58 = crate::cli::common::resolve_address(&interceptor)?;
+	let (interceptor_id, _) =
+		SpAccountId32::from_ss58check_with_version(&interceptor_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid interceptor address: {:?}", e))
+		})?;
+	let interceptor_bytes: [u8; 32] = *interceptor_id.as_ref();
+	let interceptor_account_id = subxt::ext::subxt_core::utils::AccountId32::from(interceptor_bytes);
+
+	log_verbose!("Multisig: {}", multisig_ss58);
+	log_verbose!("Interceptor: {}", interceptor_ss58);
+
+	// Connect to chain
+	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+
+	// Build the set_high_security call
+	use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay as HsDelay;
+
+	let delay_value = if let Some(blocks) = delay_blocks {
+		HsDelay::BlockNumber(blocks)
+	} else if let Some(seconds) = delay_seconds {
+		HsDelay::Timestamp(seconds * 1000) // Convert seconds to milliseconds
+	} else {
+		return Err(crate::error::QuantusError::Generic("Missing delay parameter".to_string()));
+	};
+
+	log_verbose!("Delay: {:?}", delay_value);
+
+	// Build the runtime call
+	let set_hs_call =
+		quantus_subxt::api::tx().reversible_transfers().set_high_security(delay_value, interceptor_account_id);
+
+	// Encode the call
+	use subxt::tx::Payload;
+	let call_data = set_hs_call.encode_call_data(&quantus_client.client().metadata()).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to encode call: {:?}", e))
+	})?;
+
+	log_verbose!("Call data size: {} bytes", call_data.len());
+
+	// Validate expiry is in the future (client-side check)
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let latest_block = quantus_client.client().blocks().at(latest_block_hash).await?;
+	let current_block_number = latest_block.number();
+
+	if expiry <= current_block_number {
+		log_error!(
+			"❌ Expiry block {} is in the past (current block: {})",
+			expiry,
+			current_block_number
+		);
+		log_print!("   Use a higher block number, e.g., --expiry {}", current_block_number + 1000);
+		return Err(crate::error::QuantusError::Generic("Expiry must be in the future".to_string()));
+	}
+
+	// Validate proposer is a signer
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+	let multisig_query =
+		quantus_subxt::api::storage().multisig().multisigs(multisig_account_id.clone());
+	let multisig_data = storage_at.fetch(&multisig_query).await?.ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!("Multisig not found at address: {}", multisig_ss58))
+	})?;
+
+	// Resolve proposer address
+	let proposer_ss58 = crate::cli::common::resolve_address(&from)?;
+	let (proposer_id, _) =
+		SpAccountId32::from_ss58check_with_version(&proposer_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid proposer address: {:?}", e))
+		})?;
+	let proposer_bytes: [u8; 32] = *proposer_id.as_ref();
+	let proposer_account_id = subxt::ext::subxt_core::utils::AccountId32::from(proposer_bytes);
+
+	// Check if proposer is in signers list
+	if !multisig_data.signers.0.contains(&proposer_account_id) {
+		log_error!("❌ Not authorized: {} is not a signer of this multisig", proposer_ss58);
+		return Err(crate::error::QuantusError::Generic(
+			"Only multisig signers can create proposals".to_string(),
+		));
+	}
+
+	// Load keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+
+	// Build propose transaction
+	let propose_tx =
+		quantus_subxt::api::tx().multisig().propose(multisig_account_id, call_data, expiry);
+
+	// Submit transaction
+	crate::cli::common::submit_transaction(
+		&quantus_client,
+		&keypair,
+		propose_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+
+	log_print!("");
+	log_success!("✅ High-Security proposal created!");
+	log_print!("");
+	log_print!(
+		"💡 {} Once this proposal reaches threshold, High-Security will be enabled",
+		"NEXT STEPS".bright_blue().bold()
+	);
+	log_print!(
+		"   - Other signers need to approve: quantus multisig approve --address {} --proposal-id <ID> --from <SIGNER>",
+		multisig_ss58.bright_cyan()
+	);
+	log_print!("   - After threshold is reached, all transfers will be delayed and reversible");
+	log_print!("");
+
+	Ok(())
+}
+
