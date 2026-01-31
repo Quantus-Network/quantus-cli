@@ -57,6 +57,10 @@ qp-poseidon = { version = "1.0.7", features = [
 qp-poseidon-core = { version = "1.0.7", default-features = false, features = ["p2", "p3"] }
 qp-dilithium-crypto = { version = "0.2.0", features = ["serde"] }
 
+# HTTP client for Subsquid queries
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+blake3 = "1.8"
+
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
 	"derive",

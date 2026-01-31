@@ -19,6 +19,8 @@ pub mod send;
 pub mod storage;
 pub mod system;
 pub mod tech_collective;
+pub mod tech_referenda;
+pub mod transfers;
 pub mod treasury;
 pub mod wallet;
 pub mod wormhole;
@@ -96,6 +98,10 @@ pub enum Commands {
 	/// Treasury management commands
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
+
+	/// Privacy-preserving transfer queries via Subsquid indexer
+	#[command(subcommand)]
+	Transfers(transfers::TransfersCommands),
 
 	/// Runtime management commands (requires root/sudo permissions)
 	#[command(subcommand)]
@@ -280,6 +286,8 @@ pub async fn execute_command(
 			preimage::handle_preimage_command(preimage_cmd, node_url, execution_mode).await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
+		Commands::Transfers(transfers_cmd) =>
+			transfers::handle_transfers_command(transfers_cmd).await,
 		Commands::Runtime(runtime_cmd) =>
 			runtime::handle_runtime_command(runtime_cmd, node_url, execution_mode).await,
 		Commands::Call {
