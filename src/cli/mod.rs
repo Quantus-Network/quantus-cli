@@ -19,7 +19,6 @@ pub mod send;
 pub mod storage;
 pub mod system;
 pub mod tech_collective;
-pub mod tech_referenda;
 pub mod transfers;
 pub mod treasury;
 pub mod wallet;
