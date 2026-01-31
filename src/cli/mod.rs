@@ -12,8 +12,6 @@ pub mod high_security;
 pub mod metadata;
 pub mod preimage;
 pub mod recovery;
-pub mod referenda;
-pub mod referenda_decode;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
@@ -21,10 +19,10 @@ pub mod send;
 pub mod storage;
 pub mod system;
 pub mod tech_collective;
-pub mod tech_referenda;
 pub mod transfers;
 pub mod treasury;
 pub mod wallet;
+pub mod wormhole;
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
@@ -95,12 +93,6 @@ pub enum Commands {
 	/// Tech Referenda management commands (for runtime upgrade proposals)
 	#[command(subcommand)]
 	Preimage(preimage::PreimageCommands),
-	#[command(subcommand)]
-	TechReferenda(tech_referenda::TechReferendaCommands),
-
-	/// Standard Referenda management commands (public governance)
-	#[command(subcommand)]
-	Referenda(referenda::ReferendaCommands),
 
 	/// Treasury management commands
 	#[command(subcommand)]
@@ -235,6 +227,10 @@ pub enum Commands {
 	/// Block management and analysis commands
 	#[command(subcommand)]
 	Block(block::BlockCommands),
+
+	/// Wormhole proof generation and verification
+	#[command(subcommand)]
+	Wormhole(wormhole::WormholeCommands),
 }
 
 /// Developer subcommands
@@ -287,15 +283,6 @@ pub async fn execute_command(
 			.await,
 		Commands::Preimage(preimage_cmd) =>
 			preimage::handle_preimage_command(preimage_cmd, node_url, execution_mode).await,
-		Commands::TechReferenda(tech_referenda_cmd) =>
-			tech_referenda::handle_tech_referenda_command(
-				tech_referenda_cmd,
-				node_url,
-				execution_mode,
-			)
-			.await,
-		Commands::Referenda(referenda_cmd) =>
-			referenda::handle_referenda_command(referenda_cmd, node_url, execution_mode).await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
 		Commands::Transfers(transfers_cmd) =>
@@ -373,6 +360,8 @@ pub async fn execute_command(
 		},
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
+		Commands::Wormhole(wormhole_cmd) =>
+			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
 	}
 }
 
