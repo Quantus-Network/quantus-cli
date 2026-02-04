@@ -10,6 +10,7 @@ pub mod events;
 pub mod generic_call;
 pub mod high_security;
 pub mod metadata;
+pub mod multisend;
 pub mod preimage;
 pub mod recovery;
 pub mod reversible;
@@ -231,6 +232,49 @@ pub enum Commands {
 	/// Wormhole proof generation and verification
 	#[command(subcommand)]
 	Wormhole(wormhole::WormholeCommands),
+
+	/// Send random amounts to multiple addresses (total is distributed randomly)
+	Multisend {
+		/// Wallet name to send from
+		#[arg(short, long)]
+		from: String,
+
+		/// File containing addresses (JSON array: ["addr1", "addr2", ...])
+		#[arg(long, conflicts_with = "addresses")]
+		addresses_file: Option<String>,
+
+		/// Comma-separated list of recipient addresses
+		#[arg(long, value_delimiter = ',', conflicts_with = "addresses_file")]
+		addresses: Option<Vec<String>>,
+
+		/// Total amount to distribute across all recipients (e.g., "1000", "100.5")
+		#[arg(long)]
+		total: String,
+
+		/// Minimum amount per recipient (e.g., "10", "1.5")
+		#[arg(long)]
+		min: String,
+
+		/// Maximum amount per recipient (e.g., "100", "50.5")
+		#[arg(long)]
+		max: String,
+
+		/// Password for the wallet (or use environment variables)
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Optional tip amount to prioritize the transaction (e.g., "1", "0.5")
+		#[arg(long)]
+		tip: Option<String>,
+
+		/// Skip confirmation prompt (for scripting)
+		#[arg(long, short = 'y')]
+		yes: bool,
+	},
 }
 
 /// Developer subcommands
@@ -362,6 +406,33 @@ pub async fn execute_command(
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
 		Commands::Wormhole(wormhole_cmd) =>
 			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
+		Commands::Multisend {
+			from,
+			addresses_file,
+			addresses,
+			total,
+			min,
+			max,
+			password,
+			password_file,
+			tip,
+			yes,
+		} =>
+			multisend::handle_multisend_command(
+				from,
+				node_url,
+				addresses_file,
+				addresses,
+				total,
+				min,
+				max,
+				password,
+				password_file,
+				tip,
+				yes,
+				execution_mode,
+			)
+			.await,
 	}
 }
 
