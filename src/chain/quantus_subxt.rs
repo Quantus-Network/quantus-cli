@@ -1469,9 +1469,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							150u8, 37u8, 187u8, 235u8, 4u8, 45u8, 158u8, 90u8, 61u8, 22u8, 178u8,
-							152u8, 57u8, 85u8, 34u8, 16u8, 122u8, 218u8, 248u8, 177u8, 25u8, 226u8,
-							154u8, 45u8, 184u8, 108u8, 40u8, 242u8, 0u8, 254u8, 195u8, 3u8,
+							109u8, 238u8, 14u8, 83u8, 3u8, 207u8, 39u8, 250u8, 192u8, 119u8, 154u8,
+							113u8, 108u8, 130u8, 41u8, 191u8, 2u8, 91u8, 68u8, 120u8, 74u8, 220u8,
+							120u8, 244u8, 152u8, 29u8, 129u8, 44u8, 217u8, 202u8, 119u8, 54u8,
 						],
 					)
 				}
@@ -1489,10 +1489,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							51u8, 35u8, 19u8, 160u8, 84u8, 185u8, 79u8, 227u8, 161u8, 245u8, 197u8,
-							205u8, 244u8, 62u8, 76u8, 210u8, 12u8, 218u8, 61u8, 185u8, 221u8,
-							233u8, 237u8, 56u8, 38u8, 136u8, 204u8, 91u8, 163u8, 181u8, 246u8,
-							169u8,
+							133u8, 101u8, 86u8, 173u8, 180u8, 245u8, 13u8, 112u8, 160u8, 151u8,
+							184u8, 198u8, 76u8, 243u8, 46u8, 59u8, 115u8, 175u8, 24u8, 5u8, 219u8,
+							109u8, 61u8, 169u8, 51u8, 17u8, 151u8, 17u8, 76u8, 16u8, 109u8, 137u8,
 						],
 					)
 				}
@@ -1985,9 +1984,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				65u8, 129u8, 22u8, 63u8, 167u8, 215u8, 88u8, 64u8, 59u8, 149u8, 136u8, 73u8, 234u8,
-				33u8, 62u8, 1u8, 153u8, 222u8, 92u8, 6u8, 168u8, 25u8, 156u8, 48u8, 145u8, 7u8,
-				177u8, 255u8, 104u8, 176u8, 199u8, 12u8,
+				218u8, 44u8, 215u8, 127u8, 228u8, 55u8, 8u8, 146u8, 85u8, 200u8, 57u8, 79u8, 39u8,
+				209u8, 32u8, 211u8, 162u8, 144u8, 123u8, 211u8, 238u8, 82u8, 22u8, 15u8, 178u8,
+				148u8, 92u8, 175u8, 182u8, 171u8, 62u8, 143u8,
 			]
 	}
 	pub mod system {
@@ -3086,9 +3085,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							182u8, 190u8, 253u8, 80u8, 191u8, 234u8, 66u8, 33u8, 41u8, 142u8,
-							128u8, 68u8, 27u8, 72u8, 31u8, 114u8, 136u8, 87u8, 182u8, 99u8, 96u8,
-							223u8, 71u8, 200u8, 169u8, 56u8, 123u8, 9u8, 49u8, 231u8, 82u8, 37u8,
+							115u8, 44u8, 254u8, 125u8, 200u8, 190u8, 52u8, 255u8, 116u8, 96u8,
+							164u8, 99u8, 67u8, 74u8, 246u8, 165u8, 72u8, 153u8, 138u8, 82u8, 27u8,
+							228u8, 126u8, 157u8, 160u8, 212u8, 165u8, 156u8, 125u8, 203u8, 242u8,
+							219u8,
 						],
 					)
 				}
@@ -5469,9 +5469,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							202u8, 115u8, 214u8, 142u8, 43u8, 208u8, 97u8, 120u8, 145u8, 156u8,
-							31u8, 77u8, 42u8, 95u8, 30u8, 7u8, 229u8, 193u8, 24u8, 133u8, 78u8,
-							221u8, 54u8, 162u8, 167u8, 65u8, 142u8, 149u8, 2u8, 135u8, 148u8, 55u8,
+							196u8, 232u8, 220u8, 76u8, 217u8, 82u8, 150u8, 217u8, 199u8, 72u8,
+							156u8, 142u8, 167u8, 71u8, 37u8, 146u8, 197u8, 166u8, 129u8, 250u8,
+							57u8, 144u8, 165u8, 105u8, 134u8, 135u8, 247u8, 72u8, 89u8, 130u8,
+							191u8, 35u8,
 						],
 					)
 				}
@@ -5494,9 +5495,9 @@ pub mod api {
 							weight,
 						},
 						[
-							145u8, 1u8, 121u8, 40u8, 244u8, 105u8, 130u8, 26u8, 13u8, 193u8, 231u8,
-							235u8, 135u8, 53u8, 32u8, 187u8, 137u8, 105u8, 87u8, 38u8, 21u8, 155u8,
-							127u8, 57u8, 45u8, 199u8, 69u8, 69u8, 223u8, 187u8, 145u8, 77u8,
+							107u8, 174u8, 60u8, 97u8, 17u8, 57u8, 204u8, 171u8, 220u8, 88u8, 21u8,
+							22u8, 58u8, 55u8, 229u8, 112u8, 186u8, 176u8, 107u8, 52u8, 168u8, 55u8,
+							194u8, 76u8, 140u8, 237u8, 244u8, 49u8, 79u8, 68u8, 234u8, 114u8,
 						],
 					)
 				}
@@ -5534,9 +5535,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							66u8, 165u8, 8u8, 110u8, 184u8, 181u8, 211u8, 175u8, 6u8, 212u8, 20u8,
-							234u8, 243u8, 240u8, 176u8, 67u8, 116u8, 214u8, 206u8, 37u8, 87u8,
-							84u8, 154u8, 216u8, 183u8, 4u8, 53u8, 40u8, 19u8, 106u8, 248u8, 204u8,
+							71u8, 75u8, 120u8, 133u8, 11u8, 132u8, 176u8, 225u8, 61u8, 148u8,
+							114u8, 9u8, 141u8, 42u8, 96u8, 201u8, 57u8, 191u8, 9u8, 183u8, 41u8,
+							95u8, 27u8, 37u8, 47u8, 18u8, 117u8, 9u8, 204u8, 240u8, 23u8, 239u8,
 						],
 					)
 				}
@@ -7010,9 +7011,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							65u8, 21u8, 226u8, 47u8, 92u8, 131u8, 84u8, 6u8, 98u8, 34u8, 250u8,
-							133u8, 102u8, 164u8, 88u8, 158u8, 35u8, 254u8, 65u8, 178u8, 148u8,
-							157u8, 239u8, 221u8, 25u8, 179u8, 5u8, 202u8, 60u8, 209u8, 78u8, 229u8,
+							166u8, 39u8, 107u8, 220u8, 251u8, 193u8, 192u8, 111u8, 32u8, 144u8,
+							118u8, 60u8, 115u8, 254u8, 121u8, 217u8, 73u8, 126u8, 7u8, 138u8, 82u8,
+							124u8, 76u8, 86u8, 86u8, 30u8, 203u8, 228u8, 43u8, 253u8, 60u8, 23u8,
 						],
 					)
 				}
@@ -7054,9 +7055,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							96u8, 207u8, 83u8, 62u8, 175u8, 146u8, 43u8, 253u8, 41u8, 49u8, 12u8,
-							215u8, 209u8, 164u8, 98u8, 114u8, 0u8, 56u8, 63u8, 225u8, 98u8, 167u8,
-							129u8, 210u8, 34u8, 168u8, 118u8, 253u8, 117u8, 65u8, 111u8, 179u8,
+							245u8, 72u8, 248u8, 134u8, 144u8, 189u8, 152u8, 4u8, 128u8, 87u8,
+							131u8, 234u8, 251u8, 50u8, 118u8, 71u8, 56u8, 162u8, 87u8, 27u8, 208u8,
+							179u8, 241u8, 65u8, 212u8, 190u8, 119u8, 21u8, 27u8, 192u8, 91u8,
+							250u8,
 						],
 					)
 				}
@@ -7095,9 +7097,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							251u8, 160u8, 71u8, 51u8, 31u8, 32u8, 110u8, 133u8, 11u8, 146u8, 31u8,
-							136u8, 121u8, 70u8, 73u8, 228u8, 163u8, 9u8, 14u8, 99u8, 90u8, 190u8,
-							139u8, 59u8, 175u8, 159u8, 54u8, 182u8, 76u8, 255u8, 195u8, 27u8,
+							242u8, 161u8, 153u8, 76u8, 154u8, 202u8, 160u8, 50u8, 113u8, 114u8,
+							34u8, 150u8, 128u8, 247u8, 66u8, 144u8, 24u8, 81u8, 206u8, 227u8, 75u8,
+							189u8, 249u8, 227u8, 45u8, 114u8, 51u8, 180u8, 110u8, 213u8, 187u8,
+							123u8,
 						],
 					)
 				}
@@ -7122,9 +7125,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							215u8, 96u8, 49u8, 194u8, 36u8, 23u8, 162u8, 162u8, 67u8, 50u8, 151u8,
-							34u8, 160u8, 173u8, 115u8, 90u8, 46u8, 164u8, 195u8, 15u8, 64u8, 120u8,
-							62u8, 155u8, 251u8, 102u8, 244u8, 27u8, 187u8, 191u8, 226u8, 203u8,
+							50u8, 255u8, 221u8, 111u8, 141u8, 234u8, 109u8, 34u8, 8u8, 7u8, 68u8,
+							245u8, 53u8, 198u8, 234u8, 47u8, 11u8, 55u8, 217u8, 50u8, 194u8, 212u8,
+							210u8, 163u8, 19u8, 157u8, 142u8, 230u8, 111u8, 106u8, 254u8, 189u8,
 						],
 					)
 				}
@@ -8152,9 +8155,10 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							163u8, 76u8, 28u8, 40u8, 58u8, 96u8, 128u8, 250u8, 37u8, 204u8, 51u8,
-							101u8, 180u8, 2u8, 92u8, 104u8, 45u8, 231u8, 225u8, 109u8, 227u8, 2u8,
-							140u8, 117u8, 37u8, 13u8, 205u8, 196u8, 106u8, 44u8, 162u8, 81u8,
+							24u8, 92u8, 194u8, 180u8, 81u8, 199u8, 196u8, 1u8, 10u8, 153u8, 100u8,
+							165u8, 140u8, 138u8, 186u8, 16u8, 249u8, 113u8, 150u8, 152u8, 46u8,
+							41u8, 133u8, 103u8, 217u8, 5u8, 146u8, 149u8, 133u8, 94u8, 209u8,
+							233u8,
 						],
 					)
 				}
@@ -8184,9 +8188,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							19u8, 216u8, 62u8, 141u8, 0u8, 50u8, 14u8, 247u8, 173u8, 146u8, 224u8,
-							58u8, 205u8, 86u8, 43u8, 48u8, 207u8, 43u8, 189u8, 234u8, 15u8, 168u8,
-							85u8, 119u8, 21u8, 229u8, 97u8, 44u8, 105u8, 195u8, 114u8, 123u8,
+							150u8, 248u8, 238u8, 233u8, 76u8, 79u8, 101u8, 76u8, 193u8, 204u8,
+							171u8, 38u8, 120u8, 52u8, 98u8, 95u8, 79u8, 190u8, 7u8, 192u8, 219u8,
+							125u8, 96u8, 144u8, 31u8, 35u8, 147u8, 45u8, 156u8, 14u8, 238u8, 239u8,
 						],
 					)
 				}
@@ -8212,10 +8216,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							140u8, 226u8, 201u8, 140u8, 54u8, 23u8, 54u8, 131u8, 118u8, 24u8,
-							240u8, 220u8, 233u8, 104u8, 189u8, 59u8, 143u8, 48u8, 52u8, 199u8,
-							199u8, 185u8, 218u8, 40u8, 146u8, 192u8, 3u8, 36u8, 251u8, 55u8, 37u8,
-							122u8,
+							63u8, 128u8, 96u8, 130u8, 253u8, 168u8, 249u8, 176u8, 210u8, 179u8,
+							97u8, 145u8, 126u8, 208u8, 76u8, 56u8, 99u8, 55u8, 81u8, 95u8, 160u8,
+							249u8, 188u8, 83u8, 249u8, 77u8, 44u8, 198u8, 27u8, 200u8, 44u8, 144u8,
 						],
 					)
 				}
@@ -8238,10 +8241,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							150u8, 45u8, 86u8, 233u8, 232u8, 140u8, 205u8, 192u8, 121u8, 214u8,
-							79u8, 202u8, 13u8, 176u8, 44u8, 41u8, 140u8, 249u8, 120u8, 102u8,
-							125u8, 78u8, 141u8, 86u8, 132u8, 4u8, 244u8, 12u8, 57u8, 133u8, 158u8,
-							244u8,
+							36u8, 234u8, 228u8, 198u8, 157u8, 178u8, 21u8, 247u8, 118u8, 33u8,
+							12u8, 194u8, 9u8, 108u8, 90u8, 50u8, 225u8, 222u8, 234u8, 14u8, 82u8,
+							113u8, 204u8, 8u8, 221u8, 54u8, 214u8, 144u8, 60u8, 62u8, 125u8, 43u8,
 						],
 					)
 				}
@@ -8267,9 +8269,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							68u8, 69u8, 7u8, 114u8, 162u8, 177u8, 132u8, 233u8, 205u8, 16u8, 208u8,
-							241u8, 33u8, 66u8, 32u8, 43u8, 194u8, 223u8, 21u8, 105u8, 163u8, 56u8,
-							151u8, 28u8, 121u8, 19u8, 93u8, 33u8, 58u8, 176u8, 173u8, 96u8,
+							181u8, 178u8, 249u8, 152u8, 30u8, 53u8, 81u8, 32u8, 14u8, 171u8, 79u8,
+							161u8, 173u8, 190u8, 24u8, 196u8, 98u8, 23u8, 30u8, 6u8, 156u8, 228u8,
+							158u8, 237u8, 104u8, 10u8, 114u8, 79u8, 151u8, 176u8, 88u8, 13u8,
 						],
 					)
 				}
@@ -8292,9 +8294,9 @@ pub mod api {
 							weight,
 						},
 						[
-							80u8, 80u8, 54u8, 156u8, 228u8, 204u8, 49u8, 163u8, 8u8, 226u8, 58u8,
-							53u8, 220u8, 123u8, 109u8, 93u8, 33u8, 167u8, 205u8, 188u8, 3u8, 102u8,
-							103u8, 3u8, 170u8, 198u8, 83u8, 212u8, 93u8, 67u8, 240u8, 13u8,
+							188u8, 32u8, 176u8, 41u8, 30u8, 206u8, 252u8, 99u8, 120u8, 90u8, 139u8,
+							11u8, 187u8, 35u8, 8u8, 107u8, 71u8, 42u8, 132u8, 137u8, 218u8, 18u8,
+							132u8, 118u8, 21u8, 88u8, 212u8, 93u8, 69u8, 152u8, 122u8, 131u8,
 						],
 					)
 				}
@@ -8334,9 +8336,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							242u8, 31u8, 7u8, 216u8, 34u8, 174u8, 140u8, 28u8, 68u8, 80u8, 158u8,
-							135u8, 236u8, 84u8, 114u8, 233u8, 16u8, 247u8, 56u8, 177u8, 113u8,
-							247u8, 132u8, 152u8, 71u8, 56u8, 185u8, 52u8, 152u8, 231u8, 0u8, 44u8,
+							243u8, 31u8, 96u8, 42u8, 126u8, 92u8, 145u8, 116u8, 214u8, 64u8, 229u8,
+							200u8, 15u8, 9u8, 227u8, 220u8, 147u8, 24u8, 188u8, 139u8, 78u8, 57u8,
+							185u8, 88u8, 123u8, 232u8, 62u8, 155u8, 122u8, 8u8, 129u8, 160u8,
 						],
 					)
 				}
@@ -8359,9 +8361,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							172u8, 84u8, 200u8, 220u8, 37u8, 19u8, 24u8, 2u8, 49u8, 55u8, 161u8,
-							37u8, 58u8, 126u8, 89u8, 125u8, 73u8, 43u8, 195u8, 41u8, 54u8, 145u8,
-							88u8, 160u8, 213u8, 77u8, 105u8, 12u8, 179u8, 147u8, 93u8, 67u8,
+							220u8, 107u8, 205u8, 139u8, 220u8, 199u8, 226u8, 99u8, 146u8, 233u8,
+							58u8, 93u8, 67u8, 10u8, 147u8, 73u8, 79u8, 57u8, 127u8, 79u8, 227u8,
+							169u8, 4u8, 230u8, 29u8, 161u8, 47u8, 182u8, 72u8, 2u8, 46u8, 100u8,
 						],
 					)
 				}
@@ -15393,10 +15395,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							215u8, 126u8, 64u8, 250u8, 176u8, 67u8, 18u8, 73u8, 211u8, 245u8,
-							145u8, 81u8, 124u8, 187u8, 164u8, 179u8, 28u8, 113u8, 117u8, 110u8,
-							155u8, 209u8, 25u8, 30u8, 188u8, 93u8, 112u8, 199u8, 166u8, 249u8,
-							150u8, 21u8,
+							102u8, 168u8, 90u8, 149u8, 56u8, 242u8, 1u8, 219u8, 42u8, 107u8, 236u8,
+							65u8, 253u8, 154u8, 88u8, 201u8, 163u8, 128u8, 39u8, 152u8, 99u8, 46u8,
+							178u8, 166u8, 130u8, 187u8, 9u8, 123u8, 240u8, 228u8, 179u8, 208u8,
 						],
 					)
 				}
@@ -19954,17 +19955,25 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Create a new multisig account"]
+				#[doc = "Create a new multisig account with deterministic address"]
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `signers`: List of accounts that can sign for this multisig"]
 				#[doc = "- `threshold`: Number of approvals required to execute transactions"]
+				#[doc = "- `nonce`: User-provided nonce for address uniqueness"]
 				#[doc = ""]
-				#[doc = "The multisig address is derived from a hash of all signers + global nonce."]
-				#[doc = "The creator must pay a non-refundable fee (burned)."]
+				#[doc = "The multisig address is deterministically derived from:"]
+				#[doc = "hash(pallet_id || sorted_signers || threshold || nonce)"]
+				#[doc = ""]
+				#[doc = "Signers are automatically sorted before hashing, so order doesn't matter."]
+				#[doc = ""]
+				#[doc = "Economic costs:"]
+				#[doc = "- MultisigFee: burned immediately (spam prevention)"]
+				#[doc = "- MultisigDeposit: locked until dissolution, then burned (storage bond)"]
 				pub struct CreateMultisig {
 					pub signers: create_multisig::Signers,
 					pub threshold: create_multisig::Threshold,
+					pub nonce: create_multisig::Nonce,
 				}
 				pub mod create_multisig {
 					use super::runtime_types;
@@ -19972,6 +19981,7 @@ pub mod api {
 						::subxt::ext::subxt_core::utils::AccountId32,
 					>;
 					pub type Threshold = ::core::primitive::u32;
+					pub type Nonce = ::core::primitive::u64;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CreateMultisig {
 					const PALLET: &'static str = "Multisig";
@@ -19999,11 +20009,13 @@ pub mod api {
 				#[doc = "- A deposit (refundable - returned immediately on execution/cancellation)"]
 				#[doc = "- A fee (non-refundable, burned immediately)"]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL expired proposals are"]
-				#[doc = "automatically removed and deposits returned to original proposers. This is the primary"]
-				#[doc = "cleanup mechanism."]
+				#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL proposer's expired"]
+				#[doc = "proposals are automatically removed. This is the primary cleanup mechanism."]
 				#[doc = ""]
 				#[doc = "**For threshold=1:** If the multisig threshold is 1, the proposal executes immediately."]
+				#[doc = ""]
+				#[doc = "**Weight:** Charged based on whether multisig is high-security or not."]
+				#[doc = "High-security multisigs incur additional cost for decode + whitelist check."]
 				pub struct Propose {
 					pub multisig_address: propose::MultisigAddress,
 					pub call: propose::Call,
@@ -20036,14 +20048,12 @@ pub mod api {
 				#[doc = "If this approval brings the total approvals to or above the threshold,"]
 				#[doc = "the transaction will be automatically executed."]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before processing the approval, ALL expired proposals are"]
-				#[doc = "automatically removed and deposits returned to original proposers."]
-				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
 				#[doc = ""]
-				#[doc = "Weight: Charges for MAX call size and MAX expired proposals, refunds based on actual"]
+				#[doc = "Weight: Charges for MAX call size, refunds based on actual"]
+				#[doc = "NOTE: approve() does NOT do auto-cleanup (removed for predictable gas costs)"]
 				pub struct Approve {
 					pub multisig_address: approve::MultisigAddress,
 					pub proposal_id: approve::ProposalId,
@@ -20070,14 +20080,9 @@ pub mod api {
 				)]
 				#[doc = "Cancel a proposed transaction (only by proposer)"]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before processing the cancellation, ALL expired proposals are"]
-				#[doc = "automatically removed and deposits returned to original proposers."]
-				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to cancel"]
-				#[doc = ""]
-				#[doc = "Weight: Charges for MAX call size and MAX expired proposals, refunds based on actual"]
 				pub struct Cancel {
 					pub multisig_address: cancel::MultisigAddress,
 					pub proposal_id: cancel::ProposalId,
@@ -20166,50 +20171,64 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Dissolve (remove) a multisig and recover the creation deposit."]
+				#[doc = "Approve dissolving a multisig account"]
+				#[doc = ""]
+				#[doc = "Signers call this to approve dissolving the multisig."]
+				#[doc = "When threshold is reached, the multisig is automatically dissolved."]
 				#[doc = ""]
 				#[doc = "Requirements:"]
-				#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up."]
-				#[doc = "- Multisig account balance must be zero."]
-				#[doc = "- Can be called by the creator OR any signer."]
+				#[doc = "- Caller must be a signer"]
+				#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up"]
+				#[doc = "- Multisig account balance must be zero"]
 				#[doc = ""]
-				#[doc = "The deposit is ALWAYS returned to the original `creator` stored in `MultisigData`."]
-				pub struct DissolveMultisig {
-					pub multisig_address: dissolve_multisig::MultisigAddress,
+				#[doc = "When threshold is reached:"]
+				#[doc = "- Deposit is burned (stays locked forever)"]
+				#[doc = "- Multisig storage is removed"]
+				pub struct ApproveDissolve {
+					pub multisig_address: approve_dissolve::MultisigAddress,
 				}
-				pub mod dissolve_multisig {
+				pub mod approve_dissolve {
 					use super::runtime_types;
 					pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for DissolveMultisig {
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ApproveDissolve {
 					const PALLET: &'static str = "Multisig";
-					const CALL: &'static str = "dissolve_multisig";
+					const CALL: &'static str = "approve_dissolve";
 				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Create a new multisig account"]
+				#[doc = "Create a new multisig account with deterministic address"]
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `signers`: List of accounts that can sign for this multisig"]
 				#[doc = "- `threshold`: Number of approvals required to execute transactions"]
+				#[doc = "- `nonce`: User-provided nonce for address uniqueness"]
 				#[doc = ""]
-				#[doc = "The multisig address is derived from a hash of all signers + global nonce."]
-				#[doc = "The creator must pay a non-refundable fee (burned)."]
+				#[doc = "The multisig address is deterministically derived from:"]
+				#[doc = "hash(pallet_id || sorted_signers || threshold || nonce)"]
+				#[doc = ""]
+				#[doc = "Signers are automatically sorted before hashing, so order doesn't matter."]
+				#[doc = ""]
+				#[doc = "Economic costs:"]
+				#[doc = "- MultisigFee: burned immediately (spam prevention)"]
+				#[doc = "- MultisigDeposit: locked until dissolution, then burned (storage bond)"]
 				pub fn create_multisig(
 					&self,
 					signers: types::create_multisig::Signers,
 					threshold: types::create_multisig::Threshold,
+					nonce: types::create_multisig::Nonce,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::CreateMultisig>
 				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Multisig",
 						"create_multisig",
-						types::CreateMultisig { signers, threshold },
+						types::CreateMultisig { signers, threshold, nonce },
 						[
-							245u8, 16u8, 24u8, 202u8, 226u8, 192u8, 244u8, 3u8, 112u8, 49u8, 179u8,
-							60u8, 108u8, 206u8, 77u8, 130u8, 112u8, 243u8, 163u8, 11u8, 239u8,
-							153u8, 232u8, 78u8, 27u8, 44u8, 88u8, 181u8, 65u8, 151u8, 98u8, 130u8,
+							126u8, 145u8, 23u8, 129u8, 179u8, 174u8, 124u8, 92u8, 17u8, 77u8, 39u8,
+							143u8, 138u8, 202u8, 71u8, 46u8, 71u8, 104u8, 68u8, 236u8, 223u8,
+							128u8, 124u8, 89u8, 133u8, 103u8, 92u8, 150u8, 75u8, 49u8, 253u8,
+							177u8,
 						],
 					)
 				}
@@ -20224,11 +20243,13 @@ pub mod api {
 				#[doc = "- A deposit (refundable - returned immediately on execution/cancellation)"]
 				#[doc = "- A fee (non-refundable, burned immediately)"]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL expired proposals are"]
-				#[doc = "automatically removed and deposits returned to original proposers. This is the primary"]
-				#[doc = "cleanup mechanism."]
+				#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL proposer's expired"]
+				#[doc = "proposals are automatically removed. This is the primary cleanup mechanism."]
 				#[doc = ""]
 				#[doc = "**For threshold=1:** If the multisig threshold is 1, the proposal executes immediately."]
+				#[doc = ""]
+				#[doc = "**Weight:** Charged based on whether multisig is high-security or not."]
+				#[doc = "High-security multisigs incur additional cost for decode + whitelist check."]
 				pub fn propose(
 					&self,
 					multisig_address: types::propose::MultisigAddress,
@@ -20252,14 +20273,12 @@ pub mod api {
 				#[doc = "If this approval brings the total approvals to or above the threshold,"]
 				#[doc = "the transaction will be automatically executed."]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before processing the approval, ALL expired proposals are"]
-				#[doc = "automatically removed and deposits returned to original proposers."]
-				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
 				#[doc = ""]
-				#[doc = "Weight: Charges for MAX call size and MAX expired proposals, refunds based on actual"]
+				#[doc = "Weight: Charges for MAX call size, refunds based on actual"]
+				#[doc = "NOTE: approve() does NOT do auto-cleanup (removed for predictable gas costs)"]
 				pub fn approve(
 					&self,
 					multisig_address: types::approve::MultisigAddress,
@@ -20278,14 +20297,9 @@ pub mod api {
 				}
 				#[doc = "Cancel a proposed transaction (only by proposer)"]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before processing the cancellation, ALL expired proposals are"]
-				#[doc = "automatically removed and deposits returned to original proposers."]
-				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to cancel"]
-				#[doc = ""]
-				#[doc = "Weight: Charges for MAX call size and MAX expired proposals, refunds based on actual"]
 				pub fn cancel(
 					&self,
 					multisig_address: types::cancel::MultisigAddress,
@@ -20353,28 +20367,33 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Dissolve (remove) a multisig and recover the creation deposit."]
+				#[doc = "Approve dissolving a multisig account"]
+				#[doc = ""]
+				#[doc = "Signers call this to approve dissolving the multisig."]
+				#[doc = "When threshold is reached, the multisig is automatically dissolved."]
 				#[doc = ""]
 				#[doc = "Requirements:"]
-				#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up."]
-				#[doc = "- Multisig account balance must be zero."]
-				#[doc = "- Can be called by the creator OR any signer."]
+				#[doc = "- Caller must be a signer"]
+				#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up"]
+				#[doc = "- Multisig account balance must be zero"]
 				#[doc = ""]
-				#[doc = "The deposit is ALWAYS returned to the original `creator` stored in `MultisigData`."]
-				pub fn dissolve_multisig(
+				#[doc = "When threshold is reached:"]
+				#[doc = "- Deposit is burned (stays locked forever)"]
+				#[doc = "- Multisig storage is removed"]
+				pub fn approve_dissolve(
 					&self,
-					multisig_address: types::dissolve_multisig::MultisigAddress,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::DissolveMultisig>
+					multisig_address: types::approve_dissolve::MultisigAddress,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ApproveDissolve>
 				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Multisig",
-						"dissolve_multisig",
-						types::DissolveMultisig { multisig_address },
+						"approve_dissolve",
+						types::ApproveDissolve { multisig_address },
 						[
-							2u8, 71u8, 80u8, 125u8, 58u8, 244u8, 234u8, 154u8, 158u8, 71u8, 21u8,
-							125u8, 188u8, 116u8, 1u8, 232u8, 43u8, 105u8, 162u8, 156u8, 132u8,
-							57u8, 252u8, 187u8, 139u8, 106u8, 160u8, 157u8, 159u8, 64u8, 140u8,
-							239u8,
+							156u8, 98u8, 164u8, 184u8, 61u8, 224u8, 117u8, 109u8, 44u8, 173u8,
+							59u8, 188u8, 164u8, 233u8, 191u8, 223u8, 240u8, 203u8, 164u8, 113u8,
+							184u8, 187u8, 41u8, 154u8, 87u8, 135u8, 229u8, 56u8, 35u8, 196u8,
+							136u8, 241u8,
 						],
 					)
 				}
@@ -20577,17 +20596,42 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A multisig account was dissolved and deposit returned"]
+			#[doc = "A signer approved dissolving the multisig"]
+			pub struct DissolveApproved {
+				pub multisig_address: dissolve_approved::MultisigAddress,
+				pub approver: dissolve_approved::Approver,
+				pub approvals_count: dissolve_approved::ApprovalsCount,
+			}
+			pub mod dissolve_approved {
+				use super::runtime_types;
+				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Approver = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type ApprovalsCount = ::core::primitive::u32;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for DissolveApproved {
+				const PALLET: &'static str = "Multisig";
+				const EVENT: &'static str = "DissolveApproved";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A multisig account was dissolved (threshold reached)"]
 			pub struct MultisigDissolved {
 				pub multisig_address: multisig_dissolved::MultisigAddress,
-				pub caller: multisig_dissolved::Caller,
 				pub deposit_returned: multisig_dissolved::DepositReturned,
+				pub approvers: multisig_dissolved::Approvers,
 			}
 			pub mod multisig_dissolved {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Caller = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type DepositReturned = ::core::primitive::u128;
+				pub type Approvers = ::subxt::ext::subxt_core::alloc::vec::Vec<
+					::subxt::ext::subxt_core::utils::AccountId32,
+				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for MultisigDissolved {
 				const PALLET: &'static str = "Multisig";
@@ -20598,15 +20642,9 @@ pub mod api {
 			use super::runtime_types;
 			pub mod types {
 				use super::runtime_types;
-				pub mod global_nonce {
-					use super::runtime_types;
-					pub type GlobalNonce = ::core::primitive::u64;
-				}
 				pub mod multisigs {
 					use super::runtime_types;
 					pub type Multisigs = runtime_types::pallet_multisig::MultisigData<
-						::core::primitive::u32,
-						::subxt::ext::subxt_core::utils::AccountId32,
 						runtime_types::bounded_collections::bounded_vec::BoundedVec<
 							::subxt::ext::subxt_core::utils::AccountId32,
 						>,
@@ -20634,31 +20672,18 @@ pub mod api {
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
 					pub type Param1 = ::core::primitive::u32;
 				}
+				pub mod dissolve_approvals {
+					use super::runtime_types;
+					pub type DissolveApprovals =
+						runtime_types::bounded_collections::bounded_vec::BoundedVec<
+							::subxt::ext::subxt_core::utils::AccountId32,
+						>;
+					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
 			}
 			pub struct StorageApi;
 			impl StorageApi {
-				#[doc = " Global nonce for generating unique multisig addresses"]
-				pub fn global_nonce(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::global_nonce::GlobalNonce,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Multisig",
-						"GlobalNonce",
-						(),
-						[
-							119u8, 119u8, 84u8, 141u8, 83u8, 67u8, 42u8, 83u8, 51u8, 196u8, 185u8,
-							39u8, 227u8, 125u8, 142u8, 154u8, 107u8, 62u8, 127u8, 13u8, 54u8,
-							114u8, 201u8, 6u8, 100u8, 28u8, 202u8, 152u8, 246u8, 202u8, 9u8, 29u8,
-						],
-					)
-				}
-				#[doc = " Multisigs stored by their generated address"]
+				#[doc = " Multisigs stored by their deterministic address"]
 				pub fn multisigs_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -20673,13 +20698,14 @@ pub mod api {
 						"Multisigs",
 						(),
 						[
-							95u8, 91u8, 215u8, 222u8, 132u8, 122u8, 22u8, 101u8, 197u8, 243u8,
-							217u8, 12u8, 255u8, 230u8, 38u8, 200u8, 69u8, 179u8, 47u8, 227u8, 70u8,
-							230u8, 25u8, 50u8, 224u8, 85u8, 127u8, 189u8, 241u8, 183u8, 21u8, 32u8,
+							130u8, 169u8, 167u8, 142u8, 122u8, 24u8, 18u8, 129u8, 40u8, 155u8,
+							231u8, 150u8, 3u8, 94u8, 157u8, 24u8, 68u8, 251u8, 119u8, 72u8, 173u8,
+							247u8, 254u8, 81u8, 207u8, 17u8, 132u8, 126u8, 186u8, 111u8, 236u8,
+							251u8,
 						],
 					)
 				}
-				#[doc = " Multisigs stored by their generated address"]
+				#[doc = " Multisigs stored by their deterministic address"]
 				pub fn multisigs(
 					&self,
 					_0: types::multisigs::Param0,
@@ -20697,9 +20723,10 @@ pub mod api {
 						"Multisigs",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							95u8, 91u8, 215u8, 222u8, 132u8, 122u8, 22u8, 101u8, 197u8, 243u8,
-							217u8, 12u8, 255u8, 230u8, 38u8, 200u8, 69u8, 179u8, 47u8, 227u8, 70u8,
-							230u8, 25u8, 50u8, 224u8, 85u8, 127u8, 189u8, 241u8, 183u8, 21u8, 32u8,
+							130u8, 169u8, 167u8, 142u8, 122u8, 24u8, 18u8, 129u8, 40u8, 155u8,
+							231u8, 150u8, 3u8, 94u8, 157u8, 24u8, 68u8, 251u8, 119u8, 72u8, 173u8,
+							247u8, 254u8, 81u8, 207u8, 17u8, 132u8, 126u8, 186u8, 111u8, 236u8,
+							251u8,
 						],
 					)
 				}
@@ -20778,6 +20805,53 @@ pub mod api {
 							91u8, 232u8, 160u8, 102u8, 108u8, 104u8, 162u8, 6u8, 45u8, 30u8, 146u8,
 							207u8, 18u8, 43u8, 197u8, 37u8, 166u8, 99u8, 30u8, 17u8, 46u8, 210u8,
 							56u8, 209u8, 9u8, 35u8, 221u8, 140u8, 178u8, 248u8, 249u8, 214u8,
+						],
+					)
+				}
+				#[doc = " Dissolve approvals: tracks which signers approved dissolving the multisig"]
+				#[doc = " Maps multisig_address -> Vec<approver_accounts>"]
+				pub fn dissolve_approvals_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::dissolve_approvals::DissolveApprovals,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Multisig",
+						"DissolveApprovals",
+						(),
+						[
+							204u8, 17u8, 210u8, 54u8, 125u8, 128u8, 75u8, 21u8, 158u8, 13u8, 205u8,
+							89u8, 98u8, 73u8, 141u8, 159u8, 53u8, 129u8, 19u8, 195u8, 2u8, 178u8,
+							26u8, 137u8, 206u8, 7u8, 108u8, 196u8, 195u8, 4u8, 54u8, 111u8,
+						],
+					)
+				}
+				#[doc = " Dissolve approvals: tracks which signers approved dissolving the multisig"]
+				#[doc = " Maps multisig_address -> Vec<approver_accounts>"]
+				pub fn dissolve_approvals(
+					&self,
+					_0: types::dissolve_approvals::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::dissolve_approvals::Param0,
+					>,
+					types::dissolve_approvals::DissolveApprovals,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Multisig",
+						"DissolveApprovals",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							204u8, 17u8, 210u8, 54u8, 125u8, 128u8, 75u8, 21u8, 158u8, 13u8, 205u8,
+							89u8, 98u8, 73u8, 141u8, 159u8, 53u8, 129u8, 19u8, 195u8, 2u8, 178u8,
+							26u8, 137u8, 206u8, 7u8, 108u8, 196u8, 195u8, 4u8, 54u8, 111u8,
 						],
 					)
 				}
@@ -23846,19 +23920,27 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
-					#[doc = "Create a new multisig account"]
+					#[doc = "Create a new multisig account with deterministic address"]
 					#[doc = ""]
 					#[doc = "Parameters:"]
 					#[doc = "- `signers`: List of accounts that can sign for this multisig"]
 					#[doc = "- `threshold`: Number of approvals required to execute transactions"]
+					#[doc = "- `nonce`: User-provided nonce for address uniqueness"]
 					#[doc = ""]
-					#[doc = "The multisig address is derived from a hash of all signers + global nonce."]
-					#[doc = "The creator must pay a non-refundable fee (burned)."]
+					#[doc = "The multisig address is deterministically derived from:"]
+					#[doc = "hash(pallet_id || sorted_signers || threshold || nonce)"]
+					#[doc = ""]
+					#[doc = "Signers are automatically sorted before hashing, so order doesn't matter."]
+					#[doc = ""]
+					#[doc = "Economic costs:"]
+					#[doc = "- MultisigFee: burned immediately (spam prevention)"]
+					#[doc = "- MultisigDeposit: locked until dissolution, then burned (storage bond)"]
 					create_multisig {
 						signers: ::subxt::ext::subxt_core::alloc::vec::Vec<
 							::subxt::ext::subxt_core::utils::AccountId32,
 						>,
 						threshold: ::core::primitive::u32,
+						nonce: ::core::primitive::u64,
 					},
 					#[codec(index = 1)]
 					#[doc = "Propose a transaction to be executed by the multisig"]
@@ -23872,11 +23954,13 @@ pub mod api {
 					#[doc = "- A deposit (refundable - returned immediately on execution/cancellation)"]
 					#[doc = "- A fee (non-refundable, burned immediately)"]
 					#[doc = ""]
-					#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL expired proposals are"]
-					#[doc = "automatically removed and deposits returned to original proposers. This is the primary"]
-					#[doc = "cleanup mechanism."]
+					#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL proposer's expired"]
+					#[doc = "proposals are automatically removed. This is the primary cleanup mechanism."]
 					#[doc = ""]
 					#[doc = "**For threshold=1:** If the multisig threshold is 1, the proposal executes immediately."]
+					#[doc = ""]
+					#[doc = "**Weight:** Charged based on whether multisig is high-security or not."]
+					#[doc = "High-security multisigs incur additional cost for decode + whitelist check."]
 					propose {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						call: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
@@ -23888,14 +23972,12 @@ pub mod api {
 					#[doc = "If this approval brings the total approvals to or above the threshold,"]
 					#[doc = "the transaction will be automatically executed."]
 					#[doc = ""]
-					#[doc = "**Auto-cleanup:** Before processing the approval, ALL expired proposals are"]
-					#[doc = "automatically removed and deposits returned to original proposers."]
-					#[doc = ""]
 					#[doc = "Parameters:"]
 					#[doc = "- `multisig_address`: The multisig account"]
 					#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
 					#[doc = ""]
-					#[doc = "Weight: Charges for MAX call size and MAX expired proposals, refunds based on actual"]
+					#[doc = "Weight: Charges for MAX call size, refunds based on actual"]
+					#[doc = "NOTE: approve() does NOT do auto-cleanup (removed for predictable gas costs)"]
 					approve {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposal_id: ::core::primitive::u32,
@@ -23903,14 +23985,9 @@ pub mod api {
 					#[codec(index = 3)]
 					#[doc = "Cancel a proposed transaction (only by proposer)"]
 					#[doc = ""]
-					#[doc = "**Auto-cleanup:** Before processing the cancellation, ALL expired proposals are"]
-					#[doc = "automatically removed and deposits returned to original proposers."]
-					#[doc = ""]
 					#[doc = "Parameters:"]
 					#[doc = "- `multisig_address`: The multisig account"]
 					#[doc = "- `proposal_id`: ID (nonce) of the proposal to cancel"]
-					#[doc = ""]
-					#[doc = "Weight: Charges for MAX call size and MAX expired proposals, refunds based on actual"]
 					cancel {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposal_id: ::core::primitive::u32,
@@ -23943,15 +24020,20 @@ pub mod api {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 6)]
-					#[doc = "Dissolve (remove) a multisig and recover the creation deposit."]
+					#[doc = "Approve dissolving a multisig account"]
+					#[doc = ""]
+					#[doc = "Signers call this to approve dissolving the multisig."]
+					#[doc = "When threshold is reached, the multisig is automatically dissolved."]
 					#[doc = ""]
 					#[doc = "Requirements:"]
-					#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up."]
-					#[doc = "- Multisig account balance must be zero."]
-					#[doc = "- Can be called by the creator OR any signer."]
+					#[doc = "- Caller must be a signer"]
+					#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up"]
+					#[doc = "- Multisig account balance must be zero"]
 					#[doc = ""]
-					#[doc = "The deposit is ALWAYS returned to the original `creator` stored in `MultisigData`."]
-					dissolve_multisig {
+					#[doc = "When threshold is reached:"]
+					#[doc = "- Deposit is burned (stays locked forever)"]
+					#[doc = "- Multisig storage is removed"]
+					approve_dissolve {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 				}
@@ -24126,11 +24208,20 @@ pub mod api {
 						multisig_removed: ::core::primitive::bool,
 					},
 					#[codec(index = 7)]
-					#[doc = "A multisig account was dissolved and deposit returned"]
+					#[doc = "A signer approved dissolving the multisig"]
+					DissolveApproved {
+						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
+						approver: ::subxt::ext::subxt_core::utils::AccountId32,
+						approvals_count: ::core::primitive::u32,
+					},
+					#[codec(index = 8)]
+					#[doc = "A multisig account was dissolved (threshold reached)"]
 					MultisigDissolved {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						caller: ::subxt::ext::subxt_core::utils::AccountId32,
 						deposit_returned: ::core::primitive::u128,
+						approvers: ::subxt::ext::subxt_core::alloc::vec::Vec<
+							::subxt::ext::subxt_core::utils::AccountId32,
+						>,
 					},
 				}
 			}
@@ -24141,16 +24232,13 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct MultisigData<_0, _1, _2, _3, _4> {
-				pub signers: _2,
+			pub struct MultisigData<_0, _1, _2> {
+				pub signers: _0,
 				pub threshold: ::core::primitive::u32,
-				pub nonce: ::core::primitive::u64,
 				pub proposal_nonce: ::core::primitive::u32,
-				pub creator: _1,
-				pub deposit: _3,
-				pub last_activity: _0,
+				pub deposit: _1,
 				pub active_proposals: ::core::primitive::u32,
-				pub proposals_per_signer: _4,
+				pub proposals_per_signer: _2,
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,

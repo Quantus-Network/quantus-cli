@@ -55,11 +55,15 @@ async fn main() -> Result<()> {
 	let signers =
 		vec![parse_address(&alice_addr)?, parse_address(&bob_addr)?, parse_address(&charlie_addr)?];
 	let threshold = 2u32;
+	let nonce = 0u64; // Default nonce. Use different values to create multiple multisigs
 
 	let alice_keypair =
 		quantus_cli::wallet::load_keypair_from_wallet("alice", Some("password".to_string()), None)?;
 
-	let create_tx = quantus_subxt::api::tx().multisig().create_multisig(signers.clone(), threshold);
+	let create_tx =
+		quantus_subxt::api::tx()
+			.multisig()
+			.create_multisig(signers.clone(), threshold, nonce);
 
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: true };
 
@@ -74,9 +78,9 @@ async fn main() -> Result<()> {
 
 	println!("✅ Multisig created! Tx hash: 0x{}", hex::encode(tx_hash));
 	println!();
-	println!("💡 NOTE: The CLI automatically extracts the address from events");
-	println!("   Or use --predict flag for instant (but potentially racy) address");
-	println!("   quantus multisig create --signers <list> --threshold 2 --from alice --predict");
+	println!("💡 NOTE: Multisig addresses are deterministic (hash of signers + threshold + nonce)");
+	println!("   Use 'quantus multisig predict-address' to calculate address before creating:");
+	println!("   quantus multisig predict-address --signers <list> --threshold 2 --nonce 0");
 	println!();
 
 	// 4. Example: Query multisig info
@@ -137,11 +141,22 @@ async fn main() -> Result<()> {
 	println!("     --from alice");
 	println!();
 
-	// 9. Example: Dissolve multisig (recover creation deposit)
-	println!("🗑️  To dissolve multisig (requires no proposals, zero balance):");
-	println!("   quantus multisig dissolve \\");
-	println!("     --address <multisig_address> \\");
-	println!("     --from alice");
+	// 9. Example: Dissolve multisig (requires threshold approvals)
+	println!("🗑️  To dissolve multisig:");
+	println!("   Requirements:");
+	println!("   - No proposals (any status)");
+	println!("   - Zero balance");
+	println!("   - Threshold approvals");
+	println!("   ⚠️  WARNING: Deposit is BURNED (not returned!)");
+	println!();
+	println!("   # Each signer must approve:");
+	println!("   quantus multisig dissolve --address <multisig_address> --from alice  # 1/2");
+	println!(
+		"   quantus multisig dissolve --address <multisig_address> --from bob    # 2/2 (dissolved)"
+	);
+	println!();
+	println!("   # Check dissolution progress:");
+	println!("   quantus multisig info --address <multisig_address>");
 	println!();
 
 	println!("✨ Multisig example complete!");

@@ -3,8 +3,9 @@
 //! This example demonstrates using quantus-cli as a library for multisig operations
 
 use quantus_cli::{
-	approve_proposal, create_multisig, get_multisig_info, get_proposal_info, list_proposals,
-	parse_multisig_amount, propose_transfer,
+	approve_dissolve_multisig, approve_proposal, create_multisig, get_multisig_info,
+	get_proposal_info, list_proposals, parse_multisig_amount, predict_multisig_address,
+	propose_transfer,
 	wallet::{load_keypair_from_wallet, WalletManager},
 	QuantusClient, Result,
 };
@@ -55,9 +56,14 @@ async fn main() -> Result<()> {
 	println!("🔐 Creating 2-of-3 multisig...");
 	let signers = vec![alice_account.clone(), bob_account.clone(), charlie_account.clone()];
 	let threshold = 2;
+	let nonce = 0; // Use different nonce to create multiple multisigs with same signers
+
+	// Predict address before creating
+	let predicted_address = predict_multisig_address(signers.clone(), threshold, nonce);
+	println!("📍 Predicted address: {}", predicted_address);
 
 	let (tx_hash, multisig_address) =
-		create_multisig(&quantus_client, &alice_keypair, signers, threshold, true).await?;
+		create_multisig(&quantus_client, &alice_keypair, signers, threshold, nonce, true).await?;
 
 	println!("✅ Multisig created!");
 	println!("   Tx hash: 0x{}", hex::encode(tx_hash));
@@ -165,7 +171,8 @@ async fn main() -> Result<()> {
 	println!("✨ Example complete!");
 	println!();
 	println!("📚 Available library functions:");
-	println!("   - create_multisig()");
+	println!("   - predict_multisig_address() - Calculate address before creating");
+	println!("   - create_multisig() - Create with nonce for deterministic addresses");
 	println!("   - propose_transfer()");
 	println!("   - propose_custom()");
 	println!("   - approve_proposal()");
@@ -173,8 +180,10 @@ async fn main() -> Result<()> {
 	println!("   - get_multisig_info()");
 	println!("   - get_proposal_info()");
 	println!("   - list_proposals()");
-	println!("   - dissolve_multisig()");
+	println!("   - approve_dissolve_multisig() - Requires threshold approvals");
 	println!("   - parse_multisig_amount()");
+	println!();
+	println!("⚠️  Note: Multisig deposits are BURNED (not returned) upon dissolution");
 
 	Ok(())
 }

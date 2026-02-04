@@ -31,9 +31,10 @@ pub use cli::send::{
 
 // Re-export multisig functions for library usage
 pub use cli::multisig::{
-	approve_proposal, cancel_proposal, create_multisig, dissolve_multisig, get_multisig_info,
-	get_proposal_info, list_proposals, parse_amount as parse_multisig_amount, propose_custom,
-	propose_transfer, MultisigInfo, ProposalInfo, ProposalStatus,
+	approve_dissolve_multisig, approve_proposal, cancel_proposal, create_multisig,
+	get_multisig_info, get_proposal_info, list_proposals, parse_amount as parse_multisig_amount,
+	predict_multisig_address, propose_custom, propose_transfer, MultisigInfo, ProposalInfo,
+	ProposalStatus,
 };
 
 /// Library version

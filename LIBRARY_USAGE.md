@@ -295,10 +295,47 @@ The library is designed to be thread-safe:
 
 The library provides full programmatic access to multisig functionality.
 
+#### Predicting Multisig Address (Deterministic)
+
+Multisig addresses are deterministically calculated from signers, threshold, and nonce. You can predict the address before creating:
+
+```rust
+use quantus_cli::predict_multisig_address;
+
+fn predict_address_example() -> Result<(), Box<dyn std::error::Error>> {
+    let alice_account = parse_address("qzkaf...")?;
+    let bob_account = parse_address("qzmqr...")?;
+    let charlie_account = parse_address("qzo4j...")?;
+    
+    let signers = vec![alice_account, bob_account, charlie_account];
+    let threshold = 2;
+    let nonce = 0; // Default nonce
+    
+    // Calculate predicted address
+    let predicted_address = predict_multisig_address(signers.clone(), threshold, nonce);
+    println!("Predicted address: {}", predicted_address);
+    
+    // Now create with the same parameters - address will match!
+    Ok(())
+}
+
+fn parse_address(ss58: &str) -> Result<subxt::utils::AccountId32, Box<dyn std::error::Error>> {
+    use sp_core::crypto::{AccountId32, Ss58Codec};
+    let (account_id, _) = AccountId32::from_ss58check_with_version(ss58)?;
+    let bytes: [u8; 32] = *account_id.as_ref();
+    Ok(subxt::utils::AccountId32::from(bytes))
+}
+```
+
+**Key points:**
+- Same signers + threshold + nonce = same address (deterministic)
+- Order of signers doesn't matter (automatically sorted)
+- Use different nonce to create multiple multisigs with same signers
+
 #### Creating a Multisig
 
 ```rust
-use quantus_cli::{create_multisig, QuantusClient};
+use quantus_cli::{create_multisig, predict_multisig_address, QuantusClient};
 
 async fn create_multisig_example() -> Result<(), Box<dyn std::error::Error>> {
     let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
@@ -311,25 +348,25 @@ async fn create_multisig_example() -> Result<(), Box<dyn std::error::Error>> {
     
     let signers = vec![alice_account, bob_account, charlie_account];
     let threshold = 2; // 2-of-3
+    let nonce = 0; // Default: 0. Use different values to create multiple multisigs
     
-    // Create multisig (wait_for_inclusion=true to get address)
+    // Optional: Predict address before creating
+    let predicted = predict_multisig_address(signers.clone(), threshold, nonce);
+    println!("Will create at: {}", predicted);
+    
+    // Create multisig (wait_for_inclusion=true to get address from event)
     let (tx_hash, multisig_address) = create_multisig(
         &client,
         &keypair,
         signers,
         threshold,
-        true // wait for address from event
+        nonce, // NEW: nonce parameter for deterministic addresses
+        true   // wait for address from event
     ).await?;
     
     println!("Multisig created at: {:?}", multisig_address);
+    assert_eq!(multisig_address.unwrap(), predicted); // Should match!
     Ok(())
-}
-
-fn parse_address(ss58: &str) -> Result<subxt::utils::AccountId32, Box<dyn std::error::Error>> {
-    use sp_core::crypto::{AccountId32, Ss58Codec};
-    let (account_id, _) = AccountId32::from_ss58check_with_version(ss58)?;
-    let bytes: [u8; 32] = *account_id.as_ref();
-    Ok(subxt::utils::AccountId32::from(bytes))
 }
 ```
 
@@ -348,7 +385,8 @@ async fn query_multisig() -> Result<(), Box<dyn std::error::Error>> {
         println!("Threshold: {}", info.threshold);
         println!("Signers: {:?}", info.signers);
         println!("Active Proposals: {}", info.active_proposals);
-        println!("Deposit: {} (locked)", info.deposit);
+        println!("Deposit: {} (locked until dissolution)", info.deposit);
+        println!("⚠️  WARNING: Deposit will be BURNED (not returned) when multisig is dissolved");
     }
     
     Ok(())
@@ -483,27 +521,46 @@ async fn cancel_example() -> Result<(), Box<dyn std::error::Error>> {
 
 #### Dissolving a Multisig
 
+**IMPORTANT:** Dissolution now requires threshold approvals and the deposit is **BURNED** (not returned).
+
 ```rust
-use quantus_cli::dissolve_multisig;
+use quantus_cli::approve_dissolve_multisig;
 
 async fn dissolve_example() -> Result<(), Box<dyn std::error::Error>> {
     let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
-    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
     
+    // Each signer must approve dissolution
     let multisig_account = parse_address("qz...")?;
     
-    // Requires: no proposals, zero balance
-    let tx_hash = dissolve_multisig(
+    // Alice approves (1/2)
+    let alice_keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    let tx_hash1 = approve_dissolve_multisig(
         &client,
-        &keypair,
+        &alice_keypair,
+        multisig_account.clone()
+    ).await?;
+    println!("Alice approved dissolution: 0x{}", hex::encode(tx_hash1));
+    
+    // Bob approves (2/2) - threshold reached, multisig dissolved automatically
+    let bob_keypair = quantus_cli::wallet::load_keypair_from_wallet("bob", None, None)?;
+    let tx_hash2 = approve_dissolve_multisig(
+        &client,
+        &bob_keypair,
         multisig_account
     ).await?;
+    println!("Bob approved - Multisig dissolved: 0x{}", hex::encode(tx_hash2));
     
-    println!("Multisig dissolved: 0x{}", hex::encode(tx_hash));
-    println!("(Creation deposit returned to creator)");
     Ok(())
 }
 ```
+
+**Requirements for dissolution:**
+- ✅ No proposals (any status: active, executed, or cancelled)
+- ✅ Balance must be zero
+- ✅ Threshold approvals required
+- ⚠️ **Deposit is BURNED** (not returned to creator)
+
+**Note:** If proposals exist, you must first cancel or claim them before dissolution can proceed.
 
 #### High-Security Operations for Multisig
 
