@@ -317,7 +317,7 @@ mod tests {
 		assert_eq!(amounts.len(), 5);
 		assert_eq!(amounts.iter().sum::<u128>(), 1000);
 		for &amt in &amounts {
-			assert!(amt >= 100 && amt <= 300, "Amount {} out of range", amt);
+			assert!((100..=300).contains(&amt), "Amount {} out of range", amt);
 		}
 	}
 
