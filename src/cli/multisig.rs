@@ -237,10 +237,6 @@ pub enum MultisigCommands {
 		/// Read password from file (for scripting)
 		#[arg(long)]
 		password_file: Option<String>,
-
-		/// Predict address before submission (faster but may be incorrect if concurrent creations)
-		#[arg(long)]
-		predict: bool,
 	},
 
 	/// Propose a transaction to be executed by the multisig
@@ -813,14 +809,13 @@ pub async fn handle_multisig_command(
 	execution_mode: ExecutionMode,
 ) -> crate::error::Result<()> {
 	match command {
-		MultisigCommands::Create { signers, threshold, from, password, password_file, predict } =>
+		MultisigCommands::Create { signers, threshold, from, password, password_file } =>
 			handle_create_multisig(
 				signers,
 				threshold,
 				from,
 				password,
 				password_file,
-				predict,
 				node_url,
 				execution_mode,
 			)
@@ -950,7 +945,6 @@ async fn handle_create_multisig(
 	from: String,
 	password: Option<String>,
 	password_file: Option<String>,
-	predict: bool,
 	node_url: &str,
 	execution_mode: ExecutionMode,
 ) -> crate::error::Result<()> {
@@ -1007,38 +1001,6 @@ async fn handle_create_multisig(
 		.multisig()
 		.create_multisig(signer_addresses.clone(), threshold);
 
-	if predict {
-		// PREDICT MODE: Calculate address before submission (fast but may be wrong on race)
-		use codec::Encode;
-		use sp_core::blake2_256;
-
-		let latest_block_hash = quantus_client.get_latest_block().await?;
-		let storage = quantus_client.client().storage().at(latest_block_hash);
-		let global_nonce_query = quantus_subxt::api::storage().multisig().global_nonce();
-		let current_nonce = storage.fetch(&global_nonce_query).await?.unwrap_or(0);
-
-		const PALLET_ID: [u8; 8] = *b"py/mltsg";
-		let mut data = Vec::new();
-		data.extend_from_slice(&PALLET_ID);
-		let signers_for_hash: Vec<[u8; 32]> =
-			signer_addresses.iter().map(|a| *a.as_ref()).collect();
-		data.extend_from_slice(&signers_for_hash.encode());
-		data.extend_from_slice(&current_nonce.encode());
-
-		let hash = blake2_256(&data);
-		let predicted_address = SpAccountId32::from(hash)
-			.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
-
-		log_print!("");
-		log_success!("📍 Predicted address: {}", predicted_address.bright_yellow().bold());
-		log_print!(
-			"   ⚠️  {} May differ if concurrent multisig creations occur",
-			"WARNING:".bright_yellow()
-		);
-		log_print!("   Check events or use without --predict for confirmed address");
-		log_print!("");
-	}
-
 	// Submit transaction (will wait if execution_mode.wait_for_transaction = true)
 	let _tx_hash = crate::cli::common::submit_transaction(
 		&quantus_client,
@@ -1051,8 +1013,8 @@ async fn handle_create_multisig(
 
 	log_success!("✅ Multisig creation transaction submitted");
 
-	// If NOT predict mode AND wait_for_transaction, extract address from events
-	if !predict && execution_mode.wait_for_transaction {
+	// If wait_for_transaction, extract address from events
+	if execution_mode.wait_for_transaction {
 		log_print!("");
 		log_print!("🔍 Looking for MultisigCreated event...");
 
@@ -1098,7 +1060,7 @@ async fn handle_create_multisig(
 			log_error!("⚠️  Couldn't find MultisigCreated event");
 			log_print!("   Check events manually: quantus events --latest --pallet Multisig");
 		}
-	} else if !predict {
+	} else {
 		log_print!("");
 		log_print!(
 			"💡 {} Transaction submitted. Check events for multisig address:",
