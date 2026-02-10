@@ -490,12 +490,8 @@ async fn aggregate_proofs(
 	let max_leaf_proofs = validate_aggregation_params(proof_files.len(), depth, branching_factor)
 		.map_err(crate::error::QuantusError::Generic)?;
 
-	// Build the wormhole verifier to get circuit data for parsing proofs
-	let config = CircuitConfig::standard_recursion_zk_config();
-	let verifier = WormholeVerifier::new(config.clone(), None);
-	let common_data = verifier.circuit_data.common.clone();
-
 	// Configure aggregation
+	let config = CircuitConfig::standard_recursion_zk_config();
 	let aggregation_config = TreeAggregationConfig::new(branching_factor, depth as u32);
 
 	log_verbose!(
@@ -505,9 +501,10 @@ async fn aggregate_proofs(
 		max_leaf_proofs
 	);
 
-	// Create aggregator
-	let mut aggregator =
-		WormholeProofAggregator::new(verifier.circuit_data).with_config(aggregation_config);
+	// Create aggregator using circuit config
+	let mut aggregator = WormholeProofAggregator::from_circuit_config(config.clone())
+		.with_config(aggregation_config);
+	let common_data = aggregator.leaf_circuit_data.common.clone();
 
 	// Load and add proofs using helper function
 	for (idx, proof_file) in proof_files.iter().enumerate() {

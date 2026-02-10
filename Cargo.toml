@@ -81,9 +81,22 @@ qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits"
 qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/agg-fees", package = "qp-wormhole-verifier", default-features = false, features = ["std"] }
 qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/agg-fees", package = "qp-wormhole-aggregator", default-features = false, features = ["rayon", "std"] }
 qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/agg-fees", package = "qp-zk-circuits-common", default-features = false, features = ["std"] }
-qp-plonky2 = { version = "1.1.3", default-features = false }
+qp-plonky2 = { version = "1.1.3", default-features = false, features = ["std", "rand"] }
 
 [dev-dependencies]
 tempfile = "3.8"
 serial_test = "3.1"
 qp-wormhole-test-helpers = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/agg-fees", package = "test-helpers" }
+
+[patch."https://github.com/Quantus-Network/qp-zk-circuits"]
+qp-wormhole-circuit = { path = "../qp-zk-circuits/wormhole/circuit" }
+qp-wormhole-prover = { path = "../qp-zk-circuits/wormhole/prover" }
+qp-wormhole-verifier = { path = "../qp-zk-circuits/wormhole/verifier" }
+qp-wormhole-aggregator = { path = "../qp-zk-circuits/wormhole/aggregator" }
+qp-wormhole-inputs = { path = "../qp-zk-circuits/wormhole/inputs" }
+qp-zk-circuits-common = { path = "../qp-zk-circuits/common" }
+test-helpers = { path = "../qp-zk-circuits/wormhole/tests/test-helpers" }
+
+[patch.crates-io]
+qp-plonky2 = { path = "../qp-plonky2/plonky2" }
+qp-plonky2-field = { path = "../qp-plonky2/field" }
