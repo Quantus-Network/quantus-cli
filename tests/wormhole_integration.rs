@@ -22,7 +22,7 @@ use qp_wormhole_circuit::{
 	nullifier::Nullifier,
 };
 use qp_wormhole_prover::WormholeProver;
-use qp_wormhole_verifier::WormholeVerifier;
+
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
@@ -510,8 +510,6 @@ fn aggregate_proofs(
 	);
 
 	let config = CircuitConfig::standard_recursion_zk_config();
-	let verifier = WormholeVerifier::new(config.clone(), None);
-
 	let aggregation_config = TreeAggregationConfig::new(branching_factor, depth as u32);
 
 	if proof_contexts.len() > aggregation_config.num_leaf_proofs {
@@ -525,7 +523,7 @@ fn aggregate_proofs(
 	}
 
 	let mut aggregator =
-		WormholeProofAggregator::new(verifier.circuit_data).with_config(aggregation_config);
+		WormholeProofAggregator::from_circuit_config(config).with_config(aggregation_config);
 
 	for (idx, ctx) in proof_contexts.into_iter().enumerate() {
 		println!("    Adding proof {} to aggregator...", idx + 1);
