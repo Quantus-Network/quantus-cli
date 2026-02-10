@@ -383,10 +383,11 @@ async fn query_multisig() -> Result<(), Box<dyn std::error::Error>> {
         println!("Address: {}", info.address);
         println!("Balance: {} (raw units)", info.balance);
         println!("Threshold: {}", info.threshold);
+        println!("Creator: {}", info.creator);
         println!("Signers: {:?}", info.signers);
         println!("Active Proposals: {}", info.active_proposals);
-        println!("Deposit: {} (locked until dissolution)", info.deposit);
-        println!("⚠️  WARNING: Deposit will be BURNED (not returned) when multisig is dissolved");
+        println!("Deposit: {} (returned to creator on dissolve)", info.deposit);
+        println!("💡 INFO: Deposit will be returned to creator when multisig is dissolved");
     }
     
     Ok(())
@@ -521,7 +522,7 @@ async fn cancel_example() -> Result<(), Box<dyn std::error::Error>> {
 
 #### Dissolving a Multisig
 
-**IMPORTANT:** Dissolution now requires threshold approvals and the deposit is **BURNED** (not returned).
+**IMPORTANT:** Dissolution now requires threshold approvals and the deposit is **RETURNED** to the creator.
 
 ```rust
 use quantus_cli::approve_dissolve_multisig;
@@ -558,7 +559,7 @@ async fn dissolve_example() -> Result<(), Box<dyn std::error::Error>> {
 - ✅ No proposals (any status: active, executed, or cancelled)
 - ✅ Balance must be zero
 - ✅ Threshold approvals required
-- ⚠️ **Deposit is BURNED** (not returned to creator)
+- 💡 **Deposit is RETURNED** to creator on successful dissolution
 
 **Note:** If proposals exist, you must first cancel or claim them before dissolution can proceed.
 

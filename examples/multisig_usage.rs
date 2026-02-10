@@ -147,7 +147,7 @@ async fn main() -> Result<()> {
 	println!("   - No proposals (any status)");
 	println!("   - Zero balance");
 	println!("   - Threshold approvals");
-	println!("   ⚠️  WARNING: Deposit is BURNED (not returned!)");
+	println!("   💡 INFO: Deposit is RETURNED to creator on successful dissolution");
 	println!();
 	println!("   # Each signer must approve:");
 	println!("   quantus multisig dissolve --address <multisig_address> --from alice  # 1/2");

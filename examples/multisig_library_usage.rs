@@ -183,7 +183,7 @@ async fn main() -> Result<()> {
 	println!("   - approve_dissolve_multisig() - Requires threshold approvals");
 	println!("   - parse_multisig_amount()");
 	println!();
-	println!("⚠️  Note: Multisig deposits are BURNED (not returned) upon dissolution");
+	println!("💡 Note: Multisig deposits are RETURNED to creator upon dissolution");
 
 	Ok(())
 }

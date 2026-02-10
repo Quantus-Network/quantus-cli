@@ -7,8 +7,18 @@ use crate::{
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 
-/// Get the `free` balance for the given account using on-chain storage.
-pub async fn get_balance(quantus_client: &QuantusClient, account_address: &str) -> Result<u128> {
+/// Account balance data
+pub struct AccountBalanceData {
+	pub free: u128,
+	pub reserved: u128,
+	pub frozen: u128,
+}
+
+/// Get full account balance data (free, reserved, frozen) from on-chain storage.
+pub async fn get_account_data(
+	quantus_client: &QuantusClient,
+	account_address: &str,
+) -> Result<AccountBalanceData> {
 	use quantus_subxt::api;
 
 	log_verbose!("💰 Querying balance for account: {}", account_address.bright_green());
@@ -37,7 +47,17 @@ pub async fn get_balance(quantus_client: &QuantusClient, account_address: &str) 
 		crate::error::QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}"))
 	})?;
 
-	Ok(account_info.data.free)
+	Ok(AccountBalanceData {
+		free: account_info.data.free,
+		reserved: account_info.data.reserved,
+		frozen: account_info.data.frozen,
+	})
+}
+
+/// Get the `free` balance for the given account using on-chain storage.
+pub async fn get_balance(quantus_client: &QuantusClient, account_address: &str) -> Result<u128> {
+	let data = get_account_data(quantus_client, account_address).await?;
+	Ok(data.free)
 }
 
 /// Get chain properties for formatting (uses system.rs ChainHead API)

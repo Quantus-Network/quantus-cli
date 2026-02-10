@@ -1984,9 +1984,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				218u8, 44u8, 215u8, 127u8, 228u8, 55u8, 8u8, 146u8, 85u8, 200u8, 57u8, 79u8, 39u8,
-				209u8, 32u8, 211u8, 162u8, 144u8, 123u8, 211u8, 238u8, 82u8, 22u8, 15u8, 178u8,
-				148u8, 92u8, 175u8, 182u8, 171u8, 62u8, 143u8,
+				104u8, 53u8, 205u8, 14u8, 228u8, 210u8, 220u8, 35u8, 67u8, 159u8, 124u8, 70u8,
+				224u8, 166u8, 103u8, 4u8, 13u8, 208u8, 110u8, 124u8, 103u8, 2u8, 130u8, 217u8,
+				193u8, 104u8, 114u8, 144u8, 113u8, 50u8, 209u8, 61u8,
 			]
 	}
 	pub mod system {
@@ -3085,10 +3085,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							115u8, 44u8, 254u8, 125u8, 200u8, 190u8, 52u8, 255u8, 116u8, 96u8,
-							164u8, 99u8, 67u8, 74u8, 246u8, 165u8, 72u8, 153u8, 138u8, 82u8, 27u8,
-							228u8, 126u8, 157u8, 160u8, 212u8, 165u8, 156u8, 125u8, 203u8, 242u8,
-							219u8,
+							21u8, 243u8, 179u8, 143u8, 32u8, 127u8, 220u8, 253u8, 34u8, 26u8, 73u8,
+							215u8, 192u8, 243u8, 123u8, 249u8, 86u8, 147u8, 104u8, 66u8, 36u8,
+							71u8, 60u8, 232u8, 177u8, 101u8, 230u8, 55u8, 115u8, 152u8, 106u8,
+							45u8,
 						],
 					)
 				}
@@ -19969,7 +19969,7 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Economic costs:"]
 				#[doc = "- MultisigFee: burned immediately (spam prevention)"]
-				#[doc = "- MultisigDeposit: locked until dissolution, then burned (storage bond)"]
+				#[doc = "- MultisigDeposit: reserved until dissolution, then returned to creator (storage bond)"]
 				pub struct CreateMultisig {
 					pub signers: create_multisig::Signers,
 					pub threshold: create_multisig::Threshold,
@@ -20182,7 +20182,7 @@ pub mod api {
 				#[doc = "- Multisig account balance must be zero"]
 				#[doc = ""]
 				#[doc = "When threshold is reached:"]
-				#[doc = "- Deposit is burned (stays locked forever)"]
+				#[doc = "- Deposit is returned to creator"]
 				#[doc = "- Multisig storage is removed"]
 				pub struct ApproveDissolve {
 					pub multisig_address: approve_dissolve::MultisigAddress,
@@ -20212,7 +20212,7 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Economic costs:"]
 				#[doc = "- MultisigFee: burned immediately (spam prevention)"]
-				#[doc = "- MultisigDeposit: locked until dissolution, then burned (storage bond)"]
+				#[doc = "- MultisigDeposit: reserved until dissolution, then returned to creator (storage bond)"]
 				pub fn create_multisig(
 					&self,
 					signers: types::create_multisig::Signers,
@@ -20378,7 +20378,7 @@ pub mod api {
 				#[doc = "- Multisig account balance must be zero"]
 				#[doc = ""]
 				#[doc = "When threshold is reached:"]
-				#[doc = "- Deposit is burned (stays locked forever)"]
+				#[doc = "- Deposit is returned to creator"]
 				#[doc = "- Multisig storage is removed"]
 				pub fn approve_dissolve(
 					&self,
@@ -20628,7 +20628,7 @@ pub mod api {
 			pub mod multisig_dissolved {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type DepositReturned = ::core::primitive::u128;
+				pub type DepositReturned = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Approvers = ::subxt::ext::subxt_core::alloc::vec::Vec<
 					::subxt::ext::subxt_core::utils::AccountId32,
 				>;
@@ -20645,6 +20645,7 @@ pub mod api {
 				pub mod multisigs {
 					use super::runtime_types;
 					pub type Multisigs = runtime_types::pallet_multisig::MultisigData<
+						::subxt::ext::subxt_core::utils::AccountId32,
 						runtime_types::bounded_collections::bounded_vec::BoundedVec<
 							::subxt::ext::subxt_core::utils::AccountId32,
 						>,
@@ -20698,10 +20699,9 @@ pub mod api {
 						"Multisigs",
 						(),
 						[
-							130u8, 169u8, 167u8, 142u8, 122u8, 24u8, 18u8, 129u8, 40u8, 155u8,
-							231u8, 150u8, 3u8, 94u8, 157u8, 24u8, 68u8, 251u8, 119u8, 72u8, 173u8,
-							247u8, 254u8, 81u8, 207u8, 17u8, 132u8, 126u8, 186u8, 111u8, 236u8,
-							251u8,
+							81u8, 182u8, 236u8, 127u8, 98u8, 244u8, 6u8, 51u8, 209u8, 6u8, 214u8,
+							144u8, 49u8, 117u8, 203u8, 39u8, 180u8, 247u8, 172u8, 228u8, 72u8,
+							25u8, 171u8, 55u8, 41u8, 236u8, 14u8, 135u8, 22u8, 6u8, 241u8, 230u8,
 						],
 					)
 				}
@@ -20723,10 +20723,9 @@ pub mod api {
 						"Multisigs",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							130u8, 169u8, 167u8, 142u8, 122u8, 24u8, 18u8, 129u8, 40u8, 155u8,
-							231u8, 150u8, 3u8, 94u8, 157u8, 24u8, 68u8, 251u8, 119u8, 72u8, 173u8,
-							247u8, 254u8, 81u8, 207u8, 17u8, 132u8, 126u8, 186u8, 111u8, 236u8,
-							251u8,
+							81u8, 182u8, 236u8, 127u8, 98u8, 244u8, 6u8, 51u8, 209u8, 6u8, 214u8,
+							144u8, 49u8, 117u8, 203u8, 39u8, 180u8, 247u8, 172u8, 228u8, 72u8,
+							25u8, 171u8, 55u8, 41u8, 236u8, 14u8, 135u8, 22u8, 6u8, 241u8, 230u8,
 						],
 					)
 				}
@@ -23934,7 +23933,7 @@ pub mod api {
 					#[doc = ""]
 					#[doc = "Economic costs:"]
 					#[doc = "- MultisigFee: burned immediately (spam prevention)"]
-					#[doc = "- MultisigDeposit: locked until dissolution, then burned (storage bond)"]
+					#[doc = "- MultisigDeposit: reserved until dissolution, then returned to creator (storage bond)"]
 					create_multisig {
 						signers: ::subxt::ext::subxt_core::alloc::vec::Vec<
 							::subxt::ext::subxt_core::utils::AccountId32,
@@ -24031,7 +24030,7 @@ pub mod api {
 					#[doc = "- Multisig account balance must be zero"]
 					#[doc = ""]
 					#[doc = "When threshold is reached:"]
-					#[doc = "- Deposit is burned (stays locked forever)"]
+					#[doc = "- Deposit is returned to creator"]
 					#[doc = "- Multisig storage is removed"]
 					approve_dissolve {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
@@ -24218,7 +24217,7 @@ pub mod api {
 					#[doc = "A multisig account was dissolved (threshold reached)"]
 					MultisigDissolved {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						deposit_returned: ::core::primitive::u128,
+						deposit_returned: ::subxt::ext::subxt_core::utils::AccountId32,
 						approvers: ::subxt::ext::subxt_core::alloc::vec::Vec<
 							::subxt::ext::subxt_core::utils::AccountId32,
 						>,
@@ -24232,13 +24231,14 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct MultisigData<_0, _1, _2> {
-				pub signers: _0,
+			pub struct MultisigData<_0, _1, _2, _3> {
+				pub creator: _0,
+				pub signers: _1,
 				pub threshold: ::core::primitive::u32,
 				pub proposal_nonce: ::core::primitive::u32,
-				pub deposit: _1,
+				pub deposit: _2,
 				pub active_proposals: ::core::primitive::u32,
-				pub proposals_per_signer: _2,
+				pub proposals_per_signer: _3,
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
