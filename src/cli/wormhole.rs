@@ -3,8 +3,10 @@ use crate::{
 		client::{ChainConfig, QuantusClient},
 		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
-	cli::common::{submit_transaction, ExecutionMode},
-	cli::send::get_balance,
+	cli::{
+		common::{submit_transaction, ExecutionMode},
+		send::get_balance,
+	},
 	log_error, log_print, log_success, log_verbose,
 	wallet::{password, QuantumKeyPair, WalletManager},
 };
@@ -477,9 +479,8 @@ pub async fn handle_wormhole_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WormholeCommands::Transfer { secret, amount, from, password, password_file } => {
-			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await
-		},
+		WormholeCommands::Transfer { secret, amount, from, password, password_file } =>
+			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await,
 		WormholeCommands::Generate {
 			secret,
 			amount,
@@ -488,7 +489,7 @@ pub async fn handle_wormhole_command(
 			transfer_count,
 			funding_account,
 			output,
-		} => {
+		} =>
 			generate_proof(
 				secret,
 				amount,
@@ -499,17 +500,13 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await
-		},
-		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
-			aggregate_proofs(proofs, output, depth, branching_factor).await
-		},
-		WormholeCommands::VerifyAggregated { proof } => {
-			verify_aggregated_proof(proof, node_url).await
-		},
-		WormholeCommands::ParseProof { proof, aggregated, verify } => {
-			parse_proof_file(proof, aggregated, verify).await
-		},
+			.await,
+		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } =>
+			aggregate_proofs(proofs, output, depth, branching_factor).await,
+		WormholeCommands::VerifyAggregated { proof } =>
+			verify_aggregated_proof(proof, node_url).await,
+		WormholeCommands::ParseProof { proof, aggregated, verify } =>
+			parse_proof_file(proof, aggregated, verify).await,
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -520,7 +517,7 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 			dry_run,
-		} => {
+		} =>
 			run_multiround(
 				num_proofs,
 				rounds,
@@ -533,8 +530,7 @@ pub async fn handle_wormhole_command(
 				dry_run,
 				node_url,
 			)
-			.await
-		},
+			.await,
 	}
 }
 
@@ -2227,8 +2223,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000
-				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000 <=
+				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
@@ -2313,8 +2309,8 @@ mod tests {
 		let input_amount = inputs.private.input_amount;
 		let output_amount = inputs.public.output_amount_1 + inputs.public.output_amount_2;
 		assert!(
-			(output_amount as u64) * 10000
-				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			(output_amount as u64) * 10000 <=
+				(input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
 			"Test inputs violate fee constraint"
 		);
 

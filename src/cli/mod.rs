@@ -238,6 +238,21 @@ pub enum Commands {
 pub enum DeveloperCommands {
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
+
+	/// Build wormhole circuit binaries and copy to CLI and chain directories
+	BuildCircuits {
+		/// Path to qp-zk-circuits repository (default: ../qp-zk-circuits)
+		#[arg(long, default_value = "../qp-zk-circuits")]
+		circuits_path: String,
+
+		/// Path to chain repository (default: ../chain)
+		#[arg(long, default_value = "../chain")]
+		chain_path: String,
+
+		/// Skip copying to chain directory
+		#[arg(long)]
+		skip_chain: bool,
+	},
 }
 
 /// Execute a CLI command
@@ -326,13 +341,7 @@ pub async fn execute_command(
 			log_print!("💰 Balance: {}", formatted_balance);
 			Ok(())
 		},
-		Commands::Developer(dev_cmd) => match dev_cmd {
-			DeveloperCommands::CreateTestWallets => {
-				let _ = crate::cli::handle_developer_command(DeveloperCommands::CreateTestWallets)
-					.await;
-				Ok(())
-			},
-		},
+		Commands::Developer(dev_cmd) => handle_developer_command(dev_cmd).await,
 		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } =>
 			events::handle_events_command(
 				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
@@ -467,7 +476,129 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 
 			Ok(())
 		},
+		DeveloperCommands::BuildCircuits { circuits_path, chain_path, skip_chain } =>
+			build_wormhole_circuits(&circuits_path, &chain_path, skip_chain).await,
 	}
+}
+
+/// Build wormhole circuit binaries and copy them to the appropriate locations
+async fn build_wormhole_circuits(
+	circuits_path: &str,
+	chain_path: &str,
+	skip_chain: bool,
+) -> crate::error::Result<()> {
+	use std::{path::Path, process::Command};
+
+	log_print!("🔧 {} Building wormhole circuit binaries...", "DEVELOPER".bright_magenta().bold());
+	log_print!("");
+
+	let circuits_dir = Path::new(circuits_path);
+	let chain_dir = Path::new(chain_path);
+
+	// Verify circuits directory exists
+	if !circuits_dir.exists() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Circuits directory not found: {}",
+			circuits_path
+		)));
+	}
+
+	// Step 1: Build the circuit builder
+	log_print!("📦 Step 1: Building circuit builder...");
+	let build_output = Command::new("cargo")
+		.args(["build", "--release", "-p", "qp-wormhole-circuit-builder"])
+		.current_dir(circuits_dir)
+		.output()
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to run cargo build: {}", e))
+		})?;
+
+	if !build_output.status.success() {
+		let stderr = String::from_utf8_lossy(&build_output.stderr);
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Circuit builder compilation failed:\n{}",
+			stderr
+		)));
+	}
+	log_success!("   Circuit builder compiled successfully");
+
+	// Step 2: Run the circuit builder
+	log_print!("⚡ Step 2: Running circuit builder (this may take a while)...");
+	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
+	let run_output =
+		Command::new(&builder_path).current_dir(circuits_dir).output().map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to run circuit builder: {}", e))
+		})?;
+
+	if !run_output.status.success() {
+		let stderr = String::from_utf8_lossy(&run_output.stderr);
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Circuit builder failed:\n{}",
+			stderr
+		)));
+	}
+	log_success!("   Circuit binaries generated");
+
+	// Step 3: Copy binaries to CLI directory
+	log_print!("📋 Step 3: Copying binaries to CLI...");
+	let source_bins = circuits_dir.join("generated-bins");
+	let cli_bins = Path::new("generated-bins");
+
+	let bin_files = [
+		"common.bin",
+		"verifier.bin",
+		"prover.bin",
+		"aggregated_common.bin",
+		"aggregated_verifier.bin",
+	];
+
+	for file in &bin_files {
+		let src = source_bins.join(file);
+		let dst = cli_bins.join(file);
+		std::fs::copy(&src, &dst).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to copy {} to CLI: {}", file, e))
+		})?;
+		log_verbose!("   Copied {} to CLI", file);
+	}
+	log_success!("   Binaries copied to CLI");
+
+	// Step 4: Copy binaries to chain directory (if not skipped)
+	if !skip_chain {
+		log_print!("📋 Step 4: Copying binaries to chain...");
+
+		if !chain_dir.exists() {
+			log_error!("   Chain directory not found: {} (use --skip-chain to skip)", chain_path);
+		} else {
+			let chain_bins = chain_dir.join("pallets/wormhole");
+			for file in &bin_files {
+				let src = source_bins.join(file);
+				let dst = chain_bins.join(file);
+				std::fs::copy(&src, &dst).map_err(|e| {
+					crate::error::QuantusError::Generic(format!(
+						"Failed to copy {} to chain: {}",
+						file, e
+					))
+				})?;
+				log_verbose!("   Copied {} to chain", file);
+			}
+			log_success!("   Binaries copied to chain");
+		}
+	} else {
+		log_print!("⏭️  Step 4: Skipping chain copy (--skip-chain)");
+	}
+
+	log_print!("");
+	log_success!("🎉 Circuit build complete!");
+	log_print!("");
+	log_print!("💡 {} Next steps:", "TIP".bright_blue().bold());
+	log_print!("   1. Rebuild the CLI: cargo build --release");
+	if !skip_chain {
+		log_print!("   2. Rebuild the chain: cd {} && cargo build --release", chain_path);
+		log_print!("   3. Restart the chain node with the new binary");
+	}
+	log_print!("");
+
+	Ok(())
 }
 
 /// Handle compatibility check command
