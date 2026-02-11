@@ -169,20 +169,154 @@ pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> 
 	}
 	parts.push(min_per_part + (distributable - prev));
 
-	// Align each part to SCALE_DOWN_FACTOR for clean quantization
-	let alignment = SCALE_DOWN_FACTOR;
-	let mut aligned_parts: Vec<u128> = parts.iter().map(|&p| (p / alignment) * alignment).collect();
-
-	// Adjust to ensure sum equals total (add remainder to random part)
-	let aligned_sum: u128 = aligned_parts.iter().sum();
-	let diff = total as i128 - aligned_sum as i128;
+	// Note: Input 'total' is already in quantized units (e.g., 998 = 9.98 DEV).
+	// No further alignment is needed - just ensure the sum equals total.
+	let sum: u128 = parts.iter().sum();
+	let diff = total as i128 - sum as i128;
 	if diff != 0 {
 		// Add/subtract difference from a random part
 		let idx = rng.random_range(0..n);
-		aligned_parts[idx] = (aligned_parts[idx] as i128 + diff) as u128;
+		parts[idx] = (parts[idx] as i128 + diff) as u128;
 	}
 
-	aligned_parts
+	parts
+}
+
+/// Output assignment for a single proof (supports dual outputs)
+#[derive(Debug, Clone)]
+pub struct ProofOutputAssignment {
+	/// Amount for output 1 (quantized, 2 decimal places)
+	pub output_amount_1: u32,
+	/// Exit account for output 1
+	pub exit_account_1: [u8; 32],
+	/// Amount for output 2 (quantized, 0 if unused)
+	pub output_amount_2: u32,
+	/// Exit account for output 2 (all zeros if unused)
+	pub exit_account_2: [u8; 32],
+}
+
+/// Compute random output assignments for a set of proofs.
+///
+/// This takes the input amounts for each proof and randomly distributes the outputs
+/// across the target exit accounts. Each proof can have up to 2 outputs.
+///
+/// # Algorithm:
+/// 1. Compute total output amount (sum of inputs after fee deduction)
+/// 2. Randomly partition total output across all target addresses
+/// 3. Greedily assign outputs to proofs, using dual outputs when necessary
+///
+/// # Arguments
+/// * `input_amounts` - The input amount for each proof (in planck, before fee)
+/// * `target_accounts` - The exit accounts to distribute outputs to
+/// * `fee_bps` - Fee in basis points
+///
+/// # Returns
+/// A vector of output assignments, one per proof
+pub fn compute_random_output_assignments(
+	input_amounts: &[u128],
+	target_accounts: &[[u8; 32]],
+	fee_bps: u32,
+) -> Vec<ProofOutputAssignment> {
+	use rand::seq::SliceRandom;
+
+	let num_proofs = input_amounts.len();
+	let num_targets = target_accounts.len();
+
+	if num_proofs == 0 || num_targets == 0 {
+		return vec![];
+	}
+
+	// Step 1: Compute output amounts per proof (after fee deduction)
+	let proof_outputs: Vec<u32> = input_amounts
+		.iter()
+		.map(|&input| {
+			let input_quantized = quantize_funding_amount(input).unwrap_or(0);
+			compute_output_amount(input_quantized, fee_bps)
+		})
+		.collect();
+
+	let total_output: u64 = proof_outputs.iter().map(|&x| x as u64).sum();
+
+	// Step 2: Randomly partition total output across target accounts
+	// Minimum 1 quantized unit (0.01 DEV) per target to ensure all targets receive funds
+	let min_per_target = 1u128;
+	let target_amounts_u128 = random_partition(total_output as u128, num_targets, min_per_target);
+	let target_amounts: Vec<u32> = target_amounts_u128.iter().map(|&x| x as u32).collect();
+
+	// Step 3: Assign outputs to proofs using a greedy algorithm
+	// Each proof can have at most 2 outputs to different targets
+	//
+	// Strategy: For each proof, we try to split across two targets if possible
+	// to maximize mixing. We process targets in shuffled order.
+
+	let mut rng = rand::rng();
+	let mut assignments = Vec::with_capacity(num_proofs);
+
+	// Shuffle target indices for random assignment order
+	let mut target_order: Vec<usize> = (0..num_targets).collect();
+	target_order.shuffle(&mut rng);
+
+	// Track remaining needs per target (in original index order)
+	let mut target_remaining: Vec<u32> = target_amounts.clone();
+
+	for &proof_output in proof_outputs.iter() {
+		let mut remaining = proof_output;
+		let mut output_1_amount = 0u32;
+		let mut output_1_account = [0u8; 32];
+		let mut output_2_amount = 0u32;
+		let mut output_2_account = [0u8; 32];
+		let mut outputs_assigned = 0;
+
+		// Try to assign to targets in shuffled order
+		for &tidx in &target_order {
+			if remaining == 0 {
+				break;
+			}
+			if outputs_assigned >= 2 {
+				// Already have 2 outputs, add remainder to output_1
+				output_1_amount += remaining;
+				remaining = 0;
+				break;
+			}
+			if target_remaining[tidx] == 0 {
+				continue;
+			}
+
+			let assign = remaining.min(target_remaining[tidx]);
+			if assign == 0 {
+				continue;
+			}
+
+			if outputs_assigned == 0 {
+				output_1_amount = assign;
+				output_1_account = target_accounts[tidx];
+			} else {
+				output_2_amount = assign;
+				output_2_account = target_accounts[tidx];
+			}
+
+			remaining -= assign;
+			target_remaining[tidx] -= assign;
+			outputs_assigned += 1;
+		}
+
+		// If we still have remaining (shouldn't happen normally), add to output_1
+		if remaining > 0 {
+			output_1_amount += remaining;
+		}
+
+		assignments.push(ProofOutputAssignment {
+			output_amount_1: output_1_amount,
+			exit_account_1: output_1_account,
+			output_amount_2: output_2_amount,
+			exit_account_2: output_2_account,
+		});
+
+		// Re-shuffle target order for next proof to increase mixing
+		target_order.shuffle(&mut rng);
+	}
+
+	assignments
 }
 
 /// Result of checking proof verification events
@@ -479,8 +613,9 @@ pub async fn handle_wormhole_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WormholeCommands::Transfer { secret, amount, from, password, password_file } =>
-			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await,
+		WormholeCommands::Transfer { secret, amount, from, password, password_file } => {
+			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await
+		},
 		WormholeCommands::Generate {
 			secret,
 			amount,
@@ -489,7 +624,7 @@ pub async fn handle_wormhole_command(
 			transfer_count,
 			funding_account,
 			output,
-		} =>
+		} => {
 			generate_proof(
 				secret,
 				amount,
@@ -500,13 +635,17 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await,
-		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } =>
-			aggregate_proofs(proofs, output, depth, branching_factor).await,
-		WormholeCommands::VerifyAggregated { proof } =>
-			verify_aggregated_proof(proof, node_url).await,
-		WormholeCommands::ParseProof { proof, aggregated, verify } =>
-			parse_proof_file(proof, aggregated, verify).await,
+			.await
+		},
+		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
+			aggregate_proofs(proofs, output, depth, branching_factor).await
+		},
+		WormholeCommands::VerifyAggregated { proof } => {
+			verify_aggregated_proof(proof, node_url).await
+		},
+		WormholeCommands::ParseProof { proof, aggregated, verify } => {
+			parse_proof_file(proof, aggregated, verify).await
+		},
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -517,7 +656,7 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 			dry_run,
-		} =>
+		} => {
 			run_multiround(
 				num_proofs,
 				rounds,
@@ -530,7 +669,8 @@ pub async fn handle_wormhole_command(
 				dry_run,
 				node_url,
 			)
-			.await,
+			.await
+		},
 	}
 }
 
@@ -1459,7 +1599,7 @@ async fn run_multiround(
 			log_print!("  Found {} transfer(s) from previous round", current_transfers.len());
 		}
 
-		// Step 2: Generate proofs
+		// Step 2: Generate proofs with random output partitioning
 		log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
 
 		// All proofs in an aggregation batch must use the same block for storage proofs.
@@ -1469,6 +1609,41 @@ async fn run_multiround(
 		})?;
 		let proof_block_hash = proof_block.hash();
 		log_print!("  Using block {} for all proofs", hex::encode(proof_block_hash.0));
+
+		// Collect input amounts and exit accounts for random assignment
+		let input_amounts: Vec<u128> = current_transfers.iter().map(|t| t.amount).collect();
+		let exit_account_bytes: Vec<[u8; 32]> = exit_accounts.iter().map(|a| a.0).collect();
+
+		// Compute random output assignments (each proof can have 2 outputs)
+		let output_assignments =
+			compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS);
+
+		// Log the random partition
+		log_print!("  Random output partition:");
+		for (i, assignment) in output_assignments.iter().enumerate() {
+			let amt1_planck = (assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR;
+			if assignment.output_amount_2 > 0 {
+				let amt2_planck = (assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR;
+				log_print!(
+					"    Proof {}: {} ({}) -> 0x{}..., {} ({}) -> 0x{}...",
+					i + 1,
+					assignment.output_amount_1,
+					format_balance(amt1_planck),
+					hex::encode(&assignment.exit_account_1[..4]),
+					assignment.output_amount_2,
+					format_balance(amt2_planck),
+					hex::encode(&assignment.exit_account_2[..4])
+				);
+			} else {
+				log_print!(
+					"    Proof {}: {} ({}) -> 0x{}...",
+					i + 1,
+					assignment.output_amount_1,
+					format_balance(amt1_planck),
+					hex::encode(&assignment.exit_account_1[..4])
+				);
+			}
+		}
 
 		let pb = ProgressBar::new(num_proofs as u64);
 		pb.set_style(
@@ -1483,18 +1658,15 @@ async fn run_multiround(
 			pb.set_message(format!("Proof {}/{}", i + 1, num_proofs));
 
 			let proof_file = format!("{}/proof_{}.hex", round_dir, i + 1);
-			let exit_account_hex = format!("0x{}", hex::encode(exit_accounts[i].0));
 
 			// Use the funding account from the transfer info
 			let funding_account_hex = format!("0x{}", hex::encode(transfer.funding_account.0));
 
-			// Generate proof using internal function
-			// Use the actual transfer amount (not calculated round_amount) for storage key lookup
-			// All proofs use the same block hash for aggregation compatibility
-			generate_proof_internal(
+			// Generate proof with dual output assignment
+			generate_proof_with_dual_output(
 				&hex::encode(secret.secret),
 				transfer.amount, // Use actual transfer amount for storage key
-				&exit_account_hex,
+				&output_assignments[i],
 				&format!("0x{}", hex::encode(proof_block_hash.0)),
 				transfer.transfer_count,
 				&funding_account_hex,
@@ -1668,12 +1840,11 @@ async fn run_multiround(
 	Ok(())
 }
 
-/// Internal proof generation that uses already-connected client
-#[allow(clippy::too_many_arguments)]
-async fn generate_proof_internal(
+/// Generate a wormhole proof with dual outputs (used for random partitioning in multiround)
+async fn generate_proof_with_dual_output(
 	secret_hex: &str,
 	funding_amount: u128,
-	exit_account_str: &str,
+	output_assignment: &ProofOutputAssignment,
 	block_hash_str: &str,
 	transfer_count: u64,
 	funding_account_str: &str,
@@ -1685,11 +1856,6 @@ async fn generate_proof_internal(
 	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
 	})?;
-
-	// Parse exit account
-	let exit_account_bytes =
-		parse_exit_account(exit_account_str).map_err(crate::error::QuantusError::Generic)?;
-	let exit_account_id = SubxtAccountId(exit_account_bytes);
 
 	// Parse funding account
 	let funding_account_bytes =
@@ -1794,11 +1960,11 @@ async fn generate_proof_internal(
 	)
 	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
-	// Quantize amounts
+	// Quantize input amount
 	let input_amount_quantized: u32 =
 		quantize_funding_amount(funding_amount).map_err(crate::error::QuantusError::Generic)?;
-	let output_amount_quantized = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
 
+	// Use the output assignment directly (already quantized)
 	let inputs = CircuitInputs {
 		private: PrivateCircuitInputs {
 			secret,
@@ -1813,14 +1979,14 @@ async fn generate_proof_internal(
 			input_amount: input_amount_quantized,
 		},
 		public: PublicCircuitInputs {
-			output_amount_1: output_amount_quantized,
-			output_amount_2: 0, // No change output for single-output spend
+			output_amount_1: output_assignment.output_amount_1,
+			output_amount_2: output_assignment.output_amount_2,
 			volume_fee_bps: VOLUME_FEE_BPS,
 			nullifier: Nullifier::from_preimage(secret, transfer_count).hash.into(),
-			exit_account_1: BytesDigest::try_from(exit_account_id.as_ref() as &[u8])
+			exit_account_1: BytesDigest::try_from(output_assignment.exit_account_1.as_ref())
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			exit_account_2: BytesDigest::try_from([0u8; 32].as_ref())
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?, // Unused
+			exit_account_2: BytesDigest::try_from(output_assignment.exit_account_2.as_ref())
+				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			block_hash: BytesDigest::try_from(block_hash.as_ref())
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			parent_hash,
@@ -2223,8 +2389,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000 <=
-				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000
+				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
@@ -2309,8 +2475,8 @@ mod tests {
 		let input_amount = inputs.private.input_amount;
 		let output_amount = inputs.public.output_amount_1 + inputs.public.output_amount_2;
 		assert!(
-			(output_amount as u64) * 10000 <=
-				(input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			(output_amount as u64) * 10000
+				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
 			"Test inputs violate fee constraint"
 		);
 
