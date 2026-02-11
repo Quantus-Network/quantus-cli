@@ -125,6 +125,64 @@ pub fn format_balance(amount: u128) -> String {
 	format!("{}.{:02} DEV", whole, frac)
 }
 
+/// Randomly partition a total amount into n parts.
+/// Each part will be at least `min_per_part` and the sum equals `total`.
+/// Returns amounts aligned to SCALE_DOWN_FACTOR for clean quantization.
+pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> {
+	use rand::Rng;
+
+	if n == 0 {
+		return vec![];
+	}
+	if n == 1 {
+		return vec![total];
+	}
+
+	// Ensure minimum is achievable
+	let min_total = min_per_part * n as u128;
+	if total < min_total {
+		// Fall back to equal distribution if total is too small
+		let per_part = total / n as u128;
+		let remainder = total % n as u128;
+		let mut parts: Vec<u128> = vec![per_part; n];
+		// Add remainder to last part
+		parts[n - 1] += remainder;
+		return parts;
+	}
+
+	// Amount available for random distribution after ensuring minimums
+	let distributable = total - min_total;
+
+	// Generate n-1 random cut points in [0, distributable]
+	let mut rng = rand::rng();
+	let mut cuts: Vec<u128> = (0..n - 1).map(|_| rng.random_range(0..=distributable)).collect();
+	cuts.sort();
+
+	// Convert cuts to amounts
+	let mut parts = Vec::with_capacity(n);
+	let mut prev = 0u128;
+	for cut in cuts {
+		parts.push(min_per_part + (cut - prev));
+		prev = cut;
+	}
+	parts.push(min_per_part + (distributable - prev));
+
+	// Align each part to SCALE_DOWN_FACTOR for clean quantization
+	let alignment = SCALE_DOWN_FACTOR;
+	let mut aligned_parts: Vec<u128> = parts.iter().map(|&p| (p / alignment) * alignment).collect();
+
+	// Adjust to ensure sum equals total (add remainder to random part)
+	let aligned_sum: u128 = aligned_parts.iter().sum();
+	let diff = total as i128 - aligned_sum as i128;
+	if diff != 0 {
+		// Add/subtract difference from a random part
+		let idx = rng.random_range(0..n);
+		aligned_parts[idx] = (aligned_parts[idx] as i128 + diff) as u128;
+	}
+
+	aligned_parts
+}
+
 /// Result of checking proof verification events
 pub struct VerificationResult {
 	pub success: bool,
@@ -335,12 +393,6 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "proof.hex")]
 		output: String,
 	},
-	/// Verify a single wormhole proof on-chain
-	Verify {
-		/// Path to the proof file (hex-encoded)
-		#[arg(short, long, default_value = "proof.hex")]
-		proof: String,
-	},
 	/// Aggregate multiple wormhole proofs into a single proof
 	Aggregate {
 		/// Input proof files (hex-encoded)
@@ -375,6 +427,10 @@ pub enum WormholeCommands {
 		/// Parse as aggregated proof (default: false, parses as leaf proof)
 		#[arg(long)]
 		aggregated: bool,
+
+		/// Verify the proof cryptographically (local verification, not on-chain)
+		#[arg(long)]
+		verify: bool,
 	},
 	/// Run a multi-round wormhole test: wallet -> wormhole -> ... -> wallet
 	Multiround {
@@ -445,15 +501,14 @@ pub async fn handle_wormhole_command(
 			)
 			.await
 		},
-		WormholeCommands::Verify { proof } => verify_proof(proof, node_url).await,
 		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
 			aggregate_proofs(proofs, output, depth, branching_factor).await
 		},
 		WormholeCommands::VerifyAggregated { proof } => {
 			verify_aggregated_proof(proof, node_url).await
 		},
-		WormholeCommands::ParseProof { proof, aggregated } => {
-			parse_proof_file(proof, aggregated).await
+		WormholeCommands::ParseProof { proof, aggregated, verify } => {
+			parse_proof_file(proof, aggregated, verify).await
 		},
 		WormholeCommands::Multiround {
 			num_proofs,
@@ -1040,116 +1095,6 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
 }
 
-async fn verify_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
-	use subxt::tx::TxStatus;
-
-	log_print!("Verifying wormhole proof on-chain...");
-
-	// Read proof from file
-	let proof_hex = std::fs::read_to_string(&proof_file).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
-	})?;
-
-	let proof_bytes = hex::decode(proof_hex.trim())
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
-
-	log_verbose!("Proof size: {} bytes", proof_bytes.len());
-
-	// Connect to node
-	let quantus_client = QuantusClient::new(node_url)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
-
-	log_verbose!("Connected to node");
-
-	// Create the verify transaction payload
-	let verify_tx = quantus_node::api::tx().wormhole().verify_wormhole_proof(proof_bytes);
-
-	log_verbose!("Submitting unsigned verification transaction...");
-
-	// Submit as unsigned extrinsic
-	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
-	})?;
-
-	let mut tx_progress = unsigned_tx
-		.submit_and_watch()
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
-
-	// Wait for transaction inclusion and verify events
-	while let Some(Ok(status)) = tx_progress.next().await {
-		log_verbose!("Transaction status: {:?}", status);
-		match status {
-			TxStatus::InBestBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				let tx_hash = tx_in_block.extrinsic_hash();
-
-				// Check for ProofVerified event
-				let result = check_proof_verification_events(
-					quantus_client.client(),
-					&block_hash,
-					&tx_hash,
-					crate::log::is_verbose(),
-				)
-				.await?;
-
-				if result.success {
-					log_success!("Proof verified successfully on-chain!");
-					if let Some(amount) = result.exit_amount {
-						log_success!("Exit amount: {}", format_balance(amount));
-					}
-					log_verbose!("Included in block: {:?}", block_hash);
-					return Ok(());
-				} else {
-					let error_msg = result.error_message.unwrap_or_else(|| {
-						"Proof verification failed - no ProofVerified event found".to_string()
-					});
-					log_error!("❌ {}", error_msg);
-					return Err(crate::error::QuantusError::Generic(error_msg));
-				}
-			},
-			TxStatus::InFinalizedBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				let tx_hash = tx_in_block.extrinsic_hash();
-
-				// Check for ProofVerified event
-				let result = check_proof_verification_events(
-					quantus_client.client(),
-					&block_hash,
-					&tx_hash,
-					crate::log::is_verbose(),
-				)
-				.await?;
-
-				if result.success {
-					log_success!("Proof verified successfully on-chain!");
-					if let Some(amount) = result.exit_amount {
-						log_success!("Exit amount: {}", format_balance(amount));
-					}
-					log_verbose!("Finalized in block: {:?}", block_hash);
-					return Ok(());
-				} else {
-					let error_msg = result.error_message.unwrap_or_else(|| {
-						"Proof verification failed - no ProofVerified event found".to_string()
-					});
-					log_error!("❌ {}", error_msg);
-					return Err(crate::error::QuantusError::Generic(error_msg));
-				}
-			},
-			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Transaction failed: {}",
-					message
-				)));
-			},
-			_ => continue,
-		}
-	}
-
-	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
-}
-
 // ============================================================================
 // Multi-round wormhole flow implementation
 // ============================================================================
@@ -1304,7 +1249,12 @@ async fn run_multiround(
 	log_print!("{}", "Configuration:".bright_cyan());
 	log_print!("  Wallet: {}", wallet_name);
 	log_print!("  Wallet address: {}", wallet_address);
-	log_print!("  Initial amount: {} ({})", amount, format_balance(amount));
+	log_print!(
+		"  Total amount: {} ({}) - randomly partitioned across {} proofs",
+		amount,
+		format_balance(amount),
+		num_proofs
+	);
 	log_print!("  Proofs per round: {}", num_proofs);
 	log_print!("  Rounds: {}", rounds);
 	log_print!(
@@ -1413,6 +1363,15 @@ async fn run_multiround(
 		if round == 1 {
 			log_print!("{}", "Step 1: Sending wormhole transfers from wallet...".bright_yellow());
 
+			// Randomly partition the total amount among proofs
+			// Minimum 1 DEV per proof to ensure meaningful amounts
+			let min_per_proof = SCALE_DOWN_FACTOR; // 0.01 DEV (minimum quantizable amount)
+			let partition_amounts = random_partition(amount, num_proofs, min_per_proof);
+			log_print!("  Random partition of {} ({}):", amount, format_balance(amount));
+			for (i, &amt) in partition_amounts.iter().enumerate() {
+				log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
+			}
+
 			let pb = ProgressBar::new(num_proofs as u64);
 			pb.set_style(
 				ProgressStyle::default_bar()
@@ -1426,11 +1385,12 @@ async fn run_multiround(
 				pb.set_message(format!("Transfer {}/{}", i + 1, num_proofs));
 
 				let wormhole_address = SubxtAccountId(secret.address);
+				let transfer_amount = partition_amounts[i];
 
 				// Submit transfer
 				let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
 					subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
-					amount,
+					transfer_amount,
 				);
 
 				let quantum_keypair = QuantumKeyPair {
@@ -1477,7 +1437,7 @@ async fn run_multiround(
 				current_transfers.push(TransferInfo {
 					block_hash,
 					transfer_count: event.transfer_count,
-					amount,
+					amount: transfer_amount,
 					wormhole_address,
 					funding_account: SubxtAccountId(funding_account_bytes.into()),
 				});
@@ -2083,7 +2043,17 @@ fn run_multiround_dry_run(
 
 		log_print!("");
 		log_print!("{}", format!("Round {}", round).bright_cyan());
-		log_print!("  Amount: {} ({})", round_amount, format_balance(round_amount));
+		log_print!("  Total amount: {} ({})", round_amount, format_balance(round_amount));
+
+		// Show sample random partition for round 1
+		if round == 1 {
+			let min_per_proof = SCALE_DOWN_FACTOR; // 0.01 DEV (minimum quantizable amount)
+			let partition = random_partition(amount, num_proofs, min_per_proof);
+			log_print!("  Sample random partition (actual partition will differ):");
+			for (i, &amt) in partition.iter().enumerate() {
+				log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
+			}
+		}
 		log_print!("");
 
 		log_print!("  Wormhole addresses (to be funded):");
@@ -2598,8 +2568,12 @@ mod tests {
 }
 
 /// Parse and display the contents of a proof file for debugging
-async fn parse_proof_file(proof_file: String, aggregated: bool) -> crate::error::Result<()> {
-	use std::path::Path;
+async fn parse_proof_file(
+	proof_file: String,
+	aggregated: bool,
+	verify: bool,
+) -> crate::error::Result<()> {
+	use qp_wormhole_verifier::WormholeVerifier;
 
 	log_print!("Parsing proof file: {}", proof_file);
 
@@ -2610,45 +2584,32 @@ async fn parse_proof_file(proof_file: String, aggregated: bool) -> crate::error:
 	log_print!("Proof size: {} bytes", proof_bytes.len());
 
 	if aggregated {
-		use plonky2::{
-			plonk::circuit_data::CommonCircuitData, util::serialization::DefaultGateSerializer,
-		};
+		// Load aggregated verifier
+		let verifier_bytes = include_bytes!("../../generated-bins/aggregated_verifier.bin");
+		let common_bytes = include_bytes!("../../generated-bins/aggregated_common.bin");
+		let verifier =
+			WormholeVerifier::new_from_bytes(verifier_bytes, common_bytes).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+			})?;
 
-		// Load aggregated circuit common data
-		let bins_dir = Path::new("generated-bins");
-		let common_bytes = std::fs::read(bins_dir.join("aggregated_common.bin")).map_err(|e| {
+		// Deserialize proof using verifier's types
+		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
+			qp_wormhole_verifier::F,
+			qp_wormhole_verifier::C,
+			{ qp_wormhole_verifier::D },
+		>::from_bytes(proof_bytes.clone(), &verifier.circuit_data.common)
+		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
-				"Failed to read aggregated_common.bin: {}",
+				"Failed to deserialize aggregated proof: {:?}",
 				e
 			))
 		})?;
 
-		let gate_serializer = DefaultGateSerializer;
-		let common_data = CommonCircuitData::<F, D>::from_bytes(common_bytes, &gate_serializer)
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!(
-					"Failed to deserialize aggregated common data: {:?}",
-					e
-				))
-			})?;
-
-		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes.clone(), &common_data)
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!(
-					"Failed to deserialize aggregated proof: {:?}",
-					e
-				))
-			})?;
-
 		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
-		log_print!("\nPublic inputs (raw field elements):");
-		for (i, pi) in proof.public_inputs.iter().enumerate() {
-			use plonky2::field::types::PrimeField64;
-			log_print!("  [{}] = {}", i, pi.to_canonical_u64());
-		}
+		log_verbose!("\nPublic inputs count: {}", proof.public_inputs.len());
 
 		// Try to parse as aggregated
-		match AggregatedPublicCircuitInputs::try_from_slice(&proof.public_inputs) {
+		match qp_wormhole_verifier::parse_aggregated_public_inputs(&proof) {
 			Ok(agg_inputs) => {
 				log_print!("\n=== Parsed Aggregated Public Inputs ===");
 				log_print!("Asset ID: {}", agg_inputs.asset_id);
@@ -2676,26 +2637,45 @@ async fn parse_proof_file(proof_file: String, aggregated: bool) -> crate::error:
 				log_print!("Failed to parse as aggregated inputs: {}", e);
 			},
 		}
-	} else {
-		// Parse as leaf proof
-		let bins_dir = Path::new("generated-bins");
-		let prover = qp_wormhole_prover::WormholeProver::new_from_files(
-			&bins_dir.join("prover.bin"),
-			&bins_dir.join("common.bin"),
-		)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load prover: {}", e))
-		})?;
 
-		let common_data = &prover.circuit_data.common;
-		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes, common_data)
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to deserialize proof: {}", e))
+		// Verify if requested
+		if verify {
+			log_print!("\n=== Verifying Proof ===");
+			match verifier.verify(proof) {
+				Ok(()) => {
+					log_success!("Proof verification PASSED");
+				},
+				Err(e) => {
+					log_error!("Proof verification FAILED: {}", e);
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Proof verification failed: {}",
+						e
+					)));
+				},
+			}
+		}
+	} else {
+		// Load leaf verifier
+		let verifier_bytes = include_bytes!("../../generated-bins/verifier.bin");
+		let common_bytes = include_bytes!("../../generated-bins/common.bin");
+		let verifier =
+			WormholeVerifier::new_from_bytes(verifier_bytes, common_bytes).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
 			})?;
+
+		// Deserialize proof using verifier's types
+		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
+			qp_wormhole_verifier::F,
+			qp_wormhole_verifier::C,
+			{ qp_wormhole_verifier::D },
+		>::from_bytes(proof_bytes, &verifier.circuit_data.common)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to deserialize proof: {:?}", e))
+		})?;
 
 		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
 
-		let pi = PublicCircuitInputs::try_from(&proof).map_err(|e| {
+		let pi = qp_wormhole_verifier::parse_public_inputs(&proof).map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to parse public inputs: {}", e))
 		})?;
 
@@ -2710,6 +2690,23 @@ async fn parse_proof_file(proof_file: String, aggregated: bool) -> crate::error:
 		log_print!("Block Hash: 0x{}", hex::encode(pi.block_hash.as_ref()));
 		log_print!("Parent Hash: 0x{}", hex::encode(pi.parent_hash.as_ref()));
 		log_print!("Block Number: {}", pi.block_number);
+
+		// Verify if requested
+		if verify {
+			log_print!("\n=== Verifying Proof ===");
+			match verifier.verify(proof) {
+				Ok(()) => {
+					log_success!("Proof verification PASSED");
+				},
+				Err(e) => {
+					log_error!("Proof verification FAILED: {}", e);
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Proof verification failed: {}",
+						e
+					)));
+				},
+			}
+		}
 	}
 
 	Ok(())
