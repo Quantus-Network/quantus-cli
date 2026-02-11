@@ -10,7 +10,7 @@ pub mod password;
 
 use crate::error::{Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
-use qp_rusty_crystals_hdwallet::{generate_mnemonic, HDLattice};
+use qp_rusty_crystals_hdwallet::{derive_key_from_mnemonic, generate_mnemonic, SensitiveBytes32};
 use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::IdentifyAccount;
@@ -69,11 +69,9 @@ impl WalletManager {
 		// Generate a new Dilithium keypair using derivation path
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
-		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
-		let lattice =
-			HDLattice::from_mnemonic(&mnemonic, None).expect("Failed to generate lattice");
-		let dilithium_keypair = lattice
-			.generate_derived_keys(derivation_path)
+		let sensitive_seed = SensitiveBytes32::from(&mut seed);
+		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, derivation_path)
 			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
@@ -219,13 +217,14 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Generate new mnemonic and use master seed directly
+		// Generate new mnemonic and use master seed directly (no derivation path)
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
-		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
-		let lattice =
-			HDLattice::from_mnemonic(&mnemonic, None).map_err(|_| WalletError::KeyGeneration)?;
-		let dilithium_keypair = lattice.generate_keys();
+		let sensitive_seed = SensitiveBytes32::from(&mut seed);
+		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		// For "no derivation" mode, we use the root path m/
+		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, "m/44'/189189'/0'")
+			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data
@@ -272,10 +271,9 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Use mnemonic to generate master seed directly
-		let lattice =
-			HDLattice::from_mnemonic(mnemonic, None).map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_keypair = lattice.generate_keys();
+		// Use mnemonic to generate keys directly (no derivation path)
+		let dilithium_keypair = derive_key_from_mnemonic(mnemonic, None, "m/44'/189189'/0'")
+			.map_err(|_| WalletError::InvalidMnemonic)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data
@@ -325,11 +323,8 @@ impl WalletManager {
 		}
 
 		// Validate and import from mnemonic using derivation path
-		let lattice =
-			HDLattice::from_mnemonic(mnemonic, None).map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_keypair = lattice
-			.generate_derived_keys(derivation_path)
-			.map_err(|_| WalletError::KeyGeneration)?;
+		let dilithium_keypair = derive_key_from_mnemonic(mnemonic, None, derivation_path)
+			.map_err(|_| WalletError::InvalidMnemonic)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data

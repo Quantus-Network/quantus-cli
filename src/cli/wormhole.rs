@@ -4,12 +4,18 @@ use crate::{
 		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
 	cli::common::{submit_transaction, ExecutionMode},
+	cli::send::get_balance,
 	log_error, log_print, log_success, log_verbose,
-	wallet::QuantumKeyPair,
+	wallet::{password, QuantumKeyPair, WalletManager},
 };
 use clap::Subcommand;
-use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
+use indicatif::{ProgressBar, ProgressStyle};
+use plonky2::plonk::proof::ProofWithPublicInputs;
 use qp_poseidon::PoseidonHasher;
+use qp_rusty_crystals_hdwallet::{
+	derive_wormhole_from_mnemonic, generate_mnemonic, SensitiveBytes32, WormholePair,
+	QUANTUS_WORMHOLE_CHAIN_ID,
+};
 use qp_wormhole_circuit::{
 	inputs::{
 		AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
@@ -17,16 +23,17 @@ use qp_wormhole_circuit::{
 	nullifier::Nullifier,
 };
 use qp_wormhole_prover::WormholeProver;
-use qp_wormhole_verifier::WormholeVerifier;
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
 	utils::{BytesDigest, Digest},
 };
+use rand::RngCore;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
 	Hasher,
 };
+use std::path::Path;
 use subxt::{
 	backend::legacy::rpc_methods::ReadProof,
 	blocks::Block,
@@ -369,6 +376,44 @@ pub enum WormholeCommands {
 		#[arg(long)]
 		aggregated: bool,
 	},
+	/// Run a multi-round wormhole test: wallet -> wormhole -> ... -> wallet
+	Multiround {
+		/// Number of proofs per round (default: 2, max: 8)
+		#[arg(short, long, default_value = "2")]
+		num_proofs: usize,
+
+		/// Number of rounds (default: 2)
+		#[arg(short, long, default_value = "2")]
+		rounds: usize,
+
+		/// Amount per transfer in planck (default: 10 DEV)
+		#[arg(short, long, default_value = "10000000000000")]
+		amount: u128,
+
+		/// Wallet name to use for funding and final exit
+		#[arg(short, long)]
+		wallet: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Keep proof files after completion
+		#[arg(short, long)]
+		keep_files: bool,
+
+		/// Output directory for proof files
+		#[arg(short, long, default_value = "/tmp/wormhole_multiround")]
+		output_dir: String,
+
+		/// Dry run - show what would be done without executing
+		#[arg(long)]
+		dry_run: bool,
+	},
 }
 
 pub async fn handle_wormhole_command(
@@ -376,8 +421,9 @@ pub async fn handle_wormhole_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WormholeCommands::Transfer { secret, amount, from, password, password_file } =>
-			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await,
+		WormholeCommands::Transfer { secret, amount, from, password, password_file } => {
+			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await
+		},
 		WormholeCommands::Generate {
 			secret,
 			amount,
@@ -386,7 +432,7 @@ pub async fn handle_wormhole_command(
 			transfer_count,
 			funding_account,
 			output,
-		} =>
+		} => {
 			generate_proof(
 				secret,
 				amount,
@@ -397,14 +443,43 @@ pub async fn handle_wormhole_command(
 				output,
 				node_url,
 			)
-			.await,
+			.await
+		},
 		WormholeCommands::Verify { proof } => verify_proof(proof, node_url).await,
-		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } =>
-			aggregate_proofs(proofs, output, depth, branching_factor).await,
-		WormholeCommands::VerifyAggregated { proof } =>
-			verify_aggregated_proof(proof, node_url).await,
-		WormholeCommands::ParseProof { proof, aggregated } =>
-			parse_proof_file(proof, aggregated).await,
+		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
+			aggregate_proofs(proofs, output, depth, branching_factor).await
+		},
+		WormholeCommands::VerifyAggregated { proof } => {
+			verify_aggregated_proof(proof, node_url).await
+		},
+		WormholeCommands::ParseProof { proof, aggregated } => {
+			parse_proof_file(proof, aggregated).await
+		},
+		WormholeCommands::Multiround {
+			num_proofs,
+			rounds,
+			amount,
+			wallet,
+			password,
+			password_file,
+			keep_files,
+			output_dir,
+			dry_run,
+		} => {
+			run_multiround(
+				num_proofs,
+				rounds,
+				amount,
+				wallet,
+				password,
+				password_file,
+				keep_files,
+				output_dir,
+				dry_run,
+				node_url,
+			)
+			.await
+		},
 	}
 }
 
@@ -665,11 +740,14 @@ async fn generate_proof(
 			input_amount: input_amount_quantized,
 		},
 		public: PublicCircuitInputs {
-			output_amount: output_amount_quantized,
+			output_amount_1: output_amount_quantized,
+			output_amount_2: 0, // No change output for single-output spend
 			volume_fee_bps: VOLUME_FEE_BPS,
 			nullifier: Nullifier::from_preimage(secret, transfer_count).hash.into(),
-			exit_account: BytesDigest::try_from(exit_account_id.as_ref() as &[u8])
+			exit_account_1: BytesDigest::try_from(exit_account_id.as_ref() as &[u8])
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
+			exit_account_2: BytesDigest::try_from([0u8; 32].as_ref())
+				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?, // Unused
 			block_hash: BytesDigest::try_from(block_hash.as_ref())
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			parent_hash,
@@ -799,6 +877,28 @@ async fn aggregate_proofs(
 	})?;
 
 	log_verbose!("Aggregated public inputs: {:#?}", aggregated_public_inputs);
+
+	// Log exit accounts and amounts that will be minted
+	log_print!("  Exit accounts in aggregated proof:");
+	for (idx, account_data) in aggregated_public_inputs.account_data.iter().enumerate() {
+		let exit_bytes: &[u8] = account_data.exit_account.as_ref();
+		let is_dummy = exit_bytes.iter().all(|&b| b == 0) || account_data.summed_output_amount == 0;
+		if is_dummy {
+			log_verbose!("    [{}] DUMMY (skipped)", idx);
+		} else {
+			// De-quantize to show actual amount that will be minted
+			let dequantized_amount =
+				(account_data.summed_output_amount as u128) * SCALE_DOWN_FACTOR;
+			log_print!(
+				"    [{}] {} -> {} quantized ({} planck = {})",
+				idx,
+				hex::encode(exit_bytes),
+				account_data.summed_output_amount,
+				dequantized_amount,
+				format_balance(dequantized_amount)
+			);
+		}
+	}
 
 	// Verify the aggregated proof locally
 	log_verbose!("Verifying aggregated proof locally...");
@@ -1050,6 +1150,972 @@ async fn verify_proof(proof_file: String, node_url: &str) -> crate::error::Resul
 	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
 }
 
+// ============================================================================
+// Multi-round wormhole flow implementation
+// ============================================================================
+
+/// Aggregation config - hardcoded for now
+const MULTIROUND_BRANCHING_FACTOR: usize = 2;
+const MULTIROUND_DEPTH: usize = 3;
+const MULTIROUND_MAX_PROOFS: usize = 8; // 2^3
+
+/// Information about a transfer needed for proof generation
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+struct TransferInfo {
+	/// Block hash where the transfer was included
+	block_hash: subxt::utils::H256,
+	/// Transfer count for this specific transfer
+	transfer_count: u64,
+	/// Amount transferred
+	amount: u128,
+	/// The wormhole address (destination of transfer)
+	wormhole_address: SubxtAccountId,
+	/// The funding account (source of transfer)
+	funding_account: SubxtAccountId,
+}
+
+/// Derive a wormhole secret using HD derivation
+/// Path: m/44'/189189189'/0'/round'/index'
+fn derive_wormhole_secret(
+	mnemonic: &str,
+	round: usize,
+	index: usize,
+) -> Result<WormholePair, crate::error::QuantusError> {
+	// QUANTUS_WORMHOLE_CHAIN_ID already includes the ' (e.g., "189189189'")
+	let path = format!("m/44'/{}/0'/{}'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, round, index);
+	derive_wormhole_from_mnemonic(mnemonic, None, &path)
+		.map_err(|e| crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e)))
+}
+
+/// Calculate the amount for a given round, accounting for fees
+/// Each round deducts 0.1% fee (10 bps)
+/// Round 1: fee applied once, Round 2: fee applied twice, etc.
+fn calculate_round_amount(initial_amount: u128, round: usize) -> u128 {
+	let mut amount = initial_amount;
+	for _ in 0..round {
+		// Output = Input * (10000 - 10) / 10000
+		amount = amount * 9990 / 10000;
+	}
+	amount
+}
+
+/// Get the minting account from chain constants
+async fn get_minting_account(
+	client: &OnlineClient<ChainConfig>,
+) -> Result<SubxtAccountId, crate::error::QuantusError> {
+	let minting_account_addr = quantus_node::api::constants().wormhole().minting_account();
+	let minting_account = client.constants().at(&minting_account_addr).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to get minting account: {}", e))
+	})?;
+	Ok(minting_account)
+}
+
+/// Parse transfer info from NativeTransferred events in a block
+fn parse_transfer_events(
+	events: &[wormhole::events::NativeTransferred],
+	expected_addresses: &[SubxtAccountId],
+) -> Result<Vec<TransferInfo>, crate::error::QuantusError> {
+	let mut transfer_infos = Vec::new();
+
+	for expected_addr in expected_addresses {
+		// Find the event matching this address
+		let matching_event = events.iter().find(|e| &e.to == expected_addr).ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"No transfer event found for address {:?}",
+				expected_addr
+			))
+		})?;
+
+		transfer_infos.push(TransferInfo {
+			block_hash: subxt::utils::H256::default(), // Will be set by caller
+			transfer_count: matching_event.transfer_count,
+			amount: matching_event.amount,
+			wormhole_address: expected_addr.clone(),
+			funding_account: matching_event.from.clone(),
+		});
+	}
+
+	Ok(transfer_infos)
+}
+
+/// Run the multi-round wormhole flow
+#[allow(clippy::too_many_arguments)]
+async fn run_multiround(
+	num_proofs: usize,
+	rounds: usize,
+	amount: u128,
+	wallet_name: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	keep_files: bool,
+	output_dir: String,
+	dry_run: bool,
+	node_url: &str,
+) -> crate::error::Result<()> {
+	use colored::Colorize;
+
+	log_print!("");
+	log_print!("==================================================");
+	log_print!("  Wormhole Multi-Round Flow Test");
+	log_print!("==================================================");
+	log_print!("");
+
+	// Validate parameters
+	if num_proofs < 1 || num_proofs > MULTIROUND_MAX_PROOFS {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"num_proofs must be between 1 and {} (got: {})",
+			MULTIROUND_MAX_PROOFS, num_proofs
+		)));
+	}
+	if rounds < 1 {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"rounds must be at least 1 (got: {})",
+			rounds
+		)));
+	}
+
+	// Load wallet
+	let wallet_manager = WalletManager::new()?;
+	let wallet_password = password::get_wallet_password(&wallet_name, password, password_file)?;
+	let wallet_data = wallet_manager.load_wallet(&wallet_name, &wallet_password)?;
+	let wallet_address = wallet_data.keypair.to_account_id_ss58check();
+	let wallet_account_id = SubxtAccountId(wallet_data.keypair.to_account_id_32().into());
+
+	// Get or generate mnemonic for HD derivation
+	let mnemonic = match wallet_data.mnemonic {
+		Some(m) => {
+			log_verbose!("Using wallet mnemonic for HD derivation");
+			m
+		},
+		None => {
+			log_print!("Wallet has no mnemonic - generating random mnemonic for wormhole secrets");
+			let mut entropy = [0u8; 32];
+			rand::rng().fill_bytes(&mut entropy);
+			let sensitive_entropy = SensitiveBytes32::from(&mut entropy);
+			let m = generate_mnemonic(sensitive_entropy).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to generate mnemonic: {:?}", e))
+			})?;
+			log_verbose!("Generated mnemonic (not saved): {}", m);
+			m
+		},
+	};
+
+	log_print!("{}", "Configuration:".bright_cyan());
+	log_print!("  Wallet: {}", wallet_name);
+	log_print!("  Wallet address: {}", wallet_address);
+	log_print!("  Initial amount: {} ({})", amount, format_balance(amount));
+	log_print!("  Proofs per round: {}", num_proofs);
+	log_print!("  Rounds: {}", rounds);
+	log_print!(
+		"  Aggregation: branching_factor={}, depth={}",
+		MULTIROUND_BRANCHING_FACTOR,
+		MULTIROUND_DEPTH
+	);
+	log_print!("  Output directory: {}", output_dir);
+	log_print!("  Keep files: {}", keep_files);
+	log_print!("  Dry run: {}", dry_run);
+	log_print!("");
+
+	// Show expected amounts per round
+	log_print!("{}", "Expected amounts per round:".bright_cyan());
+	for r in 1..=rounds {
+		let round_amount = calculate_round_amount(amount, r);
+		log_print!("  Round {}: {} ({})", r, round_amount, format_balance(round_amount));
+	}
+	log_print!("");
+
+	// Create output directory
+	std::fs::create_dir_all(&output_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create output directory: {}", e))
+	})?;
+
+	if dry_run {
+		return run_multiround_dry_run(&mnemonic, num_proofs, rounds, amount, &wallet_address);
+	}
+
+	// Connect to node
+	let quantus_client = QuantusClient::new(node_url).await.map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to connect to node: {}", e))
+	})?;
+	let client = quantus_client.client();
+
+	// Get minting account from chain
+	let minting_account = get_minting_account(client).await?;
+	log_verbose!("Minting account: {:?}", minting_account);
+
+	// Record initial wallet balance for verification
+	let initial_balance = get_balance(&quantus_client, &wallet_address).await?;
+	log_print!("{}", "Initial Balance:".bright_cyan());
+	log_print!("  Wallet balance: {} ({})", initial_balance, format_balance(initial_balance));
+	log_print!("");
+
+	// Track transfer info for the current round
+	let mut current_transfers: Vec<TransferInfo> = Vec::new();
+
+	for round in 1..=rounds {
+		let is_final = round == rounds;
+
+		log_print!("");
+		log_print!("--------------------------------------------------");
+		log_print!(
+			"  {} Round {} of {} {}",
+			">>>".bright_blue(),
+			round,
+			rounds,
+			"<<<".bright_blue()
+		);
+		log_print!("--------------------------------------------------");
+		log_print!("");
+
+		// Create round output directory
+		let round_dir = format!("{}/round{}", output_dir, round);
+		std::fs::create_dir_all(&round_dir).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to create round directory: {}", e))
+		})?;
+
+		// Derive secrets for this round
+		let pb = ProgressBar::new(num_proofs as u64);
+		pb.set_style(
+			ProgressStyle::default_bar()
+				.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+				.unwrap()
+				.progress_chars("#>-"),
+		);
+		pb.set_message("Deriving secrets...");
+
+		let mut secrets: Vec<WormholePair> = Vec::new();
+		for i in 1..=num_proofs {
+			let secret = derive_wormhole_secret(&mnemonic, round, i)?;
+			secrets.push(secret);
+			pb.inc(1);
+		}
+		pb.finish_with_message("Secrets derived");
+
+		// Determine exit accounts
+		let exit_accounts: Vec<SubxtAccountId> = if is_final {
+			log_print!("Final round - all proofs exit to wallet: {}", wallet_address);
+			vec![wallet_account_id.clone(); num_proofs]
+		} else {
+			log_print!(
+				"Intermediate round - proofs exit to round {} wormhole addresses",
+				round + 1
+			);
+			let mut addrs = Vec::new();
+			for i in 1..=num_proofs {
+				let next_secret = derive_wormhole_secret(&mnemonic, round + 1, i)?;
+				addrs.push(SubxtAccountId(next_secret.address));
+			}
+			addrs
+		};
+
+		// Step 1: Get transfer info
+		if round == 1 {
+			log_print!("{}", "Step 1: Sending wormhole transfers from wallet...".bright_yellow());
+
+			let pb = ProgressBar::new(num_proofs as u64);
+			pb.set_style(
+				ProgressStyle::default_bar()
+					.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+					.unwrap()
+					.progress_chars("#>-"),
+			);
+
+			current_transfers.clear();
+			for (i, secret) in secrets.iter().enumerate() {
+				pb.set_message(format!("Transfer {}/{}", i + 1, num_proofs));
+
+				let wormhole_address = SubxtAccountId(secret.address);
+
+				// Submit transfer
+				let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
+					subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
+					amount,
+				);
+
+				let quantum_keypair = QuantumKeyPair {
+					public_key: wallet_data.keypair.public_key.clone(),
+					private_key: wallet_data.keypair.private_key.clone(),
+				};
+
+				submit_transaction(
+					&quantus_client,
+					&quantum_keypair,
+					transfer_tx,
+					None,
+					ExecutionMode { finalized: false, wait_for_transaction: true },
+				)
+				.await
+				.map_err(|e| {
+					crate::error::QuantusError::Generic(format!("Transfer failed: {}", e))
+				})?;
+
+				// Get the block and find our event
+				let block = at_best_block(&quantus_client).await.map_err(|e| {
+					crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
+				})?;
+				let block_hash = block.hash();
+
+				let events_api = client.events().at(block_hash).await.map_err(|e| {
+					crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
+				})?;
+
+				// Find our transfer event
+				let event = events_api
+					.find::<wormhole::events::NativeTransferred>()
+					.find(|e| if let Ok(evt) = e { evt.to.0 == secret.address } else { false })
+					.ok_or_else(|| {
+						crate::error::QuantusError::Generic(
+							"No matching transfer event found".to_string(),
+						)
+					})?
+					.map_err(|e| {
+						crate::error::QuantusError::Generic(format!("Event decode error: {}", e))
+					})?;
+
+				let funding_account_bytes = wallet_data.keypair.to_account_id_32();
+				current_transfers.push(TransferInfo {
+					block_hash,
+					transfer_count: event.transfer_count,
+					amount,
+					wormhole_address,
+					funding_account: SubxtAccountId(funding_account_bytes.into()),
+				});
+
+				pb.inc(1);
+			}
+			pb.finish_with_message("Transfers complete");
+
+			// Log balance immediately after funding transfers
+			let balance_after_funding = get_balance(&quantus_client, &wallet_address).await?;
+			let funding_deducted = initial_balance.saturating_sub(balance_after_funding);
+			log_print!(
+				"  Balance after funding: {} ({}) [deducted: {} planck]",
+				balance_after_funding,
+				format_balance(balance_after_funding),
+				funding_deducted
+			);
+		} else {
+			log_print!("{}", "Step 1: Using transfer info from previous round...".bright_yellow());
+			// current_transfers was populated from the previous round's verification events
+			// The secrets for this round ARE the exit secrets from round-1
+			// So current_transfers already has the right wormhole addresses
+			log_print!("  Found {} transfer(s) from previous round", current_transfers.len());
+		}
+
+		// Step 2: Generate proofs
+		log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
+
+		// All proofs in an aggregation batch must use the same block for storage proofs.
+		// Use the best block (which contains all transfers' state) for all proofs.
+		let proof_block = at_best_block(&quantus_client).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
+		})?;
+		let proof_block_hash = proof_block.hash();
+		log_print!("  Using block {} for all proofs", hex::encode(proof_block_hash.0));
+
+		let pb = ProgressBar::new(num_proofs as u64);
+		pb.set_style(
+			ProgressStyle::default_bar()
+				.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+				.unwrap()
+				.progress_chars("#>-"),
+		);
+
+		let mut proof_files: Vec<String> = Vec::new();
+		for (i, (secret, transfer)) in secrets.iter().zip(current_transfers.iter()).enumerate() {
+			pb.set_message(format!("Proof {}/{}", i + 1, num_proofs));
+
+			let proof_file = format!("{}/proof_{}.hex", round_dir, i + 1);
+			let exit_account_hex = format!("0x{}", hex::encode(exit_accounts[i].0));
+
+			// Use the funding account from the transfer info
+			let funding_account_hex = format!("0x{}", hex::encode(transfer.funding_account.0));
+
+			// Generate proof using internal function
+			// Use the actual transfer amount (not calculated round_amount) for storage key lookup
+			// All proofs use the same block hash for aggregation compatibility
+			generate_proof_internal(
+				&hex::encode(secret.secret),
+				transfer.amount, // Use actual transfer amount for storage key
+				&exit_account_hex,
+				&format!("0x{}", hex::encode(proof_block_hash.0)),
+				transfer.transfer_count,
+				&funding_account_hex,
+				&proof_file,
+				&quantus_client,
+			)
+			.await?;
+
+			proof_files.push(proof_file);
+			pb.inc(1);
+		}
+		pb.finish_with_message("Proofs generated");
+
+		// Step 3: Aggregate proofs
+		log_print!("{}", "Step 3: Aggregating proofs...".bright_yellow());
+
+		let aggregated_file = format!("{}/aggregated.hex", round_dir);
+		aggregate_proofs(
+			proof_files,
+			aggregated_file.clone(),
+			MULTIROUND_DEPTH,
+			MULTIROUND_BRANCHING_FACTOR,
+		)
+		.await?;
+
+		log_print!("  Aggregated proof saved to {}", aggregated_file);
+
+		// Step 4: Verify aggregated proof on-chain
+		log_print!("{}", "Step 4: Submitting aggregated proof on-chain...".bright_yellow());
+
+		let (verification_block, transfer_events) =
+			verify_aggregated_and_get_events(&aggregated_file, &quantus_client).await?;
+
+		log_print!(
+			"  {} Proof verified in block {}",
+			"✓".bright_green(),
+			hex::encode(verification_block.0)
+		);
+
+		// If not final round, prepare transfer info for next round
+		if !is_final {
+			log_print!("{}", "Step 5: Capturing transfer info for next round...".bright_yellow());
+
+			// Parse events to get transfer info for next round's wormhole addresses
+			let next_round_addresses: Vec<SubxtAccountId> = (1..=num_proofs)
+				.map(|i| {
+					let next_secret = derive_wormhole_secret(&mnemonic, round + 1, i).unwrap();
+					SubxtAccountId(next_secret.address)
+				})
+				.collect();
+
+			current_transfers = parse_transfer_events(&transfer_events, &next_round_addresses)?;
+
+			// Update block hash for all transfers
+			for transfer in &mut current_transfers {
+				transfer.block_hash = verification_block;
+			}
+
+			log_print!(
+				"  Captured {} transfer(s) for round {}",
+				current_transfers.len(),
+				round + 1
+			);
+		}
+
+		// Log balance after this round
+		let balance_after_round = get_balance(&quantus_client, &wallet_address).await?;
+		let change_from_initial = balance_after_round as i128 - initial_balance as i128;
+		let change_str = if change_from_initial >= 0 {
+			format!("+{}", change_from_initial)
+		} else {
+			format!("{}", change_from_initial)
+		};
+		log_print!("");
+		log_print!(
+			"  Balance after round {}: {} ({}) [change: {} planck]",
+			round,
+			balance_after_round,
+			format_balance(balance_after_round),
+			change_str
+		);
+
+		log_print!("");
+		log_print!("  {} Round {} complete!", "✓".bright_green(), round);
+	}
+
+	log_print!("");
+	log_print!("==================================================");
+	log_success!("  All {} rounds completed successfully!", rounds);
+	log_print!("==================================================");
+	log_print!("");
+
+	// Final balance verification
+	log_print!("{}", "Balance Verification:".bright_cyan());
+
+	// Query final balance
+	let final_balance = get_balance(&quantus_client, &wallet_address).await?;
+
+	// Calculate expected balance change
+	// Total sent in round 1: num_proofs * amount
+	let total_sent = (num_proofs as u128) * amount;
+
+	// Total received in final round: num_proofs * final_round_amount
+	let final_round_amount = calculate_round_amount(amount, rounds);
+	let total_received = (num_proofs as u128) * final_round_amount;
+
+	// Expected net change (may be negative due to fees)
+	let expected_change = total_received as i128 - total_sent as i128;
+	let actual_change = final_balance as i128 - initial_balance as i128;
+
+	log_print!("  Initial balance: {} ({})", initial_balance, format_balance(initial_balance));
+	log_print!("  Final balance:   {} ({})", final_balance, format_balance(final_balance));
+	log_print!("");
+	log_print!("  Total sent (round 1):     {} ({})", total_sent, format_balance(total_sent));
+	log_print!(
+		"  Total received (round {}): {} ({})",
+		rounds,
+		total_received,
+		format_balance(total_received)
+	);
+	log_print!("");
+
+	// Format signed amounts for display
+	let expected_change_str = if expected_change >= 0 {
+		format!("+{}", expected_change)
+	} else {
+		format!("{}", expected_change)
+	};
+	let actual_change_str = if actual_change >= 0 {
+		format!("+{}", actual_change)
+	} else {
+		format!("{}", actual_change)
+	};
+
+	log_print!("  Expected change: {} planck", expected_change_str);
+	log_print!("  Actual change:   {} planck", actual_change_str);
+	log_print!("");
+
+	// Allow some tolerance for transaction fees (e.g., 1% or a fixed amount)
+	// The actual change may differ slightly due to transaction fees for the initial transfers
+	let tolerance = (total_sent / 100).max(1_000_000_000_000); // 1% or 1 QNT minimum
+
+	let diff = (actual_change - expected_change).abs() as u128;
+	if diff <= tolerance {
+		log_success!(
+			"  {} Balance verification PASSED (within tolerance of {} planck)",
+			"✓".bright_green(),
+			tolerance
+		);
+	} else {
+		log_print!(
+			"  {} Balance verification: difference of {} planck (tolerance: {} planck)",
+			"!".bright_yellow(),
+			diff,
+			tolerance
+		);
+		log_print!(
+			"    Note: Transaction fees for {} initial transfers may account for the difference",
+			num_proofs
+		);
+	}
+	log_print!("");
+
+	if keep_files {
+		log_print!("Proof files preserved in: {}", output_dir);
+	} else {
+		log_print!("Cleaning up proof files...");
+		std::fs::remove_dir_all(&output_dir).ok();
+	}
+
+	Ok(())
+}
+
+/// Internal proof generation that uses already-connected client
+#[allow(clippy::too_many_arguments)]
+async fn generate_proof_internal(
+	secret_hex: &str,
+	funding_amount: u128,
+	exit_account_str: &str,
+	block_hash_str: &str,
+	transfer_count: u64,
+	funding_account_str: &str,
+	output_file: &str,
+	quantus_client: &QuantusClient,
+) -> crate::error::Result<()> {
+	// Parse secret
+	let secret_array = parse_secret_hex(secret_hex).map_err(crate::error::QuantusError::Generic)?;
+	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
+	})?;
+
+	// Parse exit account
+	let exit_account_bytes =
+		parse_exit_account(exit_account_str).map_err(crate::error::QuantusError::Generic)?;
+	let exit_account_id = SubxtAccountId(exit_account_bytes);
+
+	// Parse funding account
+	let funding_account_bytes =
+		parse_exit_account(funding_account_str).map_err(crate::error::QuantusError::Generic)?;
+	let funding_account = AccountId32::new(funding_account_bytes);
+
+	// Parse block hash
+	let hash_bytes = hex::decode(block_hash_str.trim_start_matches("0x"))
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid block hash: {}", e)))?;
+	if hash_bytes.len() != 32 {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Block hash must be 32 bytes, got {}",
+			hash_bytes.len()
+		)));
+	}
+	let hash: [u8; 32] = hash_bytes.try_into().unwrap();
+	let block_hash = subxt::utils::H256::from(hash);
+
+	let client = quantus_client.client();
+
+	// Generate unspendable account from secret
+	let unspendable_account =
+		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
+			.account_id;
+	let unspendable_account_bytes_digest =
+		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
+		.as_ref()
+		.try_into()
+		.expect("BytesDigest is always 32 bytes");
+
+	let from_account = funding_account.clone();
+	let to_account = AccountId32::new(unspendable_account_bytes);
+
+	// Get block
+	let blocks =
+		client.blocks().at(block_hash).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
+		})?;
+
+	// Build storage key
+	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofKey>(
+		&(
+			NATIVE_ASSET_ID,
+			transfer_count,
+			from_account.clone(),
+			to_account.clone(),
+			funding_amount,
+		)
+			.encode(),
+	);
+
+	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
+		NATIVE_ASSET_ID,
+		transfer_count,
+		SubxtAccountId(from_account.clone().into()),
+		SubxtAccountId(to_account.clone().into()),
+		funding_amount,
+	));
+
+	let mut final_key = proof_address.to_root_bytes();
+	final_key.extend_from_slice(&leaf_hash);
+
+	// Verify storage key exists
+	let storage_api = client.storage().at(block_hash);
+	let val = storage_api
+		.fetch_raw(final_key.clone())
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	if val.is_none() {
+		return Err(crate::error::QuantusError::Generic(
+			"Storage key not found - transfer may not exist in this block".to_string(),
+		));
+	}
+
+	// Get storage proof
+	let proof_params = rpc_params![vec![to_hex(&final_key)], block_hash];
+	let read_proof: ReadProof<sp_core::H256> = quantus_client
+		.rpc_client()
+		.request("state_getReadProof", proof_params)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+
+	let header = blocks.header();
+	let state_root = BytesDigest::try_from(header.state_root.as_bytes())
+		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	let parent_hash = BytesDigest::try_from(header.parent_hash.as_bytes())
+		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	let extrinsics_root = BytesDigest::try_from(header.extrinsics_root.as_bytes())
+		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	let digest =
+		header.digest.encode().try_into().map_err(|_| {
+			crate::error::QuantusError::Generic("Failed to encode digest".to_string())
+		})?;
+	let block_number = header.number;
+
+	// Prepare storage proof
+	let processed_storage_proof = prepare_proof_for_circuit(
+		read_proof.proof.iter().map(|proof| proof.0.clone()).collect(),
+		hex::encode(header.state_root.0),
+		leaf_hash,
+	)
+	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+
+	// Quantize amounts
+	let input_amount_quantized: u32 =
+		quantize_funding_amount(funding_amount).map_err(crate::error::QuantusError::Generic)?;
+	let output_amount_quantized = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
+
+	let inputs = CircuitInputs {
+		private: PrivateCircuitInputs {
+			secret,
+			transfer_count,
+			funding_account: BytesDigest::try_from(funding_account.as_ref() as &[u8])
+				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
+			storage_proof: processed_storage_proof,
+			unspendable_account: Digest::from(unspendable_account).into(),
+			state_root,
+			extrinsics_root,
+			digest,
+			input_amount: input_amount_quantized,
+		},
+		public: PublicCircuitInputs {
+			output_amount_1: output_amount_quantized,
+			output_amount_2: 0, // No change output for single-output spend
+			volume_fee_bps: VOLUME_FEE_BPS,
+			nullifier: Nullifier::from_preimage(secret, transfer_count).hash.into(),
+			exit_account_1: BytesDigest::try_from(exit_account_id.as_ref() as &[u8])
+				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
+			exit_account_2: BytesDigest::try_from([0u8; 32].as_ref())
+				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?, // Unused
+			block_hash: BytesDigest::try_from(block_hash.as_ref())
+				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
+			parent_hash,
+			block_number,
+			asset_id: NATIVE_ASSET_ID,
+		},
+	};
+
+	// Load prover from pre-built bins
+	let bins_dir = Path::new("generated-bins");
+	let prover =
+		WormholeProver::new_from_files(&bins_dir.join("prover.bin"), &bins_dir.join("common.bin"))
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to load prover: {}", e))
+			})?;
+	let prover_next = prover
+		.commit(&inputs)
+		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	let proof: ProofWithPublicInputs<_, _, 2> = prover_next.prove().map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Proof generation failed: {}", e))
+	})?;
+
+	let proof_hex = hex::encode(proof.to_bytes());
+	std::fs::write(output_file, proof_hex).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
+	})?;
+
+	Ok(())
+}
+
+/// Verify an aggregated proof and return the block hash and transfer events
+async fn verify_aggregated_and_get_events(
+	proof_file: &str,
+	quantus_client: &QuantusClient,
+) -> crate::error::Result<(subxt::utils::H256, Vec<wormhole::events::NativeTransferred>)> {
+	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
+	use qp_wormhole_verifier::WormholeVerifier;
+	use subxt::tx::TxStatus;
+
+	// Read proof from file
+	let proof_hex = std::fs::read_to_string(proof_file).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
+	})?;
+
+	let proof_bytes = hex::decode(proof_hex.trim())
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
+
+	// Verify locally before submitting on-chain
+	log_verbose!("Verifying aggregated proof locally before on-chain submission...");
+	let aggregated_verifier_bytes = include_bytes!("../../generated-bins/aggregated_verifier.bin");
+	let aggregated_common_bytes = include_bytes!("../../generated-bins/aggregated_common.bin");
+	let verifier =
+		WormholeVerifier::new_from_bytes(aggregated_verifier_bytes, aggregated_common_bytes)
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to load aggregated verifier: {}",
+					e
+				))
+			})?;
+
+	// Use the verifier crate's ProofWithPublicInputs type (different from plonky2's)
+	let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
+		qp_wormhole_verifier::F,
+		qp_wormhole_verifier::C,
+		{ qp_wormhole_verifier::D },
+	>::from_bytes(proof_bytes.clone(), &verifier.circuit_data.common)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to deserialize aggregated proof: {}",
+			e
+		))
+	})?;
+
+	verifier.verify(proof).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Local aggregated proof verification failed: {}",
+			e
+		))
+	})?;
+	log_verbose!("Local verification passed!");
+
+	// Create the verify_aggregated_proof transaction payload
+	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
+
+	// Submit as unsigned extrinsic
+	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
+	})?;
+
+	let mut tx_progress = unsigned_tx
+		.submit_and_watch()
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
+
+	while let Some(Ok(status)) = tx_progress.next().await {
+		match status {
+			TxStatus::InBestBlock(tx_in_block) => {
+				let block_hash = tx_in_block.block_hash();
+				let tx_hash = tx_in_block.extrinsic_hash();
+
+				// Get all events from the block
+				let block = quantus_client.client().blocks().at(block_hash).await.map_err(|e| {
+					crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
+				})?;
+
+				let events = block.events().await.map_err(|e| {
+					crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
+				})?;
+
+				// Find our extrinsic index
+				let extrinsics = block.extrinsics().await.map_err(|e| {
+					crate::error::QuantusError::Generic(format!("Failed to get extrinsics: {}", e))
+				})?;
+
+				let our_ext_idx = extrinsics
+					.iter()
+					.enumerate()
+					.find(|(_, ext)| ext.hash() == tx_hash)
+					.map(|(idx, _)| idx as u32);
+
+				// Collect NativeTransferred events for our extrinsic
+				let mut transfer_events = Vec::new();
+				let mut found_proof_verified = false;
+
+				log_verbose!("  Events for our extrinsic (idx={:?}):", our_ext_idx);
+				for event_result in events.iter() {
+					let event = event_result.map_err(|e| {
+						crate::error::QuantusError::Generic(format!(
+							"Failed to decode event: {}",
+							e
+						))
+					})?;
+
+					if let subxt::events::Phase::ApplyExtrinsic(ext_idx) = event.phase() {
+						if Some(ext_idx) == our_ext_idx {
+							// Log all events for our extrinsic
+							log_print!(
+								"    Event: {}::{}",
+								event.pallet_name(),
+								event.variant_name()
+							);
+
+							// Decode ExtrinsicFailed to get the specific error
+							if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
+								event.as_event::<ExtrinsicFailed>()
+							{
+								let metadata = quantus_client.client().metadata();
+								let error_msg = format_dispatch_error(&dispatch_error, &metadata);
+								log_print!("    DispatchError: {}", error_msg);
+							}
+
+							if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>()
+							{
+								found_proof_verified = true;
+							}
+							if let Ok(Some(transfer)) =
+								event.as_event::<wormhole::events::NativeTransferred>()
+							{
+								transfer_events.push(transfer);
+							}
+						}
+					}
+				}
+
+				if found_proof_verified {
+					// Log the minted amounts from transfer events
+					log_print!("  Tokens minted (from NativeTransferred events):");
+					for (idx, transfer) in transfer_events.iter().enumerate() {
+						let to_hex = hex::encode(transfer.to.0);
+						log_print!(
+							"    [{}] {} -> {} planck ({})",
+							idx,
+							to_hex,
+							transfer.amount,
+							format_balance(transfer.amount)
+						);
+					}
+					return Ok((block_hash, transfer_events));
+				} else {
+					return Err(crate::error::QuantusError::Generic(
+						"Proof verification failed - no ProofVerified event".to_string(),
+					));
+				}
+			},
+			TxStatus::Error { message } | TxStatus::Invalid { message } => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Transaction failed: {}",
+					message
+				)));
+			},
+			_ => continue,
+		}
+	}
+
+	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+}
+
+/// Dry run - show what would happen without executing
+fn run_multiround_dry_run(
+	mnemonic: &str,
+	num_proofs: usize,
+	rounds: usize,
+	amount: u128,
+	wallet_address: &str,
+) -> crate::error::Result<()> {
+	use colored::Colorize;
+
+	log_print!("");
+	log_print!("{}", "=== DRY RUN MODE ===".bright_yellow());
+	log_print!("No transactions will be executed.");
+	log_print!("");
+
+	for round in 1..=rounds {
+		let is_final = round == rounds;
+		let round_amount = calculate_round_amount(amount, round);
+
+		log_print!("");
+		log_print!("{}", format!("Round {}", round).bright_cyan());
+		log_print!("  Amount: {} ({})", round_amount, format_balance(round_amount));
+		log_print!("");
+
+		log_print!("  Wormhole addresses (to be funded):");
+		for i in 1..=num_proofs {
+			let secret = derive_wormhole_secret(mnemonic, round, i)?;
+			let address = sp_core::crypto::AccountId32::new(secret.address)
+				.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+			log_print!("    [{}] {}", i, address);
+			log_verbose!("        secret: 0x{}", hex::encode(secret.secret));
+		}
+
+		log_print!("");
+		log_print!("  Exit accounts:");
+		if is_final {
+			log_print!("    All proofs exit to wallet: {}", wallet_address);
+		} else {
+			for i in 1..=num_proofs {
+				let next_secret = derive_wormhole_secret(mnemonic, round + 1, i)?;
+				let address = sp_core::crypto::AccountId32::new(next_secret.address)
+					.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+				log_print!("    [{}] {} (round {} wormhole)", i, address, round + 1);
+			}
+		}
+	}
+
+	log_print!("");
+	log_print!("{}", "=== END DRY RUN ===".bright_yellow());
+	log_print!("");
+
+	Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1059,7 +2125,7 @@ mod tests {
 	};
 	use qp_wormhole_prover::WormholeProver;
 	use qp_wormhole_test_helpers::TestInputs;
-	use qp_wormhole_verifier::WormholeVerifier;
+
 	use tempfile::NamedTempFile;
 
 	/// Helper to get a standard circuit config for tests
@@ -1191,8 +2257,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000 <=
-				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000
+				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
@@ -1275,10 +2341,10 @@ mod tests {
 
 		// Verify fee constraint is satisfied in test inputs
 		let input_amount = inputs.private.input_amount;
-		let output_amount = inputs.public.output_amount;
+		let output_amount = inputs.public.output_amount_1 + inputs.public.output_amount_2;
 		assert!(
-			(output_amount as u64) * 10000 <=
-				(input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			(output_amount as u64) * 10000
+				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
 			"Test inputs violate fee constraint"
 		);
 
@@ -1293,10 +2359,12 @@ mod tests {
 			PublicCircuitInputs::try_from(&proof).expect("Failed to parse public inputs");
 
 		assert_eq!(parsed_public_inputs.asset_id, inputs.public.asset_id);
-		assert_eq!(parsed_public_inputs.output_amount, inputs.public.output_amount);
+		assert_eq!(parsed_public_inputs.output_amount_1, inputs.public.output_amount_1);
+		assert_eq!(parsed_public_inputs.output_amount_2, inputs.public.output_amount_2);
 		assert_eq!(parsed_public_inputs.volume_fee_bps, inputs.public.volume_fee_bps);
 		assert_eq!(parsed_public_inputs.nullifier, inputs.public.nullifier);
-		assert_eq!(parsed_public_inputs.exit_account, inputs.public.exit_account);
+		assert_eq!(parsed_public_inputs.exit_account_1, inputs.public.exit_account_1);
+		assert_eq!(parsed_public_inputs.exit_account_2, inputs.public.exit_account_2);
 		assert_eq!(parsed_public_inputs.block_hash, inputs.public.block_hash);
 		assert_eq!(parsed_public_inputs.parent_hash, inputs.public.parent_hash);
 		assert_eq!(parsed_public_inputs.block_number, inputs.public.block_number);
@@ -1531,7 +2599,6 @@ mod tests {
 
 /// Parse and display the contents of a proof file for debugging
 async fn parse_proof_file(proof_file: String, aggregated: bool) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
 	use std::path::Path;
 
 	log_print!("Parsing proof file: {}", proof_file);
@@ -1634,10 +2701,12 @@ async fn parse_proof_file(proof_file: String, aggregated: bool) -> crate::error:
 
 		log_print!("\n=== Parsed Leaf Public Inputs ===");
 		log_print!("Asset ID: {}", pi.asset_id);
-		log_print!("Output Amount: {}", pi.output_amount);
+		log_print!("Output Amount 1: {}", pi.output_amount_1);
+		log_print!("Output Amount 2: {}", pi.output_amount_2);
 		log_print!("Volume Fee BPS: {}", pi.volume_fee_bps);
 		log_print!("Nullifier: 0x{}", hex::encode(pi.nullifier.as_ref()));
-		log_print!("Exit Account: 0x{}", hex::encode(pi.exit_account.as_ref()));
+		log_print!("Exit Account 1: 0x{}", hex::encode(pi.exit_account_1.as_ref()));
+		log_print!("Exit Account 2: 0x{}", hex::encode(pi.exit_account_2.as_ref()));
 		log_print!("Block Hash: 0x{}", hex::encode(pi.block_hash.as_ref()));
 		log_print!("Parent Hash: 0x{}", hex::encode(pi.parent_hash.as_ref()));
 		log_print!("Block Number: {}", pi.block_number);

@@ -1195,9 +1195,9 @@ dependencies = [
 
 [[package]]
 name = "crypto-common"
-version = "0.1.7"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a"
+checksum = "1bfb12502f3fc46cca1bb51ac28df9d618d813cdc3d2f25b9fe775a34af26bb3"
 dependencies = [
  "generic-array",
  "rand_core 0.6.4",
@@ -1298,9 +1298,9 @@ dependencies = [
 
 [[package]]
 name = "deranged"
-version = "0.5.5"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ececcb659e7ba858fb4f10388c250a7252eb0a27373f1a72b8748afdd248e587"
+checksum = "cc3dc5ad92c2e2d1c193bbbbdf2ea477cb81331de4f3103f267ca18368b988c4"
 dependencies = [
  "powerfmt",
 ]
@@ -1973,9 +1973,9 @@ dependencies = [
 
 [[package]]
 name = "generic-array"
-version = "0.14.7"
+version = "0.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
+checksum = "4bb6743198531e02858aeaea5398fcc883e71851fcbcb5a2f773e2fb6cb1edf2"
 dependencies = [
  "typenum",
  "version_check",
@@ -2829,7 +2829,6 @@ dependencies = [
  "once_cell",
  "serdect",
  "sha2 0.10.9",
- "signature",
 ]
 
 [[package]]
@@ -3096,19 +3095,6 @@ name = "multi-stash"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "685a9ac4b61f4e728e1d2c6a7844609c16527aeb5e6c865915c08e619c16410f"
-
-[[package]]
-name = "nam-tiny-hderive"
-version = "0.3.1-nam.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b2cd44792ed5cd84dc9dedc3d572242ac00e76c244e85eb4bf34da2c6239ce30"
-dependencies = [
- "base58",
- "hmac 0.12.1",
- "k256",
- "sha2 0.10.9",
- "zeroize",
-]
 
 [[package]]
 name = "nodrop"
@@ -3577,6 +3563,8 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e1e554181dc95243b8d9948ae7bae5759c7fb2502fed28f671f95ef38079406"
 dependencies = [
  "rayon",
 ]
@@ -3584,6 +3572,12 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "1.0.0"
+
+[[package]]
+name = "plonky2_util"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c32c137808ca984ab2458b612b7eb0462d853ee041a3136e83d54b96074c7610"
 
 [[package]]
 name = "polkavm-common"
@@ -3815,8 +3809,6 @@ dependencies = [
 [[package]]
 name = "qp-dilithium-crypto"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb2f13d8793f7a79c42d33e4ebe9d470fe938dc55592ef97ef42d4298aa6a976"
 dependencies = [
  "log",
  "parity-scale-codec",
@@ -3832,7 +3824,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2"
-version = "1.1.3"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "593bccf15b8e2f9eb904ef4010f68b81ddcceb70aaf90116ce29ec09d7578dd4"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3847,10 +3841,10 @@ dependencies = [
  "p3-poseidon2",
  "p3-symmetric",
  "plonky2_maybe_rayon",
- "plonky2_util",
- "qp-plonky2-core",
- "qp-plonky2-field",
- "qp-plonky2-verifier",
+ "plonky2_util 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qp-plonky2-core 1.1.5",
+ "qp-plonky2-field 1.1.5",
+ "qp-plonky2-verifier 1.1.5",
  "qp-poseidon-constants",
  "rand 0.8.5",
  "rand_chacha 0.3.1",
@@ -3875,8 +3869,33 @@ dependencies = [
  "p3-goldilocks",
  "p3-poseidon2",
  "p3-symmetric",
- "plonky2_util",
- "qp-plonky2-field",
+ "plonky2_util 1.0.0",
+ "qp-plonky2-field 1.1.3",
+ "qp-poseidon-constants",
+ "serde",
+ "static_assertions",
+ "unroll",
+]
+
+[[package]]
+name = "qp-plonky2-core"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b7d30fabfd90e359640f2371c8b3e9b377d215f7dcf4e61da1f38776c5b84540"
+dependencies = [
+ "ahash",
+ "anyhow",
+ "hashbrown 0.14.5",
+ "itertools 0.11.0",
+ "keccak-hash 0.8.0",
+ "log",
+ "num",
+ "p3-field",
+ "p3-goldilocks",
+ "p3-poseidon2",
+ "p3-symmetric",
+ "plonky2_util 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qp-plonky2-field 1.1.5",
  "qp-poseidon-constants",
  "rand 0.8.5",
  "serde",
@@ -3891,9 +3910,51 @@ dependencies = [
  "anyhow",
  "itertools 0.11.0",
  "num",
- "plonky2_util",
+ "plonky2_util 1.0.0",
+ "rustc_version",
+ "serde",
+ "static_assertions",
+ "unroll",
+]
+
+[[package]]
+name = "qp-plonky2-field"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "20c9f8259bf4f220b1d81001458cc6c09a1372f2b3e8dac2fb489a66230385c3"
+dependencies = [
+ "anyhow",
+ "itertools 0.11.0",
+ "num",
+ "plonky2_util 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "rand 0.8.5",
  "rustc_version",
+ "serde",
+ "static_assertions",
+ "unroll",
+]
+
+[[package]]
+name = "qp-plonky2-verifier"
+version = "1.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dd0eb89fd3cc40c4b25be95399635957d416406328169ba939db989c0444f364"
+dependencies = [
+ "ahash",
+ "anyhow",
+ "hashbrown 0.14.5",
+ "itertools 0.11.0",
+ "keccak-hash 0.8.0",
+ "log",
+ "num",
+ "p3-field",
+ "p3-goldilocks",
+ "p3-poseidon2",
+ "p3-symmetric",
+ "plonky2_util 1.0.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "qp-plonky2-core 1.1.5",
+ "qp-plonky2-field 1.1.5",
+ "qp-poseidon-constants",
  "serde",
  "static_assertions",
  "unroll",
@@ -3914,9 +3975,9 @@ dependencies = [
  "p3-goldilocks",
  "p3-poseidon2",
  "p3-symmetric",
- "plonky2_util",
- "qp-plonky2-core",
- "qp-plonky2-field",
+ "plonky2_util 1.0.0",
+ "qp-plonky2-core 1.0.0",
+ "qp-plonky2-field 1.1.3",
  "qp-poseidon-constants",
  "serde",
  "static_assertions",
@@ -3972,33 +4033,33 @@ dependencies = [
 
 [[package]]
 name = "qp-rusty-crystals-dilithium"
-version = "2.0.0"
+version = "2.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e77a42bfb3430fa3bf3f5a148f8132de301876ceb1bdf0891909c2728f044a58"
+checksum = "d734438e080d69fa186dac23565dd261fa8146048af00ba8aea7467b429c104b"
 dependencies = [
- "aes",
- "cipher",
- "sha2 0.10.9",
- "subtle",
+ "zeroize",
 ]
 
 [[package]]
 name = "qp-rusty-crystals-hdwallet"
-version = "1.0.0"
+version = "1.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "48fa242963fcd6bc970948b6904f18074673ff89cab8ed0133846a53c69deca7"
+checksum = "74d9d8eb6c6a555c831496ab14348a41e4d23aa11943930a568891bf687cd8b1"
 dependencies = [
  "bip39",
+ "bs58",
+ "getrandom 0.2.17",
  "hex",
  "hex-literal",
- "nam-tiny-hderive",
+ "hmac 0.12.1",
+ "k256",
  "qp-poseidon-core",
  "qp-rusty-crystals-dilithium",
- "rand_chacha 0.9.0",
- "rand_core 0.9.5",
  "serde",
  "serde_json",
+ "sha2 0.10.9",
  "thiserror 2.0.18",
+ "zeroize",
 ]
 
 [[package]]
@@ -4047,7 +4108,7 @@ name = "qp-wormhole-verifier"
 version = "1.0.1"
 dependencies = [
  "anyhow",
- "qp-plonky2-verifier",
+ "qp-plonky2-verifier 2.0.0",
  "qp-wormhole-inputs",
 ]
 
@@ -4105,7 +4166,7 @@ dependencies = [
  "test-helpers",
  "thiserror 2.0.18",
  "tokio",
- "toml 0.9.11+spec-1.1.0",
+ "toml 0.9.12+spec-1.1.0",
 ]
 
 [[package]]
@@ -6176,9 +6237,9 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.9.11+spec-1.1.0"
+version = "0.9.12+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3afc9a848309fe1aaffaed6e1546a7a14de1f935dc9d89d32afd9a44bab7c46"
+checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -6235,9 +6296,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.0.6+spec-1.1.0"
+version = "1.0.7+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3198b4b0a8e11f09dd03e133c0280504d0801269e9afa46362ffde1cbeebf44"
+checksum = "247eaa3197818b831697600aadf81514e577e0cba5eab10f7e064e78ae154df1"
 dependencies = [
  "winnow",
 ]

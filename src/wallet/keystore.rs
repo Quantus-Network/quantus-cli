@@ -214,8 +214,8 @@ impl Keystore {
 
 		// 3. Use password hash as AES-256 key (quantum-safe with 256-bit key)
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
-		let aes_key = Key::<Aes256Gcm>::from_slice(&hash_bytes[..32]);
-		let cipher = Aes256Gcm::new(aes_key);
+		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		let cipher = Aes256Gcm::new(&aes_key);
 
 		// 4. Generate nonce and encrypt the wallet data
 		let nonce = Aes256Gcm::generate_nonce(&mut AesOsRng);
@@ -255,13 +255,13 @@ impl Keystore {
 
 		// 2. Derive AES key from verified password hash
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
-		let aes_key = Key::<Aes256Gcm>::from_slice(&hash_bytes[..32]);
-		let cipher = Aes256Gcm::new(aes_key);
+		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		let cipher = Aes256Gcm::new(&aes_key);
 
 		// 3. Decrypt the data
-		let nonce = Nonce::from_slice(&encrypted.aes_nonce);
+		let nonce = Nonce::from(<[u8; 12]>::try_from(&encrypted.aes_nonce[..]).unwrap());
 		let decrypted_data = cipher
-			.decrypt(nonce, encrypted.encrypted_data.as_ref())
+			.decrypt(&nonce, encrypted.encrypted_data.as_ref())
 			.map_err(|_| WalletError::Decryption)?;
 
 		// 4. Deserialize the wallet data
