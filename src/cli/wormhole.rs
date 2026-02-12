@@ -612,8 +612,9 @@ pub async fn handle_wormhole_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WormholeCommands::Transfer { secret, amount, from, password, password_file } =>
-			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await,
+		WormholeCommands::Transfer { secret, amount, from, password, password_file } => {
+			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await
+		},
 		WormholeCommands::Generate {
 			secret,
 			amount,
@@ -658,12 +659,15 @@ pub async fn handle_wormhole_command(
 			)
 			.await
 		},
-		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } =>
-			aggregate_proofs(proofs, output, depth, branching_factor).await,
-		WormholeCommands::VerifyAggregated { proof } =>
-			verify_aggregated_proof(proof, node_url).await,
-		WormholeCommands::ParseProof { proof, aggregated, verify } =>
-			parse_proof_file(proof, aggregated, verify).await,
+		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
+			aggregate_proofs(proofs, output, depth, branching_factor).await
+		},
+		WormholeCommands::VerifyAggregated { proof } => {
+			verify_aggregated_proof(proof, node_url).await
+		},
+		WormholeCommands::ParseProof { proof, aggregated, verify } => {
+			parse_proof_file(proof, aggregated, verify).await
+		},
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -674,7 +678,7 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 			dry_run,
-		} =>
+		} => {
 			run_multiround(
 				num_proofs,
 				rounds,
@@ -687,7 +691,8 @@ pub async fn handle_wormhole_command(
 				dry_run,
 				node_url,
 			)
-			.await,
+			.await
+		},
 	}
 }
 
@@ -1137,6 +1142,400 @@ fn parse_transfer_events(
 	Ok(transfer_infos)
 }
 
+/// Configuration for multiround execution
+struct MultiroundConfig {
+	num_proofs: usize,
+	rounds: usize,
+	amount: u128,
+	output_dir: String,
+	keep_files: bool,
+}
+
+/// Wallet context for multiround execution
+struct MultiroundWalletContext {
+	wallet_name: String,
+	wallet_address: String,
+	wallet_account_id: SubxtAccountId,
+	keypair: QuantumKeyPair,
+	mnemonic: String,
+}
+
+/// Validate multiround parameters
+fn validate_multiround_params(num_proofs: usize, rounds: usize) -> crate::error::Result<()> {
+	if !(1..=MULTIROUND_MAX_PROOFS).contains(&num_proofs) {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"num_proofs must be between 1 and {} (got: {})",
+			MULTIROUND_MAX_PROOFS, num_proofs
+		)));
+	}
+	if rounds < 1 {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"rounds must be at least 1 (got: {})",
+			rounds
+		)));
+	}
+	Ok(())
+}
+
+/// Load wallet and prepare context for multiround execution
+fn load_multiround_wallet(
+	wallet_name: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> crate::error::Result<MultiroundWalletContext> {
+	let wallet_manager = WalletManager::new()?;
+	let wallet_password = password::get_wallet_password(wallet_name, password, password_file)?;
+	let wallet_data = wallet_manager.load_wallet(wallet_name, &wallet_password)?;
+	let wallet_address = wallet_data.keypair.to_account_id_ss58check();
+	let wallet_account_id = SubxtAccountId(wallet_data.keypair.to_account_id_32().into());
+
+	// Get or generate mnemonic for HD derivation
+	let mnemonic = match wallet_data.mnemonic {
+		Some(m) => {
+			log_verbose!("Using wallet mnemonic for HD derivation");
+			m
+		},
+		None => {
+			log_print!("Wallet has no mnemonic - generating random mnemonic for wormhole secrets");
+			let mut entropy = [0u8; 32];
+			rand::rng().fill_bytes(&mut entropy);
+			let sensitive_entropy = SensitiveBytes32::from(&mut entropy);
+			let m = generate_mnemonic(sensitive_entropy).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to generate mnemonic: {:?}", e))
+			})?;
+			log_verbose!("Generated mnemonic (not saved): {}", m);
+			m
+		},
+	};
+
+	Ok(MultiroundWalletContext {
+		wallet_name: wallet_name.to_string(),
+		wallet_address,
+		wallet_account_id,
+		keypair: wallet_data.keypair,
+		mnemonic,
+	})
+}
+
+/// Print multiround configuration summary
+fn print_multiround_config(config: &MultiroundConfig, wallet: &MultiroundWalletContext) {
+	use colored::Colorize;
+
+	log_print!("{}", "Configuration:".bright_cyan());
+	log_print!("  Wallet: {}", wallet.wallet_name);
+	log_print!("  Wallet address: {}", wallet.wallet_address);
+	log_print!(
+		"  Total amount: {} ({}) - randomly partitioned across {} proofs",
+		config.amount,
+		format_balance(config.amount),
+		config.num_proofs
+	);
+	log_print!("  Proofs per round: {}", config.num_proofs);
+	log_print!("  Rounds: {}", config.rounds);
+	log_print!(
+		"  Aggregation: branching_factor={}, depth={}",
+		MULTIROUND_BRANCHING_FACTOR,
+		MULTIROUND_DEPTH
+	);
+	log_print!("  Output directory: {}", config.output_dir);
+	log_print!("  Keep files: {}", config.keep_files);
+	log_print!("");
+
+	// Show expected amounts per round
+	log_print!("{}", "Expected amounts per round:".bright_cyan());
+	for r in 1..=config.rounds {
+		let round_amount = calculate_round_amount(config.amount, r);
+		log_print!("  Round {}: {} ({})", r, round_amount, format_balance(round_amount));
+	}
+	log_print!("");
+}
+
+/// Execute initial transfers from wallet to wormhole addresses (round 1 only)
+async fn execute_initial_transfers(
+	quantus_client: &QuantusClient,
+	wallet: &MultiroundWalletContext,
+	secrets: &[WormholePair],
+	amount: u128,
+	num_proofs: usize,
+) -> crate::error::Result<Vec<TransferInfo>> {
+	use colored::Colorize;
+
+	log_print!("{}", "Step 1: Sending wormhole transfers from wallet...".bright_yellow());
+
+	// Randomly partition the total amount among proofs
+	let min_per_proof = SCALE_DOWN_FACTOR; // 0.01 DEV (minimum quantizable amount)
+	let partition_amounts = random_partition(amount, num_proofs, min_per_proof);
+	log_print!("  Random partition of {} ({}):", amount, format_balance(amount));
+	for (i, &amt) in partition_amounts.iter().enumerate() {
+		log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
+	}
+
+	let pb = ProgressBar::new(num_proofs as u64);
+	pb.set_style(
+		ProgressStyle::default_bar()
+			.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+			.unwrap()
+			.progress_chars("#>-"),
+	);
+
+	let client = quantus_client.client();
+	let mut transfers = Vec::new();
+
+	for (i, secret) in secrets.iter().enumerate() {
+		pb.set_message(format!("Transfer {}/{}", i + 1, num_proofs));
+
+		let wormhole_address = SubxtAccountId(secret.address);
+		let transfer_amount = partition_amounts[i];
+
+		// Submit transfer
+		let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
+			subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
+			transfer_amount,
+		);
+
+		let quantum_keypair = QuantumKeyPair {
+			public_key: wallet.keypair.public_key.clone(),
+			private_key: wallet.keypair.private_key.clone(),
+		};
+
+		submit_transaction(
+			quantus_client,
+			&quantum_keypair,
+			transfer_tx,
+			None,
+			ExecutionMode { finalized: false, wait_for_transaction: true },
+		)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Transfer failed: {}", e)))?;
+
+		// Get the block and find our event
+		let block = at_best_block(quantus_client).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
+		})?;
+		let block_hash = block.hash();
+
+		let events_api = client.events().at(block_hash).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
+		})?;
+
+		// Find our transfer event
+		let event = events_api
+			.find::<wormhole::events::NativeTransferred>()
+			.find(|e| if let Ok(evt) = e { evt.to.0 == secret.address } else { false })
+			.ok_or_else(|| {
+				crate::error::QuantusError::Generic("No matching transfer event found".to_string())
+			})?
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Event decode error: {}", e))
+			})?;
+
+		let funding_account_bytes = wallet.keypair.to_account_id_32();
+		transfers.push(TransferInfo {
+			block_hash,
+			transfer_count: event.transfer_count,
+			amount: transfer_amount,
+			wormhole_address,
+			funding_account: SubxtAccountId(funding_account_bytes.into()),
+		});
+
+		pb.inc(1);
+	}
+	pb.finish_with_message("Transfers complete");
+
+	Ok(transfers)
+}
+
+/// Generate proofs for a round with random output partitioning
+async fn generate_round_proofs(
+	quantus_client: &QuantusClient,
+	secrets: &[WormholePair],
+	transfers: &[TransferInfo],
+	exit_accounts: &[SubxtAccountId],
+	round_dir: &str,
+	num_proofs: usize,
+) -> crate::error::Result<Vec<String>> {
+	use colored::Colorize;
+
+	log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
+
+	// All proofs in an aggregation batch must use the same block for storage proofs.
+	let proof_block = at_best_block(quantus_client)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
+	let proof_block_hash = proof_block.hash();
+	log_print!("  Using block {} for all proofs", hex::encode(proof_block_hash.0));
+
+	// Collect input amounts and exit accounts for random assignment
+	let input_amounts: Vec<u128> = transfers.iter().map(|t| t.amount).collect();
+	let exit_account_bytes: Vec<[u8; 32]> = exit_accounts.iter().map(|a| a.0).collect();
+
+	// Compute random output assignments (each proof can have 2 outputs)
+	let output_assignments =
+		compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS);
+
+	// Log the random partition
+	log_print!("  Random output partition:");
+	for (i, assignment) in output_assignments.iter().enumerate() {
+		let amt1_planck = (assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR;
+		if assignment.output_amount_2 > 0 {
+			let amt2_planck = (assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR;
+			log_print!(
+				"    Proof {}: {} ({}) -> 0x{}..., {} ({}) -> 0x{}...",
+				i + 1,
+				assignment.output_amount_1,
+				format_balance(amt1_planck),
+				hex::encode(&assignment.exit_account_1[..4]),
+				assignment.output_amount_2,
+				format_balance(amt2_planck),
+				hex::encode(&assignment.exit_account_2[..4])
+			);
+		} else {
+			log_print!(
+				"    Proof {}: {} ({}) -> 0x{}...",
+				i + 1,
+				assignment.output_amount_1,
+				format_balance(amt1_planck),
+				hex::encode(&assignment.exit_account_1[..4])
+			);
+		}
+	}
+
+	let pb = ProgressBar::new(num_proofs as u64);
+	pb.set_style(
+		ProgressStyle::default_bar()
+			.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+			.unwrap()
+			.progress_chars("#>-"),
+	);
+
+	let mut proof_files = Vec::new();
+	for (i, (secret, transfer)) in secrets.iter().zip(transfers.iter()).enumerate() {
+		pb.set_message(format!("Proof {}/{}", i + 1, num_proofs));
+
+		let proof_file = format!("{}/proof_{}.hex", round_dir, i + 1);
+
+		// Use the funding account from the transfer info
+		let funding_account_hex = format!("0x{}", hex::encode(transfer.funding_account.0));
+
+		// Generate proof with dual output assignment
+		generate_proof(
+			&hex::encode(secret.secret),
+			transfer.amount, // Use actual transfer amount for storage key
+			&output_assignments[i],
+			&format!("0x{}", hex::encode(proof_block_hash.0)),
+			transfer.transfer_count,
+			&funding_account_hex,
+			&proof_file,
+			quantus_client,
+		)
+		.await?;
+
+		proof_files.push(proof_file);
+		pb.inc(1);
+	}
+	pb.finish_with_message("Proofs generated");
+
+	Ok(proof_files)
+}
+
+/// Derive wormhole secrets for a round
+fn derive_round_secrets(
+	mnemonic: &str,
+	round: usize,
+	num_proofs: usize,
+) -> crate::error::Result<Vec<WormholePair>> {
+	let pb = ProgressBar::new(num_proofs as u64);
+	pb.set_style(
+		ProgressStyle::default_bar()
+			.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
+			.unwrap()
+			.progress_chars("#>-"),
+	);
+	pb.set_message("Deriving secrets...");
+
+	let mut secrets = Vec::new();
+	for i in 1..=num_proofs {
+		let secret = derive_wormhole_secret(mnemonic, round, i)?;
+		secrets.push(secret);
+		pb.inc(1);
+	}
+	pb.finish_with_message("Secrets derived");
+
+	Ok(secrets)
+}
+
+/// Verify final balance and print summary
+fn verify_final_balance(
+	initial_balance: u128,
+	final_balance: u128,
+	total_sent: u128,
+	rounds: usize,
+	num_proofs: usize,
+) {
+	use colored::Colorize;
+
+	log_print!("{}", "Balance Verification:".bright_cyan());
+
+	// Total received in final round: apply fee deduction for each round
+	let total_received = calculate_round_amount(total_sent, rounds);
+
+	// Expected net change (may be negative due to fees)
+	let expected_change = total_received as i128 - total_sent as i128;
+	let actual_change = final_balance as i128 - initial_balance as i128;
+
+	log_print!("  Initial balance: {} ({})", initial_balance, format_balance(initial_balance));
+	log_print!("  Final balance:   {} ({})", final_balance, format_balance(final_balance));
+	log_print!("");
+	log_print!("  Total sent (round 1):     {} ({})", total_sent, format_balance(total_sent));
+	log_print!(
+		"  Total received (round {}): {} ({})",
+		rounds,
+		total_received,
+		format_balance(total_received)
+	);
+	log_print!("");
+
+	// Format signed amounts for display
+	let expected_change_str = if expected_change >= 0 {
+		format!("+{}", expected_change)
+	} else {
+		format!("{}", expected_change)
+	};
+	let actual_change_str = if actual_change >= 0 {
+		format!("+{}", actual_change)
+	} else {
+		format!("{}", actual_change)
+	};
+
+	log_print!("  Expected change: {} planck", expected_change_str);
+	log_print!("  Actual change:   {} planck", actual_change_str);
+	log_print!("");
+
+	// Allow some tolerance for transaction fees
+	let tolerance = (total_sent / 100).max(1_000_000_000_000); // 1% or 1 QNT minimum
+
+	let diff = (actual_change - expected_change).unsigned_abs();
+	if diff <= tolerance {
+		log_success!(
+			"  {} Balance verification PASSED (within tolerance of {} planck)",
+			"✓".bright_green(),
+			tolerance
+		);
+	} else {
+		log_print!(
+			"  {} Balance verification: difference of {} planck (tolerance: {} planck)",
+			"!".bright_yellow(),
+			diff,
+			tolerance
+		);
+		log_print!(
+			"    Note: Transaction fees for {} initial transfers may account for the difference",
+			num_proofs
+		);
+	}
+	log_print!("");
+}
+
 /// Run the multi-round wormhole flow
 #[allow(clippy::too_many_arguments)]
 async fn run_multiround(
@@ -1160,72 +1559,18 @@ async fn run_multiround(
 	log_print!("");
 
 	// Validate parameters
-	if !(1..=MULTIROUND_MAX_PROOFS).contains(&num_proofs) {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"num_proofs must be between 1 and {} (got: {})",
-			MULTIROUND_MAX_PROOFS, num_proofs
-		)));
-	}
-	if rounds < 1 {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"rounds must be at least 1 (got: {})",
-			rounds
-		)));
-	}
+	validate_multiround_params(num_proofs, rounds)?;
 
 	// Load wallet
-	let wallet_manager = WalletManager::new()?;
-	let wallet_password = password::get_wallet_password(&wallet_name, password, password_file)?;
-	let wallet_data = wallet_manager.load_wallet(&wallet_name, &wallet_password)?;
-	let wallet_address = wallet_data.keypair.to_account_id_ss58check();
-	let wallet_account_id = SubxtAccountId(wallet_data.keypair.to_account_id_32().into());
+	let wallet = load_multiround_wallet(&wallet_name, password, password_file)?;
 
-	// Get or generate mnemonic for HD derivation
-	let mnemonic = match wallet_data.mnemonic {
-		Some(m) => {
-			log_verbose!("Using wallet mnemonic for HD derivation");
-			m
-		},
-		None => {
-			log_print!("Wallet has no mnemonic - generating random mnemonic for wormhole secrets");
-			let mut entropy = [0u8; 32];
-			rand::rng().fill_bytes(&mut entropy);
-			let sensitive_entropy = SensitiveBytes32::from(&mut entropy);
-			let m = generate_mnemonic(sensitive_entropy).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to generate mnemonic: {:?}", e))
-			})?;
-			log_verbose!("Generated mnemonic (not saved): {}", m);
-			m
-		},
-	};
+	// Create config struct
+	let config =
+		MultiroundConfig { num_proofs, rounds, amount, output_dir: output_dir.clone(), keep_files };
 
-	log_print!("{}", "Configuration:".bright_cyan());
-	log_print!("  Wallet: {}", wallet_name);
-	log_print!("  Wallet address: {}", wallet_address);
-	log_print!(
-		"  Total amount: {} ({}) - randomly partitioned across {} proofs",
-		amount,
-		format_balance(amount),
-		num_proofs
-	);
-	log_print!("  Proofs per round: {}", num_proofs);
-	log_print!("  Rounds: {}", rounds);
-	log_print!(
-		"  Aggregation: branching_factor={}, depth={}",
-		MULTIROUND_BRANCHING_FACTOR,
-		MULTIROUND_DEPTH
-	);
-	log_print!("  Output directory: {}", output_dir);
-	log_print!("  Keep files: {}", keep_files);
+	// Print configuration
+	print_multiround_config(&config, &wallet);
 	log_print!("  Dry run: {}", dry_run);
-	log_print!("");
-
-	// Show expected amounts per round
-	log_print!("{}", "Expected amounts per round:".bright_cyan());
-	for r in 1..=rounds {
-		let round_amount = calculate_round_amount(amount, r);
-		log_print!("  Round {}: {} ({})", r, round_amount, format_balance(round_amount));
-	}
 	log_print!("");
 
 	// Create output directory
@@ -1234,7 +1579,13 @@ async fn run_multiround(
 	})?;
 
 	if dry_run {
-		return run_multiround_dry_run(&mnemonic, num_proofs, rounds, amount, &wallet_address);
+		return run_multiround_dry_run(
+			&wallet.mnemonic,
+			num_proofs,
+			rounds,
+			amount,
+			&wallet.wallet_address,
+		);
 	}
 
 	// Connect to node
@@ -1248,7 +1599,7 @@ async fn run_multiround(
 	log_verbose!("Minting account: {:?}", minting_account);
 
 	// Record initial wallet balance for verification
-	let initial_balance = get_balance(&quantus_client, &wallet_address).await?;
+	let initial_balance = get_balance(&quantus_client, &wallet.wallet_address).await?;
 	log_print!("{}", "Initial Balance:".bright_cyan());
 	log_print!("  Wallet balance: {} ({})", initial_balance, format_balance(initial_balance));
 	log_print!("");
@@ -1278,27 +1629,12 @@ async fn run_multiround(
 		})?;
 
 		// Derive secrets for this round
-		let pb = ProgressBar::new(num_proofs as u64);
-		pb.set_style(
-			ProgressStyle::default_bar()
-				.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-				.unwrap()
-				.progress_chars("#>-"),
-		);
-		pb.set_message("Deriving secrets...");
-
-		let mut secrets: Vec<WormholePair> = Vec::new();
-		for i in 1..=num_proofs {
-			let secret = derive_wormhole_secret(&mnemonic, round, i)?;
-			secrets.push(secret);
-			pb.inc(1);
-		}
-		pb.finish_with_message("Secrets derived");
+		let secrets = derive_round_secrets(&wallet.mnemonic, round, num_proofs)?;
 
 		// Determine exit accounts
 		let exit_accounts: Vec<SubxtAccountId> = if is_final {
-			log_print!("Final round - all proofs exit to wallet: {}", wallet_address);
-			vec![wallet_account_id.clone(); num_proofs]
+			log_print!("Final round - all proofs exit to wallet: {}", wallet.wallet_address);
+			vec![wallet.wallet_account_id.clone(); num_proofs]
 		} else {
 			log_print!(
 				"Intermediate round - proofs exit to round {} wormhole addresses",
@@ -1306,101 +1642,21 @@ async fn run_multiround(
 			);
 			let mut addrs = Vec::new();
 			for i in 1..=num_proofs {
-				let next_secret = derive_wormhole_secret(&mnemonic, round + 1, i)?;
+				let next_secret = derive_wormhole_secret(&wallet.mnemonic, round + 1, i)?;
 				addrs.push(SubxtAccountId(next_secret.address));
 			}
 			addrs
 		};
 
-		// Step 1: Get transfer info
+		// Step 1: Get transfer info (execute transfers for round 1, reuse from previous round otherwise)
 		if round == 1 {
-			log_print!("{}", "Step 1: Sending wormhole transfers from wallet...".bright_yellow());
-
-			// Randomly partition the total amount among proofs
-			// Minimum 1 DEV per proof to ensure meaningful amounts
-			let min_per_proof = SCALE_DOWN_FACTOR; // 0.01 DEV (minimum quantizable amount)
-			let partition_amounts = random_partition(amount, num_proofs, min_per_proof);
-			log_print!("  Random partition of {} ({}):", amount, format_balance(amount));
-			for (i, &amt) in partition_amounts.iter().enumerate() {
-				log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
-			}
-
-			let pb = ProgressBar::new(num_proofs as u64);
-			pb.set_style(
-				ProgressStyle::default_bar()
-					.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-					.unwrap()
-					.progress_chars("#>-"),
-			);
-
-			current_transfers.clear();
-			for (i, secret) in secrets.iter().enumerate() {
-				pb.set_message(format!("Transfer {}/{}", i + 1, num_proofs));
-
-				let wormhole_address = SubxtAccountId(secret.address);
-				let transfer_amount = partition_amounts[i];
-
-				// Submit transfer
-				let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
-					subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
-					transfer_amount,
-				);
-
-				let quantum_keypair = QuantumKeyPair {
-					public_key: wallet_data.keypair.public_key.clone(),
-					private_key: wallet_data.keypair.private_key.clone(),
-				};
-
-				submit_transaction(
-					&quantus_client,
-					&quantum_keypair,
-					transfer_tx,
-					None,
-					ExecutionMode { finalized: false, wait_for_transaction: true },
-				)
-				.await
-				.map_err(|e| {
-					crate::error::QuantusError::Generic(format!("Transfer failed: {}", e))
-				})?;
-
-				// Get the block and find our event
-				let block = at_best_block(&quantus_client).await.map_err(|e| {
-					crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
-				})?;
-				let block_hash = block.hash();
-
-				let events_api = client.events().at(block_hash).await.map_err(|e| {
-					crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
-				})?;
-
-				// Find our transfer event
-				let event = events_api
-					.find::<wormhole::events::NativeTransferred>()
-					.find(|e| if let Ok(evt) = e { evt.to.0 == secret.address } else { false })
-					.ok_or_else(|| {
-						crate::error::QuantusError::Generic(
-							"No matching transfer event found".to_string(),
-						)
-					})?
-					.map_err(|e| {
-						crate::error::QuantusError::Generic(format!("Event decode error: {}", e))
-					})?;
-
-				let funding_account_bytes = wallet_data.keypair.to_account_id_32();
-				current_transfers.push(TransferInfo {
-					block_hash,
-					transfer_count: event.transfer_count,
-					amount: transfer_amount,
-					wormhole_address,
-					funding_account: SubxtAccountId(funding_account_bytes.into()),
-				});
-
-				pb.inc(1);
-			}
-			pb.finish_with_message("Transfers complete");
+			current_transfers =
+				execute_initial_transfers(&quantus_client, &wallet, &secrets, amount, num_proofs)
+					.await?;
 
 			// Log balance immediately after funding transfers
-			let balance_after_funding = get_balance(&quantus_client, &wallet_address).await?;
+			let balance_after_funding =
+				get_balance(&quantus_client, &wallet.wallet_address).await?;
 			let funding_deducted = initial_balance.saturating_sub(balance_after_funding);
 			log_print!(
 				"  Balance after funding: {} ({}) [deducted: {} planck]",
@@ -1410,92 +1666,19 @@ async fn run_multiround(
 			);
 		} else {
 			log_print!("{}", "Step 1: Using transfer info from previous round...".bright_yellow());
-			// current_transfers was populated from the previous round's verification events
-			// The secrets for this round ARE the exit secrets from round-1
-			// So current_transfers already has the right wormhole addresses
 			log_print!("  Found {} transfer(s) from previous round", current_transfers.len());
 		}
 
 		// Step 2: Generate proofs with random output partitioning
-		log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
-
-		// All proofs in an aggregation batch must use the same block for storage proofs.
-		// Use the best block (which contains all transfers' state) for all proofs.
-		let proof_block = at_best_block(&quantus_client).await.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
-		})?;
-		let proof_block_hash = proof_block.hash();
-		log_print!("  Using block {} for all proofs", hex::encode(proof_block_hash.0));
-
-		// Collect input amounts and exit accounts for random assignment
-		let input_amounts: Vec<u128> = current_transfers.iter().map(|t| t.amount).collect();
-		let exit_account_bytes: Vec<[u8; 32]> = exit_accounts.iter().map(|a| a.0).collect();
-
-		// Compute random output assignments (each proof can have 2 outputs)
-		let output_assignments =
-			compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS);
-
-		// Log the random partition
-		log_print!("  Random output partition:");
-		for (i, assignment) in output_assignments.iter().enumerate() {
-			let amt1_planck = (assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR;
-			if assignment.output_amount_2 > 0 {
-				let amt2_planck = (assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR;
-				log_print!(
-					"    Proof {}: {} ({}) -> 0x{}..., {} ({}) -> 0x{}...",
-					i + 1,
-					assignment.output_amount_1,
-					format_balance(amt1_planck),
-					hex::encode(&assignment.exit_account_1[..4]),
-					assignment.output_amount_2,
-					format_balance(amt2_planck),
-					hex::encode(&assignment.exit_account_2[..4])
-				);
-			} else {
-				log_print!(
-					"    Proof {}: {} ({}) -> 0x{}...",
-					i + 1,
-					assignment.output_amount_1,
-					format_balance(amt1_planck),
-					hex::encode(&assignment.exit_account_1[..4])
-				);
-			}
-		}
-
-		let pb = ProgressBar::new(num_proofs as u64);
-		pb.set_style(
-			ProgressStyle::default_bar()
-				.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-				.unwrap()
-				.progress_chars("#>-"),
-		);
-
-		let mut proof_files: Vec<String> = Vec::new();
-		for (i, (secret, transfer)) in secrets.iter().zip(current_transfers.iter()).enumerate() {
-			pb.set_message(format!("Proof {}/{}", i + 1, num_proofs));
-
-			let proof_file = format!("{}/proof_{}.hex", round_dir, i + 1);
-
-			// Use the funding account from the transfer info
-			let funding_account_hex = format!("0x{}", hex::encode(transfer.funding_account.0));
-
-			// Generate proof with dual output assignment
-			generate_proof(
-				&hex::encode(secret.secret),
-				transfer.amount, // Use actual transfer amount for storage key
-				&output_assignments[i],
-				&format!("0x{}", hex::encode(proof_block_hash.0)),
-				transfer.transfer_count,
-				&funding_account_hex,
-				&proof_file,
-				&quantus_client,
-			)
-			.await?;
-
-			proof_files.push(proof_file);
-			pb.inc(1);
-		}
-		pb.finish_with_message("Proofs generated");
+		let proof_files = generate_round_proofs(
+			&quantus_client,
+			&secrets,
+			&current_transfers,
+			&exit_accounts,
+			&round_dir,
+			num_proofs,
+		)
+		.await?;
 
 		// Step 3: Aggregate proofs
 		log_print!("{}", "Step 3: Aggregating proofs...".bright_yellow());
@@ -1530,7 +1713,8 @@ async fn run_multiround(
 			// Parse events to get transfer info for next round's wormhole addresses
 			let next_round_addresses: Vec<SubxtAccountId> = (1..=num_proofs)
 				.map(|i| {
-					let next_secret = derive_wormhole_secret(&mnemonic, round + 1, i).unwrap();
+					let next_secret =
+						derive_wormhole_secret(&wallet.mnemonic, round + 1, i).unwrap();
 					SubxtAccountId(next_secret.address)
 				})
 				.collect();
@@ -1550,7 +1734,7 @@ async fn run_multiround(
 		}
 
 		// Log balance after this round
-		let balance_after_round = get_balance(&quantus_client, &wallet_address).await?;
+		let balance_after_round = get_balance(&quantus_client, &wallet.wallet_address).await?;
 		let change_from_initial = balance_after_round as i128 - initial_balance as i128;
 		let change_str = if change_from_initial >= 0 {
 			format!("+{}", change_from_initial)
@@ -1577,74 +1761,8 @@ async fn run_multiround(
 	log_print!("");
 
 	// Final balance verification
-	log_print!("{}", "Balance Verification:".bright_cyan());
-
-	// Query final balance
-	let final_balance = get_balance(&quantus_client, &wallet_address).await?;
-
-	// Calculate expected balance change
-	// Total sent in round 1: the `amount` parameter is the total that was partitioned
-	let total_sent = amount;
-
-	// Total received in final round: apply fee deduction for each round
-	let total_received = calculate_round_amount(amount, rounds);
-
-	// Expected net change (may be negative due to fees)
-	let expected_change = total_received as i128 - total_sent as i128;
-	let actual_change = final_balance as i128 - initial_balance as i128;
-
-	log_print!("  Initial balance: {} ({})", initial_balance, format_balance(initial_balance));
-	log_print!("  Final balance:   {} ({})", final_balance, format_balance(final_balance));
-	log_print!("");
-	log_print!("  Total sent (round 1):     {} ({})", total_sent, format_balance(total_sent));
-	log_print!(
-		"  Total received (round {}): {} ({})",
-		rounds,
-		total_received,
-		format_balance(total_received)
-	);
-	log_print!("");
-
-	// Format signed amounts for display
-	let expected_change_str = if expected_change >= 0 {
-		format!("+{}", expected_change)
-	} else {
-		format!("{}", expected_change)
-	};
-	let actual_change_str = if actual_change >= 0 {
-		format!("+{}", actual_change)
-	} else {
-		format!("{}", actual_change)
-	};
-
-	log_print!("  Expected change: {} planck", expected_change_str);
-	log_print!("  Actual change:   {} planck", actual_change_str);
-	log_print!("");
-
-	// Allow some tolerance for transaction fees (e.g., 1% or a fixed amount)
-	// The actual change may differ slightly due to transaction fees for the initial transfers
-	let tolerance = (total_sent / 100).max(1_000_000_000_000); // 1% or 1 QNT minimum
-
-	let diff = (actual_change - expected_change).unsigned_abs();
-	if diff <= tolerance {
-		log_success!(
-			"  {} Balance verification PASSED (within tolerance of {} planck)",
-			"✓".bright_green(),
-			tolerance
-		);
-	} else {
-		log_print!(
-			"  {} Balance verification: difference of {} planck (tolerance: {} planck)",
-			"!".bright_yellow(),
-			diff,
-			tolerance
-		);
-		log_print!(
-			"    Note: Transaction fees for {} initial transfers may account for the difference",
-			num_proofs
-		);
-	}
-	log_print!("");
+	let final_balance = get_balance(&quantus_client, &wallet.wallet_address).await?;
+	verify_final_balance(initial_balance, final_balance, amount, rounds, num_proofs);
 
 	if keep_files {
 		log_print!("Proof files preserved in: {}", output_dir);
@@ -2209,8 +2327,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000 <=
-				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000
+				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
@@ -2295,8 +2413,8 @@ mod tests {
 		let input_amount = inputs.private.input_amount;
 		let output_amount = inputs.public.output_amount_1 + inputs.public.output_amount_2;
 		assert!(
-			(output_amount as u64) * 10000 <=
-				(input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			(output_amount as u64) * 10000
+				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
 			"Test inputs violate fee constraint"
 		);
 
