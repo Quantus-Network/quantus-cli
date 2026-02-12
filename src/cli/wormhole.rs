@@ -19,16 +19,15 @@ use qp_rusty_crystals_hdwallet::{
 	QUANTUS_WORMHOLE_CHAIN_ID,
 };
 use qp_wormhole_circuit::{
-	inputs::{
-		AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
-	},
+	inputs::{CircuitInputs, ParseAggregatedPublicInputs, PrivateCircuitInputs},
 	nullifier::Nullifier,
 };
+use qp_wormhole_inputs::{AggregatedPublicCircuitInputs, PublicCircuitInputs};
 use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
-	utils::{BytesDigest, Digest},
+	utils::{digest_felts_to_bytes, BytesDigest},
 };
 use rand::RngCore;
 use sp_core::{
@@ -578,7 +577,7 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "2")]
 		rounds: usize,
 
-		/// Amount per transfer in planck (default: 10 DEV)
+		/// Total amount in planck to partition across all proofs (default: 10 DEV)
 		#[arg(short, long, default_value = "10000000000000")]
 		amount: u128,
 
@@ -613,9 +612,8 @@ pub async fn handle_wormhole_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WormholeCommands::Transfer { secret, amount, from, password, password_file } => {
-			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await
-		},
+		WormholeCommands::Transfer { secret, amount, from, password, password_file } =>
+			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await,
 		WormholeCommands::Generate {
 			secret,
 			amount,
@@ -625,27 +623,47 @@ pub async fn handle_wormhole_command(
 			funding_account,
 			output,
 		} => {
+			log_print!("Generating proof from existing transfer...");
+
+			// Connect to node
+			let quantus_client = QuantusClient::new(node_url).await.map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to connect: {}", e))
+			})?;
+
+			// Parse exit account
+			let exit_account_bytes =
+				parse_exit_account(&exit_account).map_err(crate::error::QuantusError::Generic)?;
+
+			// Quantize amount and compute output (single output, no change)
+			let input_amount_quantized =
+				quantize_funding_amount(amount).map_err(crate::error::QuantusError::Generic)?;
+			let output_amount = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
+
+			let output_assignment = ProofOutputAssignment {
+				output_amount_1: output_amount,
+				exit_account_1: exit_account_bytes,
+				output_amount_2: 0,
+				exit_account_2: [0u8; 32],
+			};
+
 			generate_proof(
-				secret,
+				&secret,
 				amount,
-				exit_account,
-				block,
+				&output_assignment,
+				&block,
 				transfer_count,
-				funding_account,
-				output,
-				node_url,
+				&funding_account,
+				&output,
+				&quantus_client,
 			)
 			.await
 		},
-		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } => {
-			aggregate_proofs(proofs, output, depth, branching_factor).await
-		},
-		WormholeCommands::VerifyAggregated { proof } => {
-			verify_aggregated_proof(proof, node_url).await
-		},
-		WormholeCommands::ParseProof { proof, aggregated, verify } => {
-			parse_proof_file(proof, aggregated, verify).await
-		},
+		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } =>
+			aggregate_proofs(proofs, output, depth, branching_factor).await,
+		WormholeCommands::VerifyAggregated { proof } =>
+			verify_aggregated_proof(proof, node_url).await,
+		WormholeCommands::ParseProof { proof, aggregated, verify } =>
+			parse_proof_file(proof, aggregated, verify).await,
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -656,7 +674,7 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 			dry_run,
-		} => {
+		} =>
 			run_multiround(
 				num_proofs,
 				rounds,
@@ -669,8 +687,7 @@ pub async fn handle_wormhole_command(
 				dry_run,
 				node_url,
 			)
-			.await
-		},
+			.await,
 	}
 }
 
@@ -778,206 +795,6 @@ async fn submit_wormhole_transfer(
 	Ok(())
 }
 
-/// Generate a wormhole proof from an existing transfer
-async fn generate_proof(
-	secret_hex: String,
-	funding_amount: u128,
-	exit_account_str: String,
-	block_hash_str: String,
-	transfer_count: u64,
-	funding_account_str: String,
-	output_file: String,
-	node_url: &str,
-) -> crate::error::Result<()> {
-	log_print!("Generating proof from existing transfer...");
-
-	// Parse secret
-	let secret_array =
-		parse_secret_hex(&secret_hex).map_err(crate::error::QuantusError::Generic)?;
-	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
-	})?;
-
-	// Parse exit account
-	let exit_account_bytes =
-		parse_exit_account(&exit_account_str).map_err(crate::error::QuantusError::Generic)?;
-	let exit_account_id = SubxtAccountId(exit_account_bytes);
-
-	// Parse funding account
-	let funding_account_bytes =
-		parse_exit_account(&funding_account_str).map_err(crate::error::QuantusError::Generic)?;
-	let funding_account = AccountId32::new(funding_account_bytes);
-
-	// Parse block hash
-	let hash_bytes = hex::decode(block_hash_str.trim_start_matches("0x"))
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid block hash: {}", e)))?;
-	if hash_bytes.len() != 32 {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Block hash must be 32 bytes, got {}",
-			hash_bytes.len()
-		)));
-	}
-	let hash: [u8; 32] = hash_bytes.try_into().unwrap();
-	let block_hash = subxt::utils::H256::from(hash);
-
-	// Connect to node
-	let quantus_client = QuantusClient::new(node_url)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
-	let client = quantus_client.client();
-
-	log_verbose!("Connected to node, using block: {:?}", block_hash);
-
-	// Generate unspendable account from secret
-	let unspendable_account =
-		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
-			.account_id;
-	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
-	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
-		.as_ref()
-		.try_into()
-		.expect("BytesDigest is always 32 bytes");
-
-	let from_account = funding_account.clone();
-	let to_account = AccountId32::new(unspendable_account_bytes);
-
-	// Get block
-	let blocks =
-		client.blocks().at(block_hash).await.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
-		})?;
-
-	// Build storage key
-	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofKey>(
-		&(
-			NATIVE_ASSET_ID,
-			transfer_count,
-			from_account.clone(),
-			to_account.clone(),
-			funding_amount,
-		)
-			.encode(),
-	);
-
-	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
-		NATIVE_ASSET_ID,
-		transfer_count,
-		SubxtAccountId(from_account.clone().into()),
-		SubxtAccountId(to_account.clone().into()),
-		funding_amount,
-	));
-
-	let mut final_key = proof_address.to_root_bytes();
-	final_key.extend_from_slice(&leaf_hash);
-
-	// Verify storage key exists
-	let storage_api = client.storage().at(block_hash);
-	let val = storage_api
-		.fetch_raw(final_key.clone())
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	if val.is_none() {
-		return Err(crate::error::QuantusError::Generic(
-			"Storage key not found - transfer may not exist in this block".to_string(),
-		));
-	}
-
-	// Get storage proof
-	let proof_params = rpc_params![vec![to_hex(&final_key)], block_hash];
-	let read_proof: ReadProof<sp_core::H256> = quantus_client
-		.rpc_client()
-		.request("state_getReadProof", proof_params)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-
-	let header = blocks.header();
-	let state_root = BytesDigest::try_from(header.state_root.as_bytes())
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let parent_hash = BytesDigest::try_from(header.parent_hash.as_bytes())
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let extrinsics_root = BytesDigest::try_from(header.extrinsics_root.as_bytes())
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let digest =
-		header.digest.encode().try_into().map_err(|_| {
-			crate::error::QuantusError::Generic("Failed to encode digest".to_string())
-		})?;
-	let block_number = header.number;
-
-	// Prepare storage proof
-	let processed_storage_proof = prepare_proof_for_circuit(
-		read_proof.proof.iter().map(|proof| proof.0.clone()).collect(),
-		hex::encode(header.state_root.0),
-		leaf_hash,
-	)
-	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-
-	// Quantize amounts
-	let input_amount_quantized: u32 =
-		quantize_funding_amount(funding_amount).map_err(crate::error::QuantusError::Generic)?;
-	let output_amount_quantized = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
-
-	let inputs = CircuitInputs {
-		private: PrivateCircuitInputs {
-			secret,
-			transfer_count,
-			funding_account: BytesDigest::try_from(funding_account.as_ref() as &[u8])
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			storage_proof: processed_storage_proof,
-			unspendable_account: Digest::from(unspendable_account).into(),
-			state_root,
-			extrinsics_root,
-			digest,
-			input_amount: input_amount_quantized,
-		},
-		public: PublicCircuitInputs {
-			output_amount_1: output_amount_quantized,
-			output_amount_2: 0, // No change output for single-output spend
-			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: Nullifier::from_preimage(secret, transfer_count).hash.into(),
-			exit_account_1: BytesDigest::try_from(exit_account_id.as_ref() as &[u8])
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			exit_account_2: BytesDigest::try_from([0u8; 32].as_ref())
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?, // Unused
-			block_hash: BytesDigest::try_from(block_hash.as_ref())
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			parent_hash,
-			block_number,
-			asset_id: NATIVE_ASSET_ID,
-		},
-	};
-
-	log_verbose!("Generating ZK proof...");
-	// Load prover from pre-built bins to ensure circuit digest matches on-chain verifier
-	let bins_dir = std::path::Path::new("generated-bins");
-	let prover =
-		WormholeProver::new_from_files(&bins_dir.join("prover.bin"), &bins_dir.join("common.bin"))
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to load prover: {}", e))
-			})?;
-	let prover_next = prover
-		.commit(&inputs)
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let proof: ProofWithPublicInputs<_, _, 2> = prover_next.prove().map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Proof generation failed: {}", e))
-	})?;
-
-	let public_inputs = PublicCircuitInputs::try_from(&proof)
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-
-	let proof_hex = hex::encode(proof.to_bytes());
-	std::fs::write(&output_file, proof_hex).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
-	})?;
-
-	log_success!("Proof generated successfully!");
-	log_success!("Output: {}", output_file);
-	log_success!("Block: {:?}", block_hash);
-	log_verbose!("Public inputs: {:?}", public_inputs);
-
-	Ok(())
-}
-
 async fn at_best_block(
 	quantus_client: &QuantusClient,
 ) -> anyhow::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
@@ -1057,7 +874,7 @@ async fn aggregate_proofs(
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
 
 	// Parse and display aggregated public inputs
-	let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_slice(
+	let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
 		aggregated_proof.proof.public_inputs.as_slice(),
 	)
 	.map_err(|e| {
@@ -1343,7 +1160,7 @@ async fn run_multiround(
 	log_print!("");
 
 	// Validate parameters
-	if num_proofs < 1 || num_proofs > MULTIROUND_MAX_PROOFS {
+	if !(1..=MULTIROUND_MAX_PROOFS).contains(&num_proofs) {
 		return Err(crate::error::QuantusError::Generic(format!(
 			"num_proofs must be between 1 and {} (got: {})",
 			MULTIROUND_MAX_PROOFS, num_proofs
@@ -1663,7 +1480,7 @@ async fn run_multiround(
 			let funding_account_hex = format!("0x{}", hex::encode(transfer.funding_account.0));
 
 			// Generate proof with dual output assignment
-			generate_proof_with_dual_output(
+			generate_proof(
 				&hex::encode(secret.secret),
 				transfer.amount, // Use actual transfer amount for storage key
 				&output_assignments[i],
@@ -1766,12 +1583,11 @@ async fn run_multiround(
 	let final_balance = get_balance(&quantus_client, &wallet_address).await?;
 
 	// Calculate expected balance change
-	// Total sent in round 1: num_proofs * amount
-	let total_sent = (num_proofs as u128) * amount;
+	// Total sent in round 1: the `amount` parameter is the total that was partitioned
+	let total_sent = amount;
 
-	// Total received in final round: num_proofs * final_round_amount
-	let final_round_amount = calculate_round_amount(amount, rounds);
-	let total_received = (num_proofs as u128) * final_round_amount;
+	// Total received in final round: apply fee deduction for each round
+	let total_received = calculate_round_amount(amount, rounds);
 
 	// Expected net change (may be negative due to fees)
 	let expected_change = total_received as i128 - total_sent as i128;
@@ -1809,7 +1625,7 @@ async fn run_multiround(
 	// The actual change may differ slightly due to transaction fees for the initial transfers
 	let tolerance = (total_sent / 100).max(1_000_000_000_000); // 1% or 1 QNT minimum
 
-	let diff = (actual_change - expected_change).abs() as u128;
+	let diff = (actual_change - expected_change).unsigned_abs();
 	if diff <= tolerance {
 		log_success!(
 			"  {} Balance verification PASSED (within tolerance of {} planck)",
@@ -1841,7 +1657,7 @@ async fn run_multiround(
 }
 
 /// Generate a wormhole proof with dual outputs (used for random partitioning in multiround)
-async fn generate_proof_with_dual_output(
+async fn generate_proof(
 	secret_hex: &str,
 	funding_amount: u128,
 	output_assignment: &ProofOutputAssignment,
@@ -1972,7 +1788,7 @@ async fn generate_proof_with_dual_output(
 			funding_account: BytesDigest::try_from(funding_account.as_ref() as &[u8])
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			storage_proof: processed_storage_proof,
-			unspendable_account: Digest::from(unspendable_account).into(),
+			unspendable_account: unspendable_account_bytes_digest,
 			state_root,
 			extrinsics_root,
 			digest,
@@ -1982,7 +1798,7 @@ async fn generate_proof_with_dual_output(
 			output_amount_1: output_assignment.output_amount_1,
 			output_amount_2: output_assignment.output_amount_2,
 			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: Nullifier::from_preimage(secret, transfer_count).hash.into(),
+			nullifier: digest_felts_to_bytes(Nullifier::from_preimage(secret, transfer_count).hash),
 			exit_account_1: BytesDigest::try_from(output_assignment.exit_account_1.as_ref())
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			exit_account_2: BytesDigest::try_from(output_assignment.exit_account_2.as_ref())
@@ -2036,16 +1852,14 @@ async fn verify_aggregated_and_get_events(
 
 	// Verify locally before submitting on-chain
 	log_verbose!("Verifying aggregated proof locally before on-chain submission...");
-	let aggregated_verifier_bytes = include_bytes!("../../generated-bins/aggregated_verifier.bin");
-	let aggregated_common_bytes = include_bytes!("../../generated-bins/aggregated_common.bin");
-	let verifier =
-		WormholeVerifier::new_from_bytes(aggregated_verifier_bytes, aggregated_common_bytes)
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!(
-					"Failed to load aggregated verifier: {}",
-					e
-				))
-			})?;
+	let bins_dir = Path::new("generated-bins");
+	let verifier = WormholeVerifier::new_from_files(
+		&bins_dir.join("aggregated_verifier.bin"),
+		&bins_dir.join("aggregated_common.bin"),
+	)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to load aggregated verifier: {}", e))
+	})?;
 
 	// Use the verifier crate's ProofWithPublicInputs type (different from plonky2's)
 	let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
@@ -2252,9 +2066,8 @@ fn run_multiround_dry_run(
 mod tests {
 	use super::*;
 	use plonky2::plonk::circuit_data::CircuitConfig;
-	use qp_wormhole_circuit::inputs::{
-		AggregatedPublicCircuitInputs, CircuitInputs, PublicCircuitInputs,
-	};
+	use qp_wormhole_circuit::inputs::{CircuitInputs, ParsePublicInputs};
+	use qp_wormhole_inputs::{AggregatedPublicCircuitInputs, PublicCircuitInputs};
 	use qp_wormhole_prover::WormholeProver;
 	use qp_wormhole_test_helpers::TestInputs;
 
@@ -2263,6 +2076,13 @@ mod tests {
 	/// Helper to get a standard circuit config for tests
 	fn test_circuit_config() -> CircuitConfig {
 		CircuitConfig::standard_recursion_zk_config()
+	}
+
+	/// Helper to build a verifier from the circuit for testing.
+	/// In production, verifiers load pre-built circuit data from files.
+	fn build_test_verifier() -> plonky2::plonk::circuit_data::VerifierCircuitData<F, C, D> {
+		use qp_wormhole_circuit::circuit::circuit_logic::WormholeCircuit;
+		WormholeCircuit::new(test_circuit_config()).build_verifier()
 	}
 
 	#[test]
@@ -2389,8 +2209,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000
-				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000 <=
+				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
@@ -2475,8 +2295,8 @@ mod tests {
 		let input_amount = inputs.private.input_amount;
 		let output_amount = inputs.public.output_amount_1 + inputs.public.output_amount_2;
 		assert!(
-			(output_amount as u64) * 10000
-				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			(output_amount as u64) * 10000 <=
+				(input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
 			"Test inputs violate fee constraint"
 		);
 
@@ -2488,7 +2308,7 @@ mod tests {
 
 		// Parse and verify public inputs from proof
 		let parsed_public_inputs =
-			PublicCircuitInputs::try_from(&proof).expect("Failed to parse public inputs");
+			PublicCircuitInputs::try_from_proof(&proof).expect("Failed to parse public inputs");
 
 		assert_eq!(parsed_public_inputs.asset_id, inputs.public.asset_id);
 		assert_eq!(parsed_public_inputs.output_amount_1, inputs.public.output_amount_1);
@@ -2502,7 +2322,7 @@ mod tests {
 		assert_eq!(parsed_public_inputs.block_number, inputs.public.block_number);
 
 		// Create verifier and verify proof
-		let verifier = WormholeVerifier::new(config, None);
+		let verifier = build_test_verifier();
 		verifier.verify(proof).expect("Proof verification failed");
 	}
 
@@ -2529,12 +2349,12 @@ mod tests {
 		assert_eq!(proof_bytes, read_bytes, "Proof bytes should match after file roundtrip");
 
 		// Deserialize and verify
-		let verifier = WormholeVerifier::new(config, None);
+		let verifier = build_test_verifier();
 		let deserialized_proof = plonky2::plonk::proof::ProofWithPublicInputs::<
 			qp_zk_circuits_common::circuit::F,
 			qp_zk_circuits_common::circuit::C,
 			{ qp_zk_circuits_common::circuit::D },
-		>::from_bytes(read_bytes, &verifier.circuit_data.common)
+		>::from_bytes(read_bytes, &verifier.common)
 		.expect("Failed to deserialize proof");
 
 		verifier
@@ -2559,13 +2379,13 @@ mod tests {
 		let proof_1 = prover_1.commit(&inputs_1).unwrap().prove().unwrap();
 
 		// Verify both proofs
-		let verifier = WormholeVerifier::new(config, None);
+		let verifier = build_test_verifier();
 		verifier.verify(proof_0.clone()).expect("Proof 0 verification failed");
 		verifier.verify(proof_1.clone()).expect("Proof 1 verification failed");
 
 		// Verify public inputs are different (different nullifiers, etc.)
-		let public_0 = PublicCircuitInputs::try_from(&proof_0).unwrap();
-		let public_1 = PublicCircuitInputs::try_from(&proof_1).unwrap();
+		let public_0 = PublicCircuitInputs::try_from_proof(&proof_0).unwrap();
+		let public_1 = PublicCircuitInputs::try_from_proof(&proof_1).unwrap();
 
 		assert_ne!(public_0.nullifier, public_1.nullifier, "Nullifiers should be different");
 		assert_ne!(public_0.block_hash, public_1.block_hash, "Block hashes should be different");
@@ -2585,8 +2405,7 @@ mod tests {
 		let proof = prover.commit(&inputs).unwrap().prove().unwrap();
 
 		// Create aggregator with default config (branching_factor=2, depth=1)
-		let verifier = WormholeVerifier::new(config, None);
-		let mut aggregator = WormholeProofAggregator::new(verifier.circuit_data);
+		let mut aggregator = WormholeProofAggregator::from_circuit_config(config);
 
 		// Add proof to aggregator
 		aggregator.push_proof(proof.clone()).expect("Failed to push proof");
@@ -2595,7 +2414,7 @@ mod tests {
 		let aggregated_result = aggregator.aggregate().expect("Aggregation failed");
 
 		// Parse aggregated public inputs
-		let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_slice(
+		let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
 			aggregated_result.proof.public_inputs.as_slice(),
 		)
 		.expect("Failed to parse aggregated public inputs");
@@ -2641,8 +2460,7 @@ mod tests {
 		let proof_1 = prover_1.commit(&inputs_1).unwrap().prove().unwrap();
 
 		// Create aggregator
-		let verifier = WormholeVerifier::new(config, None);
-		let mut aggregator = WormholeProofAggregator::new(verifier.circuit_data);
+		let mut aggregator = WormholeProofAggregator::from_circuit_config(config);
 
 		// Add both proofs
 		aggregator.push_proof(proof_0).expect("Failed to push proof 0");
@@ -2652,7 +2470,7 @@ mod tests {
 		let aggregated_result = aggregator.aggregate().expect("Aggregation failed");
 
 		// Parse aggregated public inputs
-		let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_slice(
+		let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
 			aggregated_result.proof.public_inputs.as_slice(),
 		)
 		.expect("Failed to parse aggregated public inputs");
@@ -2680,27 +2498,31 @@ mod tests {
 	/// Test that public inputs parsing matches expected structure
 	#[test]
 	fn test_public_inputs_structure() {
-		use qp_wormhole_circuit::inputs::{
+		use qp_wormhole_inputs::{
 			ASSET_ID_INDEX, BLOCK_HASH_END_INDEX, BLOCK_HASH_START_INDEX, BLOCK_NUMBER_INDEX,
-			EXIT_ACCOUNT_END_INDEX, EXIT_ACCOUNT_START_INDEX, NULLIFIER_END_INDEX,
-			NULLIFIER_START_INDEX, OUTPUT_AMOUNT_INDEX, PARENT_HASH_END_INDEX,
+			EXIT_ACCOUNT_1_END_INDEX, EXIT_ACCOUNT_1_START_INDEX, EXIT_ACCOUNT_2_END_INDEX,
+			EXIT_ACCOUNT_2_START_INDEX, NULLIFIER_END_INDEX, NULLIFIER_START_INDEX,
+			OUTPUT_AMOUNT_1_INDEX, OUTPUT_AMOUNT_2_INDEX, PARENT_HASH_END_INDEX,
 			PARENT_HASH_START_INDEX, PUBLIC_INPUTS_FELTS_LEN, VOLUME_FEE_BPS_INDEX,
 		};
 
-		// Verify expected public inputs layout
-		assert_eq!(PUBLIC_INPUTS_FELTS_LEN, 20, "Public inputs should be 20 field elements");
+		// Verify expected public inputs layout for dual-output circuit
+		assert_eq!(PUBLIC_INPUTS_FELTS_LEN, 25, "Public inputs should be 25 field elements");
 		assert_eq!(ASSET_ID_INDEX, 0, "Asset ID should be first");
-		assert_eq!(OUTPUT_AMOUNT_INDEX, 1, "Output amount should be second");
-		assert_eq!(VOLUME_FEE_BPS_INDEX, 2, "Volume fee BPS should be third");
-		assert_eq!(NULLIFIER_START_INDEX, 3, "Nullifier should start at index 3");
-		assert_eq!(NULLIFIER_END_INDEX, 7, "Nullifier should end at index 7");
-		assert_eq!(EXIT_ACCOUNT_START_INDEX, 7, "Exit account should start at index 7");
-		assert_eq!(EXIT_ACCOUNT_END_INDEX, 11, "Exit account should end at index 11");
-		assert_eq!(BLOCK_HASH_START_INDEX, 11, "Block hash should start at index 11");
-		assert_eq!(BLOCK_HASH_END_INDEX, 15, "Block hash should end at index 15");
-		assert_eq!(PARENT_HASH_START_INDEX, 15, "Parent hash should start at index 15");
-		assert_eq!(PARENT_HASH_END_INDEX, 19, "Parent hash should end at index 19");
-		assert_eq!(BLOCK_NUMBER_INDEX, 19, "Block number should be at index 19");
+		assert_eq!(OUTPUT_AMOUNT_1_INDEX, 1, "Output amount 1 should be at index 1");
+		assert_eq!(OUTPUT_AMOUNT_2_INDEX, 2, "Output amount 2 should be at index 2");
+		assert_eq!(VOLUME_FEE_BPS_INDEX, 3, "Volume fee BPS should be at index 3");
+		assert_eq!(NULLIFIER_START_INDEX, 4, "Nullifier should start at index 4");
+		assert_eq!(NULLIFIER_END_INDEX, 8, "Nullifier should end at index 8");
+		assert_eq!(EXIT_ACCOUNT_1_START_INDEX, 8, "Exit account 1 should start at index 8");
+		assert_eq!(EXIT_ACCOUNT_1_END_INDEX, 12, "Exit account 1 should end at index 12");
+		assert_eq!(EXIT_ACCOUNT_2_START_INDEX, 12, "Exit account 2 should start at index 12");
+		assert_eq!(EXIT_ACCOUNT_2_END_INDEX, 16, "Exit account 2 should end at index 16");
+		assert_eq!(BLOCK_HASH_START_INDEX, 16, "Block hash should start at index 16");
+		assert_eq!(BLOCK_HASH_END_INDEX, 20, "Block hash should end at index 20");
+		assert_eq!(PARENT_HASH_START_INDEX, 20, "Parent hash should start at index 20");
+		assert_eq!(PARENT_HASH_END_INDEX, 24, "Parent hash should end at index 24");
+		assert_eq!(BLOCK_NUMBER_INDEX, 24, "Block number should be at index 24");
 	}
 
 	/// Test that constants match expected on-chain configuration
@@ -2745,14 +2567,17 @@ async fn parse_proof_file(
 
 	log_print!("Proof size: {} bytes", proof_bytes.len());
 
+	let bins_dir = Path::new("generated-bins");
+
 	if aggregated {
 		// Load aggregated verifier
-		let verifier_bytes = include_bytes!("../../generated-bins/aggregated_verifier.bin");
-		let common_bytes = include_bytes!("../../generated-bins/aggregated_common.bin");
-		let verifier =
-			WormholeVerifier::new_from_bytes(verifier_bytes, common_bytes).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-			})?;
+		let verifier = WormholeVerifier::new_from_files(
+			&bins_dir.join("aggregated_verifier.bin"),
+			&bins_dir.join("aggregated_common.bin"),
+		)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+		})?;
 
 		// Deserialize proof using verifier's types
 		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
@@ -2818,12 +2643,13 @@ async fn parse_proof_file(
 		}
 	} else {
 		// Load leaf verifier
-		let verifier_bytes = include_bytes!("../../generated-bins/verifier.bin");
-		let common_bytes = include_bytes!("../../generated-bins/common.bin");
-		let verifier =
-			WormholeVerifier::new_from_bytes(verifier_bytes, common_bytes).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-			})?;
+		let verifier = WormholeVerifier::new_from_files(
+			&bins_dir.join("verifier.bin"),
+			&bins_dir.join("common.bin"),
+		)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+		})?;
 
 		// Deserialize proof using verifier's types
 		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<

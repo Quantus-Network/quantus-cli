@@ -16,17 +16,16 @@
 
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
 use qp_wormhole_circuit::{
-	inputs::{
-		AggregatedPublicCircuitInputs, CircuitInputs, PrivateCircuitInputs, PublicCircuitInputs,
-	},
+	inputs::{CircuitInputs, PrivateCircuitInputs},
 	nullifier::Nullifier,
 };
+use qp_wormhole_inputs::{AggregatedPublicCircuitInputs, PublicCircuitInputs};
 use qp_wormhole_prover::WormholeProver;
 
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
-	utils::{BytesDigest, Digest},
+	utils::{digest_felts_to_bytes, BytesDigest},
 };
 use quantus_cli::{
 	chain::{
@@ -410,19 +409,22 @@ async fn generate_proof_from_transfer(
 			funding_account: BytesDigest::try_from(transfer_data.funding_account.as_ref() as &[u8])
 				.map_err(|e| format!("Failed to convert funding account: {}", e))?,
 			storage_proof: processed_storage_proof,
-			unspendable_account: Digest::from(transfer_data.unspendable_account).into(),
+			unspendable_account: digest_felts_to_bytes(transfer_data.unspendable_account),
 			state_root,
 			extrinsics_root,
 			digest,
 			input_amount: input_amount_quantized,
 		},
 		public: PublicCircuitInputs {
-			output_amount: output_amount_quantized,
+			output_amount_1: output_amount_quantized,
+			output_amount_2: 0, // No change output for single-output spend
 			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: Nullifier::from_preimage(secret_digest, transfer_data.transfer_count)
-				.hash
-				.into(),
-			exit_account: exit_account_digest,
+			nullifier: digest_felts_to_bytes(
+				Nullifier::from_preimage(secret_digest, transfer_data.transfer_count).hash,
+			),
+			exit_account_1: exit_account_digest,
+			exit_account_2: BytesDigest::try_from([0u8; 32].as_ref())
+				.map_err(|e| format!("Failed to convert zero exit account: {}", e))?,
 			block_hash: BytesDigest::try_from(block_hash.as_ref())
 				.map_err(|e| format!("Failed to convert block hash: {}", e))?,
 			parent_hash,
@@ -438,7 +440,8 @@ async fn generate_proof_from_transfer(
 	let proof: ProofWithPublicInputs<_, _, 2> =
 		prover_next.prove().map_err(|e| format!("Proof generation failed: {}", e))?;
 
-	let public_inputs = PublicCircuitInputs::try_from(&proof)
+	use qp_wormhole_circuit::inputs::ParsePublicInputs;
+	let public_inputs = PublicCircuitInputs::try_from_proof(&proof)
 		.map_err(|e| format!("Failed to parse public inputs: {}", e))?;
 
 	let proof_bytes = proof.to_bytes();
@@ -529,10 +532,12 @@ fn aggregate_proofs(
 		println!("    Adding proof {} to aggregator...", idx + 1);
 		println!("      Public inputs:");
 		println!("        asset_id: {}", ctx.public_inputs.asset_id);
-		println!("        output_amount: {}", ctx.public_inputs.output_amount);
+		println!("        output_amount_1: {}", ctx.public_inputs.output_amount_1);
+		println!("        output_amount_2: {}", ctx.public_inputs.output_amount_2);
 		println!("        volume_fee_bps: {}", ctx.public_inputs.volume_fee_bps);
 		println!("        nullifier: {:?}", ctx.public_inputs.nullifier);
-		println!("        exit_account: {:?}", ctx.public_inputs.exit_account);
+		println!("        exit_account_1: {:?}", ctx.public_inputs.exit_account_1);
+		println!("        exit_account_2: {:?}", ctx.public_inputs.exit_account_2);
 		println!("        block_hash: {:?}", ctx.public_inputs.block_hash);
 		println!("        parent_hash: {:?}", ctx.public_inputs.parent_hash);
 		println!("        block_number: {}", ctx.public_inputs.block_number);
@@ -545,7 +550,8 @@ fn aggregate_proofs(
 	let aggregated_result =
 		aggregator.aggregate().map_err(|e| format!("Aggregation failed: {}", e))?;
 
-	let public_inputs = AggregatedPublicCircuitInputs::try_from_slice(
+	use qp_wormhole_circuit::inputs::ParseAggregatedPublicInputs;
+	let public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
 		aggregated_result.proof.public_inputs.as_slice(),
 	)
 	.map_err(|e| format!("Failed to parse aggregated public inputs: {}", e))?;
@@ -694,8 +700,8 @@ async fn test_single_proof_on_chain_verification() {
 			.expect("Failed to generate proof");
 
 	println!(
-		"   Public inputs - output_amount: {}, nullifier: {:?}",
-		proof_context.public_inputs.output_amount, proof_context.public_inputs.nullifier
+		"   Public inputs - output_amount_1: {}, nullifier: {:?}",
+		proof_context.public_inputs.output_amount_1, proof_context.public_inputs.nullifier
 	);
 
 	// Submit for on-chain verification
@@ -721,7 +727,7 @@ async fn test_single_proof_on_chain_verification() {
 
 	// Compute expected miner fee from public inputs (single proof)
 	let fee_bps = proof_context.public_inputs.volume_fee_bps;
-	let exit_u128 = (proof_context.public_inputs.output_amount as u128) * SCALE_DOWN_FACTOR;
+	let exit_u128 = (proof_context.public_inputs.output_amount_1 as u128) * SCALE_DOWN_FACTOR;
 	let expected_miner_fee = expected_miner_fee_u128(exit_u128, fee_bps);
 
 	assert!(expected_miner_fee > 0, "expected miner fee should be > 0");
@@ -826,8 +832,8 @@ async fn test_aggregated_proof_on_chain_verification() {
 				.expect("Failed to generate proof");
 
 		println!(
-			"   Public inputs - output_amount: {}, nullifier: {:?}",
-			proof_context.public_inputs.output_amount, proof_context.public_inputs.nullifier
+			"   Public inputs - output_amount_1: {}, nullifier: {:?}",
+			proof_context.public_inputs.output_amount_1, proof_context.public_inputs.nullifier
 		);
 
 		proof_contexts.push(proof_context);
@@ -954,7 +960,7 @@ async fn test_single_proof_exit_account_verification() {
 	// Verify the exit account in public inputs matches what we specified
 	let exit_account_from_proof: [u8; 32] = proof_context
 		.public_inputs
-		.exit_account
+		.exit_account_1
 		.as_ref()
 		.try_into()
 		.expect("Exit account should be 32 bytes");
