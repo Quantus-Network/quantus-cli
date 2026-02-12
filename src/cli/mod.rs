@@ -606,14 +606,10 @@ async fn build_wormhole_circuits(
 		} else {
 			let chain_bins = chain_dir.join("pallets/wormhole");
 
-			// Chain only needs verifier binaries (no prover.bin - it's ~170MB and unused)
-			let chain_bin_files = [
-				"common.bin",
-				"verifier.bin",
-				"aggregated_common.bin",
-				"aggregated_verifier.bin",
-				"config.json",
-			];
+			// Chain only needs aggregated verifier binaries for verify_aggregated_proof
+			// (no prover.bin, and no single-proof verifier.bin/common.bin)
+			let chain_bin_files =
+				["aggregated_common.bin", "aggregated_verifier.bin", "config.json"];
 
 			for file in &chain_bin_files {
 				let src = source_bins.join(file);
