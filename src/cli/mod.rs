@@ -249,6 +249,14 @@ pub enum DeveloperCommands {
 		#[arg(long, default_value = "../chain")]
 		chain_path: String,
 
+		/// Branching factor for aggregation tree (number of proofs aggregated at each level)
+		#[arg(long)]
+		branching_factor: usize,
+
+		/// Depth of the aggregation tree (num_leaf_proofs = branching_factor^depth)
+		#[arg(long)]
+		depth: u32,
+
 		/// Skip copying to chain directory
 		#[arg(long)]
 		skip_chain: bool,
@@ -476,8 +484,21 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 
 			Ok(())
 		},
-		DeveloperCommands::BuildCircuits { circuits_path, chain_path, skip_chain } =>
-			build_wormhole_circuits(&circuits_path, &chain_path, skip_chain).await,
+		DeveloperCommands::BuildCircuits {
+			circuits_path,
+			chain_path,
+			branching_factor,
+			depth,
+			skip_chain,
+		} =>
+			build_wormhole_circuits(
+				&circuits_path,
+				&chain_path,
+				branching_factor,
+				depth,
+				skip_chain,
+			)
+			.await,
 	}
 }
 
@@ -485,11 +506,20 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 async fn build_wormhole_circuits(
 	circuits_path: &str,
 	chain_path: &str,
+	branching_factor: usize,
+	depth: u32,
 	skip_chain: bool,
 ) -> crate::error::Result<()> {
 	use std::{path::Path, process::Command};
 
+	let num_leaf_proofs = branching_factor.pow(depth);
 	log_print!("🔧 {} Building wormhole circuit binaries...", "DEVELOPER".bright_magenta().bold());
+	log_print!(
+		"   Configuration: branching_factor={}, depth={}, max_proofs={}",
+		branching_factor,
+		depth,
+		num_leaf_proofs
+	);
 	log_print!("");
 
 	let circuits_dir = Path::new(circuits_path);
@@ -525,8 +555,11 @@ async fn build_wormhole_circuits(
 	// Step 2: Run the circuit builder
 	log_print!("⚡ Step 2: Running circuit builder (this may take a while)...");
 	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
-	let run_output =
-		Command::new(&builder_path).current_dir(circuits_dir).output().map_err(|e| {
+	let run_output = Command::new(&builder_path)
+		.args(["--branching-factor", &branching_factor.to_string(), "--depth", &depth.to_string()])
+		.current_dir(circuits_dir)
+		.output()
+		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to run circuit builder: {}", e))
 		})?;
 
@@ -544,15 +577,17 @@ async fn build_wormhole_circuits(
 	let source_bins = circuits_dir.join("generated-bins");
 	let cli_bins = Path::new("generated-bins");
 
-	let bin_files = [
+	// CLI needs prover.bin for proof generation
+	let cli_bin_files = [
 		"common.bin",
 		"verifier.bin",
 		"prover.bin",
 		"aggregated_common.bin",
 		"aggregated_verifier.bin",
+		"config.json",
 	];
 
-	for file in &bin_files {
+	for file in &cli_bin_files {
 		let src = source_bins.join(file);
 		let dst = cli_bins.join(file);
 		std::fs::copy(&src, &dst).map_err(|e| {
@@ -570,7 +605,17 @@ async fn build_wormhole_circuits(
 			log_error!("   Chain directory not found: {} (use --skip-chain to skip)", chain_path);
 		} else {
 			let chain_bins = chain_dir.join("pallets/wormhole");
-			for file in &bin_files {
+
+			// Chain only needs verifier binaries (no prover.bin - it's ~170MB and unused)
+			let chain_bin_files = [
+				"common.bin",
+				"verifier.bin",
+				"aggregated_common.bin",
+				"aggregated_verifier.bin",
+				"config.json",
+			];
+
+			for file in &chain_bin_files {
 				let src = source_bins.join(file);
 				let dst = chain_bins.join(file);
 				std::fs::copy(&src, &dst).map_err(|e| {

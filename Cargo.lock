@@ -4010,6 +4010,8 @@ dependencies = [
  "qp-zk-circuits-common",
  "rand 0.8.5",
  "rayon",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -525,8 +525,7 @@ fn aggregate_proofs(
 		));
 	}
 
-	let mut aggregator =
-		WormholeProofAggregator::from_circuit_config(config).with_config(aggregation_config);
+	let mut aggregator = WormholeProofAggregator::from_circuit_config(config, aggregation_config);
 
 	for (idx, ctx) in proof_contexts.into_iter().enumerate() {
 		println!("    Adding proof {} to aggregator...", idx + 1);

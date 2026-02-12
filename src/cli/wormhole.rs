@@ -56,6 +56,34 @@ pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
 /// This must match the on-chain VolumeFeeRateBps configuration
 pub const VOLUME_FEE_BPS: u32 = 10;
 
+/// Aggregation config loaded from generated-bins/config.json
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct AggregationConfig {
+	pub branching_factor: usize,
+	pub depth: u32,
+	pub num_leaf_proofs: usize,
+}
+
+impl AggregationConfig {
+	/// Load config from the generated-bins directory
+	pub fn load() -> crate::error::Result<Self> {
+		let config_path = Path::new("generated-bins/config.json");
+		let config_str = std::fs::read_to_string(config_path).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to read aggregation config from {}: {}. Run 'quantus developer build-circuits' first.",
+				config_path.display(),
+				e
+			))
+		})?;
+		serde_json::from_str(&config_str).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to parse aggregation config: {}",
+				e
+			))
+		})
+	}
+}
+
 /// Compute output amount after fee deduction
 /// output = input * (10000 - fee_bps) / 10000
 pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
@@ -443,37 +471,6 @@ fn format_dispatch_error(
 	}
 }
 
-/// Validate aggregation parameters
-pub fn validate_aggregation_params(
-	num_proofs: usize,
-	depth: usize,
-	branching_factor: usize,
-) -> Result<usize, String> {
-	if num_proofs == 0 {
-		return Err("No proofs provided".to_string());
-	}
-
-	if branching_factor < 2 {
-		return Err("Branching factor must be at least 2".to_string());
-	}
-
-	if depth == 0 {
-		return Err("Depth must be at least 1".to_string());
-	}
-
-	// Calculate max leaf proofs for given depth and branching factor
-	let max_leaf_proofs = branching_factor.pow(depth as u32);
-
-	if num_proofs > max_leaf_proofs {
-		return Err(format!(
-			"Too many proofs: {} provided, max {} for depth={} branching_factor={}",
-			num_proofs, max_leaf_proofs, depth, branching_factor
-		));
-	}
-
-	Ok(max_leaf_proofs)
-}
-
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
 	/// Submit a wormhole transfer to an unspendable account
@@ -537,15 +534,6 @@ pub enum WormholeCommands {
 		/// Output file for the aggregated proof (default: aggregated_proof.hex)
 		#[arg(short, long, default_value = "aggregated_proof.hex")]
 		output: String,
-
-		/// Tree depth for aggregation (default: 3, supports up to 8 proofs with
-		/// branching_factor=2)
-		#[arg(long, default_value = "3")]
-		depth: usize,
-
-		/// Branching factor for aggregation tree (default: 2)
-		#[arg(long, default_value = "2")]
-		branching_factor: usize,
 	},
 	/// Verify an aggregated wormhole proof on-chain
 	VerifyAggregated {
@@ -577,8 +565,8 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "2")]
 		rounds: usize,
 
-		/// Total amount in planck to partition across all proofs (default: 10 DEV)
-		#[arg(short, long, default_value = "10000000000000")]
+		/// Total amount in planck to partition across all proofs (default: 100 DEV)
+		#[arg(short, long, default_value = "100000000000000")]
 		amount: u128,
 
 		/// Wallet name to use for funding and final exit
@@ -658,8 +646,7 @@ pub async fn handle_wormhole_command(
 			)
 			.await
 		},
-		WormholeCommands::Aggregate { proofs, output, depth, branching_factor } =>
-			aggregate_proofs(proofs, output, depth, branching_factor).await,
+		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
 		WormholeCommands::VerifyAggregated { proof } =>
 			verify_aggregated_proof(proof, node_url).await,
 		WormholeCommands::ParseProof { proof, aggregated, verify } =>
@@ -806,45 +793,71 @@ async fn at_best_block(
 async fn aggregate_proofs(
 	proof_files: Vec<String>,
 	output_file: String,
-	depth: usize,
-	branching_factor: usize,
 ) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::{
-		aggregator::WormholeProofAggregator, circuits::tree::TreeAggregationConfig,
-	};
+	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
 
 	use std::path::Path;
 
 	log_print!("Aggregating {} proofs...", proof_files.len());
 
-	// Validate aggregation parameters using helper function
-	let max_leaf_proofs = validate_aggregation_params(proof_files.len(), depth, branching_factor)
-		.map_err(crate::error::QuantusError::Generic)?;
-
-	// Configure aggregation
-	let aggregation_config = TreeAggregationConfig::new(branching_factor, depth as u32);
-
-	log_verbose!(
-		"Aggregation config: branching_factor={}, depth={}, num_leaf_proofs={}",
-		aggregation_config.tree_branching_factor,
-		aggregation_config.tree_depth,
-		max_leaf_proofs
-	);
-
-	// Load aggregator from pre-built bins to ensure circuit digest matches on-chain verifier
+	// Load config first to validate and calculate padding needs
 	let bins_dir = Path::new("generated-bins");
-	let mut aggregator = WormholeProofAggregator::from_prebuilt_with_paths(
-		&bins_dir.join("prover.bin"),
-		&bins_dir.join("common.bin"),
-		&bins_dir.join("verifier.bin"),
+	let agg_config = AggregationConfig::load()?;
+
+	// Validate number of proofs before doing expensive work
+	if proof_files.len() > agg_config.num_leaf_proofs {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Too many proofs: {} provided, max {} supported by circuit",
+			proof_files.len(),
+			agg_config.num_leaf_proofs
+		)));
+	}
+
+	let num_padding_proofs = agg_config.num_leaf_proofs - proof_files.len();
+
+	// Create progress bar for padding proof generation (if needed)
+	let progress_bar = if num_padding_proofs > 0 {
+		let pb = ProgressBar::new(num_padding_proofs as u64);
+		pb.set_style(
+			ProgressStyle::default_bar()
+				.template("  Generating {msg} [{bar:30}] {pos}/{len}")
+				.expect("Invalid progress bar template")
+				.progress_chars("=> "),
+		);
+		pb.set_message(format!("{} padding proofs", num_padding_proofs));
+		Some(pb)
+	} else {
+		None
+	};
+
+	// Load aggregator from pre-built bins (reads config from config.json)
+	// Only generates the padding proofs needed (num_leaf_proofs - num_real_proofs)
+	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(
+		bins_dir,
+		proof_files.len(),
+		Some(|current: usize, _total: usize| {
+			if let Some(ref pb) = progress_bar {
+				pb.set_position(current as u64);
+			}
+		}),
 	)
 	.map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Failed to load aggregator from pre-built bins: {}",
 			e
 		))
-	})?
-	.with_config(aggregation_config);
+	})?;
+
+	if let Some(pb) = progress_bar {
+		pb.finish_and_clear();
+	}
+
+	log_verbose!(
+		"Aggregation config: branching_factor={}, depth={}, num_leaf_proofs={}",
+		aggregator.config.tree_branching_factor,
+		aggregator.config.tree_depth,
+		aggregator.config.num_leaf_proofs
+	);
 	let common_data = aggregator.leaf_circuit_data.common.clone();
 
 	// Load and add proofs using helper function
@@ -1052,11 +1065,6 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 // Multi-round wormhole flow implementation
 // ============================================================================
 
-/// Aggregation config - hardcoded for now
-const MULTIROUND_BRANCHING_FACTOR: usize = 2;
-const MULTIROUND_DEPTH: usize = 3;
-const MULTIROUND_MAX_PROOFS: usize = 8; // 2^3
-
 /// Information about a transfer needed for proof generation
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -1156,11 +1164,15 @@ struct MultiroundWalletContext {
 }
 
 /// Validate multiround parameters
-fn validate_multiround_params(num_proofs: usize, rounds: usize) -> crate::error::Result<()> {
-	if !(1..=MULTIROUND_MAX_PROOFS).contains(&num_proofs) {
+fn validate_multiround_params(
+	num_proofs: usize,
+	rounds: usize,
+	max_proofs: usize,
+) -> crate::error::Result<()> {
+	if !(1..=max_proofs).contains(&num_proofs) {
 		return Err(crate::error::QuantusError::Generic(format!(
 			"num_proofs must be between 1 and {} (got: {})",
-			MULTIROUND_MAX_PROOFS, num_proofs
+			max_proofs, num_proofs
 		)));
 	}
 	if rounds < 1 {
@@ -1213,7 +1225,11 @@ fn load_multiround_wallet(
 }
 
 /// Print multiround configuration summary
-fn print_multiround_config(config: &MultiroundConfig, wallet: &MultiroundWalletContext) {
+fn print_multiround_config(
+	config: &MultiroundConfig,
+	wallet: &MultiroundWalletContext,
+	agg_config: &AggregationConfig,
+) {
 	use colored::Colorize;
 
 	log_print!("{}", "Configuration:".bright_cyan());
@@ -1229,8 +1245,8 @@ fn print_multiround_config(config: &MultiroundConfig, wallet: &MultiroundWalletC
 	log_print!("  Rounds: {}", config.rounds);
 	log_print!(
 		"  Aggregation: branching_factor={}, depth={}",
-		MULTIROUND_BRANCHING_FACTOR,
-		MULTIROUND_DEPTH
+		agg_config.branching_factor,
+		agg_config.depth
 	);
 	log_print!("  Output directory: {}", config.output_dir);
 	log_print!("  Keep files: {}", config.keep_files);
@@ -1258,8 +1274,9 @@ async fn execute_initial_transfers(
 	log_print!("{}", "Step 1: Sending wormhole transfers from wallet...".bright_yellow());
 
 	// Randomly partition the total amount among proofs
-	let min_per_proof = SCALE_DOWN_FACTOR; // 0.01 DEV (minimum quantizable amount)
-	let partition_amounts = random_partition(amount, num_proofs, min_per_proof);
+	// Each partition must meet the on-chain minimum transfer amount
+	// Minimum per partition is 0.02 DEV (2 quantized units) to ensure non-trivial amounts
+	let partition_amounts = random_partition(amount, num_proofs, 2 * SCALE_DOWN_FACTOR);
 	log_print!("  Random partition of {} ({}):", amount, format_balance(amount));
 	for (i, &amt) in partition_amounts.iter().enumerate() {
 		log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
@@ -1553,8 +1570,11 @@ async fn run_multiround(
 	log_print!("==================================================");
 	log_print!("");
 
+	// Load aggregation config from generated-bins/config.json
+	let agg_config = AggregationConfig::load()?;
+
 	// Validate parameters
-	validate_multiround_params(num_proofs, rounds)?;
+	validate_multiround_params(num_proofs, rounds, agg_config.num_leaf_proofs)?;
 
 	// Load wallet
 	let wallet = load_multiround_wallet(&wallet_name, password, password_file)?;
@@ -1564,7 +1584,7 @@ async fn run_multiround(
 		MultiroundConfig { num_proofs, rounds, amount, output_dir: output_dir.clone(), keep_files };
 
 	// Print configuration
-	print_multiround_config(&config, &wallet);
+	print_multiround_config(&config, &wallet, &agg_config);
 	log_print!("  Dry run: {}", dry_run);
 	log_print!("");
 
@@ -1680,13 +1700,7 @@ async fn run_multiround(
 		log_print!("{}", "Step 3: Aggregating proofs...".bright_yellow());
 
 		let aggregated_file = format!("{}/aggregated.hex", round_dir);
-		aggregate_proofs(
-			proof_files,
-			aggregated_file.clone(),
-			MULTIROUND_DEPTH,
-			MULTIROUND_BRANCHING_FACTOR,
-		)
-		.await?;
+		aggregate_proofs(proof_files, aggregated_file.clone()).await?;
 
 		log_print!("  Aggregated proof saved to {}", aggregated_file);
 
@@ -2137,8 +2151,7 @@ fn run_multiround_dry_run(
 
 		// Show sample random partition for round 1
 		if round == 1 {
-			let min_per_proof = SCALE_DOWN_FACTOR; // 0.01 DEV (minimum quantizable amount)
-			let partition = random_partition(amount, num_proofs, min_per_proof);
+			let partition = random_partition(amount, num_proofs, 2 * SCALE_DOWN_FACTOR);
 			log_print!("  Sample random partition (actual partition will differ):");
 			for (i, &amt) in partition.iter().enumerate() {
 				log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
@@ -2262,21 +2275,6 @@ mod tests {
 		assert!(quantize_funding_amount(max_valid + SCALE_DOWN_FACTOR)
 			.unwrap_err()
 			.contains("too large"));
-	}
-
-	#[test]
-	fn test_validate_aggregation_params() {
-		// Valid configurations
-		assert_eq!(validate_aggregation_params(2, 1, 2).unwrap(), 2);
-		assert_eq!(validate_aggregation_params(9, 2, 3).unwrap(), 9); // 3^2 = 9
-
-		// Invalid: no proofs, bad branching factor, zero depth
-		assert!(validate_aggregation_params(0, 1, 2).unwrap_err().contains("No proofs"));
-		assert!(validate_aggregation_params(2, 1, 1).unwrap_err().contains("Branching factor"));
-		assert!(validate_aggregation_params(2, 0, 2).unwrap_err().contains("Depth"));
-
-		// Too many proofs for tree size
-		assert!(validate_aggregation_params(3, 1, 2).unwrap_err().contains("Too many proofs"));
 	}
 
 	#[test]
@@ -2509,17 +2507,21 @@ mod tests {
 	#[test]
 	#[ignore] // This test is slow (~60s) - run with `cargo test -- --ignored`
 	fn test_proof_aggregation() {
-		use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
+		use qp_wormhole_aggregator::{
+			aggregator::WormholeProofAggregator, circuits::tree::TreeAggregationConfig,
+		};
 
 		let config = test_circuit_config();
+		let aggregation_config = TreeAggregationConfig::new(2, 1); // branching_factor=2, depth=1
 
 		// Generate a proof
 		let inputs = CircuitInputs::test_inputs_0();
 		let prover = WormholeProver::new(config.clone());
 		let proof = prover.commit(&inputs).unwrap().prove().unwrap();
 
-		// Create aggregator with default config (branching_factor=2, depth=1)
-		let mut aggregator = WormholeProofAggregator::from_circuit_config(config);
+		// Create aggregator with explicit config
+		let mut aggregator =
+			WormholeProofAggregator::from_circuit_config(config, aggregation_config);
 
 		// Add proof to aggregator
 		aggregator.push_proof(proof.clone()).expect("Failed to push proof");
@@ -2559,9 +2561,12 @@ mod tests {
 	#[test]
 	#[ignore] // This test is very slow (~120s) - run with `cargo test -- --ignored`
 	fn test_proof_aggregation_multiple_accounts() {
-		use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
+		use qp_wormhole_aggregator::{
+			aggregator::WormholeProofAggregator, circuits::tree::TreeAggregationConfig,
+		};
 
 		let config = test_circuit_config();
+		let aggregation_config = TreeAggregationConfig::new(2, 1); // branching_factor=2, depth=1
 
 		// Generate proofs with different inputs (different exit accounts)
 		let inputs_0 = CircuitInputs::test_inputs_0();
@@ -2573,8 +2578,9 @@ mod tests {
 		let prover_1 = WormholeProver::new(config.clone());
 		let proof_1 = prover_1.commit(&inputs_1).unwrap().prove().unwrap();
 
-		// Create aggregator
-		let mut aggregator = WormholeProofAggregator::from_circuit_config(config);
+		// Create aggregator with explicit config
+		let mut aggregator =
+			WormholeProofAggregator::from_circuit_config(config, aggregation_config);
 
 		// Add both proofs
 		aggregator.push_proof(proof_0).expect("Failed to push proof 0");
