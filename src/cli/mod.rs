@@ -513,9 +513,8 @@ async fn build_wormhole_circuits(
 	use std::{path::Path, process::Command};
 
 	let num_leaf_proofs = branching_factor.pow(depth);
-	log_print!("🔧 {} Building wormhole circuit binaries...", "DEVELOPER".bright_magenta().bold());
 	log_print!(
-		"   Configuration: branching_factor={}, depth={}, max_proofs={}",
+		"🔧 Building ZK circuit binaries (branching_factor={}, depth={}, max_proofs={})",
 		branching_factor,
 		depth,
 		num_leaf_proofs
@@ -534,7 +533,7 @@ async fn build_wormhole_circuits(
 	}
 
 	// Step 1: Build the circuit builder
-	log_print!("📦 Step 1: Building circuit builder...");
+	log_print!("Step 1/4: Building circuit builder...");
 	let build_output = Command::new("cargo")
 		.args(["build", "--release", "-p", "qp-wormhole-circuit-builder"])
 		.current_dir(circuits_dir)
@@ -550,10 +549,10 @@ async fn build_wormhole_circuits(
 			stderr
 		)));
 	}
-	log_success!("   Circuit builder compiled successfully");
+	log_success!("   Done");
 
-	// Step 2: Run the circuit builder
-	log_print!("⚡ Step 2: Running circuit builder (this may take a while)...");
+	// Step 2: Run the circuit builder to generate binaries
+	log_print!("Step 2/4: Generating circuit binaries (this may take a while)...");
 	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
 	let run_output = Command::new(&builder_path)
 		.args(["--branching-factor", &branching_factor.to_string(), "--depth", &depth.to_string()])
@@ -570,14 +569,13 @@ async fn build_wormhole_circuits(
 			stderr
 		)));
 	}
-	log_success!("   Circuit binaries generated");
+	log_success!("   Done");
 
-	// Step 3: Copy binaries to CLI directory
-	log_print!("📋 Step 3: Copying binaries to CLI...");
+	// Step 3: Copy binaries to CLI and touch aggregator to force recompile
+	log_print!("Step 3/4: Copying binaries to CLI...");
 	let source_bins = circuits_dir.join("generated-bins");
 	let cli_bins = Path::new("generated-bins");
 
-	// CLI needs prover.bin for proof generation
 	let cli_bin_files = [
 		"common.bin",
 		"verifier.bin",
@@ -593,21 +591,28 @@ async fn build_wormhole_circuits(
 		std::fs::copy(&src, &dst).map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to copy {} to CLI: {}", file, e))
 		})?;
-		log_verbose!("   Copied {} to CLI", file);
+		log_verbose!("   Copied {}", file);
 	}
-	log_success!("   Binaries copied to CLI");
+
+	// Touch aggregator lib.rs to force cargo to recompile it
+	let aggregator_lib = circuits_dir.join("wormhole/aggregator/src/lib.rs");
+	if aggregator_lib.exists() {
+		if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&aggregator_lib) {
+			let _ = file.set_modified(std::time::SystemTime::now());
+		}
+	}
+	log_success!("   Done");
 
 	// Step 4: Copy binaries to chain directory (if not skipped)
 	if !skip_chain {
-		log_print!("📋 Step 4: Copying binaries to chain...");
+		log_print!("Step 4/4: Copying binaries to chain...");
 
 		if !chain_dir.exists() {
-			log_error!("   Chain directory not found: {} (use --skip-chain to skip)", chain_path);
+			log_error!("   Chain directory not found: {}", chain_path);
+			log_print!("   Use --skip-chain to skip this step");
 		} else {
 			let chain_bins = chain_dir.join("pallets/wormhole");
 
-			// Chain only needs aggregated verifier binaries for verify_aggregated_proof
-			// (no prover.bin, and no single-proof verifier.bin/common.bin)
 			let chain_bin_files =
 				["aggregated_common.bin", "aggregated_verifier.bin", "config.json"];
 
@@ -620,22 +625,30 @@ async fn build_wormhole_circuits(
 						file, e
 					))
 				})?;
-				log_verbose!("   Copied {} to chain", file);
+				log_verbose!("   Copied {}", file);
 			}
-			log_success!("   Binaries copied to chain");
+
+			// Touch pallet lib.rs to force cargo to recompile it
+			let pallet_lib = chain_bins.join("src/lib.rs");
+			if pallet_lib.exists() {
+				if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&pallet_lib) {
+					let _ = file.set_modified(std::time::SystemTime::now());
+				}
+			}
+			log_success!("   Done");
 		}
 	} else {
-		log_print!("⏭️  Step 4: Skipping chain copy (--skip-chain)");
+		log_print!("Step 4/4: Skipping chain copy (--skip-chain)");
 	}
 
 	log_print!("");
-	log_success!("🎉 Circuit build complete!");
+	log_success!("Circuit build complete!");
 	log_print!("");
-	log_print!("💡 {} Next steps:", "TIP".bright_blue().bold());
-	log_print!("   1. Rebuild the CLI: cargo build --release");
+	log_print!("{}", "Next steps:".bright_blue().bold());
+	log_print!("  1. Rebuild CLI:   cargo build --release");
 	if !skip_chain {
-		log_print!("   2. Rebuild the chain: cd {} && cargo build --release", chain_path);
-		log_print!("   3. Restart the chain node with the new binary");
+		log_print!("  2. Rebuild chain: cd {} && cargo build --release", chain_path);
+		log_print!("  3. Restart the chain node");
 	}
 	log_print!("");
 

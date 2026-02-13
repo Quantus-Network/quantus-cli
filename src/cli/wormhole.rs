@@ -56,17 +56,31 @@ pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
 /// This must match the on-chain VolumeFeeRateBps configuration
 pub const VOLUME_FEE_BPS: u32 = 10;
 
-/// Aggregation config loaded from generated-bins/config.json
+/// SHA256 hashes of circuit binary files for integrity verification.
+/// Must match the BinaryHashes struct in qp-wormhole-aggregator/src/config.rs
+#[derive(Debug, Clone, serde::Deserialize, Default)]
+pub struct BinaryHashes {
+	pub common: Option<String>,
+	pub verifier: Option<String>,
+	pub prover: Option<String>,
+	pub aggregated_common: Option<String>,
+	pub aggregated_verifier: Option<String>,
+}
+
+/// Aggregation config loaded from generated-bins/config.json.
+/// Must match the CircuitBinsConfig struct in qp-wormhole-aggregator/src/config.rs
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct AggregationConfig {
 	pub branching_factor: usize,
 	pub depth: u32,
 	pub num_leaf_proofs: usize,
+	#[serde(default)]
+	pub hashes: Option<BinaryHashes>,
 }
 
 impl AggregationConfig {
 	/// Load config from the generated-bins directory
-	pub fn load() -> crate::error::Result<Self> {
+	pub fn load_from_bins() -> crate::error::Result<Self> {
 		let config_path = Path::new("generated-bins/config.json");
 		let config_str = std::fs::read_to_string(config_path).map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
@@ -81,6 +95,76 @@ impl AggregationConfig {
 				e
 			))
 		})
+	}
+
+	/// Verify that the binary files in generated-bins match the stored hashes.
+	pub fn verify_binary_hashes(&self) -> crate::error::Result<()> {
+		use sha2::{Digest, Sha256};
+
+		let Some(ref stored_hashes) = self.hashes else {
+			log_verbose!("   No hashes in config.json, skipping binary verification");
+			return Ok(());
+		};
+
+		let bins_dir = Path::new("generated-bins");
+		let mut mismatches = Vec::new();
+
+		let hash_file = |filename: &str| -> Option<String> {
+			let path = bins_dir.join(filename);
+			std::fs::read(&path).ok().map(|bytes| {
+				let hash = Sha256::digest(&bytes);
+				hex::encode(hash)
+			})
+		};
+
+		if let Some(ref expected) = stored_hashes.aggregated_common {
+			if let Some(actual) = hash_file("aggregated_common.bin") {
+				if expected != &actual {
+					mismatches.push(format!(
+						"aggregated_common.bin: expected {}..., got {}...",
+						&expected[..16.min(expected.len())],
+						&actual[..16.min(actual.len())]
+					));
+				}
+			}
+		}
+
+		if let Some(ref expected) = stored_hashes.aggregated_verifier {
+			if let Some(actual) = hash_file("aggregated_verifier.bin") {
+				if expected != &actual {
+					mismatches.push(format!(
+						"aggregated_verifier.bin: expected {}..., got {}...",
+						&expected[..16.min(expected.len())],
+						&actual[..16.min(actual.len())]
+					));
+				}
+			}
+		}
+
+		if let Some(ref expected) = stored_hashes.prover {
+			if let Some(actual) = hash_file("prover.bin") {
+				if expected != &actual {
+					mismatches.push(format!(
+						"prover.bin: expected {}..., got {}...",
+						&expected[..16.min(expected.len())],
+						&actual[..16.min(actual.len())]
+					));
+				}
+			}
+		}
+
+		if mismatches.is_empty() {
+			log_verbose!("   Binary hashes verified successfully");
+			Ok(())
+		} else {
+			Err(crate::error::QuantusError::Generic(format!(
+				"Binary hash mismatch detected! The circuit binaries do not match config.json.\n\
+				 This can happen if binaries were regenerated but the CLI wasn't rebuilt.\n\
+				 Mismatches:\n  {}\n\n\
+				 To fix: Run 'quantus developer build-circuits' and then 'cargo build --release'",
+				mismatches.join("\n  ")
+			)))
+		}
 	}
 }
 
@@ -802,7 +886,11 @@ async fn aggregate_proofs(
 
 	// Load config first to validate and calculate padding needs
 	let bins_dir = Path::new("generated-bins");
-	let agg_config = AggregationConfig::load()?;
+	let agg_config = AggregationConfig::load_from_bins()?;
+
+	// Verify binary hashes match config.json to detect stale binaries
+	log_verbose!("Verifying circuit binary integrity...");
+	agg_config.verify_binary_hashes()?;
 
 	// Validate number of proofs before doing expensive work
 	if proof_files.len() > agg_config.num_leaf_proofs {
@@ -1571,7 +1659,7 @@ async fn run_multiround(
 	log_print!("");
 
 	// Load aggregation config from generated-bins/config.json
-	let agg_config = AggregationConfig::load()?;
+	let agg_config = AggregationConfig::load_from_bins()?;
 
 	// Validate parameters
 	validate_multiround_params(num_proofs, rounds, agg_config.num_leaf_proofs)?;
