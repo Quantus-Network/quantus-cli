@@ -42,6 +42,8 @@ pub struct MultisigInfo {
 #[derive(Debug, Clone, PartialEq)]
 pub enum ProposalStatus {
 	Active,
+	/// Threshold reached; any signer can call execute to dispatch
+	Approved,
 	Executed,
 	Cancelled,
 }
@@ -270,6 +272,29 @@ pub enum MultisigCommands {
 		proposal_id: u32,
 
 		/// Approver wallet name (must be a signer)
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Execute an approved proposal (any signer; proposal must have reached threshold)
+	Execute {
+		/// Multisig account address
+		#[arg(long)]
+		address: String,
+
+		/// Proposal ID (u32 nonce) to execute
+		#[arg(long)]
+		proposal_id: u32,
+
+		/// Wallet name (must be a signer)
 		#[arg(long)]
 		from: String,
 
@@ -760,6 +785,8 @@ pub async fn get_proposal_info(
 		let status = match data.status {
 			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
 				ProposalStatus::Active,
+			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
+				ProposalStatus::Approved,
 			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
 				ProposalStatus::Executed,
 			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
@@ -832,6 +859,8 @@ pub async fn list_proposals(
 				let status = match data.status {
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
 						ProposalStatus::Active,
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
+						ProposalStatus::Approved,
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
 						ProposalStatus::Executed,
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
@@ -981,6 +1010,17 @@ pub async fn handle_multisig_command(
 		},
 		MultisigCommands::Approve { address, proposal_id, from, password, password_file } =>
 			handle_approve(
+				address,
+				proposal_id,
+				from,
+				password,
+				password_file,
+				node_url,
+				execution_mode,
+			)
+			.await,
+		MultisigCommands::Execute { address, proposal_id, from, password, password_file } =>
+			handle_execute(
 				address,
 				proposal_id,
 				from,
@@ -1673,7 +1713,88 @@ async fn handle_approve(
 	.await?;
 
 	log_success!("✅ Approval confirmed on-chain");
-	log_print!("   If threshold is reached, the proposal will execute automatically");
+	log_print!(
+		"   If threshold is reached, the proposal becomes Approved. Any signer can run: quantus multisig execute --address {} --proposal-id {} --from <signer>",
+		multisig_ss58,
+		proposal_id
+	);
+
+	Ok(())
+}
+
+/// Execute an approved proposal (any signer)
+async fn handle_execute(
+	multisig_address: String,
+	proposal_id: u32,
+	from: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	node_url: &str,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<()> {
+	log_print!("▶️  {} Executing proposal...", "MULTISIG".bright_magenta().bold());
+
+	// Resolve multisig address
+	let multisig_ss58 = crate::cli::common::resolve_address(&multisig_address)?;
+	let (multisig_id, _) =
+		SpAccountId32::from_ss58check_with_version(&multisig_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid multisig address: {:?}", e))
+		})?;
+	let multisig_bytes: [u8; 32] = *multisig_id.as_ref();
+	let multisig_account_id = subxt::ext::subxt_core::utils::AccountId32::from(multisig_bytes);
+
+	log_verbose!("Multisig: {}", multisig_ss58);
+	log_verbose!("Proposal ID: {}", proposal_id);
+
+	// Load keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+
+	// Connect to chain
+	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+
+	// Validate executor is a signer (client-side check)
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let multisig_query =
+		quantus_subxt::api::storage().multisig().multisigs(multisig_account_id.clone());
+	let multisig_data = storage_at.fetch(&multisig_query).await?.ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!(
+			"Multisig not found at address: {}",
+			multisig_ss58
+		))
+	})?;
+
+	let executor_ss58 = crate::cli::common::resolve_address(&from)?;
+	let (executor_id, _) =
+		SpAccountId32::from_ss58check_with_version(&executor_ss58).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Invalid executor address: {:?}", e))
+		})?;
+	let executor_bytes: [u8; 32] = *executor_id.as_ref();
+	let executor_account_id = subxt::ext::subxt_core::utils::AccountId32::from(executor_bytes);
+
+	if !multisig_data.signers.0.contains(&executor_account_id) {
+		log_error!("❌ Not authorized: {} is not a signer of this multisig", executor_ss58);
+		return Err(crate::error::QuantusError::Generic(
+			"Only multisig signers can execute proposals".to_string(),
+		));
+	}
+
+	// Build transaction
+	let execute_tx = quantus_subxt::api::tx().multisig().execute(multisig_account_id, proposal_id);
+
+	let exec_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
+
+	crate::cli::common::submit_transaction(
+		&quantus_client,
+		&keypair,
+		execute_tx,
+		None,
+		exec_execution_mode,
+	)
+	.await?;
+
+	log_success!("✅ Proposal executed on-chain");
 
 	Ok(())
 }
@@ -2049,6 +2170,8 @@ async fn handle_info(
 					let status = match proposal.status {
 						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
 							"Active".bright_green(),
+						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
+							"Approved (ready to execute)".bright_yellow(),
 						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
 							"Executed".bright_blue(),
 						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
@@ -2458,6 +2581,8 @@ async fn handle_proposal_info(
 				match data.status {
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
 						"Active".bright_green(),
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
+						"Approved (ready to execute)".bright_yellow(),
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
 						"Executed".bright_blue(),
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
@@ -2541,6 +2666,7 @@ async fn handle_list_proposals(
 
 	let mut count = 0;
 	let mut active_count = 0;
+	let mut approved_count = 0;
 	let mut executed_count = 0;
 	let mut cancelled_count = 0;
 
@@ -2553,6 +2679,10 @@ async fn handle_list_proposals(
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active => {
 						active_count += 1;
 						"Active".bright_green()
+					},
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved => {
+						approved_count += 1;
+						"Approved (ready to execute)".bright_yellow()
 					},
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed => {
 						executed_count += 1;
@@ -2615,6 +2745,7 @@ async fn handle_list_proposals(
 		log_print!("📊 {} Summary:", "PROPOSALS".bright_green().bold());
 		log_print!("   Total: {}", count.to_string().bright_yellow());
 		log_print!("   Active: {}", active_count.to_string().bright_green());
+		log_print!("   Approved: {}", approved_count.to_string().bright_yellow());
 		log_print!("   Executed: {}", executed_count.to_string().bright_blue());
 		log_print!("   Cancelled: {}", cancelled_count.to_string().bright_red());
 	}

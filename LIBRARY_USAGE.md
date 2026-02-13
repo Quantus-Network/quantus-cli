@@ -427,6 +427,8 @@ async fn create_proposal() -> Result<(), Box<dyn std::error::Error>> {
 
 #### Approving a Proposal
 
+When a proposal reaches the approval threshold, its status becomes **Approved**. Execution is **not** automatic: any signer must then call **execute** to dispatch the call (CLI: `quantus multisig execute --address <addr> --proposal-id <id> --from <signer>`).
+
 ```rust
 use quantus_cli::approve_proposal;
 
@@ -445,10 +447,20 @@ async fn approve_example() -> Result<(), Box<dyn std::error::Error>> {
     ).await?;
     
     println!("Approval submitted: 0x{}", hex::encode(tx_hash));
-    println!("(Will auto-execute at threshold)");
+    // Once threshold is reached, status becomes Approved; any signer must call execute to dispatch
     Ok(())
 }
 ```
+
+#### Executing an Approved Proposal
+
+After enough signers have approved, the proposal status is **Approved**. Any signer must then submit an **execute** transaction to actually run the call. From the CLI:
+
+```bash
+quantus multisig execute --address <MULTISIG_SS58> --proposal-id <ID> --from <SIGNER_WALLET>
+```
+
+Proposal statuses: **Active** (collecting approvals), **Approved** (threshold reached, ready to execute), **Executed**, **Cancelled**.
 
 #### Listing Proposals
 
@@ -562,6 +574,23 @@ async fn dissolve_example() -> Result<(), Box<dyn std::error::Error>> {
 - 💡 **Deposit is RETURNED** to creator on successful dissolution
 
 **Note:** If proposals exist, you must first cancel or claim them before dissolution can proceed.
+
+#### Multisig Errors (Chain)
+
+When a multisig extrinsic fails, the CLI (and any code using the chain) receives a dispatch error. The runtime returns named errors; after metadata is up to date, you will see messages such as:
+
+| Error | When |
+|-------|------|
+| `ExpiryTooFar` | Proposal expiry is beyond the chain's `MaxExpiryDuration` (e.g. ~2 weeks in blocks). |
+| `TooManyProposalsInStorage` | Multisig has reached the max total proposals in storage; cleanup via `claim_deposits` or `remove_expired` first. |
+| `TooManyProposalsPerSigner` | This signer has too many proposals (per-signer limit for filibuster protection). |
+| `ProposalNotApproved` | `execute` was called but the proposal is not in **Approved** status (e.g. still Active or already removed). |
+| `ProposalNotFound` | No proposal with the given ID for this multisig. |
+| `CallNotAllowedForHighSecurityMultisig` | Multisig is high-security and the proposed call is not whitelisted (e.g. use `schedule_transfer` instead of `transfer_allow_death`). |
+| `ProposalsExist` | Cannot dissolve: there are still proposals; clear them first. |
+| `MultisigAccountNotZero` | Cannot dissolve: multisig balance is not zero. |
+
+Other errors (e.g. `NotASigner`, `AlreadyApproved`, `ExpiryInPast`, `ProposalExpired`) are self-explanatory. Error text is resolved from runtime metadata when available.
 
 #### High-Security Operations for Multisig
 
