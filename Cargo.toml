@@ -89,4 +89,4 @@ tempfile = "3.8"
 serial_test = "3.1"
 
 [patch.crates-io]
-qp-dilithium-crypto = { path = "../chain/primitives/dilithium-crypto" }
+qp-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", branch = "testnet/planck" }
