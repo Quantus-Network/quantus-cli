@@ -13,7 +13,6 @@ use crate::{
 use clap::Subcommand;
 use indicatif::{ProgressBar, ProgressStyle};
 use plonky2::plonk::proof::ProofWithPublicInputs;
-use qp_poseidon::PoseidonHasher;
 use qp_rusty_crystals_hdwallet::{
 	derive_wormhole_from_mnemonic, generate_mnemonic, SensitiveBytes32, WormholePair,
 	QUANTUS_WORMHOLE_CHAIN_ID,
@@ -30,10 +29,7 @@ use qp_zk_circuits_common::{
 	utils::{digest_felts_to_bytes, BytesDigest},
 };
 use rand::RngCore;
-use sp_core::{
-	crypto::{AccountId32, Ss58Codec},
-	Hasher,
-};
+use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::path::Path;
 use subxt::{
 	backend::legacy::rpc_methods::ReadProof,
@@ -60,8 +56,6 @@ pub const VOLUME_FEE_BPS: u32 = 10;
 /// Must match the BinaryHashes struct in qp-wormhole-aggregator/src/config.rs
 #[derive(Debug, Clone, serde::Deserialize, Default)]
 pub struct BinaryHashes {
-	pub common: Option<String>,
-	pub verifier: Option<String>,
 	pub prover: Option<String>,
 	pub aggregated_common: Option<String>,
 	pub aggregated_verifier: Option<String>,
@@ -557,30 +551,14 @@ fn format_dispatch_error(
 
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
-	/// Submit a wormhole transfer to an unspendable account
-	Transfer {
+	/// Derive the unspendable wormhole address from a secret
+	Address {
 		/// Secret (32-byte hex string) - used to derive the unspendable account
 		#[arg(long)]
 		secret: String,
-
-		/// Amount to transfer
-		#[arg(long)]
-		amount: u128,
-
-		/// Wallet name to fund from
-		#[arg(short, long)]
-		from: String,
-
-		/// Password for the wallet
-		#[arg(short, long)]
-		password: Option<String>,
-
-		/// Read password from file
-		#[arg(long)]
-		password_file: Option<String>,
 	},
 	/// Generate a wormhole proof from an existing transfer
-	Generate {
+	Prove {
 		/// Secret (32-byte hex string) used for the transfer
 		#[arg(long)]
 		secret: String,
@@ -684,9 +662,8 @@ pub async fn handle_wormhole_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WormholeCommands::Transfer { secret, amount, from, password, password_file } =>
-			submit_wormhole_transfer(secret, amount, from, password, password_file, node_url).await,
-		WormholeCommands::Generate {
+		WormholeCommands::Address { secret } => show_wormhole_address(secret),
+		WormholeCommands::Prove {
 			secret,
 			amount,
 			exit_account,
@@ -718,6 +695,7 @@ pub async fn handle_wormhole_command(
 				exit_account_2: [0u8; 32],
 			};
 
+			let prove_start = std::time::Instant::now();
 			generate_proof(
 				&secret,
 				amount,
@@ -728,13 +706,18 @@ pub async fn handle_wormhole_command(
 				&output,
 				&quantus_client,
 			)
-			.await
+			.await?;
+			let prove_elapsed = prove_start.elapsed();
+			log_print!("Proof generation: {:.2}s", prove_elapsed.as_secs_f64());
+			Ok(())
 		},
 		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
-		WormholeCommands::VerifyAggregated { proof } =>
-			verify_aggregated_proof(proof, node_url).await,
-		WormholeCommands::ParseProof { proof, aggregated, verify } =>
-			parse_proof_file(proof, aggregated, verify).await,
+		WormholeCommands::VerifyAggregated { proof } => {
+			verify_aggregated_proof(proof, node_url).await
+		},
+		WormholeCommands::ParseProof { proof, aggregated, verify } => {
+			parse_proof_file(proof, aggregated, verify).await
+		},
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -745,7 +728,7 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 			dry_run,
-		} =>
+		} => {
 			run_multiround(
 				num_proofs,
 				rounds,
@@ -758,42 +741,24 @@ pub async fn handle_wormhole_command(
 				dry_run,
 				node_url,
 			)
-			.await,
+			.await
+		},
 	}
 }
 
 pub type TransferProofKey = (u32, u64, AccountId32, AccountId32, u128);
 
-/// Submit a wormhole transfer to an unspendable account
-async fn submit_wormhole_transfer(
-	secret_hex: String,
-	funding_amount: u128,
-	from_wallet: String,
-	password: Option<String>,
-	password_file: Option<String>,
-	node_url: &str,
-) -> crate::error::Result<()> {
-	log_print!("Submitting wormhole transfer...");
+/// Derive and display the unspendable wormhole address from a secret.
+/// Users can then send funds to this address using `quantus send`.
+fn show_wormhole_address(secret_hex: String) -> crate::error::Result<()> {
+	use colored::Colorize;
 
-	// Parse secret
 	let secret_array =
 		parse_secret_hex(&secret_hex).map_err(crate::error::QuantusError::Generic)?;
 	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
 	})?;
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
-
-	// Connect to node
-	let quantus_client = QuantusClient::new(node_url)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
-	let client = quantus_client.client();
-
-	let funding_account = AccountId32::new(PoseidonHasher::hash(keypair.public_key.as_ref()).0);
-
-	// Generate unspendable account from secret
 	let unspendable_account =
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
@@ -803,65 +768,17 @@ async fn submit_wormhole_transfer(
 		.as_ref()
 		.try_into()
 		.expect("BytesDigest is always 32 bytes");
-	let unspendable_account_id = SubxtAccountId(unspendable_account_bytes);
 
-	log_verbose!("Funding account: 0x{}", hex::encode(funding_account.as_ref() as &[u8]));
-	log_verbose!("Unspendable account: 0x{}", hex::encode(unspendable_account_bytes));
+	let account_id = sp_core::crypto::AccountId32::new(unspendable_account_bytes);
+	let ss58_address =
+		account_id.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 
-	// Transfer to unspendable account
-	let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(unspendable_account_id.clone()),
-		funding_amount,
-	);
-
-	let quantum_keypair = QuantumKeyPair {
-		public_key: keypair.public_key.clone(),
-		private_key: keypair.private_key.clone(),
-	};
-
-	submit_transaction(
-		&quantus_client,
-		&quantum_keypair,
-		transfer_tx,
-		None,
-		ExecutionMode { finalized: false, wait_for_transaction: true },
-	)
-	.await
-	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-
-	// Get block and event details
-	let blocks = at_best_block(&quantus_client)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let block_hash = blocks.hash();
-
-	let events_api = client
-		.events()
-		.at(block_hash)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-
-	// Find our specific transfer event
-	let event = events_api
-		.find::<wormhole::events::NativeTransferred>()
-		.find(|e| if let Ok(evt) = e { evt.to.0 == unspendable_account_bytes } else { false })
-		.ok_or_else(|| {
-			crate::error::QuantusError::Generic(
-				"No matching NativeTransferred event found".to_string(),
-			)
-		})?
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-
-	// Output all the details needed for proof generation
-	log_success!("Transfer successful!");
-	log_success!("Block: {:?}", block_hash);
+	log_print!("{}", "Wormhole Address".bright_cyan());
+	log_print!("  SS58:  {}", ss58_address.bright_green());
+	log_print!("  Hex:   0x{}", hex::encode(unspendable_account_bytes));
 	log_print!("");
-	log_print!("Use these values for proof generation:");
-	log_print!("  --secret {}", secret_hex);
-	log_print!("  --amount {}", funding_amount);
-	log_print!("  --block 0x{}", hex::encode(block_hash.as_ref()));
-	log_print!("  --transfer-count {}", event.transfer_count);
-	log_print!("  --funding-account 0x{}", hex::encode(funding_account.as_ref() as &[u8]));
+	log_print!("To fund this address:");
+	log_print!("  quantus send --from <wallet> --to {} --amount <amount>", ss58_address);
 
 	Ok(())
 }
@@ -904,41 +821,17 @@ async fn aggregate_proofs(
 	let num_padding_proofs = agg_config.num_leaf_proofs - proof_files.len();
 
 	// Create progress bar for padding proof generation (if needed)
-	let progress_bar = if num_padding_proofs > 0 {
-		let pb = ProgressBar::new(num_padding_proofs as u64);
-		pb.set_style(
-			ProgressStyle::default_bar()
-				.template("  Generating {msg} [{bar:30}] {pos}/{len}")
-				.expect("Invalid progress bar template")
-				.progress_chars("=> "),
-		);
-		pb.set_message(format!("{} padding proofs", num_padding_proofs));
-		Some(pb)
-	} else {
-		None
-	};
-
 	// Load aggregator from pre-built bins (reads config from config.json)
-	// Only generates the padding proofs needed (num_leaf_proofs - num_real_proofs)
-	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(
-		bins_dir,
-		proof_files.len(),
-		Some(|current: usize, _total: usize| {
-			if let Some(ref pb) = progress_bar {
-				pb.set_position(current as u64);
-			}
-		}),
-	)
-	.map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to load aggregator from pre-built bins: {}",
-			e
-		))
-	})?;
+	// This also generates the padding (dummy) proofs needed
+	log_print!("  Loading aggregator and generating {} dummy proofs...", num_padding_proofs);
 
-	if let Some(pb) = progress_bar {
-		pb.finish_and_clear();
-	}
+	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(bins_dir, proof_files.len())
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to load aggregator from pre-built bins: {}",
+				e
+			))
+		})?;
 
 	log_verbose!(
 		"Aggregation config: branching_factor={}, depth={}, num_leaf_proofs={}",
@@ -969,10 +862,13 @@ async fn aggregate_proofs(
 		})?;
 	}
 
-	log_print!("Running aggregation...");
+	log_print!("  Running aggregation...");
+	let agg_start = std::time::Instant::now();
 	let aggregated_proof = aggregator
 		.aggregate()
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
+	let agg_elapsed = agg_start.elapsed();
+	log_print!("  Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
 
 	// Parse and display aggregated public inputs
 	let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
@@ -1359,7 +1255,7 @@ async fn execute_initial_transfers(
 ) -> crate::error::Result<Vec<TransferInfo>> {
 	use colored::Colorize;
 
-	log_print!("{}", "Step 1: Sending wormhole transfers from wallet...".bright_yellow());
+	log_print!("{}", "Step 1: Sending transfers to wormhole addresses...".bright_yellow());
 
 	// Randomly partition the total amount among proofs
 	// Each partition must meet the on-chain minimum transfer amount
@@ -1387,8 +1283,10 @@ async fn execute_initial_transfers(
 		let wormhole_address = SubxtAccountId(secret.address);
 		let transfer_amount = partition_amounts[i];
 
-		// Submit transfer
-		let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
+		// Use standard Balances::transfer_allow_death -- the chain's
+		// WormholeProofRecorderExtension automatically records a transfer proof
+		// and emits NativeTransferred for any balance transfer.
+		let transfer_tx = quantus_node::api::tx().balances().transfer_allow_death(
 			subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
 			transfer_amount,
 		);
@@ -1418,7 +1316,7 @@ async fn execute_initial_transfers(
 			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
 		})?;
 
-		// Find our transfer event
+		// Find the NativeTransferred event emitted by the WormholeProofRecorderExtension
 		let event = events_api
 			.find::<wormhole::events::NativeTransferred>()
 			.find(|e| if let Ok(evt) = e { evt.to.0 == secret.address } else { false })
@@ -1508,6 +1406,7 @@ async fn generate_round_proofs(
 			.progress_chars("#>-"),
 	);
 
+	let proof_gen_start = std::time::Instant::now();
 	let mut proof_files = Vec::new();
 	for (i, (secret, transfer)) in secrets.iter().zip(transfers.iter()).enumerate() {
 		pb.set_message(format!("Proof {}/{}", i + 1, num_proofs));
@@ -1516,6 +1415,8 @@ async fn generate_round_proofs(
 
 		// Use the funding account from the transfer info
 		let funding_account_hex = format!("0x{}", hex::encode(transfer.funding_account.0));
+
+		let single_start = std::time::Instant::now();
 
 		// Generate proof with dual output assignment
 		generate_proof(
@@ -1530,10 +1431,20 @@ async fn generate_round_proofs(
 		)
 		.await?;
 
+		let single_elapsed = single_start.elapsed();
+		log_verbose!("  Proof {} generated in {:.2}s", i + 1, single_elapsed.as_secs_f64());
+
 		proof_files.push(proof_file);
 		pb.inc(1);
 	}
 	pb.finish_with_message("Proofs generated");
+	let proof_gen_elapsed = proof_gen_start.elapsed();
+	log_print!(
+		"  Proof generation: {:.2}s ({} proofs, {:.2}s avg)",
+		proof_gen_elapsed.as_secs_f64(),
+		num_proofs,
+		proof_gen_elapsed.as_secs_f64() / num_proofs as f64,
+	);
 
 	Ok(proof_files)
 }
@@ -2409,8 +2320,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000 <=
-				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000
+				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
@@ -2495,8 +2406,8 @@ mod tests {
 		let input_amount = inputs.private.input_amount;
 		let output_amount = inputs.public.output_amount_1 + inputs.public.output_amount_2;
 		assert!(
-			(output_amount as u64) * 10000 <=
-				(input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
+			(output_amount as u64) * 10000
+				<= (input_amount as u64) * (10000 - VOLUME_FEE_BPS as u64),
 			"Test inputs violate fee constraint"
 		);
 

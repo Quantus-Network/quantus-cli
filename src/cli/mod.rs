@@ -644,13 +644,12 @@ async fn build_wormhole_circuits(
 	log_print!("");
 	log_success!("Circuit build complete!");
 	log_print!("");
-	log_print!("{}", "Next steps:".bright_blue().bold());
-	log_print!("  1. Rebuild CLI:   cargo build --release");
 	if !skip_chain {
-		log_print!("  2. Rebuild chain: cd {} && cargo build --release", chain_path);
-		log_print!("  3. Restart the chain node");
+		log_print!("{}", "Next steps:".bright_blue().bold());
+		log_print!("  1. Rebuild chain: cd {} && cargo build --release", chain_path);
+		log_print!("  2. Restart the chain node");
+		log_print!("");
 	}
-	log_print!("");
 
 	Ok(())
 }
