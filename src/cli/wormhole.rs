@@ -2185,6 +2185,155 @@ fn run_multiround_dry_run(
 	Ok(())
 }
 
+/// Parse and display the contents of a proof file for debugging
+async fn parse_proof_file(
+	proof_file: String,
+	aggregated: bool,
+	verify: bool,
+) -> crate::error::Result<()> {
+	use qp_wormhole_verifier::WormholeVerifier;
+
+	log_print!("Parsing proof file: {}", proof_file);
+
+	// Read proof bytes
+	let proof_bytes = read_proof_file(&proof_file)
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to read proof: {}", e)))?;
+
+	log_print!("Proof size: {} bytes", proof_bytes.len());
+
+	let bins_dir = Path::new("generated-bins");
+
+	if aggregated {
+		// Load aggregated verifier
+		let verifier = WormholeVerifier::new_from_files(
+			&bins_dir.join("aggregated_verifier.bin"),
+			&bins_dir.join("aggregated_common.bin"),
+		)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+		})?;
+
+		// Deserialize proof using verifier's types
+		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
+			qp_wormhole_verifier::F,
+			qp_wormhole_verifier::C,
+			{ qp_wormhole_verifier::D },
+		>::from_bytes(proof_bytes.clone(), &verifier.circuit_data.common)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to deserialize aggregated proof: {:?}",
+				e
+			))
+		})?;
+
+		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
+		log_verbose!("\nPublic inputs count: {}", proof.public_inputs.len());
+
+		// Try to parse as aggregated
+		match qp_wormhole_verifier::parse_aggregated_public_inputs(&proof) {
+			Ok(agg_inputs) => {
+				log_print!("\n=== Parsed Aggregated Public Inputs ===");
+				log_print!("Asset ID: {}", agg_inputs.asset_id);
+				log_print!("Volume Fee BPS: {}", agg_inputs.volume_fee_bps);
+				log_print!(
+					"Block Hash: 0x{}",
+					hex::encode(agg_inputs.block_data.block_hash.as_ref())
+				);
+				log_print!("Block Number: {}", agg_inputs.block_data.block_number);
+				log_print!("\nAccount Data ({} accounts):", agg_inputs.account_data.len());
+				for (i, acct) in agg_inputs.account_data.iter().enumerate() {
+					log_print!(
+						"  [{}] amount={}, exit=0x{}",
+						i,
+						acct.summed_output_amount,
+						hex::encode(acct.exit_account.as_ref())
+					);
+				}
+				log_print!("\nNullifiers ({} nullifiers):", agg_inputs.nullifiers.len());
+				for (i, nullifier) in agg_inputs.nullifiers.iter().enumerate() {
+					log_print!("  [{}] 0x{}", i, hex::encode(nullifier.as_ref()));
+				}
+			},
+			Err(e) => {
+				log_print!("Failed to parse as aggregated inputs: {}", e);
+			},
+		}
+
+		// Verify if requested
+		if verify {
+			log_print!("\n=== Verifying Proof ===");
+			match verifier.verify(proof) {
+				Ok(()) => {
+					log_success!("Proof verification PASSED");
+				},
+				Err(e) => {
+					log_error!("Proof verification FAILED: {}", e);
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Proof verification failed: {}",
+						e
+					)));
+				},
+			}
+		}
+	} else {
+		// Load leaf verifier
+		let verifier = WormholeVerifier::new_from_files(
+			&bins_dir.join("verifier.bin"),
+			&bins_dir.join("common.bin"),
+		)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+		})?;
+
+		// Deserialize proof using verifier's types
+		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
+			qp_wormhole_verifier::F,
+			qp_wormhole_verifier::C,
+			{ qp_wormhole_verifier::D },
+		>::from_bytes(proof_bytes, &verifier.circuit_data.common)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to deserialize proof: {:?}", e))
+		})?;
+
+		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
+
+		let pi = qp_wormhole_verifier::parse_public_inputs(&proof).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to parse public inputs: {}", e))
+		})?;
+
+		log_print!("\n=== Parsed Leaf Public Inputs ===");
+		log_print!("Asset ID: {}", pi.asset_id);
+		log_print!("Output Amount 1: {}", pi.output_amount_1);
+		log_print!("Output Amount 2: {}", pi.output_amount_2);
+		log_print!("Volume Fee BPS: {}", pi.volume_fee_bps);
+		log_print!("Nullifier: 0x{}", hex::encode(pi.nullifier.as_ref()));
+		log_print!("Exit Account 1: 0x{}", hex::encode(pi.exit_account_1.as_ref()));
+		log_print!("Exit Account 2: 0x{}", hex::encode(pi.exit_account_2.as_ref()));
+		log_print!("Block Hash: 0x{}", hex::encode(pi.block_hash.as_ref()));
+		log_print!("Parent Hash: 0x{}", hex::encode(pi.parent_hash.as_ref()));
+		log_print!("Block Number: {}", pi.block_number);
+
+		// Verify if requested
+		if verify {
+			log_print!("\n=== Verifying Proof ===");
+			match verifier.verify(proof) {
+				Ok(()) => {
+					log_success!("Proof verification PASSED");
+				},
+				Err(e) => {
+					log_error!("Proof verification FAILED: {}", e);
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Proof verification failed: {}",
+						e
+					)));
+				},
+			}
+		}
+	}
+
+	Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -2428,153 +2577,4 @@ mod tests {
 		// Ensure VOLUME_FEE_BPS matches expected value (10 bps = 0.1%)
 		assert_eq!(VOLUME_FEE_BPS, 10);
 	}
-}
-
-/// Parse and display the contents of a proof file for debugging
-async fn parse_proof_file(
-	proof_file: String,
-	aggregated: bool,
-	verify: bool,
-) -> crate::error::Result<()> {
-	use qp_wormhole_verifier::WormholeVerifier;
-
-	log_print!("Parsing proof file: {}", proof_file);
-
-	// Read proof bytes
-	let proof_bytes = read_proof_file(&proof_file)
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to read proof: {}", e)))?;
-
-	log_print!("Proof size: {} bytes", proof_bytes.len());
-
-	let bins_dir = Path::new("generated-bins");
-
-	if aggregated {
-		// Load aggregated verifier
-		let verifier = WormholeVerifier::new_from_files(
-			&bins_dir.join("aggregated_verifier.bin"),
-			&bins_dir.join("aggregated_common.bin"),
-		)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-		})?;
-
-		// Deserialize proof using verifier's types
-		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
-			qp_wormhole_verifier::F,
-			qp_wormhole_verifier::C,
-			{ qp_wormhole_verifier::D },
-		>::from_bytes(proof_bytes.clone(), &verifier.circuit_data.common)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to deserialize aggregated proof: {:?}",
-				e
-			))
-		})?;
-
-		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
-		log_verbose!("\nPublic inputs count: {}", proof.public_inputs.len());
-
-		// Try to parse as aggregated
-		match qp_wormhole_verifier::parse_aggregated_public_inputs(&proof) {
-			Ok(agg_inputs) => {
-				log_print!("\n=== Parsed Aggregated Public Inputs ===");
-				log_print!("Asset ID: {}", agg_inputs.asset_id);
-				log_print!("Volume Fee BPS: {}", agg_inputs.volume_fee_bps);
-				log_print!(
-					"Block Hash: 0x{}",
-					hex::encode(agg_inputs.block_data.block_hash.as_ref())
-				);
-				log_print!("Block Number: {}", agg_inputs.block_data.block_number);
-				log_print!("\nAccount Data ({} accounts):", agg_inputs.account_data.len());
-				for (i, acct) in agg_inputs.account_data.iter().enumerate() {
-					log_print!(
-						"  [{}] amount={}, exit=0x{}",
-						i,
-						acct.summed_output_amount,
-						hex::encode(acct.exit_account.as_ref())
-					);
-				}
-				log_print!("\nNullifiers ({} nullifiers):", agg_inputs.nullifiers.len());
-				for (i, nullifier) in agg_inputs.nullifiers.iter().enumerate() {
-					log_print!("  [{}] 0x{}", i, hex::encode(nullifier.as_ref()));
-				}
-			},
-			Err(e) => {
-				log_print!("Failed to parse as aggregated inputs: {}", e);
-			},
-		}
-
-		// Verify if requested
-		if verify {
-			log_print!("\n=== Verifying Proof ===");
-			match verifier.verify(proof) {
-				Ok(()) => {
-					log_success!("Proof verification PASSED");
-				},
-				Err(e) => {
-					log_error!("Proof verification FAILED: {}", e);
-					return Err(crate::error::QuantusError::Generic(format!(
-						"Proof verification failed: {}",
-						e
-					)));
-				},
-			}
-		}
-	} else {
-		// Load leaf verifier
-		let verifier = WormholeVerifier::new_from_files(
-			&bins_dir.join("verifier.bin"),
-			&bins_dir.join("common.bin"),
-		)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-		})?;
-
-		// Deserialize proof using verifier's types
-		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
-			qp_wormhole_verifier::F,
-			qp_wormhole_verifier::C,
-			{ qp_wormhole_verifier::D },
-		>::from_bytes(proof_bytes, &verifier.circuit_data.common)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to deserialize proof: {:?}", e))
-		})?;
-
-		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
-
-		let pi = qp_wormhole_verifier::parse_public_inputs(&proof).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to parse public inputs: {}", e))
-		})?;
-
-		log_print!("\n=== Parsed Leaf Public Inputs ===");
-		log_print!("Asset ID: {}", pi.asset_id);
-		log_print!("Output Amount 1: {}", pi.output_amount_1);
-		log_print!("Output Amount 2: {}", pi.output_amount_2);
-		log_print!("Volume Fee BPS: {}", pi.volume_fee_bps);
-		log_print!("Nullifier: 0x{}", hex::encode(pi.nullifier.as_ref()));
-		log_print!("Exit Account 1: 0x{}", hex::encode(pi.exit_account_1.as_ref()));
-		log_print!("Exit Account 2: 0x{}", hex::encode(pi.exit_account_2.as_ref()));
-		log_print!("Block Hash: 0x{}", hex::encode(pi.block_hash.as_ref()));
-		log_print!("Parent Hash: 0x{}", hex::encode(pi.parent_hash.as_ref()));
-		log_print!("Block Number: {}", pi.block_number);
-
-		// Verify if requested
-		if verify {
-			log_print!("\n=== Verifying Proof ===");
-			match verifier.verify(proof) {
-				Ok(()) => {
-					log_success!("Proof verification PASSED");
-				},
-				Err(e) => {
-					log_error!("Proof verification FAILED: {}", e);
-					return Err(crate::error::QuantusError::Generic(format!(
-						"Proof verification failed: {}",
-						e
-					)));
-				},
-			}
-		}
-	}
-
-	Ok(())
 }
