@@ -61,6 +61,9 @@ qp-dilithium-crypto = { version = "0.2.0", features = ["serde"] }
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 blake3 = "1.8"
 
+# Force patched version of bytes (RUSTSEC-2026-0007)
+bytes = "1.11.1"
+
 # Blockchain and RPC client
 codec = { package = "parity-scale-codec", version = "3.7", features = [
 	"derive",
