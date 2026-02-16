@@ -111,38 +111,17 @@ impl AggregationConfig {
 			})
 		};
 
-		if let Some(ref expected) = stored_hashes.aggregated_common {
-			if let Some(actual) = hash_file("aggregated_common.bin") {
-				if expected != &actual {
-					mismatches.push(format!(
-						"aggregated_common.bin: expected {}..., got {}...",
-						&expected[..16.min(expected.len())],
-						&actual[..16.min(actual.len())]
-					));
-				}
-			}
-		}
-
-		if let Some(ref expected) = stored_hashes.aggregated_verifier {
-			if let Some(actual) = hash_file("aggregated_verifier.bin") {
-				if expected != &actual {
-					mismatches.push(format!(
-						"aggregated_verifier.bin: expected {}..., got {}...",
-						&expected[..16.min(expected.len())],
-						&actual[..16.min(actual.len())]
-					));
-				}
-			}
-		}
-
-		if let Some(ref expected) = stored_hashes.prover {
-			if let Some(actual) = hash_file("prover.bin") {
-				if expected != &actual {
-					mismatches.push(format!(
-						"prover.bin: expected {}..., got {}...",
-						&expected[..16.min(expected.len())],
-						&actual[..16.min(actual.len())]
-					));
+		let checks = [
+			("aggregated_common.bin", &stored_hashes.aggregated_common),
+			("aggregated_verifier.bin", &stored_hashes.aggregated_verifier),
+			("prover.bin", &stored_hashes.prover),
+		];
+		for (filename, expected_hash) in checks {
+			if let Some(ref expected) = expected_hash {
+				if let Some(actual) = hash_file(filename) {
+					if expected != &actual {
+						mismatches.push(format!("{}...", filename));
+					}
 				}
 			}
 		}
@@ -281,7 +260,7 @@ pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> 
 	if diff != 0 {
 		// Add/subtract difference from a random part
 		let idx = rng.random_range(0..n);
-		parts[idx] = (parts[idx] as i128 + diff) as u128;
+		parts[idx] = (parts[idx] as i128 + diff).max(0) as u128;
 	}
 
 	parts
@@ -930,34 +909,42 @@ async fn aggregate_proofs(
 	Ok(())
 }
 
-async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
-	use subxt::tx::TxStatus;
+#[derive(Debug, Clone, Copy)]
+enum IncludedAt {
+	Best,
+	Finalized,
+}
 
-	log_print!("Verifying aggregated wormhole proof on-chain...");
+impl IncludedAt {
+	fn label(self) -> &'static str {
+		match self {
+			IncludedAt::Best => "best block",
+			IncludedAt::Finalized => "finalized block",
+		}
+	}
+}
 
-	// Read proof from file
-	let proof_hex = std::fs::read_to_string(&proof_file).map_err(|e| {
+fn read_hex_proof_file_to_bytes(proof_file: &str) -> crate::error::Result<Vec<u8>> {
+	let proof_hex = std::fs::read_to_string(proof_file).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
 	})?;
 
 	let proof_bytes = hex::decode(proof_hex.trim())
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
 
-	log_verbose!("Aggregated proof size: {} bytes", proof_bytes.len());
+	Ok(proof_bytes)
+}
 
-	// Connect to node
-	let quantus_client = QuantusClient::new(node_url)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+/// Submit unsigned verify_aggregated_proof(proof_bytes) and return (included_at, block_hash,
+/// tx_hash).
+async fn submit_unsigned_verify_aggregated_proof(
+	quantus_client: &QuantusClient,
+	proof_bytes: Vec<u8>,
+) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
+	use subxt::tx::TxStatus;
 
-	log_verbose!("Connected to node");
-
-	// Create the verify_aggregated_proof transaction payload
 	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
 
-	log_verbose!("Submitting unsigned aggregated verification transaction...");
-
-	// Submit as unsigned extrinsic
 	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
 	})?;
@@ -967,67 +954,21 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
 
-	// Wait for transaction inclusion and verify events
 	while let Some(Ok(status)) = tx_progress.next().await {
-		log_verbose!("Transaction status: {:?}", status);
 		match status {
 			TxStatus::InBestBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				let tx_hash = tx_in_block.extrinsic_hash();
-
-				// Check for ProofVerified event
-				let result = check_proof_verification_events(
-					quantus_client.client(),
-					&block_hash,
-					&tx_hash,
-					crate::log::is_verbose(),
-				)
-				.await?;
-
-				if result.success {
-					log_success!("Aggregated proof verified successfully on-chain!");
-					if let Some(amount) = result.exit_amount {
-						log_success!("Total exit amount: {}", format_balance(amount));
-					}
-					log_verbose!("Included in block: {:?}", block_hash);
-					return Ok(());
-				} else {
-					let error_msg = result.error_message.unwrap_or_else(|| {
-						"Aggregated proof verification failed - no ProofVerified event found"
-							.to_string()
-					});
-					log_error!("❌ {}", error_msg);
-					return Err(crate::error::QuantusError::Generic(error_msg));
-				}
+				return Ok((
+					IncludedAt::Best,
+					tx_in_block.block_hash(),
+					tx_in_block.extrinsic_hash(),
+				));
 			},
 			TxStatus::InFinalizedBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				let tx_hash = tx_in_block.extrinsic_hash();
-
-				// Check for ProofVerified event
-				let result = check_proof_verification_events(
-					quantus_client.client(),
-					&block_hash,
-					&tx_hash,
-					crate::log::is_verbose(),
-				)
-				.await?;
-
-				if result.success {
-					log_success!("Aggregated proof verified successfully on-chain!");
-					if let Some(amount) = result.exit_amount {
-						log_success!("Total exit amount: {}", format_balance(amount));
-					}
-					log_verbose!("Finalized in block: {:?}", block_hash);
-					return Ok(());
-				} else {
-					let error_msg = result.error_message.unwrap_or_else(|| {
-						"Aggregated proof verification failed - no ProofVerified event found"
-							.to_string()
-					});
-					log_error!("❌ {}", error_msg);
-					return Err(crate::error::QuantusError::Generic(error_msg));
-				}
+				return Ok((
+					IncludedAt::Finalized,
+					tx_in_block.block_hash(),
+					tx_in_block.extrinsic_hash(),
+				));
 			},
 			TxStatus::Error { message } | TxStatus::Invalid { message } => {
 				return Err(crate::error::QuantusError::Generic(format!(
@@ -1040,6 +981,121 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 	}
 
 	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+}
+
+/// Collect wormhole events for our extrinsic (by tx_hash) in a given block.
+/// Returns (found_proof_verified, native_transfers).
+async fn collect_wormhole_events_for_extrinsic(
+	quantus_client: &QuantusClient,
+	block_hash: subxt::utils::H256,
+	tx_hash: subxt::utils::H256,
+) -> crate::error::Result<(bool, Vec<wormhole::events::NativeTransferred>)> {
+	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
+
+	let block =
+		quantus_client.client().blocks().at(block_hash).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
+		})?;
+
+	let events = block
+		.events()
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get events: {}", e)))?;
+
+	let extrinsics = block.extrinsics().await.map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to get extrinsics: {}", e))
+	})?;
+
+	let our_ext_idx = extrinsics
+		.iter()
+		.enumerate()
+		.find(|(_, ext)| ext.hash() == tx_hash)
+		.map(|(idx, _)| idx as u32)
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Could not find submitted extrinsic in included block".to_string(),
+			)
+		})?;
+
+	let mut transfer_events = Vec::new();
+	let mut found_proof_verified = false;
+
+	log_verbose!("  Events for our extrinsic (idx={}):", our_ext_idx);
+
+	for event_result in events.iter() {
+		let event = event_result.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to decode event: {}", e))
+		})?;
+
+		if let subxt::events::Phase::ApplyExtrinsic(ext_idx) = event.phase() {
+			if ext_idx == our_ext_idx {
+				log_print!("    Event: {}::{}", event.pallet_name(), event.variant_name());
+
+				// Decode ExtrinsicFailed to get the specific error
+				if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
+					event.as_event::<ExtrinsicFailed>()
+				{
+					let metadata = quantus_client.client().metadata();
+					let error_msg = format_dispatch_error(&dispatch_error, &metadata);
+					log_print!("    DispatchError: {}", error_msg);
+				}
+
+				if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>() {
+					found_proof_verified = true;
+				}
+
+				if let Ok(Some(transfer)) = event.as_event::<wormhole::events::NativeTransferred>()
+				{
+					transfer_events.push(transfer);
+				}
+			}
+		}
+	}
+
+	Ok((found_proof_verified, transfer_events))
+}
+
+async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+	log_print!("Verifying aggregated wormhole proof on-chain...");
+
+	let proof_bytes = read_hex_proof_file_to_bytes(&proof_file)?;
+	log_verbose!("Aggregated proof size: {} bytes", proof_bytes.len());
+
+	// Connect to node
+	let quantus_client = QuantusClient::new(node_url)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+	log_verbose!("Connected to node");
+
+	log_verbose!("Submitting unsigned aggregated verification transaction...");
+
+	let (included_at, block_hash, tx_hash) =
+		submit_unsigned_verify_aggregated_proof(&quantus_client, proof_bytes).await?;
+
+	// One unified check (no best/finalized copy-paste)
+	let result = check_proof_verification_events(
+		quantus_client.client(),
+		&block_hash,
+		&tx_hash,
+		crate::log::is_verbose(),
+	)
+	.await?;
+
+	if result.success {
+		log_success!("Aggregated proof verified successfully on-chain!");
+		if let Some(amount) = result.exit_amount {
+			log_success!("Total exit amount: {}", format_balance(amount));
+		}
+
+		log_verbose!("Included in {}: {:?}", included_at.label(), block_hash);
+		return Ok(());
+	}
+
+	let error_msg = result.error_message.unwrap_or_else(|| {
+		"Aggregated proof verification failed - no ProofVerified event found".to_string()
+	});
+	log_error!("❌ {}", error_msg);
+	Err(crate::error::QuantusError::Generic(error_msg))
 }
 
 // ============================================================================
@@ -1098,10 +1154,12 @@ async fn get_minting_account(
 	Ok(minting_account)
 }
 
-/// Parse transfer info from NativeTransferred events in a block
+/// Parse transfer info from NativeTransferred events in a block and updates block hash for all
+/// transfers
 fn parse_transfer_events(
 	events: &[wormhole::events::NativeTransferred],
 	expected_addresses: &[SubxtAccountId],
+	block_hash: subxt::utils::H256,
 ) -> Result<Vec<TransferInfo>, crate::error::QuantusError> {
 	let mut transfer_infos = Vec::new();
 
@@ -1115,7 +1173,7 @@ fn parse_transfer_events(
 		})?;
 
 		transfer_infos.push(TransferInfo {
-			block_hash: subxt::utils::H256::default(), // Will be set by caller
+			block_hash,
 			transfer_count: matching_event.transfer_count,
 			amount: matching_event.amount,
 			wormhole_address: expected_addr.clone(),
@@ -1725,12 +1783,8 @@ async fn run_multiround(
 				})
 				.collect();
 
-			current_transfers = parse_transfer_events(&transfer_events, &next_round_addresses)?;
-
-			// Update block hash for all transfers
-			for transfer in &mut current_transfers {
-				transfer.block_hash = verification_block;
-			}
+			current_transfers =
+				parse_transfer_events(&transfer_events, &next_round_addresses, verification_block)?;
 
 			log_print!(
 				"  Captured {} transfer(s) for round {}",
@@ -1962,17 +2016,9 @@ async fn verify_aggregated_and_get_events(
 	proof_file: &str,
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<(subxt::utils::H256, Vec<wormhole::events::NativeTransferred>)> {
-	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
 	use qp_wormhole_verifier::WormholeVerifier;
-	use subxt::tx::TxStatus;
 
-	// Read proof from file
-	let proof_hex = std::fs::read_to_string(proof_file).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to read proof file: {}", e))
-	})?;
-
-	let proof_bytes = hex::decode(proof_hex.trim())
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to decode hex: {}", e)))?;
+	let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
 
 	// Verify locally before submitting on-chain
 	log_verbose!("Verifying aggregated proof locally before on-chain submission...");
@@ -1985,7 +2031,6 @@ async fn verify_aggregated_and_get_events(
 		crate::error::QuantusError::Generic(format!("Failed to load aggregated verifier: {}", e))
 	})?;
 
-	// Use the verifier crate's ProofWithPublicInputs type (different from plonky2's)
 	let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
 		qp_wormhole_verifier::F,
 		qp_wormhole_verifier::C,
@@ -2006,120 +2051,41 @@ async fn verify_aggregated_and_get_events(
 	})?;
 	log_verbose!("Local verification passed!");
 
-	// Create the verify_aggregated_proof transaction payload
-	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
+	// Submit unsigned tx + wait for inclusion (best or finalized)
+	let (included_at, block_hash, tx_hash) =
+		submit_unsigned_verify_aggregated_proof(quantus_client, proof_bytes).await?;
 
-	// Submit as unsigned extrinsic
-	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
-	})?;
+	log_verbose!(
+		"Submitted tx included in {}: block={:?}, tx={:?}",
+		included_at.label(),
+		block_hash,
+		tx_hash
+	);
 
-	let mut tx_progress = unsigned_tx
-		.submit_and_watch()
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
+	// Collect events for our extrinsic only
+	let (found_proof_verified, transfer_events) =
+		collect_wormhole_events_for_extrinsic(quantus_client, block_hash, tx_hash).await?;
 
-	while let Some(Ok(status)) = tx_progress.next().await {
-		match status {
-			TxStatus::InBestBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				let tx_hash = tx_in_block.extrinsic_hash();
-
-				// Get all events from the block
-				let block = quantus_client.client().blocks().at(block_hash).await.map_err(|e| {
-					crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
-				})?;
-
-				let events = block.events().await.map_err(|e| {
-					crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
-				})?;
-
-				// Find our extrinsic index
-				let extrinsics = block.extrinsics().await.map_err(|e| {
-					crate::error::QuantusError::Generic(format!("Failed to get extrinsics: {}", e))
-				})?;
-
-				let our_ext_idx = extrinsics
-					.iter()
-					.enumerate()
-					.find(|(_, ext)| ext.hash() == tx_hash)
-					.map(|(idx, _)| idx as u32);
-
-				// Collect NativeTransferred events for our extrinsic
-				let mut transfer_events = Vec::new();
-				let mut found_proof_verified = false;
-
-				log_verbose!("  Events for our extrinsic (idx={:?}):", our_ext_idx);
-				for event_result in events.iter() {
-					let event = event_result.map_err(|e| {
-						crate::error::QuantusError::Generic(format!(
-							"Failed to decode event: {}",
-							e
-						))
-					})?;
-
-					if let subxt::events::Phase::ApplyExtrinsic(ext_idx) = event.phase() {
-						if Some(ext_idx) == our_ext_idx {
-							// Log all events for our extrinsic
-							log_print!(
-								"    Event: {}::{}",
-								event.pallet_name(),
-								event.variant_name()
-							);
-
-							// Decode ExtrinsicFailed to get the specific error
-							if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
-								event.as_event::<ExtrinsicFailed>()
-							{
-								let metadata = quantus_client.client().metadata();
-								let error_msg = format_dispatch_error(&dispatch_error, &metadata);
-								log_print!("    DispatchError: {}", error_msg);
-							}
-
-							if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>()
-							{
-								found_proof_verified = true;
-							}
-							if let Ok(Some(transfer)) =
-								event.as_event::<wormhole::events::NativeTransferred>()
-							{
-								transfer_events.push(transfer);
-							}
-						}
-					}
-				}
-
-				if found_proof_verified {
-					// Log the minted amounts from transfer events
-					log_print!("  Tokens minted (from NativeTransferred events):");
-					for (idx, transfer) in transfer_events.iter().enumerate() {
-						let to_hex = hex::encode(transfer.to.0);
-						log_print!(
-							"    [{}] {} -> {} planck ({})",
-							idx,
-							to_hex,
-							transfer.amount,
-							format_balance(transfer.amount)
-						);
-					}
-					return Ok((block_hash, transfer_events));
-				} else {
-					return Err(crate::error::QuantusError::Generic(
-						"Proof verification failed - no ProofVerified event".to_string(),
-					));
-				}
-			},
-			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Transaction failed: {}",
-					message
-				)));
-			},
-			_ => continue,
-		}
+	if !found_proof_verified {
+		return Err(crate::error::QuantusError::Generic(
+			"Proof verification failed - no ProofVerified event".to_string(),
+		));
 	}
 
-	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+	// Log minted amounts
+	log_print!("  Tokens minted (from NativeTransferred events):");
+	for (idx, transfer) in transfer_events.iter().enumerate() {
+		let to_hex = hex::encode(transfer.to.0);
+		log_print!(
+			"    [{}] {} -> {} planck ({})",
+			idx,
+			to_hex,
+			transfer.amount,
+			format_balance(transfer.amount)
+		);
+	}
+
+	Ok((block_hash, transfer_events))
 }
 
 /// Dry run - show what would happen without executing
@@ -2337,6 +2303,7 @@ async fn parse_proof_file(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::collections::HashSet;
 	use tempfile::NamedTempFile;
 
 	#[test]
@@ -2576,5 +2543,244 @@ mod tests {
 	fn test_volume_fee_bps_constant() {
 		// Ensure VOLUME_FEE_BPS matches expected value (10 bps = 0.1%)
 		assert_eq!(VOLUME_FEE_BPS, 10);
+	}
+	fn mk_accounts(n: usize) -> Vec<[u8; 32]> {
+		(0..n)
+			.map(|i| {
+				let mut a = [0u8; 32];
+				a[0] = (i as u8).wrapping_add(1); // avoid [0;32]
+				a
+			})
+			.collect()
+	}
+
+	fn proof_outputs_for_inputs(input_amounts: &[u128], fee_bps: u32) -> Vec<u32> {
+		input_amounts
+			.iter()
+			.map(|&input| {
+				let input_quantized = quantize_funding_amount(input).unwrap_or(0);
+				compute_output_amount(input_quantized, fee_bps)
+			})
+			.collect()
+	}
+
+	fn total_output_for_inputs(input_amounts: &[u128], fee_bps: u32) -> u64 {
+		proof_outputs_for_inputs(input_amounts, fee_bps)
+			.into_iter()
+			.map(|x| x as u64)
+			.sum()
+	}
+
+	/// Find some input that yields at least `min_out` quantized output after fee.
+	/// Keeps tests robust even if quantization constants change.
+	fn find_input_for_min_output(fee_bps: u32, min_out: u32) -> u128 {
+		let mut input: u128 = 1;
+		for _ in 0..80 {
+			let q = quantize_funding_amount(input).unwrap_or(0);
+			let out = compute_output_amount(q, fee_bps);
+			if out >= min_out {
+				return input;
+			}
+			// grow fast but safely
+			input = input.saturating_mul(10);
+		}
+		panic!("Could not find input producing output >= {}", min_out);
+	}
+
+	// --------------------------
+	// random_partition tests
+	// --------------------------
+
+	#[test]
+	fn random_partition_n0() {
+		let parts = random_partition(100, 0, 1);
+		assert!(parts.is_empty());
+	}
+
+	#[test]
+	fn random_partition_n1() {
+		let total = 12345u128;
+		let parts = random_partition(total, 1, 9999);
+		assert_eq!(parts, vec![total]);
+	}
+
+	#[test]
+	fn random_partition_total_less_than_min_total_falls_back_to_equalish() {
+		// total < min_per_part * n => fallback path
+		let total = 5u128;
+		let n = 10usize;
+		let min_per_part = 1u128;
+
+		let parts = random_partition(total, n, min_per_part);
+
+		assert_eq!(parts.len(), n);
+		assert_eq!(parts.iter().sum::<u128>(), total);
+
+		// fallback behavior: per_part=0, remainder=5, last gets remainder
+		for part in parts.iter().take(n - 1) {
+			assert_eq!(*part, 0);
+		}
+		assert_eq!(parts[n - 1], 5);
+	}
+
+	#[test]
+	fn random_partition_min_achievable_invariants_hold() {
+		let total = 100u128;
+		let n = 10usize;
+		let min_per_part = 3u128;
+
+		for _ in 0..200 {
+			let parts = random_partition(total, n, min_per_part);
+			assert_eq!(parts.len(), n);
+			assert_eq!(parts.iter().sum::<u128>(), total);
+			assert!(parts.iter().all(|&p| p >= min_per_part));
+		}
+	}
+
+	#[test]
+	fn random_partition_distributable_zero_all_min() {
+		let n = 10usize;
+		let min_per_part = 3u128;
+		let total = min_per_part * n as u128;
+
+		let parts = random_partition(total, n, min_per_part);
+
+		assert_eq!(parts.len(), n);
+		assert_eq!(parts.iter().sum::<u128>(), total);
+		assert!(parts.iter().all(|&p| p == min_per_part));
+	}
+
+	// --------------------------
+	// compute_random_output_assignments tests
+	// --------------------------
+
+	#[test]
+	fn compute_random_output_assignments_empty_inputs_or_targets() {
+		let targets = mk_accounts(3);
+		assert!(compute_random_output_assignments(&[], &targets, 0).is_empty());
+
+		let inputs = vec![1u128, 2u128, 3u128];
+		assert!(compute_random_output_assignments(&inputs, &[], 0).is_empty());
+	}
+
+	#[test]
+	fn compute_random_output_assignments_basic_invariants() {
+		let fee_bps = 0u32;
+
+		// ensure non-zero outputs for meaningful checks
+		let input = find_input_for_min_output(fee_bps, 5);
+		let input_amounts = vec![input, input, input, input, input];
+		let targets = mk_accounts(4);
+
+		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		assert_eq!(assignments.len(), input_amounts.len());
+
+		let proof_outputs = proof_outputs_for_inputs(&input_amounts, fee_bps);
+
+		// per-proof sum matches
+		for (i, a) in assignments.iter().enumerate() {
+			let per_proof_sum = a.output_amount_1 as u64 + a.output_amount_2 as u64;
+			assert_eq!(per_proof_sum, proof_outputs[i] as u64);
+
+			// If an output amount is non-zero, the account must be in targets
+			if a.output_amount_1 > 0 {
+				assert!(targets.contains(&a.exit_account_1));
+			} else {
+				// if amount is zero, account can be zero or anything; current impl keeps default
+				// [0;32]
+			}
+			if a.output_amount_2 > 0 {
+				assert!(targets.contains(&a.exit_account_2));
+				assert_ne!(a.exit_account_2, a.exit_account_1); // should be different if both used
+			} else {
+				// current impl keeps default [0;32]
+				assert_eq!(a.exit_account_2, [0u8; 32]);
+			}
+		}
+
+		// total sum matches
+		let total_assigned: u64 = assignments
+			.iter()
+			.map(|a| a.output_amount_1 as u64 + a.output_amount_2 as u64)
+			.sum();
+
+		let total_expected = total_output_for_inputs(&input_amounts, fee_bps);
+		assert_eq!(total_assigned, total_expected);
+	}
+
+	#[test]
+	fn compute_random_output_assignments_more_targets_than_capacity_still_conserves_funds() {
+		// Capacity: each proof can hit at most 2 targets, so distinct-used-targets <= 2 *
+		// num_proofs. Set num_targets > 2*num_proofs and ensure total_output >= num_targets so
+		// the partition *wants* to give each target >= 1 (though algorithm can't satisfy it).
+		let fee_bps = 0u32;
+		let num_proofs = 1usize;
+		let num_targets = 5usize;
+
+		let input = find_input_for_min_output(fee_bps, 10); // ensure total_output is "big enough"
+		let input_amounts = vec![input; num_proofs];
+		let targets = mk_accounts(num_targets);
+
+		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		assert_eq!(assignments.len(), num_proofs);
+
+		// total preserved
+		let total_assigned: u64 = assignments
+			.iter()
+			.map(|a| a.output_amount_1 as u64 + a.output_amount_2 as u64)
+			.sum();
+		let total_expected = total_output_for_inputs(&input_amounts, fee_bps);
+		assert_eq!(total_assigned, total_expected);
+
+		// used targets bounded by 2*num_proofs and thus < num_targets
+		let mut used = HashSet::new();
+		for a in &assignments {
+			if a.output_amount_1 > 0 {
+				used.insert(a.exit_account_1);
+			}
+			if a.output_amount_2 > 0 {
+				used.insert(a.exit_account_2);
+			}
+		}
+		assert!(used.len() <= 2 * num_proofs);
+		assert!(used.len() < num_targets);
+	}
+
+	#[test]
+	fn compute_random_output_assignments_total_output_less_than_num_targets_does_not_panic_and_conserves(
+	) {
+		// This forces random_partition into its fallback branch inside
+		// compute_random_output_assignments because min_per_target = 1 and total_output <
+		// num_targets.
+		let fee_bps = 0u32;
+
+		let num_targets = 50usize;
+		let targets = mk_accounts(num_targets);
+
+		// Try to get very small total output: two proofs with output likely >= 1 each,
+		// but still far less than 50.
+		let input = find_input_for_min_output(fee_bps, 1);
+		let input_amounts = vec![input, input];
+
+		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		assert_eq!(assignments.len(), input_amounts.len());
+
+		let total_assigned: u64 = assignments
+			.iter()
+			.map(|a| a.output_amount_1 as u64 + a.output_amount_2 as u64)
+			.sum();
+		let total_expected = total_output_for_inputs(&input_amounts, fee_bps);
+		assert_eq!(total_assigned, total_expected);
+
+		// For each assignment: if non-zero amount then account must be in targets.
+		for a in &assignments {
+			if a.output_amount_1 > 0 {
+				assert!(targets.contains(&a.exit_account_1));
+			}
+			if a.output_amount_2 > 0 {
+				assert!(targets.contains(&a.exit_account_2));
+				assert_ne!(a.exit_account_2, a.exit_account_1);
+			}
+		}
 	}
 }
