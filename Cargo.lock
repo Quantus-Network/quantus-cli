@@ -4079,6 +4079,7 @@ dependencies = [
  "anyhow",
  "argon2",
  "blake3",
+ "bytes",
  "chrono",
  "clap",
  "colored",
