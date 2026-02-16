@@ -263,13 +263,10 @@ async fn submit_wormhole_transfer(
 	};
 
 	// Submit transaction and get the actual block hash where it was included
-	let block_hash: subxt::utils::H256 = submit_and_get_block_hash(
-		quantus_client,
-		&quantum_keypair,
-		transfer_tx,
-	)
-	.await
-	.map_err(|e| format!("Transfer failed: {}", e))?;
+	let block_hash: subxt::utils::H256 =
+		submit_and_get_block_hash(quantus_client, &quantum_keypair, transfer_tx)
+			.await
+			.map_err(|e| format!("Transfer failed: {}", e))?;
 
 	println!("  Transfer included in block: {:?}", block_hash);
 
