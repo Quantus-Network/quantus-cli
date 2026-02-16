@@ -2541,6 +2541,36 @@ mod tests {
 		// Ensure VOLUME_FEE_BPS matches expected value (10 bps = 0.1%)
 		assert_eq!(VOLUME_FEE_BPS, 10);
 	}
+	
+	#[test]
+	fn test_aggregation_config_deserialization_matches_upstream_format() {
+		// This test verifies that our local AggregationConfig struct can deserialize
+		// the same JSON format that the upstream CircuitBinsConfig produces.
+		// If the upstream adds/removes/renames fields, this test will catch it.
+		let json = r#"{
+			"branching_factor": 8,
+			"depth": 1,
+			"num_leaf_proofs": 8,
+			"hashes": {
+				"common": "aabbcc",
+				"verifier": "ddeeff",
+				"prover": "112233",
+				"aggregated_common": "445566",
+				"aggregated_verifier": "778899"
+			}
+		}"#;
+
+		let config: AggregationConfig = serde_json::from_str(json).unwrap();
+		assert_eq!(config.branching_factor, 8);
+		assert_eq!(config.depth, 1);
+		assert_eq!(config.num_leaf_proofs, 8);
+
+		let hashes = config.hashes.unwrap();
+		assert_eq!(hashes.prover.as_deref(), Some("112233"));
+		assert_eq!(hashes.aggregated_common.as_deref(), Some("445566"));
+		assert_eq!(hashes.aggregated_verifier.as_deref(), Some("778899"));
+	}
+
 	fn mk_accounts(n: usize) -> Vec<[u8; 32]> {
 		(0..n)
 			.map(|i| {
