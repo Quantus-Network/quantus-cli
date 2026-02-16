@@ -500,30 +500,26 @@ async fn submit_single_proof_for_verification(
 /// Aggregate multiple proofs into one
 fn aggregate_proofs(
 	proof_contexts: Vec<ProofContext>,
-	depth: usize,
-	branching_factor: usize,
+	num_leaf_proofs: usize,
 ) -> Result<AggregatedProofContext, String> {
 	use qp_wormhole_aggregator::{
-		aggregator::WormholeProofAggregator, circuits::tree::TreeAggregationConfig,
+		aggregator::WormholeProofAggregator, circuits::tree::AggregationConfig,
 	};
 
 	println!(
-		"  Aggregating {} proofs (depth={}, branching_factor={})...",
+		"  Aggregating {} proofs (num_leaf_proofs={})...",
 		proof_contexts.len(),
-		depth,
-		branching_factor
+		num_leaf_proofs,
 	);
 
 	let config = CircuitConfig::standard_recursion_zk_config();
-	let aggregation_config = TreeAggregationConfig::new(branching_factor, depth as u32);
+	let aggregation_config = AggregationConfig::new(num_leaf_proofs);
 
 	if proof_contexts.len() > aggregation_config.num_leaf_proofs {
 		return Err(format!(
-			"Too many proofs: {} provided, max {} for depth={} branching_factor={}",
+			"Too many proofs: {} provided, max {}",
 			proof_contexts.len(),
 			aggregation_config.num_leaf_proofs,
-			depth,
-			branching_factor
 		));
 	}
 
@@ -844,8 +840,7 @@ async fn test_aggregated_proof_on_chain_verification() {
 	println!("\n4. Aggregating {} proofs...", proof_contexts.len());
 	let aggregated_context = aggregate_proofs(
 		proof_contexts,
-		1, // depth
-		2, // branching_factor (2^1 = 2 max proofs)
+		2, // num_leaf_proofs
 	)
 	.expect("Failed to aggregate proofs");
 

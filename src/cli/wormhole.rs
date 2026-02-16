@@ -59,14 +59,13 @@ pub struct BinaryHashes {
 	pub prover: Option<String>,
 	pub aggregated_common: Option<String>,
 	pub aggregated_verifier: Option<String>,
+	pub dummy_proof: Option<String>,
 }
 
 /// Aggregation config loaded from generated-bins/config.json.
 /// Must match the CircuitBinsConfig struct in qp-wormhole-aggregator/src/config.rs
 #[derive(Debug, Clone, serde::Deserialize)]
 pub struct AggregationConfig {
-	pub branching_factor: usize,
-	pub depth: u32,
 	pub num_leaf_proofs: usize,
 	#[serde(default)]
 	pub hashes: Option<BinaryHashes>,
@@ -115,6 +114,7 @@ impl AggregationConfig {
 			("aggregated_common.bin", &stored_hashes.aggregated_common),
 			("aggregated_verifier.bin", &stored_hashes.aggregated_verifier),
 			("prover.bin", &stored_hashes.prover),
+			("dummy_proof.bin", &stored_hashes.dummy_proof),
 		];
 		for (filename, expected_hash) in checks {
 			if let Some(ref expected) = expected_hash {
@@ -327,77 +327,83 @@ pub fn compute_random_output_assignments(
 	let target_amounts_u128 = random_partition(total_output as u128, num_targets, min_per_target);
 	let target_amounts: Vec<u32> = target_amounts_u128.iter().map(|&x| x as u32).collect();
 
-	// Step 3: Assign outputs to proofs using a greedy algorithm
-	// Each proof can have at most 2 outputs to different targets
+	// Step 3: Assign outputs to proofs.
+	// Each proof can have at most 2 outputs to different targets.
 	//
-	// Strategy: For each proof, we try to split across two targets if possible
-	// to maximize mixing. We process targets in shuffled order.
+	// Strategy:
+	//   Pass 1 - Guarantee every target gets at least one output slot by round-robin
+	//            assigning each target as output_1 of successive proofs.
+	//   Pass 2 - Fill remaining capacity (output_2 slots and any leftover amounts)
+	//            greedily from targets that still have remaining allocation.
+	//
+	// This ensures every target address appears in at least one proof output,
+	// which is critical for the multiround flow where each target is a next-round
+	// wormhole address that must receive minted tokens.
 
 	let mut rng = rand::rng();
-	let mut assignments = Vec::with_capacity(num_proofs);
 
-	// Shuffle target indices for random assignment order
-	let mut target_order: Vec<usize> = (0..num_targets).collect();
-	target_order.shuffle(&mut rng);
-
-	// Track remaining needs per target (in original index order)
+	// Track remaining needs per target
 	let mut target_remaining: Vec<u32> = target_amounts.clone();
 
-	for &proof_output in proof_outputs.iter() {
-		let mut remaining = proof_output;
-		let mut output_1_amount = 0u32;
-		let mut output_1_account = [0u8; 32];
-		let mut output_2_amount = 0u32;
-		let mut output_2_account = [0u8; 32];
-		let mut outputs_assigned = 0;
+	// Pre-allocate assignments with output_1 = full proof output, output_2 = 0
+	let mut assignments: Vec<ProofOutputAssignment> = proof_outputs
+		.iter()
+		.map(|&po| ProofOutputAssignment {
+			output_amount_1: po,
+			exit_account_1: [0u8; 32],
+			output_amount_2: 0,
+			exit_account_2: [0u8; 32],
+		})
+		.collect();
 
-		// Try to assign to targets in shuffled order
-		for &tidx in &target_order {
-			if remaining == 0 {
-				break;
-			}
-			if outputs_assigned >= 2 {
-				// Already have 2 outputs, add remainder to output_1
-				output_1_amount += remaining;
-				remaining = 0;
-				break;
-			}
-			if target_remaining[tidx] == 0 {
-				continue;
-			}
+	// Pass 1: Round-robin assign each target to a proof's output_1.
+	// If num_targets <= num_proofs, each target gets its own proof.
+	// If num_targets > num_proofs, later targets share proofs via output_2.
+	let mut shuffled_targets: Vec<usize> = (0..num_targets).collect();
+	shuffled_targets.shuffle(&mut rng);
 
-			let assign = remaining.min(target_remaining[tidx]);
-			if assign == 0 {
-				continue;
-			}
+	for (assign_idx, &tidx) in shuffled_targets.iter().enumerate() {
+		let proof_idx = assign_idx % num_proofs;
+		let assignment = &mut assignments[proof_idx];
 
-			if outputs_assigned == 0 {
-				output_1_amount = assign;
-				output_1_account = target_accounts[tidx];
-			} else {
-				output_2_amount = assign;
-				output_2_account = target_accounts[tidx];
-			}
-
-			remaining -= assign;
+		if assignment.exit_account_1 == [0u8; 32] {
+			// First target for this proof -> use output_1
+			let assign = assignment.output_amount_1.min(target_remaining[tidx]);
+			assignment.exit_account_1 = target_accounts[tidx];
+			// We'll fix up the exact amounts in pass 2; for now just mark the account
+			assignment.output_amount_1 = assign;
 			target_remaining[tidx] -= assign;
-			outputs_assigned += 1;
+		} else if assignment.exit_account_2 == [0u8; 32] {
+			// Second target for this proof -> use output_2
+			let avail = proof_outputs[proof_idx].saturating_sub(assignment.output_amount_1);
+			let assign = avail.min(target_remaining[tidx]);
+			assignment.exit_account_2 = target_accounts[tidx];
+			assignment.output_amount_2 = assign;
+			target_remaining[tidx] -= assign;
+		}
+		// If both slots taken, skip (shouldn't happen when num_targets <= 2*num_proofs)
+	}
+
+	// Pass 2: Distribute any remaining target allocations into available proof outputs.
+	// Also ensure each proof's output_1 + output_2 == proof_outputs[i].
+	for proof_idx in 0..num_proofs {
+		let total_proof_output = proof_outputs[proof_idx];
+		let current_sum =
+			assignments[proof_idx].output_amount_1 + assignments[proof_idx].output_amount_2;
+		let mut shortfall = total_proof_output.saturating_sub(current_sum);
+
+		if shortfall > 0 {
+			// Add shortfall to output_1 (its account is already set)
+			assignments[proof_idx].output_amount_1 += shortfall;
+			shortfall = 0;
 		}
 
-		// If we still have remaining (shouldn't happen normally), add to output_1
-		if remaining > 0 {
-			output_1_amount += remaining;
+		// If output_1_account is still [0;32] (shouldn't happen), assign first target as fallback
+		if assignments[proof_idx].exit_account_1 == [0u8; 32] && num_targets > 0 {
+			assignments[proof_idx].exit_account_1 = target_accounts[0];
 		}
 
-		assignments.push(ProofOutputAssignment {
-			output_amount_1: output_1_amount,
-			exit_account_1: output_1_account,
-			output_amount_2: output_2_amount,
-			exit_account_2: output_2_account,
-		});
-
-		// Re-shuffle target order for next proof to increase mixing
-		target_order.shuffle(&mut rng);
+		let _ = shortfall; // suppress unused warning
 	}
 
 	assignments
@@ -772,6 +778,7 @@ async fn aggregate_proofs(
 	output_file: String,
 ) -> crate::error::Result<()> {
 	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
+	use qp_zk_circuits_common::aggregation::AggregationConfig as AggConfig;
 
 	use std::path::Path;
 
@@ -801,7 +808,8 @@ async fn aggregate_proofs(
 	// This also generates the padding (dummy) proofs needed
 	log_print!("  Loading aggregator and generating {} dummy proofs...", num_padding_proofs);
 
-	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(bins_dir, proof_files.len())
+	let aggr_config = AggConfig::new(agg_config.num_leaf_proofs);
+	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(bins_dir, aggr_config)
 		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
 				"Failed to load aggregator from pre-built bins: {}",
@@ -809,12 +817,7 @@ async fn aggregate_proofs(
 			))
 		})?;
 
-	log_verbose!(
-		"Aggregation config: branching_factor={}, depth={}, num_leaf_proofs={}",
-		aggregator.config.tree_branching_factor,
-		aggregator.config.tree_depth,
-		aggregator.config.num_leaf_proofs
-	);
+	log_verbose!("Aggregation config: num_leaf_proofs={}", aggregator.config.num_leaf_proofs);
 	let common_data = aggregator.leaf_circuit_data.common.clone();
 
 	// Load and add proofs using helper function
@@ -1282,11 +1285,7 @@ fn print_multiround_config(
 	);
 	log_print!("  Proofs per round: {}", config.num_proofs);
 	log_print!("  Rounds: {}", config.rounds);
-	log_print!(
-		"  Aggregation: branching_factor={}, depth={}",
-		agg_config.branching_factor,
-		agg_config.depth
-	);
+	log_print!("  Aggregation: num_leaf_proofs={}", agg_config.num_leaf_proofs);
 	log_print!("  Output directory: {}", config.output_dir);
 	log_print!("  Keep files: {}", config.keep_files);
 	log_print!("");
@@ -1300,7 +1299,10 @@ fn print_multiround_config(
 	log_print!("");
 }
 
-/// Execute initial transfers from wallet to wormhole addresses (round 1 only)
+/// Execute initial transfers from wallet to wormhole addresses (round 1 only).
+///
+/// Sends all transfers in a single batched extrinsic using `utility.batch()`,
+/// then parses the `NativeTransferred` events to extract transfer info for proof generation.
 async fn execute_initial_transfers(
 	quantus_client: &QuantusClient,
 	wallet: &MultiroundWalletContext,
@@ -1309,8 +1311,11 @@ async fn execute_initial_transfers(
 	num_proofs: usize,
 ) -> crate::error::Result<Vec<TransferInfo>> {
 	use colored::Colorize;
+	use quantus_node::api::runtime_types::{
+		pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
+	};
 
-	log_print!("{}", "Step 1: Sending transfers to wormhole addresses...".bright_yellow());
+	log_print!("{}", "Step 1: Sending batched transfer to wormhole addresses...".bright_yellow());
 
 	// Randomly partition the total amount among proofs
 	// Each partition must meet the on-chain minimum transfer amount
@@ -1321,79 +1326,81 @@ async fn execute_initial_transfers(
 		log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
 	}
 
-	let pb = ProgressBar::new(num_proofs as u64);
-	pb.set_style(
-		ProgressStyle::default_bar()
-			.template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} {msg}")
-			.unwrap()
-			.progress_chars("#>-"),
-	);
-
-	let client = quantus_client.client();
-	let mut transfers = Vec::new();
-
+	// Build batch of transfer calls
+	let mut calls = Vec::with_capacity(num_proofs);
 	for (i, secret) in secrets.iter().enumerate() {
-		pb.set_message(format!("Transfer {}/{}", i + 1, num_proofs));
-
 		let wormhole_address = SubxtAccountId(secret.address);
-		let transfer_amount = partition_amounts[i];
+		let transfer_call = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
+			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address),
+			value: partition_amounts[i],
+		});
+		calls.push(transfer_call);
+	}
 
-		// Use standard Balances::transfer_allow_death -- the chain's
-		// WormholeProofRecorderExtension automatically records a transfer proof
-		// and emits NativeTransferred for any balance transfer.
-		let transfer_tx = quantus_node::api::tx().balances().transfer_allow_death(
-			subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
-			transfer_amount,
-		);
+	let batch_tx = quantus_node::api::tx().utility().batch(calls);
 
-		let quantum_keypair = QuantumKeyPair {
-			public_key: wallet.keypair.public_key.clone(),
-			private_key: wallet.keypair.private_key.clone(),
-		};
+	let quantum_keypair = QuantumKeyPair {
+		public_key: wallet.keypair.public_key.clone(),
+		private_key: wallet.keypair.private_key.clone(),
+	};
 
-		submit_transaction(
-			quantus_client,
-			&quantum_keypair,
-			transfer_tx,
-			None,
-			ExecutionMode { finalized: false, wait_for_transaction: true },
-		)
+	log_print!("  Submitting batch of {} transfers...", num_proofs);
+
+	submit_transaction(
+		quantus_client,
+		&quantum_keypair,
+		batch_tx,
+		None,
+		ExecutionMode { finalized: false, wait_for_transaction: true },
+	)
+	.await
+	.map_err(|e| crate::error::QuantusError::Generic(format!("Batch transfer failed: {}", e)))?;
+
+	// Get the block and find all NativeTransferred events
+	let client = quantus_client.client();
+	let block = at_best_block(quantus_client)
 		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Transfer failed: {}", e)))?;
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
+	let block_hash = block.hash();
 
-		// Get the block and find our event
-		let block = at_best_block(quantus_client).await.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
-		})?;
-		let block_hash = block.hash();
-
-		let events_api = client.events().at(block_hash).await.map_err(|e| {
+	let events_api =
+		client.events().at(block_hash).await.map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
 		})?;
 
-		// Find the NativeTransferred event emitted by the WormholeProofRecorderExtension
+	// Match each secret's wormhole address to its NativeTransferred event
+	let funding_account: SubxtAccountId = SubxtAccountId(wallet.keypair.to_account_id_32().into());
+	let mut transfers = Vec::with_capacity(num_proofs);
+
+	for (i, secret) in secrets.iter().enumerate() {
 		let event = events_api
 			.find::<wormhole::events::NativeTransferred>()
 			.find(|e| if let Ok(evt) = e { evt.to.0 == secret.address } else { false })
 			.ok_or_else(|| {
-				crate::error::QuantusError::Generic("No matching transfer event found".to_string())
+				crate::error::QuantusError::Generic(format!(
+					"No NativeTransferred event found for wormhole address {} (proof {})",
+					hex::encode(secret.address),
+					i + 1
+				))
 			})?
 			.map_err(|e| {
 				crate::error::QuantusError::Generic(format!("Event decode error: {}", e))
 			})?;
 
-		let funding_account_bytes = wallet.keypair.to_account_id_32();
 		transfers.push(TransferInfo {
 			block_hash,
 			transfer_count: event.transfer_count,
-			amount: transfer_amount,
-			wormhole_address,
-			funding_account: SubxtAccountId(funding_account_bytes.into()),
+			amount: partition_amounts[i],
+			wormhole_address: SubxtAccountId(secret.address),
+			funding_account: funding_account.clone(),
 		});
-
-		pb.inc(1);
 	}
-	pb.finish_with_message("Transfers complete");
+
+	log_success!(
+		"  {} transfers submitted in a single batch (block {})",
+		num_proofs,
+		hex::encode(block_hash.0)
+	);
 
 	Ok(transfers)
 }
@@ -2541,15 +2548,13 @@ mod tests {
 		// Ensure VOLUME_FEE_BPS matches expected value (10 bps = 0.1%)
 		assert_eq!(VOLUME_FEE_BPS, 10);
 	}
-	
+
 	#[test]
 	fn test_aggregation_config_deserialization_matches_upstream_format() {
 		// This test verifies that our local AggregationConfig struct can deserialize
 		// the same JSON format that the upstream CircuitBinsConfig produces.
 		// If the upstream adds/removes/renames fields, this test will catch it.
 		let json = r#"{
-			"branching_factor": 8,
-			"depth": 1,
 			"num_leaf_proofs": 8,
 			"hashes": {
 				"common": "aabbcc",
@@ -2561,8 +2566,6 @@ mod tests {
 		}"#;
 
 		let config: AggregationConfig = serde_json::from_str(json).unwrap();
-		assert_eq!(config.branching_factor, 8);
-		assert_eq!(config.depth, 1);
 		assert_eq!(config.num_leaf_proofs, 8);
 
 		let hashes = config.hashes.unwrap();

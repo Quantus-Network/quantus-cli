@@ -293,13 +293,9 @@ pub enum DeveloperCommands {
 		#[arg(long, default_value = "../chain")]
 		chain_path: String,
 
-		/// Branching factor for aggregation tree (number of proofs aggregated at each level)
+		/// Number of leaf proofs aggregated into a single proof
 		#[arg(long)]
-		branching_factor: usize,
-
-		/// Depth of the aggregation tree (num_leaf_proofs = branching_factor^depth)
-		#[arg(long)]
-		depth: u32,
+		num_leaf_proofs: usize,
 
 		/// Skip copying to chain directory
 		#[arg(long)]
@@ -558,18 +554,9 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 		DeveloperCommands::BuildCircuits {
 			circuits_path,
 			chain_path,
-			branching_factor,
-			depth,
+			num_leaf_proofs,
 			skip_chain,
-		} =>
-			build_wormhole_circuits(
-				&circuits_path,
-				&chain_path,
-				branching_factor,
-				depth,
-				skip_chain,
-			)
-			.await,
+		} => build_wormhole_circuits(&circuits_path, &chain_path, num_leaf_proofs, skip_chain).await,
 	}
 }
 
@@ -577,19 +564,12 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 async fn build_wormhole_circuits(
 	circuits_path: &str,
 	chain_path: &str,
-	branching_factor: usize,
-	depth: u32,
+	num_leaf_proofs: usize,
 	skip_chain: bool,
 ) -> crate::error::Result<()> {
 	use std::{path::Path, process::Command};
 
-	let num_leaf_proofs = branching_factor.pow(depth);
-	log_print!(
-		"🔧 Building ZK circuit binaries (branching_factor={}, depth={}, max_proofs={})",
-		branching_factor,
-		depth,
-		num_leaf_proofs
-	);
+	log_print!("Building ZK circuit binaries (num_leaf_proofs={})", num_leaf_proofs);
 	log_print!("");
 
 	let circuits_dir = Path::new(circuits_path);
@@ -626,7 +606,7 @@ async fn build_wormhole_circuits(
 	log_print!("Step 2/4: Generating circuit binaries (this may take a while)...");
 	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
 	let run_output = Command::new(&builder_path)
-		.args(["--branching-factor", &branching_factor.to_string(), "--depth", &depth.to_string()])
+		.args(["--num-leaf-proofs", &num_leaf_proofs.to_string()])
 		.current_dir(circuits_dir)
 		.output()
 		.map_err(|e| {
@@ -651,6 +631,7 @@ async fn build_wormhole_circuits(
 		"common.bin",
 		"verifier.bin",
 		"prover.bin",
+		"dummy_proof.bin",
 		"aggregated_common.bin",
 		"aggregated_verifier.bin",
 		"config.json",
