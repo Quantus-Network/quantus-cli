@@ -248,8 +248,9 @@ async fn submit_wormhole_transfer(
 	println!("  Unspendable account: 0x{}", hex::encode(unspendable_account_bytes));
 	println!("  Exit account: 0x{}", hex::encode(exit_account_bytes));
 
-	// Create and submit transfer to unspendable account
-	let transfer_tx = quantus_node::api::tx().wormhole().transfer_native(
+	// Fund via Balances (wormhole has no transfer_native; WormholeProofRecorderExtension
+	// records every Balances transfer and emits NativeTransferred)
+	let transfer_tx = quantus_node::api::tx().balances().transfer_allow_death(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(unspendable_account_id.clone()),
 		funding_amount,
 	);
@@ -262,13 +263,17 @@ async fn submit_wormhole_transfer(
 	};
 
 	// Submit transaction and get the actual block hash where it was included
-	let block_hash = submit_and_get_block_hash(quantus_client, &quantum_keypair, transfer_tx)
-		.await
-		.map_err(|e| format!("Transfer failed: {}", e))?;
+	let block_hash: subxt::utils::H256 = submit_and_get_block_hash(
+		quantus_client,
+		&quantum_keypair,
+		transfer_tx,
+	)
+	.await
+	.map_err(|e| format!("Transfer failed: {}", e))?;
 
 	println!("  Transfer included in block: {:?}", block_hash);
 
-	// Find the NativeTransferred event that matches our unspendable account
+	// WormholeProofRecorderExtension emits NativeTransferred for every Balances transfer
 	let events_api = client
 		.events()
 		.at(block_hash)
@@ -457,7 +462,7 @@ async fn submit_single_proof_for_verification(
 ) -> Result<(), String> {
 	println!("  Submitting single proof for on-chain verification...");
 
-	let verify_tx = quantus_node::api::tx().wormhole().verify_wormhole_proof(proof_bytes);
+	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
 
 	let unsigned_tx = quantus_client
 		.client()
