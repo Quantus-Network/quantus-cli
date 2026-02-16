@@ -1913,6 +1913,7 @@ async fn generate_proof(
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			storage_proof: processed_storage_proof,
 			unspendable_account: unspendable_account_bytes_digest,
+			parent_hash,
 			state_root,
 			extrinsics_root,
 			digest,
@@ -1929,7 +1930,6 @@ async fn generate_proof(
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			block_hash: BytesDigest::try_from(block_hash.as_ref())
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			parent_hash,
 			block_number,
 			asset_id: NATIVE_ASSET_ID,
 		},
@@ -2310,7 +2310,6 @@ async fn parse_proof_file(
 		log_print!("Exit Account 1: 0x{}", hex::encode(pi.exit_account_1.as_ref()));
 		log_print!("Exit Account 2: 0x{}", hex::encode(pi.exit_account_2.as_ref()));
 		log_print!("Block Hash: 0x{}", hex::encode(pi.block_hash.as_ref()));
-		log_print!("Parent Hash: 0x{}", hex::encode(pi.parent_hash.as_ref()));
 		log_print!("Block Number: {}", pi.block_number);
 
 		// Verify if requested
@@ -2530,12 +2529,12 @@ mod tests {
 			ASSET_ID_INDEX, BLOCK_HASH_END_INDEX, BLOCK_HASH_START_INDEX, BLOCK_NUMBER_INDEX,
 			EXIT_ACCOUNT_1_END_INDEX, EXIT_ACCOUNT_1_START_INDEX, EXIT_ACCOUNT_2_END_INDEX,
 			EXIT_ACCOUNT_2_START_INDEX, NULLIFIER_END_INDEX, NULLIFIER_START_INDEX,
-			OUTPUT_AMOUNT_1_INDEX, OUTPUT_AMOUNT_2_INDEX, PARENT_HASH_END_INDEX,
-			PARENT_HASH_START_INDEX, PUBLIC_INPUTS_FELTS_LEN, VOLUME_FEE_BPS_INDEX,
+			OUTPUT_AMOUNT_1_INDEX, OUTPUT_AMOUNT_2_INDEX, PUBLIC_INPUTS_FELTS_LEN,
+			VOLUME_FEE_BPS_INDEX,
 		};
 
 		// Verify expected public inputs layout for dual-output circuit
-		assert_eq!(PUBLIC_INPUTS_FELTS_LEN, 25, "Public inputs should be 25 field elements");
+		assert_eq!(PUBLIC_INPUTS_FELTS_LEN, 21, "Public inputs should be 21 field elements");
 		assert_eq!(ASSET_ID_INDEX, 0, "Asset ID should be first");
 		assert_eq!(OUTPUT_AMOUNT_1_INDEX, 1, "Output amount 1 should be at index 1");
 		assert_eq!(OUTPUT_AMOUNT_2_INDEX, 2, "Output amount 2 should be at index 2");
@@ -2548,9 +2547,7 @@ mod tests {
 		assert_eq!(EXIT_ACCOUNT_2_END_INDEX, 16, "Exit account 2 should end at index 16");
 		assert_eq!(BLOCK_HASH_START_INDEX, 16, "Block hash should start at index 16");
 		assert_eq!(BLOCK_HASH_END_INDEX, 20, "Block hash should end at index 20");
-		assert_eq!(PARENT_HASH_START_INDEX, 20, "Parent hash should start at index 20");
-		assert_eq!(PARENT_HASH_END_INDEX, 24, "Parent hash should end at index 24");
-		assert_eq!(BLOCK_NUMBER_INDEX, 24, "Block number should be at index 24");
+		assert_eq!(BLOCK_NUMBER_INDEX, 20, "Block number should be at index 20");
 	}
 
 	/// Test that constants match expected on-chain configuration

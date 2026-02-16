@@ -410,6 +410,7 @@ async fn generate_proof_from_transfer(
 				.map_err(|e| format!("Failed to convert funding account: {}", e))?,
 			storage_proof: processed_storage_proof,
 			unspendable_account: digest_felts_to_bytes(transfer_data.unspendable_account),
+			parent_hash,
 			state_root,
 			extrinsics_root,
 			digest,
@@ -427,7 +428,6 @@ async fn generate_proof_from_transfer(
 				.map_err(|e| format!("Failed to convert zero exit account: {}", e))?,
 			block_hash: BytesDigest::try_from(block_hash.as_ref())
 				.map_err(|e| format!("Failed to convert block hash: {}", e))?,
-			parent_hash,
 			block_number,
 			asset_id: NATIVE_ASSET_ID,
 		},
@@ -538,7 +538,7 @@ fn aggregate_proofs(
 		println!("        exit_account_1: {:?}", ctx.public_inputs.exit_account_1);
 		println!("        exit_account_2: {:?}", ctx.public_inputs.exit_account_2);
 		println!("        block_hash: {:?}", ctx.public_inputs.block_hash);
-		println!("        parent_hash: {:?}", ctx.public_inputs.parent_hash);
+		println!("        block_number: {:?}", ctx.public_inputs.block_number);
 		println!("        block_number: {}", ctx.public_inputs.block_number);
 		aggregator
 			.push_proof(ctx.proof)
