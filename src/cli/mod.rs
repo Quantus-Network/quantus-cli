@@ -95,7 +95,7 @@ pub enum Commands {
 	#[command(subcommand)]
 	Preimage(preimage::PreimageCommands),
 
-	/// Treasury management commands
+	/// Treasury account info
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
 
