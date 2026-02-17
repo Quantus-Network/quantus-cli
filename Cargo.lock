@@ -3800,8 +3800,9 @@ dependencies = [
 
 [[package]]
 name = "qp-dilithium-crypto"
-version = "0.2.0"
-source = "git+https://github.com/Quantus-Network/chain?branch=testnet%2Fplanck#fc80f0359a0d3450151c8fe98fd5f92dab312d6a"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb99863567fe9eebd3e23435b233f508ec814ae97e4b944954caec5d07275515"
 dependencies = [
  "log",
  "parity-scale-codec",
