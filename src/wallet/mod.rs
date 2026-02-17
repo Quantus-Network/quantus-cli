@@ -10,13 +10,13 @@ pub mod password;
 
 use crate::error::{Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
-use qp_rusty_crystals_hdwallet::{generate_mnemonic, HDLattice};
+use qp_rusty_crystals_hdwallet::{derive_key_from_mnemonic, generate_mnemonic, SensitiveBytes32};
 use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::IdentifyAccount;
 
-/// Default derivation path for Quantus wallets: m/44'/189189'/0'/0/0
-pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0/0";
+/// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'
+pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0'/0'";
 
 /// Wallet information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,11 +69,9 @@ impl WalletManager {
 		// Generate a new Dilithium keypair using derivation path
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
-		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
-		let lattice =
-			HDLattice::from_mnemonic(&mnemonic, None).expect("Failed to generate lattice");
-		let dilithium_keypair = lattice
-			.generate_derived_keys(derivation_path)
+		let sensitive_seed = SensitiveBytes32::from(&mut seed);
+		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, derivation_path)
 			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
@@ -219,13 +217,14 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Generate new mnemonic and use master seed directly
+		// Generate new mnemonic and use master seed directly (no derivation path)
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
-		let mnemonic = generate_mnemonic(24, seed).map_err(|_| WalletError::KeyGeneration)?;
-		let lattice =
-			HDLattice::from_mnemonic(&mnemonic, None).map_err(|_| WalletError::KeyGeneration)?;
-		let dilithium_keypair = lattice.generate_keys();
+		let sensitive_seed = SensitiveBytes32::from(&mut seed);
+		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		// For "no derivation" mode, we use the root path m/
+		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, "m/44'/189189'/0'")
+			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data
@@ -272,10 +271,9 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Use mnemonic to generate master seed directly
-		let lattice =
-			HDLattice::from_mnemonic(mnemonic, None).map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_keypair = lattice.generate_keys();
+		// Use mnemonic to generate keys directly (no derivation path)
+		let dilithium_keypair = derive_key_from_mnemonic(mnemonic, None, "m/44'/189189'/0'")
+			.map_err(|_| WalletError::InvalidMnemonic)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data
@@ -325,11 +323,8 @@ impl WalletManager {
 		}
 
 		// Validate and import from mnemonic using derivation path
-		let lattice =
-			HDLattice::from_mnemonic(mnemonic, None).map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_keypair = lattice
-			.generate_derived_keys(derivation_path)
-			.map_err(|_| WalletError::KeyGeneration)?;
+		let dilithium_keypair = derive_key_from_mnemonic(mnemonic, None, derivation_path)
+			.map_err(|_| WalletError::InvalidMnemonic)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Create wallet data
@@ -604,8 +599,10 @@ mod tests {
 		let keystore = keystore::Keystore::new(temp_dir.path());
 
 		// Create test wallet data
-		let entropy = [1u8; 32]; // Use fixed entropy for deterministic tests
-		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(&entropy);
+		let mut entropy = [1u8; 32]; // Use fixed entropy for deterministic tests
+		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
+			SensitiveBytes32::from(&mut entropy),
+		);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		let mut metadata = std::collections::HashMap::new();
@@ -654,8 +651,10 @@ mod tests {
 	#[tokio::test]
 	async fn test_quantum_keypair_address_generation() {
 		// Generate keypair
-		let entropy = [2u8; 32]; // Use different entropy for variety
-		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(&entropy);
+		let mut entropy = [2u8; 32]; // Use different entropy for variety
+		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
+			SensitiveBytes32::from(&mut entropy),
+		);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Test address generation
@@ -678,8 +677,10 @@ mod tests {
 		let keystore = keystore::Keystore::new(temp_dir.path());
 
 		// Create and encrypt wallet data
-		let entropy = [3u8; 32]; // Use different entropy for each test
-		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(&entropy);
+		let mut entropy = [3u8; 32]; // Use different entropy for each test
+		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
+			SensitiveBytes32::from(&mut entropy),
+		);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		let wallet_data = keystore::WalletData {
@@ -772,8 +773,8 @@ mod tests {
 
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
-		let expected_address = "qznMJss7Ls1SWBhvvL2CSHVbgTxEfnL9GgpvMTq5CWMEwfCoe"; // default derivation path index 0
-		let expected_address_no_derive = "qznBvupPsA9T8VJDuTDokKPiNUe88zMMUtHGA1AsGc8fXKSSA";
+		let expected_address = "qzoog56PJKvDwqo9GwkzRN74kxEgDEspxu5zVA62y18ttt3tG"; // default derivation path index 0
+		let expected_address_no_derive = "qzofkFbmnEYLX6iHwqJ9uKYXFi7ypQwcBBMxcYYLVD17vGpsm";
 
 		let imported_wallet = wallet_manager
 			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))

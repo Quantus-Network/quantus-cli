@@ -119,6 +119,347 @@ Common navigation patterns:
 
 
 
+## Command Reference
+
+### Wormhole (Privacy-Preserving Transfers)
+
+The `wormhole` commands implement a ZK-proof-based privacy layer. Funds are sent to an unspendable account derived from a secret, a zero-knowledge proof is generated to prove ownership, and the proof is verified on-chain to mint equivalent tokens to an exit account -- breaking the on-chain link between sender and receiver.
+
+#### `quantus wormhole address`
+
+Derive the unspendable wormhole address from a secret. This is step one of a private transfer -- it shows the address you need to send funds to.
+
+```bash
+quantus wormhole address --secret 0x<64-hex-chars>
+```
+
+Output:
+```
+Wormhole Address
+  SS58:  qDx...
+  Hex:   0x...
+
+To fund this address:
+  quantus send --from <wallet> --to qDx... --amount <amount>
+```
+
+Then send funds using a standard transfer (the chain's `WormholeProofRecorderExtension` automatically records a transfer proof for any balance transfer):
+
+```bash
+quantus send --from crystal_alice --to qDx... --amount 100
+```
+
+#### `quantus wormhole prove`
+
+Generate a ZK proof for an existing wormhole transfer. The proof demonstrates knowledge of the secret without revealing it.
+
+```bash
+quantus wormhole prove \
+  --secret 0x<secret> \
+  --amount 100000000000000 \
+  --exit-account <SS58-or-hex> \
+  --block 0x<block-hash> \
+  --transfer-count <count> \
+  --funding-account 0x<funding-account> \
+  --output proof.hex
+```
+
+- `--exit-account`: The destination address that will receive funds after on-chain verification (SS58 or `0x`-prefixed hex).
+- `--block`: Block hash where the transfer was included.
+- `--transfer-count`: Transfer count from the `NativeTransferred` event.
+- `--output`: Output file path for the hex-encoded proof (default: `proof.hex`).
+
+#### `quantus wormhole aggregate`
+
+Aggregate multiple leaf proofs into a single recursive proof. The aggregation circuit pads with dummy proofs and shuffles to hide which slots are real.
+
+```bash
+quantus wormhole aggregate \
+  --proofs proof_1.hex proof_2.hex \
+  --output aggregated_proof.hex
+```
+
+- `--proofs`: One or more hex-encoded proof files. The number must not exceed `num_leaf_proofs` from the circuit config.
+- Before aggregation, the CLI verifies binary hashes from `generated-bins/config.json` to detect stale circuit binaries.
+- Displays timing for dummy proof generation and aggregation separately.
+
+#### `quantus wormhole verify-aggregated`
+
+Submit an aggregated proof to the chain for on-chain verification. This is an unsigned extrinsic -- no wallet is needed.
+
+```bash
+quantus wormhole verify-aggregated --proof aggregated_proof.hex
+```
+
+- On success, the chain mints tokens to each exit account listed in the proof.
+- The command checks for `ProofVerified` and `ExtrinsicFailed` events and reports the result.
+
+#### `quantus wormhole parse-proof`
+
+Inspect the public inputs of a proof file for debugging.
+
+```bash
+# Parse a leaf proof
+quantus wormhole parse-proof --proof proof.hex
+
+# Parse an aggregated proof
+quantus wormhole parse-proof --proof aggregated_proof.hex --aggregated
+
+# Parse and cryptographically verify locally
+quantus wormhole parse-proof --proof aggregated_proof.hex --aggregated --verify
+```
+
+#### `quantus wormhole multiround`
+
+Run an automated multi-round wormhole flow: fund -> prove -> aggregate -> verify on-chain, repeated over multiple rounds. This is the primary integration test for the wormhole system.
+
+```bash
+quantus wormhole multiround \
+  --num-proofs 4 \
+  --rounds 2 \
+  --amount 100000000000000 \
+  --wallet crystal_alice \
+  --password "" \
+  --keep-files \
+  --output-dir /tmp/wormhole_test
+```
+
+- `--num-proofs`: Number of proofs per round (1 to `num_leaf_proofs` from circuit config, default: 2).
+- `--rounds`: Number of rounds (default: 2). In intermediate rounds, exit accounts are the next round's wormhole addresses; in the final round, funds exit back to the wallet.
+- `--amount`: Total amount in planck to randomly partition across proofs (default: 100 DEV).
+- `--wallet`: Wallet name for funding (round 1) and final exit.
+- `--keep-files`: Preserve proof files after completion (default: cleaned up).
+- `--output-dir`: Directory for intermediate proof files (default: `/tmp/wormhole_multiround`).
+- `--dry-run`: Show configuration and derived addresses without executing.
+
+Each round performs:
+1. **Transfer** (round 1 only): Randomly partition the total amount and send to wormhole addresses derived via HD path `m/44'/189189189'/0'/<round>'/<index>'`.
+2. **Generate proofs**: Create a ZK proof for each transfer with randomized dual-output assignments.
+3. **Aggregate**: Combine all leaf proofs into a single recursive proof.
+4. **Verify on-chain**: Submit the aggregated proof; the chain mints tokens to exit accounts.
+
+After all rounds, the command verifies the wallet balance matches expectations (initial - fees).
+
+---
+
+### Developer Tools
+
+#### `quantus developer build-circuits`
+
+Build ZK circuit binaries from the `qp-zk-circuits` repository, then copy them to the CLI and chain directories. This is required whenever the circuit logic changes.
+
+```bash
+quantus developer build-circuits \
+  --branching-factor 2 \
+  --depth 1 \
+  --circuits-path ../qp-zk-circuits \
+  --chain-path ../chain
+```
+
+- `--branching-factor`: Number of proofs aggregated at each tree level.
+- `--depth`: Depth of the aggregation tree. Total leaf proofs = `branching_factor ^ depth`.
+- `--circuits-path`: Path to the `qp-zk-circuits` repo (default: `../qp-zk-circuits`).
+- `--chain-path`: Path to the chain repo (default: `../chain`).
+- `--skip-chain`: Skip copying binaries to the chain directory.
+
+**What it does (4 steps):**
+1. Builds the `qp-wormhole-circuit-builder` binary.
+2. Runs the circuit builder to generate binary files in `generated-bins/` (includes `prover.bin`, `verifier.bin`, `common.bin`, `aggregated_verifier.bin`, `aggregated_common.bin`, `config.json` with SHA256 hashes).
+3. Copies binaries to the CLI's `generated-bins/` directory and touches the aggregator source to force recompilation.
+4. Copies chain-relevant binaries (`aggregated_common.bin`, `aggregated_verifier.bin`, `config.json`) to `chain/pallets/wormhole/` and touches the pallet source.
+
+After running, rebuild the chain (`cargo build --release` in the chain directory) so `include_bytes!()` picks up the new binaries.
+
+#### `quantus developer create-test-wallets`
+
+Create standard test wallets (`crystal_alice`, `crystal_bob`, `crystal_charlie`) with developer passwords for local testing.
+
+```bash
+quantus developer create-test-wallets
+```
+
+---
+
+### Wallet Management
+
+```bash
+# Create a new quantum-safe wallet
+quantus wallet create --name my_wallet
+
+# Create with explicit derivation path
+quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0/0"
+
+# Import from mnemonic
+quantus wallet import --name recovered_wallet --mnemonic "word1 word2 ... word24"
+
+# Create from raw 32-byte seed
+quantus wallet from-seed --name raw_wallet --seed <64-hex-chars>
+
+# List wallets
+quantus wallet list
+
+# View wallet details
+quantus wallet view --name my_wallet
+
+# Export mnemonic
+quantus wallet export --name my_wallet --format mnemonic
+```
+
+---
+
+### Sending Tokens
+
+```bash
+# Simple transfer
+quantus send --from crystal_alice --to <address> --amount 10.5
+
+# With tip for priority
+quantus send --from crystal_alice --to <address> --amount 10 --tip 0.1
+
+# With manual nonce
+quantus send --from crystal_alice --to <address> --amount 10 --nonce 42
+```
+
+---
+
+### Batch Transfers
+
+```bash
+# From a JSON file
+quantus batch send --from crystal_alice --batch-file transfers.json
+
+# Generate identical test transfers
+quantus batch send --from crystal_alice --count 10 --to <address> --amount 1.0
+
+# Check batch limits
+quantus batch config --limits
+```
+
+---
+
+### Reversible Transfers
+
+Schedule transfers with a time delay, allowing cancellation before execution.
+
+```bash
+# Schedule with default delay
+quantus reversible schedule-transfer --from alice --to bob --amount 10
+
+# Schedule with custom delay
+quantus reversible schedule-transfer-with-delay --from alice --to bob --amount 10 --delay 3600
+
+# Cancel a pending transfer
+quantus reversible cancel --tx-id 0x<hash> --from alice
+```
+
+---
+
+### High-Security Mode
+
+Configure reversibility settings for an account (interceptor + delay).
+
+```bash
+# Check status
+quantus high-security status --account <address>
+
+# Enable high-security with an interceptor
+quantus high-security set --interceptor <address> --delay-seconds 3600 --from alice
+
+# Show accounts you guard
+quantus high-security entrusted --from alice
+```
+
+---
+
+### Account Recovery
+
+Social recovery using trusted friends.
+
+```bash
+# Initiate recovery
+quantus recovery initiate --rescuer bob --lost alice
+
+# Friend vouches
+quantus recovery vouch --friend charlie --lost alice --rescuer bob
+
+# Claim after threshold met
+quantus recovery claim --rescuer bob --lost alice
+```
+
+---
+
+### Treasury
+
+```bash
+# Check treasury balance
+quantus treasury balance
+
+# Submit a spend proposal
+quantus treasury submit-spend --beneficiary <address> --amount 100.0 --track small --from alice
+
+# Payout an approved spend
+quantus treasury payout --index 0 --from alice
+```
+
+---
+
+### Privacy-Preserving Transfer Queries
+
+Query transfers via a Subsquid indexer using hash-prefix queries that hide your exact address.
+
+```bash
+quantus transfers query \
+  --subsquid-url https://indexer.quantus.com/graphql \
+  --prefix-len 4 \
+  --wallet my_wallet
+```
+
+---
+
+### Block Analysis
+
+```bash
+# Analyze a specific block
+quantus block analyze --number 1234 --all
+
+# Analyze latest block
+quantus block analyze --latest --extrinsics --events
+
+# List blocks in a range
+quantus block list --start 100 --end 110
+```
+
+---
+
+### Generic Pallet Calls
+
+Call any pallet function using metadata-driven parsing:
+
+```bash
+quantus call \
+  --pallet Balances \
+  --call transfer_allow_death \
+  --args '["5GrwvaEF...", "1000000000000"]' \
+  --from crystal_alice
+```
+
+---
+
+### Other Commands
+
+| Command | Description |
+|---------|-------------|
+| `quantus balance --address <addr>` | Query account balance |
+| `quantus events --block 123` | Query events from a block |
+| `quantus events --finalized` | Events from the latest finalized block |
+| `quantus system` | System information |
+| `quantus system --runtime` | Runtime version details |
+| `quantus metadata --pallet Balances` | Explore chain metadata |
+| `quantus version` | CLI version |
+| `quantus compatibility-check` | Check CLI/node compatibility |
+
+---
+
 ## 🔧 Environment Variables
 
 ### Password Management
