@@ -502,9 +502,8 @@ fn aggregate_proofs(
 	proof_contexts: Vec<ProofContext>,
 	num_leaf_proofs: usize,
 ) -> Result<AggregatedProofContext, String> {
-	use qp_wormhole_aggregator::{
-		aggregator::WormholeProofAggregator, circuits::tree::AggregationConfig,
-	};
+	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
+	use qp_zk_circuits_common::aggregation::AggregationConfig;
 
 	println!(
 		"  Aggregating {} proofs (num_leaf_proofs={})...",
@@ -1137,7 +1136,7 @@ async fn test_full_wormhole_workflow() {
 	// Step 3: Aggregate and verify
 	println!("\n--- Step 3: Aggregation ---");
 	let aggregated =
-		aggregate_proofs(proofs_for_aggregation, 1, 2).expect("Failed to aggregate proofs");
+		aggregate_proofs(proofs_for_aggregation, 2).expect("Failed to aggregate proofs");
 
 	println!("   Verifying aggregated proof on-chain...");
 	submit_aggregated_proof_for_verification(&quantus_client, aggregated.proof_bytes)
