@@ -3,9 +3,8 @@
 //! This example demonstrates using quantus-cli as a library for multisig operations
 
 use quantus_cli::{
-	approve_dissolve_multisig, approve_proposal, create_multisig, get_multisig_info,
-	get_proposal_info, list_proposals, parse_multisig_amount, predict_multisig_address,
-	propose_transfer,
+	approve_proposal, create_multisig, get_multisig_info, get_proposal_info, list_proposals,
+	parse_multisig_amount, predict_multisig_address, propose_transfer,
 	wallet::{load_keypair_from_wallet, WalletManager},
 	QuantusClient, Result,
 };
