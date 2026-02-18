@@ -482,7 +482,7 @@ The Quantus CLI provides comprehensive support for multi-signature wallets, allo
 
 ### Key Features
 
-- **Deterministic Address Generation**: Multisig addresses are derived from signers + nonce
+- **Deterministic Address Generation**: Multisig addresses are derived from signers + threshold + nonce
 - **Flexible Threshold**: Configure how many approvals are needed (e.g., 2-of-3, 5-of-7)
 - **Full Call Transparency**: Complete transaction data stored on-chain (no blind signing)
 - **Auto-Execution**: Proposals execute automatically when threshold is reached
@@ -663,7 +663,7 @@ Deposit: 0.5 QUAN (locked)  ← Refundable creation deposit
 - **Auto-Execution**: Proposals execute automatically when threshold is reached
 - **Access Control**: Only signers can propose/approve, only proposer can cancel
 - **Expiry Protection**: Client validates expiry before submission to prevent wasted fees
-- **Deterministic Addresses**: Multisig addresses are deterministic and verifiable
+- **Deterministic Addresses**: Multisig addresses are derived from signers + threshold + nonce and are verifiable
 
 ### Advanced Features
 
