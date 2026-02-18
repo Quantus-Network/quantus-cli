@@ -30,6 +30,14 @@ pub use cli::send::{
 	batch_transfer, format_balance_with_symbol, get_balance, transfer, transfer_with_nonce,
 };
 
+// Re-export multisig functions for library usage
+pub use cli::multisig::{
+	approve_dissolve_multisig, approve_proposal, cancel_proposal, create_multisig,
+	get_multisig_info, get_proposal_info, list_proposals, parse_amount as parse_multisig_amount,
+	predict_multisig_address, propose_custom, propose_transfer, MultisigInfo, ProposalInfo,
+	ProposalStatus,
+};
+
 /// Library version
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 

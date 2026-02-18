@@ -11,6 +11,7 @@ pub mod generic_call;
 pub mod high_security;
 pub mod metadata;
 pub mod multisend;
+pub mod multisig;
 pub mod preimage;
 pub mod recovery;
 pub mod reversible;
@@ -78,6 +79,10 @@ pub enum Commands {
 	/// Recovery commands
 	#[command(subcommand)]
 	Recovery(recovery::RecoveryCommands),
+
+	/// Multisig commands (multi-signature wallets)
+	#[command(subcommand)]
+	Multisig(multisig::MultisigCommands),
 
 	/// Scheduler commands
 	#[command(subcommand)]
@@ -333,6 +338,8 @@ pub async fn execute_command(
 			high_security::handle_high_security_command(hs_cmd, node_url, execution_mode).await,
 		Commands::Recovery(recovery_cmd) =>
 			recovery::handle_recovery_command(recovery_cmd, node_url, execution_mode).await,
+		Commands::Multisig(multisig_cmd) =>
+			multisig::handle_multisig_command(multisig_cmd, node_url, execution_mode).await,
 		Commands::Scheduler(scheduler_cmd) =>
 			scheduler::handle_scheduler_command(scheduler_cmd, node_url, execution_mode).await,
 		Commands::Storage(storage_cmd) =>
@@ -383,10 +390,17 @@ pub async fn execute_command(
 			// Resolve address (could be wallet name or SS58 address)
 			let resolved_address = common::resolve_address(&address)?;
 
-			let balance = send::get_balance(&quantus_client, &resolved_address).await?;
-			let formatted_balance =
-				send::format_balance_with_symbol(&quantus_client, balance).await?;
-			log_print!("💰 Balance: {}", formatted_balance);
+			let account_data = send::get_account_data(&quantus_client, &resolved_address).await?;
+			let (symbol, decimals) = send::get_chain_properties(&quantus_client).await?;
+
+			let free_fmt = send::format_balance(account_data.free, decimals);
+			let reserved_fmt = send::format_balance(account_data.reserved, decimals);
+			let frozen_fmt = send::format_balance(account_data.frozen, decimals);
+
+			log_print!("💰 {} {}", "Balance".bright_green().bold(), resolved_address.bright_cyan());
+			log_print!("   Free:     {} {}", free_fmt.bright_green(), symbol);
+			log_print!("   Reserved: {} {}", reserved_fmt.bright_yellow(), symbol);
+			log_print!("   Frozen:   {} {}", frozen_fmt.bright_red(), symbol);
 			Ok(())
 		},
 		Commands::Developer(dev_cmd) => handle_developer_command(dev_cmd).await,

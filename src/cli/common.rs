@@ -216,7 +216,7 @@ where
 			<_ as subxt::tx::Payload>::encode_call_data(&call, &metadata).map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!("Failed to encode call: {:?}", e))
 			})?;
-		crate::log_print!("📝 Encoded call: 0x{}", hex::encode(&encoded_call));
+		crate::log_verbose!("📝 Encoded call: 0x{}", hex::encode(&encoded_call));
 		crate::log_print!("📝 Encoded call size: {} bytes", encoded_call.len());
 
 		if execution_mode.wait_for_transaction {
@@ -492,12 +492,27 @@ fn format_dispatch_error(
 
 	match error {
 		DispatchError::Module(module_error) => {
-			let pallet_name = metadata
-				.pallet_by_index(module_error.index)
-				.map(|p| p.name())
-				.unwrap_or("Unknown");
+			let pallet_index = module_error.index;
 			let error_index = module_error.error[0];
-			format!("{}::Error[{}]", pallet_name, error_index)
+
+			// Try to get human-readable error name from metadata
+			if let Some(pallet) = metadata.pallet_by_index(pallet_index) {
+				let pallet_name = pallet.name();
+				// Look up the error variant name from metadata
+				if let Some(variant) = pallet.error_variant_by_index(error_index) {
+					let error_name = &variant.name;
+					let docs = variant.docs.join(" ");
+					if docs.is_empty() {
+						format!("{}::{}", pallet_name, error_name)
+					} else {
+						format!("{}::{} - {}", pallet_name, error_name, docs)
+					}
+				} else {
+					format!("{}::Error[{}]", pallet_name, error_index)
+				}
+			} else {
+				format!("Pallet[{}]::Error[{}]", pallet_index, error_index)
+			}
 		},
 		DispatchError::BadOrigin => "BadOrigin".to_string(),
 		DispatchError::CannotLookup => "CannotLookup".to_string(),

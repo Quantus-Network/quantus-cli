@@ -291,6 +291,445 @@ The library is designed to be thread-safe:
 - `QuantusClient` can be shared using `Arc<RwLock<QuantusClient>>`
 - Wallet operations are safe to call concurrently
 
+### Multisig Operations
+
+The library provides full programmatic access to multisig functionality.
+
+#### Predicting Multisig Address (Deterministic)
+
+Multisig addresses are deterministically calculated from signers, threshold, and nonce. You can predict the address before creating:
+
+```rust
+use quantus_cli::predict_multisig_address;
+
+fn predict_address_example() -> Result<(), Box<dyn std::error::Error>> {
+    let alice_account = parse_address("qzkaf...")?;
+    let bob_account = parse_address("qzmqr...")?;
+    let charlie_account = parse_address("qzo4j...")?;
+    
+    let signers = vec![alice_account, bob_account, charlie_account];
+    let threshold = 2;
+    let nonce = 0; // Default nonce
+    
+    // Calculate predicted address
+    let predicted_address = predict_multisig_address(signers.clone(), threshold, nonce);
+    println!("Predicted address: {}", predicted_address);
+    
+    // Now create with the same parameters - address will match!
+    Ok(())
+}
+
+fn parse_address(ss58: &str) -> Result<subxt::utils::AccountId32, Box<dyn std::error::Error>> {
+    use sp_core::crypto::{AccountId32, Ss58Codec};
+    let (account_id, _) = AccountId32::from_ss58check_with_version(ss58)?;
+    let bytes: [u8; 32] = *account_id.as_ref();
+    Ok(subxt::utils::AccountId32::from(bytes))
+}
+```
+
+**Key points:**
+- Same signers + threshold + nonce = same address (deterministic)
+- Order of signers doesn't matter (automatically sorted)
+- Use different nonce to create multiple multisigs with same signers
+
+#### Creating a Multisig
+
+```rust
+use quantus_cli::{create_multisig, predict_multisig_address, QuantusClient};
+
+async fn create_multisig_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    
+    // Parse signer addresses
+    let alice_account = parse_address("qzkaf...")?;
+    let bob_account = parse_address("qzmqr...")?;
+    let charlie_account = parse_address("qzo4j...")?;
+    
+    let signers = vec![alice_account, bob_account, charlie_account];
+    let threshold = 2; // 2-of-3
+    let nonce = 0; // Default: 0. Use different values to create multiple multisigs
+    
+    // Optional: Predict address before creating
+    let predicted = predict_multisig_address(signers.clone(), threshold, nonce);
+    println!("Will create at: {}", predicted);
+    
+    // Create multisig (wait_for_inclusion=true to get address from event)
+    let (tx_hash, multisig_address) = create_multisig(
+        &client,
+        &keypair,
+        signers,
+        threshold,
+        nonce, // NEW: nonce parameter for deterministic addresses
+        true   // wait for address from event
+    ).await?;
+    
+    println!("Multisig created at: {:?}", multisig_address);
+    assert_eq!(multisig_address.unwrap(), predicted); // Should match!
+    Ok(())
+}
+```
+
+#### Querying Multisig Info
+
+```rust
+use quantus_cli::{get_multisig_info, MultisigInfo};
+
+async fn query_multisig() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let multisig_account = parse_address("qz...")?;
+    
+    if let Some(info) = get_multisig_info(&client, multisig_account).await? {
+        println!("Address: {}", info.address);
+        println!("Balance: {} (raw units)", info.balance);
+        println!("Threshold: {}", info.threshold);
+        println!("Creator: {}", info.creator);
+        println!("Signers: {:?}", info.signers);
+        println!("Active Proposals: {}", info.active_proposals);
+        println!("Deposit: {} (returned to creator on dissolve)", info.deposit);
+        println!("💡 INFO: Deposit will be returned to creator when multisig is dissolved");
+    }
+    
+    Ok(())
+}
+```
+
+#### Creating a Transfer Proposal
+
+```rust
+use quantus_cli::{propose_transfer, parse_multisig_amount};
+
+async fn create_proposal() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    
+    let multisig_account = parse_address("qz...")?;
+    let recipient = parse_address("qzmqr...")?;
+    
+    // Parse amount (supports "10", "10.5", "0.001" format)
+    let amount = parse_multisig_amount("10")?; // 10 QUAN
+    
+    let expiry = 1000; // Block number
+    
+    let tx_hash = propose_transfer(
+        &client,
+        &keypair,
+        multisig_account,
+        recipient,
+        amount,
+        expiry
+    ).await?;
+    
+    println!("Proposal created: 0x{}", hex::encode(tx_hash));
+    Ok(())
+}
+```
+
+#### Approving a Proposal
+
+When a proposal reaches the approval threshold, its status becomes **Approved**. Execution is **not** automatic: any signer must then call **execute** to dispatch the call (CLI: `quantus multisig execute --address <addr> --proposal-id <id> --from <signer>`).
+
+```rust
+use quantus_cli::approve_proposal;
+
+async fn approve_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("bob", None, None)?;
+    
+    let multisig_account = parse_address("qz...")?;
+    let proposal_id = 0u32;
+    
+    let tx_hash = approve_proposal(
+        &client,
+        &keypair,
+        multisig_account,
+        proposal_id
+    ).await?;
+    
+    println!("Approval submitted: 0x{}", hex::encode(tx_hash));
+    // Once threshold is reached, status becomes Approved; any signer must call execute to dispatch
+    Ok(())
+}
+```
+
+#### Executing an Approved Proposal
+
+After enough signers have approved, the proposal status is **Approved**. Any signer must then submit an **execute** transaction to actually run the call. From the CLI:
+
+```bash
+quantus multisig execute --address <MULTISIG_SS58> --proposal-id <ID> --from <SIGNER_WALLET>
+```
+
+Proposal statuses: **Active** (collecting approvals), **Approved** (threshold reached, ready to execute), **Executed**, **Cancelled**.
+
+#### Listing Proposals
+
+```rust
+use quantus_cli::{list_proposals, ProposalInfo, ProposalStatus};
+
+async fn list_all_proposals() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let multisig_account = parse_address("qz...")?;
+    
+    let proposals = list_proposals(&client, multisig_account).await?;
+    
+    println!("Found {} proposal(s)", proposals.len());
+    for proposal in proposals {
+        println!("Proposal #{}:", proposal.id);
+        println!("  Proposer: {}", proposal.proposer);
+        println!("  Expiry: block {}", proposal.expiry);
+        println!("  Status: {:?}", proposal.status);
+        println!("  Approvals: {}", proposal.approvals.len());
+    }
+    
+    Ok(())
+}
+```
+
+#### Getting Specific Proposal Info
+
+```rust
+use quantus_cli::get_proposal_info;
+
+async fn query_proposal() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let multisig_account = parse_address("qz...")?;
+    let proposal_id = 0u32;
+    
+    if let Some(proposal) = get_proposal_info(&client, multisig_account, proposal_id).await? {
+        println!("Proposer: {}", proposal.proposer);
+        println!("Call data size: {} bytes", proposal.call_data.len());
+        println!("Expiry: block {}", proposal.expiry);
+        println!("Approvals: {:?}", proposal.approvals);
+        println!("Status: {:?}", proposal.status);
+    }
+    
+    Ok(())
+}
+```
+
+#### Canceling a Proposal
+
+```rust
+use quantus_cli::cancel_proposal;
+
+async fn cancel_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    
+    let multisig_account = parse_address("qz...")?;
+    let proposal_id = 0u32;
+    
+    let tx_hash = cancel_proposal(
+        &client,
+        &keypair,
+        multisig_account,
+        proposal_id
+    ).await?;
+    
+    println!("Proposal canceled: 0x{}", hex::encode(tx_hash));
+    Ok(())
+}
+```
+
+#### Dissolving a Multisig
+
+**IMPORTANT:** Dissolution now requires threshold approvals and the deposit is **RETURNED** to the creator.
+
+```rust
+use quantus_cli::approve_dissolve_multisig;
+
+async fn dissolve_example() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    
+    // Each signer must approve dissolution
+    let multisig_account = parse_address("qz...")?;
+    
+    // Alice approves (1/2)
+    let alice_keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    let tx_hash1 = approve_dissolve_multisig(
+        &client,
+        &alice_keypair,
+        multisig_account.clone()
+    ).await?;
+    println!("Alice approved dissolution: 0x{}", hex::encode(tx_hash1));
+    
+    // Bob approves (2/2) - threshold reached, multisig dissolved automatically
+    let bob_keypair = quantus_cli::wallet::load_keypair_from_wallet("bob", None, None)?;
+    let tx_hash2 = approve_dissolve_multisig(
+        &client,
+        &bob_keypair,
+        multisig_account
+    ).await?;
+    println!("Bob approved - Multisig dissolved: 0x{}", hex::encode(tx_hash2));
+    
+    Ok(())
+}
+```
+
+**Requirements for dissolution:**
+- ✅ No proposals (any status: active, executed, or cancelled)
+- ✅ Balance must be zero
+- ✅ Threshold approvals required
+- 💡 **Deposit is RETURNED** to creator on successful dissolution
+
+**Note:** If proposals exist, you must first cancel or claim them before dissolution can proceed.
+
+#### Multisig Errors (Chain)
+
+When a multisig extrinsic fails, the CLI (and any code using the chain) receives a dispatch error. The runtime returns named errors; after metadata is up to date, you will see messages such as:
+
+| Error | When |
+|-------|------|
+| `ExpiryTooFar` | Proposal expiry is beyond the chain's `MaxExpiryDuration` (e.g. ~2 weeks in blocks). |
+| `TooManyProposalsInStorage` | Multisig has reached the max total proposals in storage; cleanup via `claim_deposits` or `remove_expired` first. |
+| `TooManyProposalsPerSigner` | This signer has too many proposals (per-signer limit for filibuster protection). |
+| `ProposalNotApproved` | `execute` was called but the proposal is not in **Approved** status (e.g. still Active or already removed). |
+| `ProposalNotFound` | No proposal with the given ID for this multisig. |
+| `CallNotAllowedForHighSecurityMultisig` | Multisig is high-security and the proposed call is not whitelisted (e.g. use `schedule_transfer` instead of `transfer_allow_death`). |
+| `ProposalsExist` | Cannot dissolve: there are still proposals; clear them first. |
+| `MultisigAccountNotZero` | Cannot dissolve: multisig balance is not zero. |
+
+Other errors (e.g. `NotASigner`, `AlreadyApproved`, `ExpiryInPast`, `ProposalExpired`) are self-explanatory. Error text is resolved from runtime metadata when available.
+
+#### High-Security Operations for Multisig
+
+Multisig accounts can be configured with high-security mode, which delays all transfers and allows a guardian to intercept suspicious transactions.
+
+##### Checking High-Security Status
+
+```bash
+# CLI usage
+quantus multisig high-security status --address qz...
+```
+
+Example output:
+```
+🔍 MULTISIG Checking High-Security status...
+
+📋 Multisig: qz...
+
+✅ High-Security: ENABLED
+
+🛡️  Guardian/Interceptor: qzmqr...
+⏱️  Delay: 100 blocks
+
+💡 INFO All transfers from this multisig will be delayed and reversible
+   The guardian can intercept suspicious transactions during the delay period
+```
+
+##### Enabling High-Security via Proposal
+
+To enable high-security for a multisig, you need to create a proposal that will call `reversible_transfers.set_high_security`. This requires approval from threshold signers.
+
+```bash
+# CLI usage - Create proposal to enable high-security
+quantus multisig propose high-security \
+  --address qz... \
+  --interceptor qzmqr... \
+  --delay-blocks 100 \
+  --expiry 2000 \
+  --from alice \
+  -p password
+
+# Alternative: delay in seconds instead of blocks
+quantus multisig propose high-security \
+  --address qz... \
+  --interceptor qzmqr... \
+  --delay-seconds 600 \
+  --expiry 2000 \
+  --from alice \
+  -p password
+```
+
+Example workflow:
+```bash
+# 1. Alice (signer) proposes high-security
+quantus multisig propose high-security \
+  --address qz123... \
+  --interceptor qzguardian... \
+  --delay-blocks 100 \
+  --expiry 2000 \
+  --from alice
+
+# 2. Check proposals to find the ID
+quantus multisig list-proposals --address qz123...
+
+# 3. Bob (another signer) approves
+quantus multisig approve \
+  --address qz123... \
+  --proposal-id 0 \
+  --from bob
+
+# 4. Once threshold is reached, high-security is automatically enabled
+# 5. Verify it's enabled
+quantus multisig high-security status --address qz123...
+```
+
+##### Key Concepts
+
+- **Guardian/Interceptor**: An account that can intercept (reverse) transactions during the delay period
+- **Delay**: Time window during which transactions are reversible (in blocks or seconds)
+- **Delayed Transfers**: All transfers from a high-security multisig are scheduled for delayed execution
+- **Interception**: Guardian can cancel suspicious transactions and recover funds
+
+##### Disabling High-Security
+
+**Note:** There is currently no `remove` command for disabling high-security mode. The runtime does not expose a `remove_high_security` extrinsic.
+
+If you need to disable high-security for a multisig:
+1. Create a new multisig without high-security
+2. Transfer funds from the HS multisig to the new one
+3. Dissolve the old HS multisig (after cleanup)
+
+Alternatively, request a runtime upgrade to add `remove_high_security` functionality.
+
+##### Security Considerations
+
+- Choose a trusted guardian account (can be another multisig)
+- Set an appropriate delay period (longer = more secure, but less convenient)
+- Guardian has full control to intercept transactions during delay
+- Once enabled, only whitelisted calls are allowed from high-security multisigs
+- **High-security cannot be disabled** - consider this permanent for the multisig account
+
+##### Programmatic Usage (Library)
+
+Currently, high-security operations are best performed via CLI. For programmatic access, you can build the runtime call manually:
+
+```rust
+use quantus_cli::{chain::client::QuantusClient, chain::quantus_subxt};
+
+async fn enable_hs_via_proposal() -> Result<(), Box<dyn std::error::Error>> {
+    let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
+    
+    // Build set_high_security call
+    use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
+    let delay = Delay::BlockNumber(100);
+    let interceptor = parse_address("qzguardian...")?;
+    
+    let set_hs_call = quantus_subxt::api::tx()
+        .reversible_transfers()
+        .set_high_security(delay, interceptor);
+    
+    // Encode as call data
+    use subxt::tx::Payload;
+    let call_data = set_hs_call.encode_call_data(&client.client().metadata())?;
+    
+    // Create multisig proposal with this call
+    let multisig_account = parse_address("qz...")?;
+    let expiry = 2000;
+    
+    let propose_tx = quantus_subxt::api::tx()
+        .multisig()
+        .propose(multisig_account, call_data, expiry);
+    
+    // Submit via your signer keypair
+    // ... (submit transaction)
+    
+    Ok(())
+}
+```
+
 ## Examples
 
 See the `examples/` directory for complete working examples:
@@ -298,6 +737,8 @@ See the `examples/` directory for complete working examples:
 - `examples/basic_usage.rs` - Basic library usage
 - `examples/wallet_ops.rs` - Advanced wallet operations
 - `examples/service.rs` - Service architecture example
+- `examples/multisig_library_usage.rs` - Multisig operations
+- `examples/multisig_usage.rs` - Multisig CLI usage reference
 
 ## Running Examples
 
@@ -310,6 +751,9 @@ cargo run --example wallet_ops
 
 # Run service example
 cargo run --example service
+
+# Run multisig library usage example
+cargo run --example multisig_library_usage
 ```
 
 ## Key Features
