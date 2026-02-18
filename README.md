@@ -390,15 +390,11 @@ quantus recovery claim --rescuer bob --lost alice
 
 ### Treasury
 
+Treasury is the account that receives a configurable portion of mining rewards. No special spend/proposal flow — just view its state.
+
 ```bash
-# Check treasury balance
-quantus treasury balance
-
-# Submit a spend proposal
-quantus treasury submit-spend --beneficiary <address> --amount 100.0 --track small --from alice
-
-# Payout an approved spend
-quantus treasury payout --index 0 --from alice
+# Show treasury account and balance
+quantus treasury info
 ```
 
 ---
