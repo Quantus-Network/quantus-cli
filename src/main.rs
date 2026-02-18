@@ -13,6 +13,7 @@ mod cli;
 mod config;
 mod error;
 mod log;
+mod subsquid;
 mod wallet;
 
 use cli::Commands;
@@ -71,15 +72,22 @@ async fn main() -> Result<(), QuantusError> {
 		wait_for_transaction: cli.wait_for_transaction,
 	};
 
-	// Execute the command
-	match cli::execute_command(cli.command, &cli.node_url, cli.verbose, execution_mode).await {
+	// Execute the command with timing
+	let start_time = std::time::Instant::now();
+	let result =
+		cli::execute_command(cli.command, &cli.node_url, cli.verbose, execution_mode).await;
+	let elapsed = start_time.elapsed();
+
+	match result {
 		Ok(_) => {
 			log_verbose!("");
 			log_verbose!("Command executed successfully!");
+			log_print!("⏱️  Completed in {:.2}s", elapsed.as_secs_f64());
 			Ok(())
 		},
 		Err(e) => {
 			log_error!("{}", e);
+			log_print!("⏱️  Failed after {:.2}s", elapsed.as_secs_f64());
 			std::process::exit(1);
 		},
 	}

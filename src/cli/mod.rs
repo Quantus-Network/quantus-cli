@@ -10,11 +10,10 @@ pub mod events;
 pub mod generic_call;
 pub mod high_security;
 pub mod metadata;
+pub mod multisend;
 pub mod multisig;
 pub mod preimage;
 pub mod recovery;
-pub mod referenda;
-pub mod referenda_decode;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
@@ -22,9 +21,10 @@ pub mod send;
 pub mod storage;
 pub mod system;
 pub mod tech_collective;
-pub mod tech_referenda;
+pub mod transfers;
 pub mod treasury;
 pub mod wallet;
+pub mod wormhole;
 
 /// Main CLI commands
 #[derive(Subcommand, Debug)]
@@ -99,16 +99,14 @@ pub enum Commands {
 	/// Tech Referenda management commands (for runtime upgrade proposals)
 	#[command(subcommand)]
 	Preimage(preimage::PreimageCommands),
-	#[command(subcommand)]
-	TechReferenda(tech_referenda::TechReferendaCommands),
 
-	/// Standard Referenda management commands (public governance)
-	#[command(subcommand)]
-	Referenda(referenda::ReferendaCommands),
-
-	/// Treasury management commands
+	/// Treasury account info
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
+
+	/// Privacy-preserving transfer queries via Subsquid indexer
+	#[command(subcommand)]
+	Transfers(transfers::TransfersCommands),
 
 	/// Runtime management commands (requires root/sudo permissions)
 	#[command(subcommand)]
@@ -235,6 +233,53 @@ pub enum Commands {
 	/// Block management and analysis commands
 	#[command(subcommand)]
 	Block(block::BlockCommands),
+
+	/// Wormhole proof generation and verification
+	#[command(subcommand)]
+	Wormhole(wormhole::WormholeCommands),
+
+	/// Send random amounts to multiple addresses (total is distributed randomly)
+	Multisend {
+		/// Wallet name to send from
+		#[arg(short, long)]
+		from: String,
+
+		/// File containing addresses (JSON array: ["addr1", "addr2", ...])
+		#[arg(long, conflicts_with = "addresses")]
+		addresses_file: Option<String>,
+
+		/// Comma-separated list of recipient addresses
+		#[arg(long, value_delimiter = ',', conflicts_with = "addresses_file")]
+		addresses: Option<Vec<String>>,
+
+		/// Total amount to distribute across all recipients (e.g., "1000", "100.5")
+		#[arg(long)]
+		total: String,
+
+		/// Minimum amount per recipient (e.g., "10", "1.5")
+		#[arg(long)]
+		min: String,
+
+		/// Maximum amount per recipient (e.g., "100", "50.5")
+		#[arg(long)]
+		max: String,
+
+		/// Password for the wallet (or use environment variables)
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Optional tip amount to prioritize the transaction (e.g., "1", "0.5")
+		#[arg(long)]
+		tip: Option<String>,
+
+		/// Skip confirmation prompt (for scripting)
+		#[arg(long, short = 'y')]
+		yes: bool,
+	},
 }
 
 /// Developer subcommands
@@ -242,6 +287,25 @@ pub enum Commands {
 pub enum DeveloperCommands {
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
+
+	/// Build wormhole circuit binaries and copy to CLI and chain directories
+	BuildCircuits {
+		/// Path to qp-zk-circuits repository (default: ../qp-zk-circuits)
+		#[arg(long, default_value = "../qp-zk-circuits")]
+		circuits_path: String,
+
+		/// Path to chain repository (default: ../chain)
+		#[arg(long, default_value = "../chain")]
+		chain_path: String,
+
+		/// Number of leaf proofs aggregated into a single proof
+		#[arg(long)]
+		num_leaf_proofs: usize,
+
+		/// Skip copying to chain directory
+		#[arg(long)]
+		skip_chain: bool,
+	},
 }
 
 /// Execute a CLI command
@@ -289,17 +353,10 @@ pub async fn execute_command(
 			.await,
 		Commands::Preimage(preimage_cmd) =>
 			preimage::handle_preimage_command(preimage_cmd, node_url, execution_mode).await,
-		Commands::TechReferenda(tech_referenda_cmd) =>
-			tech_referenda::handle_tech_referenda_command(
-				tech_referenda_cmd,
-				node_url,
-				execution_mode,
-			)
-			.await,
-		Commands::Referenda(referenda_cmd) =>
-			referenda::handle_referenda_command(referenda_cmd, node_url, execution_mode).await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
+		Commands::Transfers(transfers_cmd) =>
+			transfers::handle_transfers_command(transfers_cmd).await,
 		Commands::Runtime(runtime_cmd) =>
 			runtime::handle_runtime_command(runtime_cmd, node_url, execution_mode).await,
 		Commands::Call {
@@ -346,13 +403,7 @@ pub async fn execute_command(
 			log_print!("   Frozen:   {} {}", frozen_fmt.bright_red(), symbol);
 			Ok(())
 		},
-		Commands::Developer(dev_cmd) => match dev_cmd {
-			DeveloperCommands::CreateTestWallets => {
-				let _ = crate::cli::handle_developer_command(DeveloperCommands::CreateTestWallets)
-					.await;
-				Ok(())
-			},
-		},
+		Commands::Developer(dev_cmd) => handle_developer_command(dev_cmd).await,
 		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } =>
 			events::handle_events_command(
 				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
@@ -380,6 +431,35 @@ pub async fn execute_command(
 		},
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
+		Commands::Wormhole(wormhole_cmd) =>
+			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
+		Commands::Multisend {
+			from,
+			addresses_file,
+			addresses,
+			total,
+			min,
+			max,
+			password,
+			password_file,
+			tip,
+			yes,
+		} =>
+			multisend::handle_multisend_command(
+				from,
+				node_url,
+				addresses_file,
+				addresses,
+				total,
+				min,
+				max,
+				password,
+				password_file,
+				tip,
+				yes,
+				execution_mode,
+			)
+			.await,
 	}
 }
 
@@ -485,7 +565,159 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 
 			Ok(())
 		},
+		DeveloperCommands::BuildCircuits {
+			circuits_path,
+			chain_path,
+			num_leaf_proofs,
+			skip_chain,
+		} => build_wormhole_circuits(&circuits_path, &chain_path, num_leaf_proofs, skip_chain).await,
 	}
+}
+
+/// Build wormhole circuit binaries and copy them to the appropriate locations
+async fn build_wormhole_circuits(
+	circuits_path: &str,
+	chain_path: &str,
+	num_leaf_proofs: usize,
+	skip_chain: bool,
+) -> crate::error::Result<()> {
+	use std::{path::Path, process::Command};
+
+	log_print!("Building ZK circuit binaries (num_leaf_proofs={})", num_leaf_proofs);
+	log_print!("");
+
+	let circuits_dir = Path::new(circuits_path);
+	let chain_dir = Path::new(chain_path);
+
+	// Verify circuits directory exists
+	if !circuits_dir.exists() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Circuits directory not found: {}",
+			circuits_path
+		)));
+	}
+
+	// Step 1: Build the circuit builder
+	log_print!("Step 1/4: Building circuit builder...");
+	let build_output = Command::new("cargo")
+		.args(["build", "--release", "-p", "qp-wormhole-circuit-builder"])
+		.current_dir(circuits_dir)
+		.output()
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to run cargo build: {}", e))
+		})?;
+
+	if !build_output.status.success() {
+		let stderr = String::from_utf8_lossy(&build_output.stderr);
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Circuit builder compilation failed:\n{}",
+			stderr
+		)));
+	}
+	log_success!("   Done");
+
+	// Step 2: Run the circuit builder to generate binaries
+	log_print!("Step 2/4: Generating circuit binaries (this may take a while)...");
+	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
+	let run_output = Command::new(&builder_path)
+		.args(["--num-leaf-proofs", &num_leaf_proofs.to_string()])
+		.current_dir(circuits_dir)
+		.output()
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to run circuit builder: {}", e))
+		})?;
+
+	if !run_output.status.success() {
+		let stderr = String::from_utf8_lossy(&run_output.stderr);
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Circuit builder failed:\n{}",
+			stderr
+		)));
+	}
+	log_success!("   Done");
+
+	// Step 3: Copy binaries to CLI and touch aggregator to force recompile
+	log_print!("Step 3/4: Copying binaries to CLI...");
+	let source_bins = circuits_dir.join("generated-bins");
+	let cli_bins = Path::new("generated-bins");
+
+	let cli_bin_files = [
+		"common.bin",
+		"verifier.bin",
+		"prover.bin",
+		"dummy_proof.bin",
+		"aggregated_common.bin",
+		"aggregated_verifier.bin",
+		"config.json",
+	];
+
+	for file in &cli_bin_files {
+		let src = source_bins.join(file);
+		let dst = cli_bins.join(file);
+		std::fs::copy(&src, &dst).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to copy {} to CLI: {}", file, e))
+		})?;
+		log_verbose!("   Copied {}", file);
+	}
+
+	// Touch aggregator lib.rs to force cargo to recompile it
+	let aggregator_lib = circuits_dir.join("wormhole/aggregator/src/lib.rs");
+	if aggregator_lib.exists() {
+		if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&aggregator_lib) {
+			let _ = file.set_modified(std::time::SystemTime::now());
+		}
+	}
+	log_success!("   Done");
+
+	// Step 4: Copy binaries to chain directory (if not skipped)
+	if !skip_chain {
+		log_print!("Step 4/4: Copying binaries to chain...");
+
+		if !chain_dir.exists() {
+			log_error!("   Chain directory not found: {}", chain_path);
+			log_print!("   Use --skip-chain to skip this step");
+		} else {
+			let chain_bins = chain_dir.join("pallets/wormhole");
+
+			let chain_bin_files =
+				["aggregated_common.bin", "aggregated_verifier.bin", "config.json"];
+
+			for file in &chain_bin_files {
+				let src = source_bins.join(file);
+				let dst = chain_bins.join(file);
+				std::fs::copy(&src, &dst).map_err(|e| {
+					crate::error::QuantusError::Generic(format!(
+						"Failed to copy {} to chain: {}",
+						file, e
+					))
+				})?;
+				log_verbose!("   Copied {}", file);
+			}
+
+			// Touch pallet lib.rs to force cargo to recompile it
+			let pallet_lib = chain_bins.join("src/lib.rs");
+			if pallet_lib.exists() {
+				if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&pallet_lib) {
+					let _ = file.set_modified(std::time::SystemTime::now());
+				}
+			}
+			log_success!("   Done");
+		}
+	} else {
+		log_print!("Step 4/4: Skipping chain copy (--skip-chain)");
+	}
+
+	log_print!("");
+	log_success!("Circuit build complete!");
+	log_print!("");
+	if !skip_chain {
+		log_print!("{}", "Next steps:".bright_blue().bold());
+		log_print!("  1. Rebuild chain: cd {} && cargo build --release", chain_path);
+		log_print!("  2. Restart the chain node");
+		log_print!("");
+	}
+
+	Ok(())
 }
 
 /// Handle compatibility check command

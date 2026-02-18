@@ -6,6 +6,8 @@
 /// - Managing wallet files on disk with quantum-resistant security
 use crate::error::{Result, WalletError};
 use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
+#[cfg(test)]
+use qp_rusty_crystals_hdwallet::SensitiveBytes32;
 use serde::{Deserialize, Serialize};
 #[cfg(test)]
 use sp_core::crypto::Ss58AddressFormat;
@@ -214,8 +216,8 @@ impl Keystore {
 
 		// 3. Use password hash as AES-256 key (quantum-safe with 256-bit key)
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
-		let aes_key = Key::<Aes256Gcm>::from_slice(&hash_bytes[..32]);
-		let cipher = Aes256Gcm::new(aes_key);
+		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		let cipher = Aes256Gcm::new(&aes_key);
 
 		// 4. Generate nonce and encrypt the wallet data
 		let nonce = Aes256Gcm::generate_nonce(&mut AesOsRng);
@@ -255,13 +257,13 @@ impl Keystore {
 
 		// 2. Derive AES key from verified password hash
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
-		let aes_key = Key::<Aes256Gcm>::from_slice(&hash_bytes[..32]);
-		let cipher = Aes256Gcm::new(aes_key);
+		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		let cipher = Aes256Gcm::new(&aes_key);
 
 		// 3. Decrypt the data
-		let nonce = Nonce::from_slice(&encrypted.aes_nonce);
+		let nonce = Nonce::from(<[u8; 12]>::try_from(&encrypted.aes_nonce[..]).unwrap());
 		let decrypted_data = cipher
-			.decrypt(nonce, encrypted.encrypted_data.as_ref())
+			.decrypt(&nonce, encrypted.encrypted_data.as_ref())
 			.map_err(|_| WalletError::Decryption)?;
 
 		// 4. Deserialize the wallet data
@@ -281,8 +283,8 @@ mod tests {
 	#[test]
 	fn test_quantum_keypair_from_dilithium_keypair() {
 		// Generate a test keypair
-		let entropy = [1u8; 32];
-		let dilithium_keypair = Keypair::generate(&entropy);
+		let mut entropy = [1u8; 32];
+		let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
 
 		// Convert to QuantumKeyPair
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
@@ -295,8 +297,8 @@ mod tests {
 	#[test]
 	fn test_quantum_keypair_to_dilithium_keypair_roundtrip() {
 		// Generate a test keypair
-		let entropy = [2u8; 32];
-		let original_keypair = Keypair::generate(&entropy);
+		let mut entropy = [2u8; 32];
+		let original_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
 
 		// Convert to QuantumKeyPair and back
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&original_keypair);
@@ -420,8 +422,8 @@ mod tests {
 		// Start with a Dilithium keypair
 		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 
-		let entropy = [3u8; 32];
-		let dilithium_keypair = Keypair::generate(&entropy);
+		let mut entropy = [3u8; 32];
+		let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
 
 		// Convert through different paths
 		let quantum_from_dilithium = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
@@ -664,8 +666,8 @@ mod tests {
 	fn test_keypair_data_integrity() {
 		// Generate multiple keypairs and verify they maintain data integrity
 		for i in 0..5 {
-			let entropy = [i as u8; 32];
-			let dilithium_keypair = Keypair::generate(&entropy);
+			let mut entropy = [i as u8; 32];
+			let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
 			let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 			// Print actual key sizes for debugging (first iteration only)
