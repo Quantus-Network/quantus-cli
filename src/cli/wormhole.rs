@@ -322,8 +322,11 @@ pub fn compute_random_output_assignments(
 	let total_output: u64 = proof_outputs.iter().map(|&x| x as u64).sum();
 
 	// Step 2: Randomly partition total output across target accounts
-	// Minimum 1 quantized unit (0.01 DEV) per target to ensure all targets receive funds
-	let min_per_target = 1u128;
+	// Minimum 3 quantized units (0.03 DEV) per target. After fee deduction in the
+	// next round: compute_output_amount(3, 10) = 3 * 9990 / 10000 = 2, which is safe.
+	// With 2: compute_output_amount(2, 10) = 1, borderline.
+	// With 1: compute_output_amount(1, 10) = 0, causes circuit failure.
+	let min_per_target = 3u128;
 	let target_amounts_u128 = random_partition(total_output as u128, num_targets, min_per_target);
 	let target_amounts: Vec<u32> = target_amounts_u128.iter().map(|&x| x as u32).collect();
 
@@ -525,7 +528,20 @@ fn format_dispatch_error(
 				.map(|p| p.name())
 				.unwrap_or("Unknown");
 			let error_index = module_error.error[0];
-			format!("{}::Error[{}]", pallet_name, error_index)
+
+			// Try to decode the error name and docs from metadata
+			let error_info = metadata.pallet_by_index(module_error.index).and_then(|p| {
+				p.error_variant_by_index(error_index)
+					.map(|v| (v.name.clone(), v.docs.join(" ")))
+			});
+
+			match error_info {
+				Some((name, docs)) if !docs.is_empty() => {
+					format!("{}::{} ({})", pallet_name, name, docs)
+				},
+				Some((name, _)) => format!("{}::{}", pallet_name, name),
+				None => format!("{}::Error[{}]", pallet_name, error_index),
+			}
 		},
 		DispatchError::BadOrigin => "BadOrigin".to_string(),
 		DispatchError::CannotLookup => "CannotLookup".to_string(),
@@ -612,9 +628,9 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "2")]
 		rounds: usize,
 
-		/// Total amount in planck to partition across all proofs (default: 100 DEV)
-		#[arg(short, long, default_value = "100000000000000")]
-		amount: u128,
+		/// Total amount in DEV to partition across all proofs (default: 100)
+		#[arg(short, long, default_value = "100")]
+		amount: f64,
 
 		/// Wallet name to use for funding and final exit
 		#[arg(short, long)]
@@ -639,6 +655,41 @@ pub enum WormholeCommands {
 		/// Dry run - show what would be done without executing
 		#[arg(long)]
 		dry_run: bool,
+	},
+	/// Dissolve a large wormhole deposit into many small outputs for better privacy.
+	///
+	/// Creates a tree of wormhole transactions: each layer splits outputs into two,
+	/// doubling the number of outputs until all are below the target size. This moves
+	/// funds from a high-amount bucket (few deposits, low privacy score) into the
+	/// low-amount bucket (many miner rewards, high privacy score).
+	Dissolve {
+		/// Amount in DEV to dissolve
+		#[arg(short, long)]
+		amount: f64,
+
+		/// Target output size in DEV (stop splitting when all outputs are below this)
+		#[arg(short, long, default_value = "1.0")]
+		target_size: f64,
+
+		/// Wallet name to use for funding
+		#[arg(short, long)]
+		wallet: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Keep proof files after completion
+		#[arg(short, long)]
+		keep_files: bool,
+
+		/// Output directory for proof files
+		#[arg(short, long, default_value = "/tmp/wormhole_dissolve")]
+		output_dir: String,
 	},
 }
 
@@ -711,11 +762,14 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 			dry_run,
-		} =>
+		} => {
+			// Convert DEV to planck and align to SCALE_DOWN_FACTOR for clean quantization
+			let amount_planck = (amount * 1_000_000_000_000.0) as u128;
+			let amount_aligned = (amount_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
 			run_multiround(
 				num_proofs,
 				rounds,
-				amount,
+				amount_aligned,
 				wallet,
 				password,
 				password_file,
@@ -724,7 +778,33 @@ pub async fn handle_wormhole_command(
 				dry_run,
 				node_url,
 			)
-			.await,
+			.await
+		},
+		WormholeCommands::Dissolve {
+			amount,
+			target_size,
+			wallet,
+			password,
+			password_file,
+			keep_files,
+			output_dir,
+		} => {
+			let amount_planck = (amount * 1_000_000_000_000.0) as u128;
+			let amount_aligned = (amount_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
+			let target_planck = (target_size * 1_000_000_000_000.0) as u128;
+			let target_aligned = (target_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
+			run_dissolve(
+				amount_aligned,
+				target_aligned,
+				wallet,
+				password,
+				password_file,
+				keep_files,
+				output_dir,
+				node_url,
+			)
+			.await
+		},
 	}
 }
 
@@ -1090,6 +1170,8 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 			log_success!("Total exit amount: {}", format_balance(amount));
 		}
 
+		log_print!("  Block: 0x{}", hex::encode(block_hash.0));
+		log_print!("  Extrinsic: 0x{}", hex::encode(tx_hash.0));
 		log_verbose!("Included in {}: {:?}", included_at.label(), block_hash);
 		return Ok(());
 	}
@@ -1320,7 +1402,7 @@ async fn execute_initial_transfers(
 	// Randomly partition the total amount among proofs
 	// Each partition must meet the on-chain minimum transfer amount
 	// Minimum per partition is 0.02 DEV (2 quantized units) to ensure non-trivial amounts
-	let partition_amounts = random_partition(amount, num_proofs, 2 * SCALE_DOWN_FACTOR);
+	let partition_amounts = random_partition(amount, num_proofs, 3 * SCALE_DOWN_FACTOR);
 	log_print!("  Random partition of {} ({}):", amount, format_balance(amount));
 	for (i, &amt) in partition_amounts.iter().enumerate() {
 		log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
@@ -1768,13 +1850,14 @@ async fn run_multiround(
 		// Step 4: Verify aggregated proof on-chain
 		log_print!("{}", "Step 4: Submitting aggregated proof on-chain...".bright_yellow());
 
-		let (verification_block, transfer_events) =
+		let (verification_block, extrinsic_hash, transfer_events) =
 			verify_aggregated_and_get_events(&aggregated_file, &quantus_client).await?;
 
 		log_print!(
-			"  {} Proof verified in block {}",
+			"  {} Proof verified in block {} (extrinsic: 0x{})",
 			"✓".bright_green(),
-			hex::encode(verification_block.0)
+			hex::encode(verification_block.0),
+			hex::encode(extrinsic_hash.0)
 		);
 
 		// If not final round, prepare transfer info for next round
@@ -2018,11 +2101,15 @@ async fn generate_proof(
 	Ok(())
 }
 
-/// Verify an aggregated proof and return the block hash and transfer events
+/// Verify an aggregated proof and return the block hash, extrinsic hash, and transfer events
 async fn verify_aggregated_and_get_events(
 	proof_file: &str,
 	quantus_client: &QuantusClient,
-) -> crate::error::Result<(subxt::utils::H256, Vec<wormhole::events::NativeTransferred>)> {
+) -> crate::error::Result<(
+	subxt::utils::H256,
+	subxt::utils::H256,
+	Vec<wormhole::events::NativeTransferred>,
+)> {
 	use qp_wormhole_verifier::WormholeVerifier;
 
 	let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
@@ -2092,7 +2179,7 @@ async fn verify_aggregated_and_get_events(
 		);
 	}
 
-	Ok((block_hash, transfer_events))
+	Ok((block_hash, tx_hash, transfer_events))
 }
 
 /// Dry run - show what would happen without executing
@@ -2120,7 +2207,7 @@ fn run_multiround_dry_run(
 
 		// Show sample random partition for round 1
 		if round == 1 {
-			let partition = random_partition(amount, num_proofs, 2 * SCALE_DOWN_FACTOR);
+			let partition = random_partition(amount, num_proofs, 3 * SCALE_DOWN_FACTOR);
 			log_print!("  Sample random partition (actual partition will differ):");
 			for (i, &amt) in partition.iter().enumerate() {
 				log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
@@ -2302,6 +2389,367 @@ async fn parse_proof_file(
 			}
 		}
 	}
+
+	Ok(())
+}
+
+/// A pending wormhole output that can be used as input for the next dissolve layer.
+#[derive(Debug, Clone)]
+struct DissolveOutput {
+	/// The wormhole address that received the funds
+	address: SubxtAccountId,
+	/// The secret used to derive the wormhole address
+	secret: [u8; 32],
+	/// Amount in planck
+	amount: u128,
+	/// Block hash where the transfer was recorded
+	block_hash: subxt::utils::H256,
+	/// Transfer count from the NativeTransferred event
+	transfer_count: u64,
+	/// Funding account (sender)
+	funding_account: SubxtAccountId,
+}
+
+/// Dissolve a large wormhole deposit into many small outputs for better privacy.
+///
+/// Creates a tree of wormhole transactions where each layer doubles the number of outputs
+/// by splitting each input into 2 via the dual-output proof mechanism.
+///
+/// ```text
+/// Layer 0: 1 input  → 2 outputs
+/// Layer 1: 2 inputs → 4 outputs
+/// Layer 2: 4 inputs → 8 outputs
+/// ...
+/// Layer N: 2^(N-1) inputs → 2^N outputs (all below target_size)
+/// ```
+///
+/// Each layer: batch inputs into groups of ≤16, generate proofs, aggregate, verify on-chain.
+/// The final outputs are small enough to blend with the miner reward noise floor.
+#[allow(clippy::too_many_arguments)]
+async fn run_dissolve(
+	amount: u128,
+	target_size: u128,
+	wallet_name: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	keep_files: bool,
+	output_dir: String,
+	node_url: &str,
+) -> crate::error::Result<()> {
+	use colored::Colorize;
+
+	log_print!("");
+	log_print!("==================================================");
+	log_print!("  Wormhole Dissolve");
+	log_print!("==================================================");
+	log_print!("");
+
+	// Calculate number of layers needed
+	let mut num_outputs = 1u128;
+	let mut layers = 0usize;
+	while amount / num_outputs > target_size {
+		num_outputs *= 2;
+		layers += 1;
+	}
+	let final_output_count = num_outputs as usize;
+
+	log_print!("  Amount: {} ({})", amount, format_balance(amount));
+	log_print!("  Target size: {} ({})", target_size, format_balance(target_size));
+	log_print!("  Layers: {}", layers);
+	log_print!("  Final outputs: {}", final_output_count);
+	log_print!(
+		"  Approximate output size: {} ({})",
+		amount / num_outputs,
+		format_balance(amount / num_outputs)
+	);
+	log_print!("");
+
+	// Load wallet (reuse multiround wallet loader for HD derivation)
+	let wallet = load_multiround_wallet(&wallet_name, password, password_file)?;
+	let funding_account = wallet.wallet_account_id.clone();
+
+	// Connect to node
+	let quantus_client = QuantusClient::new(node_url)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+
+	// Create output directory
+	std::fs::create_dir_all(&output_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create output directory: {}", e))
+	})?;
+
+	// Load aggregation config
+	let bins_dir = std::path::Path::new("generated-bins");
+	let agg_config: AggregationConfig =
+		serde_json::from_reader(std::fs::File::open(bins_dir.join("config.json")).map_err(
+			|e| crate::error::QuantusError::Generic(format!("Failed to open config.json: {}", e)),
+		)?)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to parse config.json: {}", e))
+		})?;
+
+	// === Layer 0: Initial funding ===
+	log_print!("{}", "Layer 0: Initial funding".bright_yellow());
+
+	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
+	let wormhole_address = SubxtAccountId(initial_secret.address);
+
+	// Transfer to the wormhole address
+	let transfer_tx = quantus_node::api::tx().balances().transfer_allow_death(
+		subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
+		amount,
+	);
+
+	let quantum_keypair = QuantumKeyPair {
+		public_key: wallet.keypair.public_key.clone(),
+		private_key: wallet.keypair.private_key.clone(),
+	};
+
+	submit_transaction(
+		&quantus_client,
+		&quantum_keypair,
+		transfer_tx,
+		None,
+		ExecutionMode { finalized: false, wait_for_transaction: true },
+	)
+	.await
+	.map_err(|e| crate::error::QuantusError::Generic(format!("Initial transfer failed: {}", e)))?;
+
+	// Get block and event
+	let block = at_best_block(&quantus_client)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
+	let block_hash = block.hash();
+	let events_api =
+		quantus_client.client().events().at(block_hash).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
+		})?;
+	let event = events_api
+		.find::<wormhole::events::NativeTransferred>()
+		.find(|e| if let Ok(evt) = e { evt.to.0 == initial_secret.address } else { false })
+		.ok_or_else(|| crate::error::QuantusError::Generic("No transfer event found".to_string()))?
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Event decode error: {}", e)))?;
+
+	let mut current_outputs = vec![DissolveOutput {
+		address: wormhole_address,
+		secret: initial_secret.secret,
+		amount,
+		block_hash,
+		transfer_count: event.transfer_count,
+		funding_account: funding_account.clone(),
+	}];
+
+	log_success!("  Funded 1 wormhole address with {}", format_balance(amount));
+
+	// === Layers 1..N: Split outputs ===
+	for layer in 1..=layers {
+		let num_inputs = current_outputs.len();
+		let layer_dir = format!("{}/layer{}", output_dir, layer);
+		std::fs::create_dir_all(&layer_dir).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to create layer directory: {}", e))
+		})?;
+
+		log_print!("");
+		log_print!(
+			"{} Layer {}/{}: {} inputs → {} outputs {}",
+			">>>".bright_blue(),
+			layer,
+			layers,
+			num_inputs,
+			num_inputs * 2,
+			"<<<".bright_blue()
+		);
+
+		// Derive secrets for this layer's outputs (2 per input)
+		let mut next_secrets: Vec<WormholePair> = Vec::new();
+		for i in 0..(num_inputs * 2) {
+			next_secrets.push(derive_wormhole_secret(&wallet.mnemonic, layer, i + 1)?);
+		}
+
+		// Get current block for all proofs in this layer
+		let proof_block = at_best_block(&quantus_client).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
+		})?;
+		let proof_block_hash = proof_block.hash();
+
+		// Process inputs in batches of ≤16 (aggregation batch size)
+		let batch_size = agg_config.num_leaf_proofs;
+		let mut all_next_outputs: Vec<DissolveOutput> = Vec::new();
+		let num_batches = (num_inputs + batch_size - 1) / batch_size;
+
+		for batch_idx in 0..num_batches {
+			let batch_start = batch_idx * batch_size;
+			let batch_end = (batch_start + batch_size).min(num_inputs);
+			let batch_inputs = &current_outputs[batch_start..batch_end];
+			let batch_num_proofs = batch_inputs.len();
+
+			log_print!("  Batch {}/{}: {} proofs", batch_idx + 1, num_batches, batch_num_proofs);
+
+			// Each input splits into 2 outputs (equal split)
+			let mut proof_files = Vec::new();
+			let proof_gen_start = std::time::Instant::now();
+
+			for (i, input) in batch_inputs.iter().enumerate() {
+				let global_idx = batch_start + i;
+				let exit_1_idx = global_idx * 2;
+				let exit_2_idx = global_idx * 2 + 1;
+
+				let input_quantized = quantize_funding_amount(input.amount)
+					.map_err(crate::error::QuantusError::Generic)?;
+				let total_output = compute_output_amount(input_quantized, VOLUME_FEE_BPS);
+				let output_1 = total_output / 2;
+				let output_2 = total_output - output_1;
+
+				let assignment = ProofOutputAssignment {
+					output_amount_1: output_1.max(1),
+					exit_account_1: next_secrets[exit_1_idx].address,
+					output_amount_2: output_2.max(1),
+					exit_account_2: next_secrets[exit_2_idx].address,
+				};
+
+				let proof_file = format!("{}/batch{}_proof{}.hex", layer_dir, batch_idx, i);
+
+				generate_proof(
+					&hex::encode(input.secret),
+					input.amount,
+					&assignment,
+					&format!("0x{}", hex::encode(proof_block_hash.0)),
+					input.transfer_count,
+					&format!("0x{}", hex::encode(input.funding_account.0)),
+					&proof_file,
+					&quantus_client,
+				)
+				.await?;
+
+				proof_files.push(proof_file);
+			}
+
+			let proof_gen_elapsed = proof_gen_start.elapsed();
+			log_print!(
+				"    Proof generation: {:.2}s ({} proofs)",
+				proof_gen_elapsed.as_secs_f64(),
+				batch_num_proofs
+			);
+
+			// Aggregate
+			log_print!("    Aggregating...");
+			let aggregated_file = format!("{}/batch{}_aggregated.hex", layer_dir, batch_idx);
+			aggregate_proofs_to_file(&proof_files, &aggregated_file, &agg_config)?;
+
+			// Verify on-chain
+			log_print!("    Verifying on-chain...");
+			let (verification_block, _extrinsic_hash, transfer_events) =
+				verify_aggregated_and_get_events(&aggregated_file, &quantus_client).await?;
+
+			log_success!("    Verified in block 0x{}", hex::encode(verification_block.0));
+
+			// Collect next layer's outputs from the transfer events
+			for (i, input) in batch_inputs.iter().enumerate() {
+				let global_idx = batch_start + i;
+				let exit_1_idx = global_idx * 2;
+				let exit_2_idx = global_idx * 2 + 1;
+
+				for (secret_idx, target_address) in [
+					(exit_1_idx, &next_secrets[exit_1_idx]),
+					(exit_2_idx, &next_secrets[exit_2_idx]),
+				] {
+					let event = transfer_events
+						.iter()
+						.find(|e| e.to.0 == target_address.address)
+						.ok_or_else(|| {
+						crate::error::QuantusError::Generic(format!(
+							"No transfer event for output {} at layer {}",
+							secret_idx, layer
+						))
+					})?;
+
+					all_next_outputs.push(DissolveOutput {
+						address: SubxtAccountId(target_address.address),
+						secret: target_address.secret,
+						amount: event.amount,
+						block_hash: verification_block,
+						transfer_count: event.transfer_count,
+						funding_account: input.address.clone(),
+					});
+				}
+			}
+		}
+
+		log_print!("  Layer {} complete: {} outputs", layer, all_next_outputs.len());
+
+		current_outputs = all_next_outputs;
+	}
+
+	// Summary
+	log_print!("");
+	log_print!("==================================================");
+	log_success!("  Dissolve complete!");
+	log_print!("==================================================");
+	log_print!("");
+	log_print!("  Final outputs: {}", current_outputs.len());
+	let min_output = current_outputs.iter().map(|o| o.amount).min().unwrap_or(0);
+	let max_output = current_outputs.iter().map(|o| o.amount).max().unwrap_or(0);
+	let total_output: u128 = current_outputs.iter().map(|o| o.amount).sum();
+	log_print!(
+		"  Output range: {} - {} ({})",
+		format_balance(min_output),
+		format_balance(max_output),
+		format_balance(total_output)
+	);
+
+	if keep_files {
+		log_print!("  Proof files preserved in: {}", output_dir);
+	} else {
+		log_print!("  Cleaning up proof files...");
+		std::fs::remove_dir_all(&output_dir).ok();
+	}
+
+	Ok(())
+}
+
+/// Helper to aggregate proof files and write the result
+fn aggregate_proofs_to_file(
+	proof_files: &[String],
+	output_file: &str,
+	agg_config: &AggregationConfig,
+) -> crate::error::Result<()> {
+	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
+	use qp_zk_circuits_common::aggregation::AggregationConfig as AggConfig;
+
+	let bins_dir = std::path::Path::new("generated-bins");
+	let aggr_config = AggConfig::new(agg_config.num_leaf_proofs);
+	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(bins_dir, aggr_config)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to create aggregator: {}", e))
+		})?;
+
+	let common_data = aggregator.leaf_circuit_data.common.clone();
+
+	for proof_file in proof_files {
+		let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
+		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes, &common_data)
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to deserialize proof from {}: {:?}",
+					proof_file, e
+				))
+			})?;
+		aggregator.push_proof(proof).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to push proof: {}", e))
+		})?;
+	}
+
+	let agg_start = std::time::Instant::now();
+	let result = aggregator
+		.aggregate()
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
+	let agg_elapsed = agg_start.elapsed();
+	log_print!("    Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
+
+	let proof_hex = hex::encode(result.proof.to_bytes());
+	std::fs::write(output_file, &proof_hex).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
+	})?;
 
 	Ok(())
 }
