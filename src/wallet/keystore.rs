@@ -334,10 +334,12 @@ mod tests {
 		assert_eq!(original_pair.secret.as_ref(), converted_pair.secret.as_ref());
 	}
 
+	/// Wallet address must match chain: same AccountId (Poseidon hash of Dilithium public)
+	/// and same SS58 prefix (189, "qz") as in chain runtime and genesis.
 	#[test]
 	fn test_quantum_keypair_address_generation() {
 		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
-		// Test with known test keypairs
+		// Same test keypairs as chain genesis (crystal_alice, dilithium_bob, crystal_charlie)
 		let test_pairs = vec![
 			("crystal_alice", crystal_alice()),
 			("crystal_bob", dilithium_bob()),
@@ -351,8 +353,11 @@ mod tests {
 			let account_id = quantum_keypair.to_account_id_32();
 			let ss58_address = quantum_keypair.to_account_id_ss58check();
 
-			// Verify address format
-			assert!(ss58_address.starts_with("qz"), "SS58 address for {name} should start with 5");
+			// Verify address format (Quantus SS58 prefix 189 = "qz")
+			assert!(
+				ss58_address.starts_with("qz"),
+				"SS58 address for {name} should start with qz (Quantus prefix 189)"
+			);
 			assert!(
 				ss58_address.len() >= 47,
 				"SS58 address for {name} should be at least 47 characters"
@@ -366,14 +371,15 @@ mod tests {
 				"Address methods should be consistent for {name}"
 			);
 
-			// Verify it matches the direct DilithiumPair method
-			let expected_address = resonance_pair
+			// Must match chain: chain uses same qp_dilithium_crypto IdentifyAccount (into_account)
+			// and SS58 189 in genesis_config_presets and runtime config
+			let chain_expected_address = resonance_pair
 				.public()
 				.into_account()
 				.to_ss58check_with_version(quantus_ss58_format());
 			assert_eq!(
-				ss58_address, expected_address,
-				"Address should match DilithiumPair method for {name}"
+				ss58_address, chain_expected_address,
+				"Wallet address for {name} must match chain dev account (same derivation and SS58 189)"
 			);
 		}
 	}

@@ -1,13 +1,14 @@
 //! `quantus wallet` subcommand - wallet operations
 use crate::{
 	chain::quantus_subxt,
+	cli::address_format::QuantusSS58,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 	wallet::{password::get_mnemonic_from_user, WalletManager, DEFAULT_DERIVATION_PATH},
 };
 use clap::Subcommand;
 use colored::Colorize;
-use sp_core::crypto::{AccountId32, Ss58Codec};
+use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 use std::io::{self, Write};
 
 /// Wallet management commands
@@ -134,7 +135,7 @@ pub async fn get_account_nonce(
 	log_verbose!("#️⃣ Querying nonce for account: {}", account_address.bright_green());
 
 	// Parse the SS58 address to AccountId32 (sp-core)
-	let (account_id_sp, _) = AccountId32::from_ss58check_with_version(account_address)
+	let (account_id_sp, _) = SpAccountId32::from_ss58check_with_version(account_address)
 		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
 
 	log_verbose!("🔍 SP Account ID: {:?}", account_id_sp);
@@ -163,6 +164,105 @@ pub async fn get_account_nonce(
 	log_verbose!("🔢 Nonce: {}", account_info.nonce);
 
 	Ok(account_info.nonce)
+}
+
+/// Fetch high-security status from chain for an account (SS58). Returns None if disabled or on
+/// error.
+async fn fetch_high_security_status(
+	quantus_client: &crate::chain::client::QuantusClient,
+	account_ss58: &str,
+) -> crate::error::Result<Option<(String, String)>> {
+	use quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp;
+
+	let (account_id_sp, _) = SpAccountId32::from_ss58check_with_version(account_ss58)
+		.map_err(|e| QuantusError::Generic(format!("Invalid SS58 for HS lookup: {e:?}")))?;
+	let account_bytes: [u8; 32] = *account_id_sp.as_ref();
+	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+
+	let storage_addr = quantus_subxt::api::storage()
+		.reversible_transfers()
+		.high_security_accounts(account_id);
+	let latest = quantus_client.get_latest_block().await?;
+	let value = quantus_client
+		.client()
+		.storage()
+		.at(latest)
+		.fetch(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Fetch HS storage: {e:?}")))?;
+
+	let Some(data) = value else {
+		return Ok(None);
+	};
+
+	let interceptor_ss58 = data.interceptor.to_quantus_ss58();
+	let delay_str = match data.delay {
+		BlockNumberOrTimestamp::BlockNumber(blocks) => format!("{} blocks", blocks),
+		BlockNumberOrTimestamp::Timestamp(ms) => format!("{} seconds", ms / 1000),
+	};
+	Ok(Some((interceptor_ss58, delay_str)))
+}
+
+/// Fetch list of accounts for which this account is guardian (interceptor_index). Returns empty vec
+/// on error or none.
+async fn fetch_guardian_for_list(
+	quantus_client: &crate::chain::client::QuantusClient,
+	account_ss58: &str,
+) -> crate::error::Result<Vec<String>> {
+	let account_id_sp = SpAccountId32::from_ss58check(account_ss58)
+		.map_err(|e| QuantusError::Generic(format!("Invalid SS58 for interceptor_index: {e:?}")))?;
+	let account_bytes: [u8; 32] = *account_id_sp.as_ref();
+	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+
+	let storage_addr = quantus_subxt::api::storage()
+		.reversible_transfers()
+		.interceptor_index(account_id);
+	let latest = quantus_client.get_latest_block().await?;
+	let value = quantus_client
+		.client()
+		.storage()
+		.at(latest)
+		.fetch(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Fetch interceptor_index: {e:?}")))?;
+
+	let list = value
+		.map(|bounded| bounded.0.iter().map(|a| a.to_quantus_ss58()).collect())
+		.unwrap_or_default();
+	Ok(list)
+}
+
+/// For each entrusted account (SS58), count pending reversible transfers by sender. Returns (total,
+/// per-account list).
+async fn fetch_pending_transfers_for_guardian(
+	quantus_client: &crate::chain::client::QuantusClient,
+	entrusted_ss58: &[String],
+) -> crate::error::Result<(u32, Vec<(String, u32)>)> {
+	let latest = quantus_client.get_latest_block().await?;
+	let storage = quantus_client.client().storage().at(latest);
+	let mut total = 0u32;
+	let mut per_account = Vec::with_capacity(entrusted_ss58.len());
+
+	for ss58 in entrusted_ss58 {
+		let account_id_sp = SpAccountId32::from_ss58check(ss58).map_err(|e| {
+			QuantusError::Generic(format!("Invalid SS58 for pending lookup: {e:?}"))
+		})?;
+		let account_bytes: [u8; 32] = *account_id_sp.as_ref();
+		let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+
+		let addr = quantus_subxt::api::storage()
+			.reversible_transfers()
+			.pending_transfers_by_sender(account_id);
+		let value = storage.fetch(&addr).await.map_err(|e| {
+			QuantusError::NetworkError(format!("Fetch pending_transfers_by_sender: {e:?}"))
+		})?;
+
+		let count = value.map(|bounded| bounded.0.len() as u32).unwrap_or(0);
+		total += count;
+		per_account.push((ss58.clone(), count));
+	}
+
+	Ok((total, per_account))
 }
 
 /// Handle wallet commands
@@ -287,6 +387,93 @@ pub async fn handle_wallet_command(
 								"💡 To see the full address, use the export command with password"
 									.dimmed()
 							);
+						}
+
+						// High-Security status and Guardian-for list from chain (optional; don't
+						// fail view if node unavailable)
+						if !wallet_info.address.contains("[") {
+							if let Ok(quantus_client) =
+								crate::chain::client::QuantusClient::new(node_url).await
+							{
+								match fetch_high_security_status(
+									&quantus_client,
+									&wallet_info.address,
+								)
+								.await
+								{
+									Ok(Some((interceptor_ss58, delay_str))) => {
+										log_print!(
+											"\n🛡️  High Security: {}",
+											"ENABLED".bright_green().bold()
+										);
+										log_print!(
+											"   Guardian/Interceptor: {}",
+											interceptor_ss58.bright_cyan()
+										);
+										log_print!("   Delay: {}", delay_str.bright_yellow());
+									},
+									Ok(None) => {
+										log_print!("\n🛡️  High Security: {}", "DISABLED".dimmed());
+									},
+									Err(e) => {
+										log_verbose!("High Security status skipped: {}", e);
+										log_print!(
+											"\n{}",
+											"💡 Run quantus high-security status --account <address> to check on-chain"
+												.dimmed()
+										);
+									},
+								}
+
+								// Guardian for: accounts that have this wallet as their interceptor
+								if let Ok(entrusted) =
+									fetch_guardian_for_list(&quantus_client, &wallet_info.address)
+										.await
+								{
+									if entrusted.is_empty() {
+										log_print!("🛡️  Guardian for: {}", "none".dimmed());
+									} else {
+										log_print!(
+											"\n🛡️  Guardian for: {} account(s)",
+											entrusted.len().to_string().bright_green()
+										);
+										for (i, addr) in entrusted.iter().enumerate() {
+											log_print!("   {}. {}", i + 1, addr.bright_cyan());
+										}
+										// Pending reversible transfers that this guardian can
+										// intercept
+										if let Ok((total, per_account)) =
+											fetch_pending_transfers_for_guardian(
+												&quantus_client,
+												&entrusted,
+											)
+											.await
+										{
+											if total > 0 {
+												log_print!(
+													"\n   {} {} pending transfer(s) you can intercept",
+													"⚠️".bright_yellow(),
+													total.to_string().bright_yellow().bold()
+												);
+												for (addr, count) in per_account {
+													if count > 0 {
+														log_print!(
+															"      from {}: {}",
+															addr.bright_cyan(),
+															count
+														);
+													}
+												}
+												log_print!("   {}", "Use: quantus reversible cancel --tx-id <id> --from <you>".dimmed());
+											}
+										}
+									}
+								}
+							} else {
+								log_verbose!(
+									"Could not connect to node; High Security status skipped."
+								);
+							}
 						}
 					},
 					Ok(None) => {
@@ -569,7 +756,7 @@ pub async fn handle_wallet_command(
 			let target_address = match (address, wallet) {
 				(Some(addr), _) => {
 					// Validate the provided address
-					AccountId32::from_ss58check(&addr)
+					SpAccountId32::from_ss58check(&addr)
 						.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 					addr
 				},
