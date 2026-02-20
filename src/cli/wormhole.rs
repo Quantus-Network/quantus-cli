@@ -748,10 +748,12 @@ pub async fn handle_wormhole_command(
 			Ok(())
 		},
 		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
-		WormholeCommands::VerifyAggregated { proof } =>
-			verify_aggregated_proof(proof, node_url).await,
-		WormholeCommands::ParseProof { proof, aggregated, verify } =>
-			parse_proof_file(proof, aggregated, verify).await,
+		WormholeCommands::VerifyAggregated { proof } => {
+			verify_aggregated_proof(proof, node_url).await
+		},
+		WormholeCommands::ParseProof { proof, aggregated, verify } => {
+			parse_proof_file(proof, aggregated, verify).await
+		},
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -2402,8 +2404,6 @@ struct DissolveOutput {
 	secret: [u8; 32],
 	/// Amount in planck
 	amount: u128,
-	/// Block hash where the transfer was recorded
-	block_hash: subxt::utils::H256,
 	/// Transfer count from the NativeTransferred event
 	transfer_count: u64,
 	/// Funding account (sender)
@@ -2534,7 +2534,6 @@ async fn run_dissolve(
 		address: wormhole_address,
 		secret: initial_secret.secret,
 		amount,
-		block_hash,
 		transfer_count: event.transfer_count,
 		funding_account: funding_account.clone(),
 	}];
@@ -2575,7 +2574,7 @@ async fn run_dissolve(
 		// Process inputs in batches of ≤16 (aggregation batch size)
 		let batch_size = agg_config.num_leaf_proofs;
 		let mut all_next_outputs: Vec<DissolveOutput> = Vec::new();
-		let num_batches = (num_inputs + batch_size - 1) / batch_size;
+		let num_batches = num_inputs.div_ceil(batch_size);
 
 		for batch_idx in 0..num_batches {
 			let batch_start = batch_idx * batch_size;
@@ -2667,7 +2666,6 @@ async fn run_dissolve(
 						address: SubxtAccountId(target_address.address),
 						secret: target_address.secret,
 						amount: event.amount,
-						block_hash: verification_block,
 						transfer_count: event.transfer_count,
 						funding_account: input.address.clone(),
 					});
@@ -2869,8 +2867,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000 <=
-				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000
+				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
