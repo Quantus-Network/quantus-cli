@@ -2398,8 +2398,6 @@ async fn parse_proof_file(
 /// A pending wormhole output that can be used as input for the next dissolve layer.
 #[derive(Debug, Clone)]
 struct DissolveOutput {
-	/// The wormhole address that received the funds
-	address: SubxtAccountId,
 	/// The secret used to derive the wormhole address
 	secret: [u8; 32],
 	/// Amount in planck
@@ -2408,6 +2406,8 @@ struct DissolveOutput {
 	transfer_count: u64,
 	/// Funding account (sender)
 	funding_account: SubxtAccountId,
+	/// Block hash where the transfer was recorded (needed for storage proof)
+	proof_block_hash: subxt::utils::H256,
 }
 
 /// Dissolve a large wormhole deposit into many small outputs for better privacy.
@@ -2531,11 +2531,11 @@ async fn run_dissolve(
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Event decode error: {}", e)))?;
 
 	let mut current_outputs = vec![DissolveOutput {
-		address: wormhole_address,
 		secret: initial_secret.secret,
 		amount,
 		transfer_count: event.transfer_count,
 		funding_account: funding_account.clone(),
+		proof_block_hash: block_hash,
 	}];
 
 	log_success!("  Funded 1 wormhole address with {}", format_balance(amount));
@@ -2565,12 +2565,6 @@ async fn run_dissolve(
 			next_secrets.push(derive_wormhole_secret(&wallet.mnemonic, layer, i + 1)?);
 		}
 
-		// Get current block for all proofs in this layer
-		let proof_block = at_best_block(&quantus_client).await.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
-		})?;
-		let proof_block_hash = proof_block.hash();
-
 		// Process inputs in batches of ≤16 (aggregation batch size)
 		let batch_size = agg_config.num_leaf_proofs;
 		let mut all_next_outputs: Vec<DissolveOutput> = Vec::new();
@@ -2587,6 +2581,11 @@ async fn run_dissolve(
 			// Each input splits into 2 outputs (equal split)
 			let mut proof_files = Vec::new();
 			let proof_gen_start = std::time::Instant::now();
+
+			// All inputs in a batch must use the same block for proof generation.
+			// Use the proof_block_hash from the first input (all inputs in a batch
+			// were created in the same verification block from the previous layer).
+			let batch_proof_block_hash = batch_inputs[0].proof_block_hash;
 
 			for (i, input) in batch_inputs.iter().enumerate() {
 				let global_idx = batch_start + i;
@@ -2612,7 +2611,7 @@ async fn run_dissolve(
 					&hex::encode(input.secret),
 					input.amount,
 					&assignment,
-					&format!("0x{}", hex::encode(proof_block_hash.0)),
+					&format!("0x{}", hex::encode(batch_proof_block_hash.0)),
 					input.transfer_count,
 					&format!("0x{}", hex::encode(input.funding_account.0)),
 					&proof_file,
@@ -2643,7 +2642,8 @@ async fn run_dissolve(
 			log_success!("    Verified in block 0x{}", hex::encode(verification_block.0));
 
 			// Collect next layer's outputs from the transfer events
-			for (i, input) in batch_inputs.iter().enumerate() {
+			// Use the verification_block as the proof_block_hash for the next layer
+			for (i, _input) in batch_inputs.iter().enumerate() {
 				let global_idx = batch_start + i;
 				let exit_1_idx = global_idx * 2;
 				let exit_2_idx = global_idx * 2 + 1;
@@ -2663,11 +2663,11 @@ async fn run_dissolve(
 					})?;
 
 					all_next_outputs.push(DissolveOutput {
-						address: SubxtAccountId(target_address.address),
 						secret: target_address.secret,
 						amount: event.amount,
 						transfer_count: event.transfer_count,
-						funding_account: input.address.clone(),
+						funding_account: event.from.clone(),
+						proof_block_hash: verification_block,
 					});
 				}
 			}
