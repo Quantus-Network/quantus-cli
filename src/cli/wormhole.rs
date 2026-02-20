@@ -748,12 +748,10 @@ pub async fn handle_wormhole_command(
 			Ok(())
 		},
 		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
-		WormholeCommands::VerifyAggregated { proof } => {
-			verify_aggregated_proof(proof, node_url).await
-		},
-		WormholeCommands::ParseProof { proof, aggregated, verify } => {
-			parse_proof_file(proof, aggregated, verify).await
-		},
+		WormholeCommands::VerifyAggregated { proof } =>
+			verify_aggregated_proof(proof, node_url).await,
+		WormholeCommands::ParseProof { proof, aggregated, verify } =>
+			parse_proof_file(proof, aggregated, verify).await,
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -2867,8 +2865,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000
-				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000 <=
+				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX
