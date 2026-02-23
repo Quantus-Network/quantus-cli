@@ -203,8 +203,8 @@ async fn fetch_high_security_status(
 	Ok(Some((interceptor_ss58, delay_str)))
 }
 
-/// Fetch list of accounts for which this account is guardian (interceptor_index). Returns empty vec
-/// on error or none.
+/// Fetch list of accounts for which this account is guardian (interceptor_index).
+/// Returns an empty vec when the storage entry is absent (`None`), and an error on failure.
 async fn fetch_guardian_for_list(
 	quantus_client: &crate::chain::client::QuantusClient,
 	account_ss58: &str,
