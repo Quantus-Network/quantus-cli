@@ -77,7 +77,7 @@ pub fn generate_random_distribution(
 	let mut remaining = total - min_possible;
 
 	// Randomly distribute the remaining amount
-	let mut rng = rand::rng();
+	let mut rng = rand::thread_rng();
 
 	while remaining > 0 {
 		// Find recipients who can still receive more
@@ -94,12 +94,12 @@ pub fn generate_random_distribution(
 		}
 
 		// Pick a random eligible recipient
-		let recipient_idx = eligible_indices[rng.random_range(0..eligible_indices.len())];
+		let recipient_idx = eligible_indices[rng.gen_range(0..eligible_indices.len())];
 		let headroom = max - amounts[recipient_idx];
 
 		// Add a random amount (at least 1, at most headroom or remaining)
 		let max_addition = headroom.min(remaining);
-		let amount_to_add = if max_addition == 1 { 1 } else { rng.random_range(1..=max_addition) };
+		let amount_to_add = if max_addition == 1 { 1 } else { rng.gen_range(1..=max_addition) };
 
 		amounts[recipient_idx] += amount_to_add;
 		remaining -= amount_to_add;

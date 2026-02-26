@@ -21,7 +21,7 @@ use aes_gcm::{
 	Aes256Gcm, Key, Nonce,
 };
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
-use rand::{rng, RngCore};
+use rand::RngCore;
 
 use std::path::Path;
 
@@ -204,7 +204,7 @@ impl Keystore {
 	) -> Result<EncryptedWallet> {
 		// 1. Generate salt for Argon2
 		let mut argon2_salt = [0u8; 16];
-		rng().fill_bytes(&mut argon2_salt);
+		rand::thread_rng().fill_bytes(&mut argon2_salt);
 
 		// 2. Derive encryption key from password using Argon2 (quantum-safe)
 		let argon2 = Argon2::default();

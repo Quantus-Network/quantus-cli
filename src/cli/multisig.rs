@@ -483,7 +483,7 @@ pub fn predict_multisig_address(
 	use sp_core::crypto::AccountId32;
 	use sp_runtime::traits::{Hash as HashT, TrailingZeroInput};
 
-	let hash = PoseidonHasher::hash(&data);
+	let hash = <PoseidonHasher as HashT>::hash(&data);
 	let account_id = AccountId32::decode(&mut TrailingZeroInput::new(hash.as_ref()))
 		.expect("TrailingZeroInput provides sufficient bytes; qed");
 

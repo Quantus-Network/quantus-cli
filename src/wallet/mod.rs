@@ -11,7 +11,7 @@ pub mod password;
 use crate::error::{Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
 use qp_rusty_crystals_hdwallet::{derive_key_from_mnemonic, generate_mnemonic, SensitiveBytes32};
-use rand::{rng, RngCore};
+use rand::RngCore;
 use serde::{Deserialize, Serialize};
 use sp_runtime::traits::IdentifyAccount;
 
@@ -68,7 +68,7 @@ impl WalletManager {
 
 		// Generate a new Dilithium keypair using derivation path
 		let mut seed = [0u8; 32];
-		rng().fill_bytes(&mut seed);
+		rand::thread_rng().fill_bytes(&mut seed);
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
 		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, derivation_path)
@@ -219,7 +219,7 @@ impl WalletManager {
 
 		// Generate new mnemonic and use master seed directly (no derivation path)
 		let mut seed = [0u8; 32];
-		rng().fill_bytes(&mut seed);
+		rand::thread_rng().fill_bytes(&mut seed);
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
 		// For "no derivation" mode, we use the root path m/
