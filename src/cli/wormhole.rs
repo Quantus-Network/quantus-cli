@@ -28,7 +28,7 @@ use qp_zk_circuits_common::{
 	storage_proof::prepare_proof_for_circuit,
 	utils::{digest_felts_to_bytes, BytesDigest},
 };
-use rand::{Rng, RngCore};
+use rand::RngCore;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::path::Path;
 use subxt::{
@@ -215,6 +215,8 @@ pub fn format_balance(amount: u128) -> String {
 /// Each part will be at least `min_per_part` and the sum equals `total`.
 /// Returns amounts aligned to SCALE_DOWN_FACTOR for clean quantization.
 pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> {
+	use rand::Rng;
+
 	if n == 0 {
 		return vec![];
 	}
@@ -238,8 +240,8 @@ pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> 
 	let distributable = total - min_total;
 
 	// Generate n-1 random cut points in [0, distributable]
-	let mut rng = rand::thread_rng();
-	let mut cuts: Vec<u128> = (0..n - 1).map(|_| rng.gen_range(0..=distributable)).collect();
+	let mut rng = rand::rng();
+	let mut cuts: Vec<u128> = (0..n - 1).map(|_| rng.random_range(0..=distributable)).collect();
 	cuts.sort();
 
 	// Convert cuts to amounts
@@ -257,7 +259,7 @@ pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> 
 	let diff = total as i128 - sum as i128;
 	if diff != 0 {
 		// Add/subtract difference from a random part
-		let idx = rng.gen_range(0..n);
+		let idx = rng.random_range(0..n);
 		parts[idx] = (parts[idx] as i128 + diff).max(0) as u128;
 	}
 
@@ -341,7 +343,7 @@ pub fn compute_random_output_assignments(
 	// which is critical for the multiround flow where each target is a next-round
 	// wormhole address that must receive minted tokens.
 
-	let mut rng = rand::thread_rng();
+	let mut rng = rand::rng();
 
 	// Track remaining needs per target
 	let mut target_remaining: Vec<u32> = target_amounts.clone();
@@ -1327,7 +1329,7 @@ fn load_multiround_wallet(
 		None => {
 			log_print!("Wallet has no mnemonic - generating random mnemonic for wormhole secrets");
 			let mut entropy = [0u8; 32];
-			rand::thread_rng().fill_bytes(&mut entropy);
+			rand::rng().fill_bytes(&mut entropy);
 			let sensitive_entropy = SensitiveBytes32::from(&mut entropy);
 			let m = generate_mnemonic(sensitive_entropy).map_err(|e| {
 				crate::error::QuantusError::Generic(format!("Failed to generate mnemonic: {:?}", e))

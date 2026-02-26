@@ -20,33 +20,33 @@ name = "quantus"
 path = "src/main.rs"
 
 [dependencies]
-# CLI and async runtime (aligned with chain workspace)
-clap = { version = "4.5.13", features = ["derive"] }
-tokio = { version = "1.45.0", features = ["full"] }
+# CLI and async runtime
+clap = { version = "4.5", features = ["derive"] }
+tokio = { version = "1.46", features = ["full"] }
 
 # Serialization and configuration
-serde = { version = "1.0.214", features = ["derive"] }
-serde_json = "1.0.132"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 toml = "0.9"
 
 # Error handling
-thiserror = "1.0.64"
+thiserror = "2.0"
 
 # Terminal UI
 colored = "3.0"
 indicatif = "0.17"
 
 # Additional utilities
-sha2 = { version = "0.10", default-features = false }
-hex = { version = "0.4.3", default-features = false }
-chrono = { version = "0.4.31", features = ["serde"] }
+sha2 = "0.10"
+hex = "0.4"
+chrono = { version = "0.4", features = ["serde"] }
 dirs = "6.0"
-rpassword = "7.0.0"
+rpassword = "7.4"
 
 # Quantum-Safe Encryption
-argon2 = "0.5"                                         # Password-based key derivation (quantum-safe)
-rand = { version = "0.8.5", default-features = false }
-aes-gcm = "0.10"                                       # AES-256-GCM (quantum-safe with 256-bit keys)
+argon2 = "0.5"   # Password-based key derivation (quantum-safe)
+rand = "0.9"
+aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 
 # Quantus crypto dependencies (aligned with chain)
 qp-rusty-crystals-dilithium = { version = "2.1.0" }
@@ -56,14 +56,17 @@ qp-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain", branch
 qp-poseidon = { git = "https://github.com/Quantus-Network/qp-poseidon", branch = "chore/substrate_stable2512_2" }
 
 # HTTP client for Subsquid queries
-reqwest = { version = "0.11.24", features = ["json", "rustls-tls"], default-features = false }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 blake3 = "1.8"
 
+# Force patched version of bytes (RUSTSEC-2026-0007)
+bytes = "1.11.1"
+
 # Blockchain deps: align with chain workspace; use chain primitives for qp-dilithium-crypto so sp-* versions match
-codec = { package = "parity-scale-codec", version = "3.6.12", features = ["derive"] }
+codec = { package = "parity-scale-codec", version = "3.7", features = ["derive"] }
 sp-core = { version = "39.0.0" }
 sp-runtime = { version = "45.0.0" }
-jsonrpsee = { version = "0.24.3", features = ["client"] }
+jsonrpsee = { version = "0.24", features = ["client"] }
 
 # Subxt: latest 0.44.x (bug fixes; compatible with sp-core 39 / scale-codec 3.6)
 subxt = "0.44"
