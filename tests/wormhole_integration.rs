@@ -34,7 +34,7 @@ use quantus_cli::{
 	},
 	wallet::{QuantumKeyPair, WalletManager},
 };
-use rand::{rng, RngCore};
+use rand::RngCore;
 use serial_test::serial;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
@@ -72,7 +72,7 @@ fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 /// Generate a random 32-byte secret
 fn generate_random_secret() -> [u8; 32] {
 	let mut secret = [0u8; 32];
-	rng().fill_bytes(&mut secret);
+	rand::thread_rng().fill_bytes(&mut secret);
 	secret
 }
 
@@ -681,7 +681,7 @@ async fn test_single_proof_on_chain_verification() {
 	// Generate random secret and exit account
 	let secret = generate_random_secret();
 	let mut exit_account = [0u8; 32];
-	rng().fill_bytes(&mut exit_account);
+	rand::thread_rng().fill_bytes(&mut exit_account);
 
 	// Use a small funding amount (1 token = 10^12 units)
 	let funding_amount: u128 = 1_000_000_000_000; // 1 token
@@ -787,7 +787,7 @@ async fn test_aggregated_proof_on_chain_verification() {
 
 		let secret = generate_random_secret();
 		let mut exit_account = [0u8; 32];
-		rng().fill_bytes(&mut exit_account);
+		rand::thread_rng().fill_bytes(&mut exit_account);
 
 		// Use a small funding amount (0.5 tokens each)
 		let funding_amount: u128 = 500_000_000_000; // 0.5 tokens
@@ -1001,7 +1001,7 @@ async fn test_nullifier_uniqueness() {
 	assert_ne!(secret1, secret2, "Secrets should be different");
 
 	let mut exit_account = [0u8; 32];
-	rng().fill_bytes(&mut exit_account);
+	rand::thread_rng().fill_bytes(&mut exit_account);
 
 	let funding_amount: u128 = 500_000_000_000;
 
@@ -1072,7 +1072,7 @@ async fn test_full_wormhole_workflow() {
 	println!("\n--- Step 1: Single Proof ---");
 	let secret1 = generate_random_secret();
 	let mut exit1 = [0u8; 32];
-	rng().fill_bytes(&mut exit1);
+	rand::thread_rng().fill_bytes(&mut exit1);
 
 	let proof1 = generate_wormhole_proof(
 		&quantus_client,
@@ -1100,7 +1100,7 @@ async fn test_full_wormhole_workflow() {
 		println!("   Submitting transfer {}...", i + 1);
 		let secret = generate_random_secret();
 		let mut exit = [0u8; 32];
-		rng().fill_bytes(&mut exit);
+		rand::thread_rng().fill_bytes(&mut exit);
 
 		let transfer_data = submit_wormhole_transfer(
 			&quantus_client,
