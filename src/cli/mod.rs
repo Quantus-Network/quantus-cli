@@ -759,26 +759,26 @@ async fn build_wormhole_circuits(
 			log_error!("   quantus-apps directory not found: {}", apps_path);
 			log_print!("   Use --skip-apps to skip this step");
 		} else {
-			// Copy to miner-app assets for bundling
-			let apps_bins = apps_dir.join("miner-app/assets/circuits");
+			// Copy to quantus_sdk assets for bundling (shared by all apps)
+			let apps_bins = apps_dir.join("quantus_sdk/assets/circuits");
 
 			// Create directory if it doesn't exist
 			if !apps_bins.exists() {
 				std::fs::create_dir_all(&apps_bins).map_err(|e| {
 					crate::error::QuantusError::Generic(format!(
-						"Failed to create circuits directory in quantus-apps: {}",
+						"Failed to create circuits directory in quantus_sdk: {}",
 						e
 					))
 				})?;
 			}
 
-			// Apps needs all files for proof generation and aggregation
+			// SDK needs all files for proof generation and aggregation
 			for file in &all_bin_files {
 				let src = source_bins.join(file);
 				let dst = apps_bins.join(file);
 				std::fs::copy(&src, &dst).map_err(|e| {
 					crate::error::QuantusError::Generic(format!(
-						"Failed to copy {} to quantus-apps: {}",
+						"Failed to copy {} to quantus_sdk: {}",
 						file, e
 					))
 				})?;
