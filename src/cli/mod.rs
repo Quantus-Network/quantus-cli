@@ -687,8 +687,6 @@ async fn build_wormhole_circuits(
 		"dummy_proof.bin",
 		"aggregated_common.bin",
 		"aggregated_verifier.bin",
-		"aggregated_prover.bin",
-		"layer0_targets.json",
 		"config.json",
 	];
 
