@@ -288,7 +288,8 @@ pub enum DeveloperCommands {
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
 
-	/// Build wormhole circuit binaries and copy to CLI and chain directories
+	/// Build wormhole circuit binaries and copy to CLI, chain, quantus-apps, and ~/.quantus
+	/// directories
 	BuildCircuits {
 		/// Path to qp-zk-circuits repository (default: ../qp-zk-circuits)
 		#[arg(long, default_value = "../qp-zk-circuits")]
@@ -298,6 +299,10 @@ pub enum DeveloperCommands {
 		#[arg(long, default_value = "../chain")]
 		chain_path: String,
 
+		/// Path to quantus-apps repository (default: ../quantus-apps)
+		#[arg(long, default_value = "../quantus-apps")]
+		apps_path: String,
+
 		/// Number of leaf proofs aggregated into a single proof
 		#[arg(long)]
 		num_leaf_proofs: usize,
@@ -305,6 +310,10 @@ pub enum DeveloperCommands {
 		/// Skip copying to chain directory
 		#[arg(long)]
 		skip_chain: bool,
+
+		/// Skip copying to quantus-apps directory
+		#[arg(long)]
+		skip_apps: bool,
 	},
 }
 
@@ -568,9 +577,20 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 		DeveloperCommands::BuildCircuits {
 			circuits_path,
 			chain_path,
+			apps_path,
 			num_leaf_proofs,
 			skip_chain,
-		} => build_wormhole_circuits(&circuits_path, &chain_path, num_leaf_proofs, skip_chain).await,
+			skip_apps,
+		} =>
+			build_wormhole_circuits(
+				&circuits_path,
+				&chain_path,
+				&apps_path,
+				num_leaf_proofs,
+				skip_chain,
+				skip_apps,
+			)
+			.await,
 	}
 }
 
@@ -578,16 +598,29 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 async fn build_wormhole_circuits(
 	circuits_path: &str,
 	chain_path: &str,
+	apps_path: &str,
 	num_leaf_proofs: usize,
 	skip_chain: bool,
+	skip_apps: bool,
 ) -> crate::error::Result<()> {
 	use std::{path::Path, process::Command};
+
+	// Calculate total steps
+	let mut total_steps = 3; // build, generate, copy to CLI
+	if !skip_chain {
+		total_steps += 1;
+	}
+	if !skip_apps {
+		total_steps += 1;
+	}
+	total_steps += 1; // copy to ~/.quantus/circuits
 
 	log_print!("Building ZK circuit binaries (num_leaf_proofs={})", num_leaf_proofs);
 	log_print!("");
 
 	let circuits_dir = Path::new(circuits_path);
 	let chain_dir = Path::new(chain_path);
+	let apps_dir = Path::new(apps_path);
 
 	// Verify circuits directory exists
 	if !circuits_dir.exists() {
@@ -597,8 +630,10 @@ async fn build_wormhole_circuits(
 		)));
 	}
 
+	let mut step = 1;
+
 	// Step 1: Build the circuit builder
-	log_print!("Step 1/4: Building circuit builder...");
+	log_print!("Step {}/{}: Building circuit builder...", step, total_steps);
 	let build_output = Command::new("cargo")
 		.args(["build", "--release", "-p", "qp-wormhole-circuit-builder"])
 		.current_dir(circuits_dir)
@@ -615,9 +650,14 @@ async fn build_wormhole_circuits(
 		)));
 	}
 	log_success!("   Done");
+	step += 1;
 
 	// Step 2: Run the circuit builder to generate binaries
-	log_print!("Step 2/4: Generating circuit binaries (this may take a while)...");
+	log_print!(
+		"Step {}/{}: Generating circuit binaries (this may take a while)...",
+		step,
+		total_steps
+	);
 	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
 	let run_output = Command::new(&builder_path)
 		.args(["--num-leaf-proofs", &num_leaf_proofs.to_string()])
@@ -635,13 +675,12 @@ async fn build_wormhole_circuits(
 		)));
 	}
 	log_success!("   Done");
+	step += 1;
 
-	// Step 3: Copy binaries to CLI and touch aggregator to force recompile
-	log_print!("Step 3/4: Copying binaries to CLI...");
 	let source_bins = circuits_dir.join("generated-bins");
-	let cli_bins = Path::new("generated-bins");
 
-	let cli_bin_files = [
+	// All circuit files (new architecture includes aggregated_prover.bin and layer0_targets.json)
+	let all_bin_files = [
 		"common.bin",
 		"verifier.bin",
 		"prover.bin",
@@ -651,7 +690,11 @@ async fn build_wormhole_circuits(
 		"config.json",
 	];
 
-	for file in &cli_bin_files {
+	// Step 3: Copy binaries to CLI
+	log_print!("Step {}/{}: Copying binaries to CLI...", step, total_steps);
+	let cli_bins = Path::new("generated-bins");
+
+	for file in &all_bin_files {
 		let src = source_bins.join(file);
 		let dst = cli_bins.join(file);
 		std::fs::copy(&src, &dst).map_err(|e| {
@@ -668,10 +711,11 @@ async fn build_wormhole_circuits(
 		}
 	}
 	log_success!("   Done");
+	step += 1;
 
-	// Step 4: Copy binaries to chain directory (if not skipped)
+	// Step: Copy binaries to chain directory (if not skipped)
 	if !skip_chain {
-		log_print!("Step 4/4: Copying binaries to chain...");
+		log_print!("Step {}/{}: Copying binaries to chain...", step, total_steps);
 
 		if !chain_dir.exists() {
 			log_error!("   Chain directory not found: {}", chain_path);
@@ -679,6 +723,7 @@ async fn build_wormhole_circuits(
 		} else {
 			let chain_bins = chain_dir.join("pallets/wormhole");
 
+			// Chain only needs verifier files (not prover)
 			let chain_bin_files =
 				["aggregated_common.bin", "aggregated_verifier.bin", "config.json"];
 
@@ -703,9 +748,77 @@ async fn build_wormhole_circuits(
 			}
 			log_success!("   Done");
 		}
-	} else {
-		log_print!("Step 4/4: Skipping chain copy (--skip-chain)");
+		step += 1;
 	}
+
+	// Step: Copy binaries to quantus-apps (if not skipped)
+	if !skip_apps {
+		log_print!("Step {}/{}: Copying binaries to quantus-apps...", step, total_steps);
+
+		if !apps_dir.exists() {
+			log_error!("   quantus-apps directory not found: {}", apps_path);
+			log_print!("   Use --skip-apps to skip this step");
+		} else {
+			// Copy to quantus_sdk assets for bundling (shared by all apps)
+			let apps_bins = apps_dir.join("quantus_sdk/assets/circuits");
+
+			// Create directory if it doesn't exist
+			if !apps_bins.exists() {
+				std::fs::create_dir_all(&apps_bins).map_err(|e| {
+					crate::error::QuantusError::Generic(format!(
+						"Failed to create circuits directory in quantus_sdk: {}",
+						e
+					))
+				})?;
+			}
+
+			// SDK needs all files for proof generation and aggregation
+			for file in &all_bin_files {
+				let src = source_bins.join(file);
+				let dst = apps_bins.join(file);
+				std::fs::copy(&src, &dst).map_err(|e| {
+					crate::error::QuantusError::Generic(format!(
+						"Failed to copy {} to quantus_sdk: {}",
+						file, e
+					))
+				})?;
+				log_verbose!("   Copied {}", file);
+			}
+			log_success!("   Done");
+		}
+		step += 1;
+	}
+
+	// Step: Copy binaries to ~/.quantus/circuits (for local development)
+	log_print!("Step {}/{}: Copying binaries to ~/.quantus/circuits...", step, total_steps);
+
+	let home_dir = dirs::home_dir().ok_or_else(|| {
+		crate::error::QuantusError::Generic("Could not determine home directory".to_string())
+	})?;
+	let quantus_circuits = home_dir.join(".quantus/circuits");
+
+	// Create directory if it doesn't exist
+	if !quantus_circuits.exists() {
+		std::fs::create_dir_all(&quantus_circuits).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to create ~/.quantus/circuits: {}",
+				e
+			))
+		})?;
+	}
+
+	for file in &all_bin_files {
+		let src = source_bins.join(file);
+		let dst = quantus_circuits.join(file);
+		std::fs::copy(&src, &dst).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to copy {} to ~/.quantus/circuits: {}",
+				file, e
+			))
+		})?;
+		log_verbose!("   Copied {}", file);
+	}
+	log_success!("   Done");
 
 	log_print!("");
 	log_success!("Circuit build complete!");
