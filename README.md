@@ -250,14 +250,15 @@ Build ZK circuit binaries from the `qp-zk-circuits` repository, then copy them t
 
 ```bash
 quantus developer build-circuits \
-  --branching-factor 2 \
+  --num-leaf-proofs 2 \
+  --num-layer0-proofs 2 \
   --depth 1 \
   --circuits-path ../qp-zk-circuits \
   --chain-path ../chain
 ```
 
-- `--branching-factor`: Number of proofs aggregated at each tree level.
-- `--depth`: Depth of the aggregation tree. Total leaf proofs = `branching_factor ^ depth`.
+- `--num-leaf-proofs`: Number of leaf proofs per layer-0 aggregation.
+- `--num-layer0-proofs`: Number of inner proofs per layer-1 aggregation.
 - `--circuits-path`: Path to the `qp-zk-circuits` repo (default: `../qp-zk-circuits`).
 - `--chain-path`: Path to the chain repo (default: `../chain`).
 - `--skip-chain`: Skip copying binaries to the chain directory.

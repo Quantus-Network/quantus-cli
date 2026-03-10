@@ -1,11 +1,13 @@
 {
-  "num_leaf_proofs": 16,
+  "num_leaf_proofs": 8,
+  "num_layer0_proofs": null,
   "hashes": {
     "common": "672689a87e8ed780337c0752ebc7fd1db6a63611fbd59b4ad0cbe4a4d97edcf2",
     "verifier": "bb017485b12fb9c6d0b5c3db8b68f417bd3f75b2d5f3a2ea5fe12b6244233372",
     "prover": "78c114c7290b04bac00551a590fd652f98194653b10ac4e11b0c0ddd5c7c0976",
-    "aggregated_common": "af4461081f6fb527d2b9ffb74479a133ed8b92cdd3554b46adc481a0dfc38b5d",
-    "aggregated_verifier": "90350437c8e0e2144ca849623ea0b58edd2decd7bdf6b728b32e1aa9d8f1e337",
-    "dummy_proof": "8c46fd19c4c3581016ba4adcf4f0735bd04bf09f8e94e9b0f092ea522c9d3ba9"
+    "aggregated_common": "20a2dc0e48a9d7a69c9bffca5e9ee917769abdbd1f512dcb5ba303af4f69ed91",
+    "aggregated_verifier": "22913f5a8da5bfe1d3153e8fb4ca3c9bce02ad1afc7a07d229c48b40f67f5b8b",
+    "aggregated_prover": "168212332937960d0a8319f1944ecd5357476a2f0b7017c2dedb6ae461717d6b",
+    "dummy_proof": "6828bea2ccd42eac05f9e785f3834a1cc218553a68b090718d84c2d9dd381e8d"
   }
 }

@@ -298,9 +298,13 @@ pub enum DeveloperCommands {
 		#[arg(long, default_value = "../chain")]
 		chain_path: String,
 
-		/// Number of leaf proofs aggregated into a single proof
+		/// Number of leaf proofs aggregated into a single layer-0 proof
 		#[arg(long)]
 		num_leaf_proofs: usize,
+
+		/// Number of inner layer-0 proofs aggregated into a single layer-1 proof
+		#[arg(long)]
+		num_layer0_proofs: Option<usize>,
 
 		/// Skip copying to chain directory
 		#[arg(long)]
@@ -569,8 +573,17 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 			circuits_path,
 			chain_path,
 			num_leaf_proofs,
+			num_layer0_proofs,
 			skip_chain,
-		} => build_wormhole_circuits(&circuits_path, &chain_path, num_leaf_proofs, skip_chain).await,
+		} =>
+			build_wormhole_circuits(
+				&circuits_path,
+				&chain_path,
+				num_leaf_proofs,
+				num_layer0_proofs,
+				skip_chain,
+			)
+			.await,
 	}
 }
 
@@ -579,11 +592,16 @@ async fn build_wormhole_circuits(
 	circuits_path: &str,
 	chain_path: &str,
 	num_leaf_proofs: usize,
+	num_layer0_proofs: Option<usize>,
 	skip_chain: bool,
 ) -> crate::error::Result<()> {
 	use std::{path::Path, process::Command};
 
-	log_print!("Building ZK circuit binaries (num_leaf_proofs={})", num_leaf_proofs);
+	log_print!(
+		"Building ZK circuit binaries (num_leaf_proofs={}, num_layer0_proofs={})",
+		num_leaf_proofs,
+		num_layer0_proofs.unwrap_or(0)
+	);
 	log_print!("");
 
 	let circuits_dir = Path::new(circuits_path);
@@ -619,13 +637,16 @@ async fn build_wormhole_circuits(
 	// Step 2: Run the circuit builder to generate binaries
 	log_print!("Step 2/4: Generating circuit binaries (this may take a while)...");
 	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
-	let run_output = Command::new(&builder_path)
-		.args(["--num-leaf-proofs", &num_leaf_proofs.to_string()])
-		.current_dir(circuits_dir)
-		.output()
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to run circuit builder: {}", e))
-		})?;
+	let mut cmd = Command::new(&builder_path);
+	cmd.arg("--num-leaf-proofs").arg(num_leaf_proofs.to_string());
+
+	if let Some(num_layer0) = num_layer0_proofs {
+		cmd.arg("--num-layer0-proofs").arg(num_layer0.to_string());
+	}
+
+	let run_output = cmd.current_dir(circuits_dir).output().map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to run circuit builder: {}", e))
+	})?;
 
 	if !run_output.status.success() {
 		let stderr = String::from_utf8_lossy(&run_output.stderr);
@@ -641,17 +662,30 @@ async fn build_wormhole_circuits(
 	let source_bins = circuits_dir.join("generated-bins");
 	let cli_bins = Path::new("generated-bins");
 
-	let cli_bin_files = [
-		"common.bin",
-		"verifier.bin",
-		"prover.bin",
-		"dummy_proof.bin",
-		"aggregated_common.bin",
-		"aggregated_verifier.bin",
-		"config.json",
+	let possible_cli_bin_files = [
+		"common.bin",              // leaf circuit
+		"verifier.bin",            // leaf circuit
+		"prover.bin",              // leaf circuit
+		"dummy_proof.bin",         // leaf dummy proof
+		"aggregated_common.bin",   // layer-0 aggregated circuit
+		"aggregated_verifier.bin", // layer-0 aggregated circuit
+		"aggregated_prover.bin",   // layer-0 aggregated circuit
+		"config.json",             // config file with metadata about the circuit bin data
+		// Layer-0 binaries are always generated, but layer-1 binaries are only generated if
+		// num_layer0_proofs is set
+		"layer1_common.bin",   // layer-1 aggregated circuit
+		"layer1_verifier.bin", // layer-1 aggregated circuit
+		"layer1_prover.bin",   // layer-1 aggregated circuit
 	];
 
-	for file in &cli_bin_files {
+	let cli_bin_files = if num_layer0_proofs.is_some() {
+		&possible_cli_bin_files
+	} else {
+		// If num_layer0_proofs is not set, we only generate layer-0 binaries.
+		&possible_cli_bin_files[0..8]
+	};
+
+	for file in cli_bin_files {
 		let src = source_bins.join(file);
 		let dst = cli_bins.join(file);
 		std::fs::copy(&src, &dst).map_err(|e| {
