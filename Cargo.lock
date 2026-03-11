@@ -2037,6 +2037,7 @@ checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 dependencies = [
  "ahash",
  "allocator-api2",
+ "rayon",
  "serde",
 ]
 
@@ -3381,6 +3382,9 @@ name = "plonky2_maybe_rayon"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1e554181dc95243b8d9948ae7bae5759c7fb2502fed28f671f95ef38079406"
+dependencies = [
+ "rayon",
+]
 
 [[package]]
 name = "plonky2_util"
@@ -3606,6 +3610,7 @@ checksum = "593bccf15b8e2f9eb904ef4010f68b81ddcceb70aaf90116ce29ec09d7578dd4"
 dependencies = [
  "ahash",
  "anyhow",
+ "getrandom 0.2.17",
  "hashbrown 0.14.5",
  "itertools 0.11.0",
  "keccak-hash 0.8.0",
@@ -3622,9 +3627,11 @@ dependencies = [
  "qp-plonky2-verifier",
  "qp-poseidon-constants",
  "rand 0.8.5",
+ "rand_chacha 0.3.1",
  "serde",
  "static_assertions",
  "unroll",
+ "web-time",
 ]
 
 [[package]]
@@ -3804,6 +3811,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "qp-wormhole-circuit-builder"
+version = "1.0.7"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#dd187e0b3b5f0113814ffb1b3e4084b0df76175a"
+dependencies = [
+ "anyhow",
+ "clap",
+ "qp-plonky2",
+ "qp-wormhole-aggregator",
+ "qp-wormhole-circuit",
+ "qp-zk-circuits-common",
+]
+
+[[package]]
 name = "qp-wormhole-inputs"
 version = "1.0.7"
 source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#dd187e0b3b5f0113814ffb1b3e4084b0df76175a"
@@ -3871,6 +3891,7 @@ dependencies = [
  "qp-rusty-crystals-hdwallet",
  "qp-wormhole-aggregator",
  "qp-wormhole-circuit",
+ "qp-wormhole-circuit-builder",
  "qp-wormhole-inputs",
  "qp-wormhole-prover",
  "qp-wormhole-verifier",

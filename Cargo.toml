@@ -75,6 +75,7 @@ subxt-metadata = "0.44"
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
 qp-wormhole-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-circuit", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-circuit-builder" }
 qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-prover", default-features = false, features = ["std"] }
 qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-verifier", default-features = false, features = ["std"] }
 qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits", package = "qp-wormhole-aggregator", branch = "refactor/sep-prover-and-circuit-build", default-features = false, features = ["rayon", "std"] }
