@@ -121,13 +121,11 @@ async fn schedule_remark(
 
 	// When: after N blocks (u32)
 	let when_u32: u32 = after;
-	let maybe_periodic = None;
 	let priority: u8 = 0;
 
 	// Submit schedule extrinsic
 	let keypair = crate::wallet::load_keypair_from_wallet(from, None, None)?;
-	let schedule_tx =
-		api::tx().scheduler().schedule(when_u32, maybe_periodic, priority, runtime_call);
+	let schedule_tx = api::tx().scheduler().schedule(when_u32, priority, runtime_call);
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
 		&keypair,
@@ -166,7 +164,8 @@ pub async fn handle_scheduler_command(
 			Ok(())
 		},
 		SchedulerCommands::Agenda { range } => list_agenda_range(&quantus_client, &range).await,
-		SchedulerCommands::ScheduleRemark { after, from } =>
-			schedule_remark(&quantus_client, after, &from, execution_mode).await,
+		SchedulerCommands::ScheduleRemark { after, from } => {
+			schedule_remark(&quantus_client, after, &from, execution_mode).await
+		},
 	}
 }

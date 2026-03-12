@@ -782,26 +782,6 @@ pub mod api {
 			use super::{root_mod, runtime_types};
 			pub struct QPoWApi;
 			impl QPoWApi {
-				#[doc = " calculate hash of header with nonce using Bitcoin-style double Poseidon2"]
-				pub fn get_nonce_distance(
-					&self,
-					block_hash: types::get_nonce_distance::BlockHash,
-					nonce: types::get_nonce_distance::Nonce,
-				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
-					types::GetNonceDistance,
-					types::get_nonce_distance::output::Output,
-				> {
-					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
-						"QPoWApi",
-						"get_nonce_distance",
-						types::GetNonceDistance { block_hash, nonce },
-						[
-							129u8, 114u8, 220u8, 23u8, 229u8, 124u8, 105u8, 65u8, 77u8, 91u8, 9u8,
-							2u8, 2u8, 177u8, 124u8, 108u8, 143u8, 100u8, 174u8, 61u8, 29u8, 55u8,
-							166u8, 162u8, 16u8, 61u8, 75u8, 213u8, 182u8, 125u8, 7u8, 120u8,
-						],
-					)
-				}
 				#[doc = " Get the max possible reorg depth"]
 				pub fn get_max_reorg_depth(
 					&self,
@@ -856,24 +836,6 @@ pub mod api {
 							148u8, 6u8, 174u8, 121u8, 38u8, 103u8, 46u8, 5u8, 235u8, 20u8, 133u8,
 							207u8, 67u8, 211u8, 25u8, 112u8, 83u8, 196u8, 118u8, 66u8, 118u8,
 							179u8,
-						],
-					)
-				}
-				#[doc = " Get total work"]
-				pub fn get_total_work(
-					&self,
-				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
-					types::GetTotalWork,
-					types::get_total_work::output::Output,
-				> {
-					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
-						"QPoWApi",
-						"get_total_work",
-						types::GetTotalWork {},
-						[
-							1u8, 91u8, 59u8, 140u8, 203u8, 250u8, 8u8, 65u8, 208u8, 35u8, 187u8,
-							190u8, 255u8, 125u8, 190u8, 111u8, 216u8, 168u8, 83u8, 32u8, 37u8,
-							203u8, 102u8, 226u8, 88u8, 207u8, 253u8, 59u8, 86u8, 72u8, 30u8, 171u8,
 						],
 					)
 				}
@@ -986,33 +948,28 @@ pub mod api {
 						],
 					)
 				}
+				pub fn verify_and_get_achieved_difficulty(
+					&self,
+					block_hash: types::verify_and_get_achieved_difficulty::BlockHash,
+					nonce: types::verify_and_get_achieved_difficulty::Nonce,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::VerifyAndGetAchievedDifficulty,
+					types::verify_and_get_achieved_difficulty::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"QPoWApi",
+						"verify_and_get_achieved_difficulty",
+						types::VerifyAndGetAchievedDifficulty { block_hash, nonce },
+						[
+							200u8, 115u8, 180u8, 31u8, 14u8, 76u8, 235u8, 83u8, 133u8, 52u8, 192u8,
+							59u8, 52u8, 48u8, 224u8, 34u8, 33u8, 53u8, 218u8, 132u8, 191u8, 10u8,
+							17u8, 243u8, 227u8, 162u8, 171u8, 240u8, 49u8, 217u8, 172u8, 240u8,
+						],
+					)
+				}
 			}
 			pub mod types {
 				use super::runtime_types;
-				pub mod get_nonce_distance {
-					use super::runtime_types;
-					pub type BlockHash = [::core::primitive::u8; 32usize];
-					pub type Nonce = [::core::primitive::u8; 64usize];
-					pub mod output {
-						use super::runtime_types;
-						pub type Output = runtime_types::primitive_types::U512;
-					}
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct GetNonceDistance {
-					pub block_hash: get_nonce_distance::BlockHash,
-					pub nonce: get_nonce_distance::Nonce,
-				}
 				pub mod get_max_reorg_depth {
 					use super::runtime_types;
 					pub mod output {
@@ -1070,25 +1027,6 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				pub struct GetDifficulty {}
-				pub mod get_total_work {
-					use super::runtime_types;
-					pub mod output {
-						use super::runtime_types;
-						pub type Output = runtime_types::primitive_types::U512;
-					}
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct GetTotalWork {}
 				pub mod get_block_time_ema {
 					use super::runtime_types;
 					pub mod output {
@@ -1212,6 +1150,31 @@ pub mod api {
 				pub struct VerifyNonceLocalMining {
 					pub block_hash: verify_nonce_local_mining::BlockHash,
 					pub nonce: verify_nonce_local_mining::Nonce,
+				}
+				pub mod verify_and_get_achieved_difficulty {
+					use super::runtime_types;
+					pub type BlockHash = [::core::primitive::u8; 32usize];
+					pub type Nonce = [::core::primitive::u8; 64usize];
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							(::core::primitive::bool, runtime_types::primitive_types::U512);
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct VerifyAndGetAchievedDifficulty {
+					pub block_hash: verify_and_get_achieved_difficulty::BlockHash,
+					pub nonce: verify_and_get_achieved_difficulty::Nonce,
 				}
 			}
 		}
@@ -1469,9 +1432,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							198u8, 65u8, 204u8, 71u8, 28u8, 170u8, 188u8, 123u8, 4u8, 169u8, 112u8,
-							140u8, 13u8, 71u8, 97u8, 37u8, 125u8, 168u8, 73u8, 123u8, 116u8, 53u8,
-							236u8, 206u8, 173u8, 112u8, 141u8, 87u8, 177u8, 37u8, 238u8, 57u8,
+							59u8, 44u8, 99u8, 66u8, 11u8, 94u8, 211u8, 6u8, 243u8, 46u8, 231u8,
+							78u8, 147u8, 43u8, 186u8, 119u8, 84u8, 5u8, 35u8, 154u8, 58u8, 175u8,
+							180u8, 197u8, 176u8, 160u8, 53u8, 155u8, 145u8, 42u8, 23u8, 102u8,
 						],
 					)
 				}
@@ -1489,10 +1452,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							181u8, 192u8, 142u8, 93u8, 47u8, 223u8, 252u8, 28u8, 253u8, 247u8,
-							255u8, 49u8, 206u8, 94u8, 24u8, 227u8, 178u8, 147u8, 3u8, 138u8, 204u8,
-							67u8, 221u8, 34u8, 21u8, 249u8, 185u8, 109u8, 195u8, 213u8, 165u8,
-							162u8,
+							135u8, 58u8, 229u8, 112u8, 19u8, 128u8, 2u8, 114u8, 132u8, 7u8, 98u8,
+							170u8, 14u8, 148u8, 33u8, 57u8, 125u8, 107u8, 77u8, 66u8, 33u8, 10u8,
+							65u8, 28u8, 121u8, 233u8, 63u8, 109u8, 189u8, 9u8, 189u8, 122u8,
 						],
 					)
 				}
@@ -1995,9 +1957,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				241u8, 104u8, 181u8, 101u8, 78u8, 126u8, 146u8, 140u8, 82u8, 117u8, 79u8, 128u8,
-				3u8, 33u8, 86u8, 223u8, 167u8, 80u8, 94u8, 196u8, 191u8, 207u8, 240u8, 239u8,
-				186u8, 203u8, 0u8, 147u8, 140u8, 8u8, 140u8, 64u8,
+				235u8, 241u8, 231u8, 143u8, 238u8, 18u8, 134u8, 210u8, 142u8, 123u8, 23u8, 238u8,
+				7u8, 116u8, 199u8, 36u8, 101u8, 103u8, 107u8, 11u8, 141u8, 9u8, 176u8, 251u8,
+				185u8, 220u8, 173u8, 198u8, 201u8, 167u8, 78u8, 188u8,
 			]
 	}
 	pub mod system {
@@ -3096,10 +3058,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							129u8, 117u8, 78u8, 200u8, 45u8, 177u8, 108u8, 250u8, 68u8, 196u8,
-							35u8, 140u8, 114u8, 113u8, 44u8, 193u8, 216u8, 27u8, 164u8, 117u8,
-							173u8, 170u8, 119u8, 26u8, 55u8, 150u8, 155u8, 226u8, 61u8, 102u8,
-							162u8, 127u8,
+							16u8, 202u8, 95u8, 126u8, 59u8, 71u8, 99u8, 58u8, 52u8, 83u8, 147u8,
+							29u8, 27u8, 91u8, 11u8, 178u8, 100u8, 183u8, 107u8, 163u8, 243u8,
+							160u8, 155u8, 46u8, 55u8, 109u8, 210u8, 242u8, 84u8, 21u8, 0u8, 174u8,
 						],
 					)
 				}
@@ -5580,9 +5541,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							24u8, 141u8, 2u8, 72u8, 96u8, 108u8, 188u8, 185u8, 194u8, 189u8, 85u8,
-							38u8, 202u8, 47u8, 99u8, 163u8, 41u8, 150u8, 193u8, 31u8, 229u8, 218u8,
-							124u8, 107u8, 188u8, 18u8, 24u8, 48u8, 88u8, 224u8, 139u8, 146u8,
+							224u8, 201u8, 98u8, 222u8, 12u8, 81u8, 22u8, 130u8, 86u8, 67u8, 141u8,
+							83u8, 170u8, 107u8, 209u8, 158u8, 237u8, 186u8, 132u8, 61u8, 103u8,
+							153u8, 37u8, 72u8, 59u8, 69u8, 181u8, 245u8, 166u8, 244u8, 62u8, 119u8,
 						],
 					)
 				}
@@ -5605,9 +5566,9 @@ pub mod api {
 							weight,
 						},
 						[
-							46u8, 22u8, 24u8, 76u8, 164u8, 139u8, 82u8, 44u8, 160u8, 220u8, 119u8,
-							122u8, 176u8, 4u8, 184u8, 55u8, 219u8, 75u8, 226u8, 43u8, 51u8, 153u8,
-							189u8, 146u8, 245u8, 96u8, 161u8, 218u8, 243u8, 35u8, 70u8, 249u8,
+							171u8, 105u8, 36u8, 170u8, 167u8, 130u8, 207u8, 182u8, 35u8, 146u8,
+							100u8, 18u8, 244u8, 232u8, 92u8, 75u8, 128u8, 183u8, 56u8, 211u8, 8u8,
+							44u8, 56u8, 99u8, 239u8, 143u8, 82u8, 65u8, 6u8, 26u8, 231u8, 216u8,
 						],
 					)
 				}
@@ -5645,10 +5606,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							58u8, 78u8, 164u8, 136u8, 199u8, 77u8, 215u8, 140u8, 160u8, 177u8,
-							127u8, 208u8, 164u8, 155u8, 35u8, 130u8, 92u8, 143u8, 46u8, 82u8,
-							232u8, 4u8, 61u8, 213u8, 74u8, 103u8, 128u8, 81u8, 26u8, 137u8, 39u8,
-							71u8,
+							225u8, 229u8, 154u8, 137u8, 127u8, 113u8, 207u8, 149u8, 115u8, 222u8,
+							119u8, 97u8, 241u8, 115u8, 146u8, 82u8, 97u8, 105u8, 97u8, 45u8, 237u8,
+							82u8, 84u8, 145u8, 235u8, 153u8, 200u8, 108u8, 222u8, 27u8, 149u8,
+							202u8,
 						],
 					)
 				}
@@ -5853,10 +5814,6 @@ pub mod api {
 					use super::runtime_types;
 					pub type CurrentDifficulty = runtime_types::primitive_types::U512;
 				}
-				pub mod total_work {
-					use super::runtime_types;
-					pub type TotalWork = runtime_types::primitive_types::U512;
-				}
 				pub mod block_time_ema {
 					use super::runtime_types;
 					pub type BlockTimeEma = ::core::primitive::u64;
@@ -5922,26 +5879,6 @@ pub mod api {
 							130u8, 252u8, 118u8, 64u8, 64u8, 105u8, 70u8, 33u8, 78u8, 161u8, 9u8,
 							26u8, 68u8, 38u8, 223u8, 64u8, 19u8, 4u8, 249u8, 112u8, 193u8, 122u8,
 							16u8, 149u8, 46u8, 50u8, 227u8, 225u8, 5u8, 47u8, 227u8, 169u8,
-						],
-					)
-				}
-				pub fn total_work(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::total_work::TotalWork,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"QPoW",
-						"TotalWork",
-						(),
-						[
-							184u8, 29u8, 54u8, 146u8, 220u8, 155u8, 103u8, 67u8, 21u8, 188u8, 53u8,
-							160u8, 171u8, 107u8, 52u8, 211u8, 251u8, 52u8, 192u8, 227u8, 150u8,
-							156u8, 172u8, 1u8, 233u8, 37u8, 49u8, 13u8, 213u8, 104u8, 10u8, 134u8,
 						],
 					)
 				}
@@ -6753,23 +6690,14 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Anonymously schedule a task."]
 				pub struct Schedule {
 					pub when: schedule::When,
-					pub maybe_periodic: schedule::MaybePeriodic,
 					pub priority: schedule::Priority,
 					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<schedule::Call>,
 				}
 				pub mod schedule {
 					use super::runtime_types;
 					pub type When = ::core::primitive::u32;
-					pub type MaybePeriodic = ::core::option::Option<(
-						runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						::core::primitive::u32,
-					)>;
 					pub type Priority = ::core::primitive::u8;
 					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
 				}
@@ -6816,11 +6744,9 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Schedule a named task."]
 				pub struct ScheduleNamed {
 					pub id: schedule_named::Id,
 					pub when: schedule_named::When,
-					pub maybe_periodic: schedule_named::MaybePeriodic,
 					pub priority: schedule_named::Priority,
 					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<schedule_named::Call>,
 				}
@@ -6828,13 +6754,6 @@ pub mod api {
 					use super::runtime_types;
 					pub type Id = [::core::primitive::u8; 32usize];
 					pub type When = ::core::primitive::u32;
-					pub type MaybePeriodic = ::core::option::Option<(
-						runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						::core::primitive::u32,
-					)>;
 					pub type Priority = ::core::primitive::u8;
 					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
 				}
@@ -6876,10 +6795,8 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Anonymously schedule a task after a delay."]
 				pub struct ScheduleAfter {
 					pub after: schedule_after::After,
-					pub maybe_periodic: schedule_after::MaybePeriodic,
 					pub priority: schedule_after::Priority,
 					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<schedule_after::Call>,
 				}
@@ -6889,13 +6806,6 @@ pub mod api {
 						::core::primitive::u32,
 						::core::primitive::u64,
 					>;
-					pub type MaybePeriodic = ::core::option::Option<(
-						runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						::core::primitive::u32,
-					)>;
 					pub type Priority = ::core::primitive::u8;
 					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
 				}
@@ -6914,11 +6824,9 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Schedule a named task after a delay."]
 				pub struct ScheduleNamedAfter {
 					pub id: schedule_named_after::Id,
 					pub after: schedule_named_after::After,
-					pub maybe_periodic: schedule_named_after::MaybePeriodic,
 					pub priority: schedule_named_after::Priority,
 					pub call:
 						::subxt::ext::subxt_core::alloc::boxed::Box<schedule_named_after::Call>,
@@ -6930,13 +6838,6 @@ pub mod api {
 						::core::primitive::u32,
 						::core::primitive::u64,
 					>;
-					pub type MaybePeriodic = ::core::option::Option<(
-						runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						::core::primitive::u32,
-					)>;
 					pub type Priority = ::core::primitive::u8;
 					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
 				}
@@ -6960,10 +6861,9 @@ pub mod api {
 				#[doc = "succeeds."]
 				#[doc = ""]
 				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task. If a periodic task fails, it will be scheduled"]
-				#[doc = "normally while the task is retrying."]
+				#[doc = "agenda space, same as a regular task."]
 				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry for a periodic task are unnamed, non-periodic"]
+				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
@@ -7007,10 +6907,9 @@ pub mod api {
 				#[doc = "it succeeds."]
 				#[doc = ""]
 				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task. If a periodic task fails, it will be scheduled"]
-				#[doc = "normally while the task is retrying."]
+				#[doc = "agenda space, same as a regular task."]
 				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry for a periodic task are unnamed, non-periodic"]
+				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
@@ -7087,11 +6986,9 @@ pub mod api {
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Anonymously schedule a task."]
 				pub fn schedule(
 					&self,
 					when: types::schedule::When,
-					maybe_periodic: types::schedule::MaybePeriodic,
 					priority: types::schedule::Priority,
 					call: types::schedule::Call,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Schedule> {
@@ -7100,14 +6997,13 @@ pub mod api {
 						"schedule",
 						types::Schedule {
 							when,
-							maybe_periodic,
 							priority,
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							232u8, 174u8, 107u8, 181u8, 152u8, 133u8, 51u8, 35u8, 111u8, 19u8,
-							66u8, 80u8, 0u8, 148u8, 65u8, 239u8, 162u8, 250u8, 28u8, 124u8, 20u8,
-							250u8, 177u8, 112u8, 35u8, 19u8, 32u8, 9u8, 166u8, 48u8, 69u8, 206u8,
+							59u8, 142u8, 42u8, 82u8, 31u8, 67u8, 95u8, 118u8, 24u8, 55u8, 82u8,
+							141u8, 2u8, 133u8, 213u8, 81u8, 84u8, 109u8, 6u8, 239u8, 46u8, 233u8,
+							125u8, 136u8, 15u8, 160u8, 240u8, 29u8, 238u8, 12u8, 114u8, 8u8,
 						],
 					)
 				}
@@ -7128,12 +7024,10 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Schedule a named task."]
 				pub fn schedule_named(
 					&self,
 					id: types::schedule_named::Id,
 					when: types::schedule_named::When,
-					maybe_periodic: types::schedule_named::MaybePeriodic,
 					priority: types::schedule_named::Priority,
 					call: types::schedule_named::Call,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ScheduleNamed>
@@ -7144,14 +7038,13 @@ pub mod api {
 						types::ScheduleNamed {
 							id,
 							when,
-							maybe_periodic,
 							priority,
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							13u8, 254u8, 63u8, 126u8, 76u8, 11u8, 93u8, 141u8, 57u8, 125u8, 141u8,
-							225u8, 225u8, 5u8, 181u8, 28u8, 1u8, 94u8, 156u8, 234u8, 29u8, 214u8,
-							124u8, 169u8, 128u8, 135u8, 70u8, 217u8, 50u8, 249u8, 178u8, 84u8,
+							132u8, 98u8, 238u8, 26u8, 202u8, 171u8, 103u8, 75u8, 126u8, 49u8, 0u8,
+							201u8, 239u8, 60u8, 78u8, 218u8, 23u8, 147u8, 136u8, 131u8, 252u8,
+							205u8, 89u8, 30u8, 83u8, 236u8, 25u8, 10u8, 149u8, 147u8, 56u8, 207u8,
 						],
 					)
 				}
@@ -7171,11 +7064,9 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Anonymously schedule a task after a delay."]
 				pub fn schedule_after(
 					&self,
 					after: types::schedule_after::After,
-					maybe_periodic: types::schedule_after::MaybePeriodic,
 					priority: types::schedule_after::Priority,
 					call: types::schedule_after::Call,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ScheduleAfter>
@@ -7185,23 +7076,21 @@ pub mod api {
 						"schedule_after",
 						types::ScheduleAfter {
 							after,
-							maybe_periodic,
 							priority,
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							162u8, 125u8, 219u8, 73u8, 158u8, 117u8, 43u8, 87u8, 203u8, 66u8, 70u8,
-							2u8, 216u8, 81u8, 36u8, 114u8, 236u8, 161u8, 11u8, 154u8, 173u8, 97u8,
-							75u8, 215u8, 178u8, 154u8, 37u8, 132u8, 100u8, 230u8, 188u8, 208u8,
+							123u8, 115u8, 44u8, 60u8, 131u8, 182u8, 245u8, 36u8, 29u8, 238u8,
+							226u8, 239u8, 76u8, 4u8, 170u8, 52u8, 245u8, 83u8, 217u8, 193u8, 100u8,
+							58u8, 144u8, 126u8, 232u8, 17u8, 219u8, 120u8, 99u8, 154u8, 255u8,
+							116u8,
 						],
 					)
 				}
-				#[doc = "Schedule a named task after a delay."]
 				pub fn schedule_named_after(
 					&self,
 					id: types::schedule_named_after::Id,
 					after: types::schedule_named_after::After,
-					maybe_periodic: types::schedule_named_after::MaybePeriodic,
 					priority: types::schedule_named_after::Priority,
 					call: types::schedule_named_after::Call,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ScheduleNamedAfter>
@@ -7212,15 +7101,13 @@ pub mod api {
 						types::ScheduleNamedAfter {
 							id,
 							after,
-							maybe_periodic,
 							priority,
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							139u8, 221u8, 152u8, 183u8, 20u8, 207u8, 141u8, 46u8, 8u8, 172u8,
-							154u8, 85u8, 106u8, 139u8, 217u8, 12u8, 190u8, 12u8, 4u8, 225u8, 103u8,
-							127u8, 84u8, 158u8, 131u8, 218u8, 175u8, 114u8, 135u8, 111u8, 154u8,
-							173u8,
+							51u8, 123u8, 141u8, 168u8, 243u8, 27u8, 146u8, 86u8, 92u8, 47u8, 205u8,
+							24u8, 66u8, 124u8, 97u8, 95u8, 171u8, 35u8, 140u8, 188u8, 58u8, 138u8,
+							115u8, 200u8, 132u8, 253u8, 68u8, 16u8, 112u8, 132u8, 121u8, 68u8,
 						],
 					)
 				}
@@ -7229,10 +7116,9 @@ pub mod api {
 				#[doc = "succeeds."]
 				#[doc = ""]
 				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task. If a periodic task fails, it will be scheduled"]
-				#[doc = "normally while the task is retrying."]
+				#[doc = "agenda space, same as a regular task."]
 				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry for a periodic task are unnamed, non-periodic"]
+				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
@@ -7258,10 +7144,9 @@ pub mod api {
 				#[doc = "it succeeds."]
 				#[doc = ""]
 				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task. If a periodic task fails, it will be scheduled"]
-				#[doc = "normally while the task is retrying."]
+				#[doc = "agenda space, same as a regular task."]
 				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry for a periodic task are unnamed, non-periodic"]
+				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
@@ -7497,33 +7382,6 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The given task was unable to be renewed since the agenda is full at that block."]
-			pub struct PeriodicFailed {
-				pub task: periodic_failed::Task,
-				pub id: periodic_failed::Id,
-			}
-			pub mod periodic_failed {
-				use super::runtime_types;
-				pub type Task = (
-					runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-						::core::primitive::u32,
-						::core::primitive::u64,
-					>,
-					::core::primitive::u32,
-				);
-				pub type Id = ::core::option::Option<[::core::primitive::u8; 32usize]>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for PeriodicFailed {
-				const PALLET: &'static str = "Scheduler";
-				const EVENT: &'static str = "PeriodicFailed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			#[doc = "The given task was unable to be retried since the agenda is full at that block or there"]
 			#[doc = "was not enough weight to reschedule it."]
 			pub struct RetryFailed {
@@ -7721,9 +7579,10 @@ pub mod api {
 						"Agenda",
 						(),
 						[
-							167u8, 175u8, 28u8, 224u8, 44u8, 149u8, 114u8, 12u8, 119u8, 107u8,
-							50u8, 64u8, 173u8, 39u8, 48u8, 85u8, 151u8, 68u8, 15u8, 145u8, 182u8,
-							105u8, 30u8, 18u8, 132u8, 11u8, 249u8, 54u8, 47u8, 73u8, 51u8, 49u8,
+							30u8, 205u8, 116u8, 231u8, 62u8, 200u8, 225u8, 69u8, 50u8, 106u8,
+							175u8, 47u8, 182u8, 175u8, 231u8, 114u8, 176u8, 58u8, 24u8, 230u8,
+							81u8, 228u8, 217u8, 72u8, 171u8, 222u8, 251u8, 218u8, 73u8, 28u8,
+							239u8, 137u8,
 						],
 					)
 				}
@@ -7745,9 +7604,10 @@ pub mod api {
 						"Agenda",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							167u8, 175u8, 28u8, 224u8, 44u8, 149u8, 114u8, 12u8, 119u8, 107u8,
-							50u8, 64u8, 173u8, 39u8, 48u8, 85u8, 151u8, 68u8, 15u8, 145u8, 182u8,
-							105u8, 30u8, 18u8, 132u8, 11u8, 249u8, 54u8, 47u8, 73u8, 51u8, 49u8,
+							30u8, 205u8, 116u8, 231u8, 62u8, 200u8, 225u8, 69u8, 50u8, 106u8,
+							175u8, 47u8, 182u8, 175u8, 231u8, 114u8, 176u8, 58u8, 24u8, 230u8,
+							81u8, 228u8, 217u8, 72u8, 171u8, 222u8, 251u8, 218u8, 73u8, 28u8,
+							239u8, 137u8,
 						],
 					)
 				}
@@ -7799,9 +7659,6 @@ pub mod api {
 					)
 				}
 				#[doc = " Lookup from a name to the block number and index of the task."]
-				#[doc = ""]
-				#[doc = " For v3 -> v4 the previously unbounded identities are Blake2-256 hashed to form the v4"]
-				#[doc = " identities."]
 				pub fn lookup_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -7823,9 +7680,6 @@ pub mod api {
 					)
 				}
 				#[doc = " Lookup from a name to the block number and index of the task."]
-				#[doc = ""]
-				#[doc = " For v3 -> v4 the previously unbounded identities are Blake2-256 hashed to form the v4"]
-				#[doc = " identities."]
 				pub fn lookup(
 					&self,
 					_0: types::lookup::Param0,
@@ -8248,9 +8102,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							218u8, 227u8, 88u8, 252u8, 144u8, 164u8, 107u8, 191u8, 4u8, 6u8, 242u8,
-							220u8, 160u8, 117u8, 131u8, 23u8, 30u8, 44u8, 210u8, 225u8, 129u8,
-							119u8, 42u8, 236u8, 42u8, 77u8, 133u8, 77u8, 167u8, 238u8, 189u8, 18u8,
+							175u8, 251u8, 47u8, 139u8, 42u8, 213u8, 29u8, 121u8, 126u8, 160u8,
+							31u8, 182u8, 18u8, 35u8, 57u8, 165u8, 44u8, 5u8, 237u8, 46u8, 120u8,
+							177u8, 32u8, 135u8, 177u8, 20u8, 87u8, 229u8, 64u8, 13u8, 127u8, 38u8,
 						],
 					)
 				}
@@ -8280,10 +8134,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							61u8, 204u8, 36u8, 196u8, 16u8, 224u8, 252u8, 119u8, 160u8, 206u8,
-							178u8, 6u8, 162u8, 252u8, 50u8, 119u8, 243u8, 74u8, 88u8, 93u8, 168u8,
-							135u8, 247u8, 31u8, 113u8, 228u8, 106u8, 61u8, 76u8, 137u8, 49u8,
-							152u8,
+							163u8, 103u8, 246u8, 62u8, 75u8, 102u8, 59u8, 101u8, 118u8, 106u8,
+							209u8, 68u8, 186u8, 60u8, 209u8, 233u8, 79u8, 179u8, 41u8, 65u8, 154u8,
+							146u8, 145u8, 126u8, 183u8, 212u8, 239u8, 26u8, 76u8, 22u8, 239u8,
+							228u8,
 						],
 					)
 				}
@@ -8309,9 +8163,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							95u8, 55u8, 212u8, 217u8, 21u8, 7u8, 172u8, 181u8, 131u8, 146u8, 194u8,
-							179u8, 219u8, 165u8, 223u8, 70u8, 125u8, 117u8, 103u8, 207u8, 97u8,
-							4u8, 2u8, 153u8, 7u8, 107u8, 218u8, 218u8, 238u8, 159u8, 132u8, 169u8,
+							150u8, 227u8, 254u8, 10u8, 63u8, 29u8, 209u8, 16u8, 78u8, 200u8, 2u8,
+							1u8, 45u8, 134u8, 126u8, 227u8, 213u8, 206u8, 28u8, 11u8, 248u8, 34u8,
+							208u8, 245u8, 115u8, 226u8, 51u8, 80u8, 157u8, 19u8, 214u8, 7u8,
 						],
 					)
 				}
@@ -8334,9 +8188,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							45u8, 253u8, 46u8, 68u8, 166u8, 17u8, 170u8, 35u8, 107u8, 183u8, 69u8,
-							167u8, 62u8, 147u8, 100u8, 67u8, 144u8, 182u8, 141u8, 227u8, 20u8,
-							175u8, 1u8, 229u8, 103u8, 16u8, 162u8, 14u8, 144u8, 57u8, 62u8, 154u8,
+							26u8, 167u8, 149u8, 52u8, 49u8, 181u8, 232u8, 189u8, 214u8, 103u8,
+							142u8, 80u8, 167u8, 149u8, 40u8, 66u8, 198u8, 220u8, 22u8, 169u8,
+							249u8, 194u8, 40u8, 241u8, 212u8, 216u8, 96u8, 42u8, 107u8, 229u8,
+							250u8, 169u8,
 						],
 					)
 				}
@@ -8362,9 +8217,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							143u8, 1u8, 248u8, 160u8, 18u8, 153u8, 38u8, 72u8, 212u8, 148u8, 146u8,
-							7u8, 79u8, 129u8, 146u8, 207u8, 173u8, 174u8, 48u8, 237u8, 195u8, 6u8,
-							40u8, 26u8, 146u8, 94u8, 85u8, 89u8, 187u8, 161u8, 10u8, 186u8,
+							214u8, 226u8, 85u8, 46u8, 75u8, 28u8, 254u8, 199u8, 162u8, 194u8,
+							192u8, 69u8, 103u8, 7u8, 126u8, 201u8, 242u8, 24u8, 85u8, 53u8, 69u8,
+							91u8, 182u8, 111u8, 205u8, 250u8, 109u8, 233u8, 52u8, 9u8, 171u8, 11u8,
 						],
 					)
 				}
@@ -8387,9 +8242,9 @@ pub mod api {
 							weight,
 						},
 						[
-							45u8, 178u8, 212u8, 106u8, 190u8, 63u8, 70u8, 5u8, 15u8, 114u8, 128u8,
-							212u8, 20u8, 232u8, 8u8, 28u8, 100u8, 12u8, 94u8, 250u8, 250u8, 221u8,
-							169u8, 206u8, 52u8, 75u8, 152u8, 194u8, 133u8, 223u8, 85u8, 213u8,
+							164u8, 25u8, 18u8, 51u8, 125u8, 4u8, 172u8, 80u8, 236u8, 99u8, 192u8,
+							159u8, 103u8, 231u8, 83u8, 188u8, 32u8, 54u8, 11u8, 101u8, 127u8, 14u8,
+							78u8, 134u8, 146u8, 112u8, 165u8, 108u8, 89u8, 10u8, 184u8, 131u8,
 						],
 					)
 				}
@@ -8429,9 +8284,10 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							182u8, 227u8, 213u8, 214u8, 220u8, 74u8, 1u8, 211u8, 42u8, 249u8,
-							237u8, 97u8, 126u8, 112u8, 93u8, 63u8, 5u8, 120u8, 216u8, 157u8, 132u8,
-							123u8, 231u8, 38u8, 7u8, 139u8, 15u8, 126u8, 104u8, 63u8, 54u8, 76u8,
+							92u8, 81u8, 197u8, 222u8, 38u8, 170u8, 79u8, 51u8, 116u8, 62u8, 50u8,
+							58u8, 150u8, 250u8, 110u8, 71u8, 27u8, 159u8, 43u8, 203u8, 156u8,
+							187u8, 239u8, 196u8, 87u8, 161u8, 156u8, 23u8, 146u8, 234u8, 101u8,
+							3u8,
 						],
 					)
 				}
@@ -8454,9 +8310,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							209u8, 114u8, 253u8, 16u8, 26u8, 99u8, 196u8, 135u8, 161u8, 52u8, 48u8,
-							224u8, 235u8, 129u8, 247u8, 215u8, 88u8, 253u8, 178u8, 0u8, 82u8,
-							173u8, 148u8, 199u8, 98u8, 250u8, 50u8, 6u8, 106u8, 190u8, 52u8, 214u8,
+							130u8, 99u8, 92u8, 78u8, 42u8, 115u8, 255u8, 247u8, 224u8, 97u8, 137u8,
+							129u8, 227u8, 245u8, 204u8, 255u8, 128u8, 231u8, 43u8, 191u8, 72u8,
+							241u8, 154u8, 16u8, 23u8, 72u8, 130u8, 40u8, 219u8, 191u8, 118u8, 34u8,
 						],
 					)
 				}
@@ -10123,6 +9979,8 @@ pub mod api {
 				#[doc = "account by transferring the entire balance to themselves."]
 				#[doc = ""]
 				#[doc = "This is an emergency function for when the high security account may be compromised."]
+				#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
+				#[doc = "the remaining free balance to the guardian."]
 				pub struct RecoverFunds {
 					pub account: recover_funds::Account,
 				}
@@ -10297,6 +10155,8 @@ pub mod api {
 				#[doc = "account by transferring the entire balance to themselves."]
 				#[doc = ""]
 				#[doc = "This is an emergency function for when the high security account may be compromised."]
+				#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
+				#[doc = "the remaining free balance to the guardian."]
 				pub fn recover_funds(
 					&self,
 					account: types::recover_funds::Account,
@@ -10479,22 +10339,9 @@ pub mod api {
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::H256;
 				}
-				pub mod account_pending_index {
-					use super::runtime_types;
-					pub type AccountPendingIndex = ::core::primitive::u32;
-					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
 				pub mod pending_transfers_by_sender {
 					use super::runtime_types;
 					pub type PendingTransfersBySender =
-						runtime_types::bounded_collections::bounded_vec::BoundedVec<
-							::subxt::ext::subxt_core::utils::H256,
-						>;
-					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
-				pub mod pending_transfers_by_recipient {
-					use super::runtime_types;
-					pub type PendingTransfersByRecipient =
 						runtime_types::bounded_collections::bounded_vec::BoundedVec<
 							::subxt::ext::subxt_core::utils::H256,
 						>;
@@ -10611,57 +10458,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Indexes pending transaction IDs per account for efficient lookup and cancellation."]
-				#[doc = " Also enforces the maximum pending transactions limit per account."]
-				pub fn account_pending_index_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::account_pending_index::AccountPendingIndex,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ReversibleTransfers",
-						"AccountPendingIndex",
-						(),
-						[
-							142u8, 255u8, 15u8, 41u8, 210u8, 84u8, 93u8, 230u8, 194u8, 31u8, 164u8,
-							88u8, 155u8, 106u8, 130u8, 110u8, 199u8, 137u8, 153u8, 99u8, 154u8,
-							210u8, 108u8, 136u8, 70u8, 141u8, 242u8, 255u8, 246u8, 19u8, 247u8,
-							136u8,
-						],
-					)
-				}
-				#[doc = " Indexes pending transaction IDs per account for efficient lookup and cancellation."]
-				#[doc = " Also enforces the maximum pending transactions limit per account."]
-				pub fn account_pending_index(
-					&self,
-					_0: types::account_pending_index::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::account_pending_index::Param0,
-					>,
-					types::account_pending_index::AccountPendingIndex,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ReversibleTransfers",
-						"AccountPendingIndex",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							142u8, 255u8, 15u8, 41u8, 210u8, 84u8, 93u8, 230u8, 194u8, 31u8, 164u8,
-							88u8, 155u8, 106u8, 130u8, 110u8, 199u8, 137u8, 153u8, 99u8, 154u8,
-							210u8, 108u8, 136u8, 70u8, 141u8, 242u8, 255u8, 246u8, 19u8, 247u8,
-							136u8,
-						],
-					)
-				}
 				#[doc = " Maps sender accounts to their list of pending transaction IDs."]
-				#[doc = " This allows users to query all their outgoing pending transfers."]
 				pub fn pending_transfers_by_sender_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -10683,7 +10480,6 @@ pub mod api {
 					)
 				}
 				#[doc = " Maps sender accounts to their list of pending transaction IDs."]
-				#[doc = " This allows users to query all their outgoing pending transfers."]
 				pub fn pending_transfers_by_sender(
 					&self,
 					_0: types::pending_transfers_by_sender::Param0,
@@ -10704,55 +10500,6 @@ pub mod api {
 							183u8, 43u8, 139u8, 203u8, 182u8, 219u8, 60u8, 129u8, 67u8, 30u8, 65u8,
 							47u8, 105u8, 196u8, 228u8, 154u8, 26u8, 74u8, 84u8, 72u8, 154u8, 220u8,
 							216u8, 134u8, 207u8, 240u8, 7u8, 190u8, 236u8, 242u8, 184u8, 224u8,
-						],
-					)
-				}
-				#[doc = " Maps recipient accounts to their list of pending incoming transaction IDs."]
-				#[doc = " This allows users to query all their incoming pending transfers."]
-				pub fn pending_transfers_by_recipient_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::pending_transfers_by_recipient::PendingTransfersByRecipient,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ReversibleTransfers",
-						"PendingTransfersByRecipient",
-						(),
-						[
-							63u8, 141u8, 24u8, 239u8, 201u8, 143u8, 36u8, 152u8, 35u8, 110u8,
-							112u8, 157u8, 29u8, 61u8, 221u8, 79u8, 209u8, 192u8, 183u8, 29u8,
-							145u8, 166u8, 238u8, 156u8, 131u8, 203u8, 124u8, 233u8, 210u8, 201u8,
-							91u8, 212u8,
-						],
-					)
-				}
-				#[doc = " Maps recipient accounts to their list of pending incoming transaction IDs."]
-				#[doc = " This allows users to query all their incoming pending transfers."]
-				pub fn pending_transfers_by_recipient(
-					&self,
-					_0: types::pending_transfers_by_recipient::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::pending_transfers_by_recipient::Param0,
-					>,
-					types::pending_transfers_by_recipient::PendingTransfersByRecipient,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ReversibleTransfers",
-						"PendingTransfersByRecipient",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							63u8, 141u8, 24u8, 239u8, 201u8, 143u8, 36u8, 152u8, 35u8, 110u8,
-							112u8, 157u8, 29u8, 61u8, 221u8, 79u8, 209u8, 192u8, 183u8, 29u8,
-							145u8, 166u8, 238u8, 156u8, 131u8, 203u8, 124u8, 233u8, 210u8, 201u8,
-							91u8, 212u8,
 						],
 					)
 				}
@@ -10834,23 +10581,6 @@ pub mod api {
 			use super::runtime_types;
 			pub struct ConstantsApi;
 			impl ConstantsApi {
-				#[doc = " Maximum pending reversible transactions allowed per account. Used for BoundedVec."]
-				pub fn max_pending_per_account(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"ReversibleTransfers",
-						"MaxPendingPerAccount",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
 				#[doc = " Maximum number of accounts an interceptor can intercept for. Used for BoundedVec."]
 				pub fn max_interceptor_accounts(
 					&self,
@@ -10860,6 +10590,23 @@ pub mod api {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"ReversibleTransfers",
 						"MaxInterceptorAccounts",
+						[
+							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
+							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
+							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
+							145u8,
+						],
+					)
+				}
+				#[doc = " Maximum pending reversible transactions allowed per account."]
+				pub fn max_pending_per_account(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					::core::primitive::u32,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"ReversibleTransfers",
+						"MaxPendingPerAccount",
 						[
 							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
 							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
@@ -14555,10 +14302,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							74u8, 28u8, 170u8, 7u8, 84u8, 125u8, 208u8, 229u8, 206u8, 35u8, 213u8,
-							58u8, 187u8, 211u8, 153u8, 234u8, 193u8, 109u8, 97u8, 114u8, 59u8,
-							238u8, 20u8, 171u8, 27u8, 139u8, 40u8, 12u8, 219u8, 199u8, 220u8,
-							245u8,
+							138u8, 215u8, 99u8, 222u8, 139u8, 128u8, 44u8, 8u8, 70u8, 23u8, 174u8,
+							102u8, 142u8, 62u8, 176u8, 98u8, 216u8, 41u8, 138u8, 101u8, 201u8,
+							105u8, 99u8, 164u8, 144u8, 176u8, 94u8, 228u8, 191u8, 175u8, 145u8,
+							30u8,
 						],
 					)
 				}
@@ -19522,10 +19269,8 @@ pub mod api {
 				#[doc = "- A deposit (refundable - returned immediately on execution/cancellation)"]
 				#[doc = "- A fee (non-refundable, burned immediately)"]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL proposer's expired"]
-				#[doc = "proposals are automatically removed. This is the primary cleanup mechanism."]
-				#[doc = ""]
-				#[doc = "**For threshold=1:** If the multisig threshold is 1, the proposal executes immediately."]
+				#[doc = "**For threshold=1:** The proposal is created with `Approved` status immediately"]
+				#[doc = "and can be executed via `execute()` without additional approvals."]
 				#[doc = ""]
 				#[doc = "**Weight:** Charged upfront for worst-case (high-security path with decode)."]
 				#[doc = "Refunded to actual cost on success based on whether HS path was taken."]
@@ -19622,11 +19367,14 @@ pub mod api {
 				#[doc = "Remove expired proposals and return deposits to proposers"]
 				#[doc = ""]
 				#[doc = "Can only be called by signers of the multisig."]
-				#[doc = "Only removes Active proposals that have expired (past expiry block)."]
+				#[doc = "Removes Active or Approved proposals that have expired (past expiry block)."]
 				#[doc = "Executed and Cancelled proposals are automatically cleaned up immediately."]
 				#[doc = ""]
+				#[doc = "Approved+expired proposals can become stuck if proposer is unavailable (e.g. lost"]
+				#[doc = "keys, compromise). Allowing any signer to remove them prevents permanent deposit"]
+				#[doc = "lockup and enables multisig dissolution."]
+				#[doc = ""]
 				#[doc = "The deposit is always returned to the original proposer, not the caller."]
-				#[doc = "This allows any signer to help clean up storage even if proposer is inactive."]
 				pub struct RemoveExpired {
 					pub multisig_address: remove_expired::MultisigAddress,
 					pub proposal_id: remove_expired::ProposalId,
@@ -19655,10 +19403,10 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "This is a batch operation that removes all expired proposals where:"]
 				#[doc = "- Caller is the proposer"]
-				#[doc = "- Proposal is Active and past expiry block"]
+				#[doc = "- Proposal is Active or Approved and past expiry block"]
 				#[doc = ""]
 				#[doc = "Note: Executed and Cancelled proposals are automatically cleaned up immediately,"]
-				#[doc = "so only Active+Expired proposals need manual cleanup."]
+				#[doc = "so only Active+Expired and Approved+Expired proposals need manual cleanup."]
 				#[doc = ""]
 				#[doc = "Returns all proposal deposits to the proposer in a single transaction."]
 				pub struct ClaimDeposits {
@@ -19792,10 +19540,8 @@ pub mod api {
 				#[doc = "- A deposit (refundable - returned immediately on execution/cancellation)"]
 				#[doc = "- A fee (non-refundable, burned immediately)"]
 				#[doc = ""]
-				#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL proposer's expired"]
-				#[doc = "proposals are automatically removed. This is the primary cleanup mechanism."]
-				#[doc = ""]
-				#[doc = "**For threshold=1:** If the multisig threshold is 1, the proposal executes immediately."]
+				#[doc = "**For threshold=1:** The proposal is created with `Approved` status immediately"]
+				#[doc = "and can be executed via `execute()` without additional approvals."]
 				#[doc = ""]
 				#[doc = "**Weight:** Charged upfront for worst-case (high-security path with decode)."]
 				#[doc = "Refunded to actual cost on success based on whether HS path was taken."]
@@ -19867,11 +19613,14 @@ pub mod api {
 				#[doc = "Remove expired proposals and return deposits to proposers"]
 				#[doc = ""]
 				#[doc = "Can only be called by signers of the multisig."]
-				#[doc = "Only removes Active proposals that have expired (past expiry block)."]
+				#[doc = "Removes Active or Approved proposals that have expired (past expiry block)."]
 				#[doc = "Executed and Cancelled proposals are automatically cleaned up immediately."]
 				#[doc = ""]
+				#[doc = "Approved+expired proposals can become stuck if proposer is unavailable (e.g. lost"]
+				#[doc = "keys, compromise). Allowing any signer to remove them prevents permanent deposit"]
+				#[doc = "lockup and enables multisig dissolution."]
+				#[doc = ""]
 				#[doc = "The deposit is always returned to the original proposer, not the caller."]
-				#[doc = "This allows any signer to help clean up storage even if proposer is inactive."]
 				pub fn remove_expired(
 					&self,
 					multisig_address: types::remove_expired::MultisigAddress,
@@ -19893,10 +19642,10 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "This is a batch operation that removes all expired proposals where:"]
 				#[doc = "- Caller is the proposer"]
-				#[doc = "- Proposal is Active and past expiry block"]
+				#[doc = "- Proposal is Active or Approved and past expiry block"]
 				#[doc = ""]
 				#[doc = "Note: Executed and Cancelled proposals are automatically cleaned up immediately,"]
-				#[doc = "so only Active+Expired proposals need manual cleanup."]
+				#[doc = "so only Active+Expired and Approved+Expired proposals need manual cleanup."]
 				#[doc = ""]
 				#[doc = "Returns all proposal deposits to the proposer in a single transaction."]
 				pub fn claim_deposits(
@@ -24068,10 +23817,8 @@ pub mod api {
 					#[doc = "- A deposit (refundable - returned immediately on execution/cancellation)"]
 					#[doc = "- A fee (non-refundable, burned immediately)"]
 					#[doc = ""]
-					#[doc = "**Auto-cleanup:** Before creating a new proposal, ALL proposer's expired"]
-					#[doc = "proposals are automatically removed. This is the primary cleanup mechanism."]
-					#[doc = ""]
-					#[doc = "**For threshold=1:** If the multisig threshold is 1, the proposal executes immediately."]
+					#[doc = "**For threshold=1:** The proposal is created with `Approved` status immediately"]
+					#[doc = "and can be executed via `execute()` without additional approvals."]
 					#[doc = ""]
 					#[doc = "**Weight:** Charged upfront for worst-case (high-security path with decode)."]
 					#[doc = "Refunded to actual cost on success based on whether HS path was taken."]
@@ -24109,11 +23856,14 @@ pub mod api {
 					#[doc = "Remove expired proposals and return deposits to proposers"]
 					#[doc = ""]
 					#[doc = "Can only be called by signers of the multisig."]
-					#[doc = "Only removes Active proposals that have expired (past expiry block)."]
+					#[doc = "Removes Active or Approved proposals that have expired (past expiry block)."]
 					#[doc = "Executed and Cancelled proposals are automatically cleaned up immediately."]
 					#[doc = ""]
+					#[doc = "Approved+expired proposals can become stuck if proposer is unavailable (e.g. lost"]
+					#[doc = "keys, compromise). Allowing any signer to remove them prevents permanent deposit"]
+					#[doc = "lockup and enables multisig dissolution."]
+					#[doc = ""]
 					#[doc = "The deposit is always returned to the original proposer, not the caller."]
-					#[doc = "This allows any signer to help clean up storage even if proposer is inactive."]
 					remove_expired {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposal_id: ::core::primitive::u32,
@@ -24123,10 +23873,10 @@ pub mod api {
 					#[doc = ""]
 					#[doc = "This is a batch operation that removes all expired proposals where:"]
 					#[doc = "- Caller is the proposer"]
-					#[doc = "- Proposal is Active and past expiry block"]
+					#[doc = "- Proposal is Active or Approved and past expiry block"]
 					#[doc = ""]
 					#[doc = "Note: Executed and Cancelled proposals are automatically cleaned up immediately,"]
-					#[doc = "so only Active+Expired proposals need manual cleanup."]
+					#[doc = "so only Active+Expired and Approved+Expired proposals need manual cleanup."]
 					#[doc = ""]
 					#[doc = "Returns all proposal deposits to the proposer in a single transaction."]
 					claim_deposits {
@@ -25920,6 +25670,8 @@ pub mod api {
 					#[doc = "account by transferring the entire balance to themselves."]
 					#[doc = ""]
 					#[doc = "This is an emergency function for when the high security account may be compromised."]
+					#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
+					#[doc = "the remaining free balance to the guardian."]
 					recover_funds { account: ::subxt::ext::subxt_core::utils::AccountId32 },
 				}
 				#[derive(
@@ -26108,16 +25860,8 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
-					#[doc = "Anonymously schedule a task."]
 					schedule {
 						when: ::core::primitive::u32,
-						maybe_periodic: ::core::option::Option<(
-							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-								::core::primitive::u32,
-								::core::primitive::u64,
-							>,
-							::core::primitive::u32,
-						)>,
 						priority: ::core::primitive::u8,
 						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
 							runtime_types::quantus_runtime::RuntimeCall,
@@ -26133,17 +25877,9 @@ pub mod api {
 						index: ::core::primitive::u32,
 					},
 					#[codec(index = 2)]
-					#[doc = "Schedule a named task."]
 					schedule_named {
 						id: [::core::primitive::u8; 32usize],
 						when: ::core::primitive::u32,
-						maybe_periodic: ::core::option::Option<(
-							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-								::core::primitive::u32,
-								::core::primitive::u64,
-							>,
-							::core::primitive::u32,
-						)>,
 						priority: ::core::primitive::u8,
 						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
 							runtime_types::quantus_runtime::RuntimeCall,
@@ -26153,39 +25889,23 @@ pub mod api {
 					#[doc = "Cancel a named scheduled task."]
 					cancel_named { id: [::core::primitive::u8; 32usize] },
 					#[codec(index = 4)]
-					#[doc = "Anonymously schedule a task after a delay."]
 					schedule_after {
 						after: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
 						>,
-						maybe_periodic: ::core::option::Option<(
-							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-								::core::primitive::u32,
-								::core::primitive::u64,
-							>,
-							::core::primitive::u32,
-						)>,
 						priority: ::core::primitive::u8,
 						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
 							runtime_types::quantus_runtime::RuntimeCall,
 						>,
 					},
 					#[codec(index = 5)]
-					#[doc = "Schedule a named task after a delay."]
 					schedule_named_after {
 						id: [::core::primitive::u8; 32usize],
 						after: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
 						>,
-						maybe_periodic: ::core::option::Option<(
-							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-								::core::primitive::u32,
-								::core::primitive::u64,
-							>,
-							::core::primitive::u32,
-						)>,
 						priority: ::core::primitive::u8,
 						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
 							runtime_types::quantus_runtime::RuntimeCall,
@@ -26197,10 +25917,9 @@ pub mod api {
 					#[doc = "succeeds."]
 					#[doc = ""]
 					#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-					#[doc = "agenda space, same as a regular task. If a periodic task fails, it will be scheduled"]
-					#[doc = "normally while the task is retrying."]
+					#[doc = "agenda space, same as a regular task."]
 					#[doc = ""]
-					#[doc = "Tasks scheduled as a result of a retry for a periodic task are unnamed, non-periodic"]
+					#[doc = "Tasks scheduled as a result of a retry are unnamed"]
 					#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 					#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 					#[doc = "original `total_retries`."]
@@ -26224,10 +25943,9 @@ pub mod api {
 					#[doc = "it succeeds."]
 					#[doc = ""]
 					#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-					#[doc = "agenda space, same as a regular task. If a periodic task fails, it will be scheduled"]
-					#[doc = "normally while the task is retrying."]
+					#[doc = "agenda space, same as a regular task."]
 					#[doc = ""]
-					#[doc = "Tasks scheduled as a result of a retry for a periodic task are unnamed, non-periodic"]
+					#[doc = "Tasks scheduled as a result of a retry are unnamed"]
 					#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 					#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 					#[doc = "original `total_retries`."]
@@ -26373,18 +26091,6 @@ pub mod api {
 						id: ::core::option::Option<[::core::primitive::u8; 32usize]>,
 					},
 					#[codec(index = 6)]
-					#[doc = "The given task was unable to be renewed since the agenda is full at that block."]
-					PeriodicFailed {
-						task: (
-							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-								::core::primitive::u32,
-								::core::primitive::u64,
-							>,
-							::core::primitive::u32,
-						),
-						id: ::core::option::Option<[::core::primitive::u8; 32usize]>,
-					},
-					#[codec(index = 7)]
 					#[doc = "The given task was unable to be retried since the agenda is full at that block or there"]
 					#[doc = "was not enough weight to reschedule it."]
 					RetryFailed {
@@ -26397,7 +26103,7 @@ pub mod api {
 						),
 						id: ::core::option::Option<[::core::primitive::u8; 32usize]>,
 					},
-					#[codec(index = 8)]
+					#[codec(index = 7)]
 					#[doc = "The given task can never be executed since it is overweight."]
 					PermanentlyOverweight {
 						task: (
@@ -26434,13 +26140,9 @@ pub mod api {
 				pub maybe_id: ::core::option::Option<_0>,
 				pub priority: ::core::primitive::u8,
 				pub call: _1,
-				pub maybe_periodic: ::core::option::Option<(
-					runtime_types::qp_scheduler::BlockNumberOrTimestamp<_2, _5>,
-					_2,
-				)>,
 				pub origin: _3,
 				#[codec(skip)]
-				pub __ignore: ::core::marker::PhantomData<_4>,
+				pub __ignore: ::core::marker::PhantomData<(_4, _5, _2)>,
 			}
 		}
 		pub mod pallet_sudo {
@@ -27045,39 +26747,30 @@ pub mod api {
 				#[doc = "The `Error` enum of this pallet."]
 				pub enum Error {
 					#[codec(index = 0)]
-					InvalidProof,
-					#[codec(index = 1)]
-					ProofDeserializationFailed,
-					#[codec(index = 2)]
-					VerificationFailed,
-					#[codec(index = 3)]
 					InvalidPublicInputs,
-					#[codec(index = 4)]
+					#[codec(index = 1)]
 					NullifierAlreadyUsed,
-					#[codec(index = 5)]
+					#[codec(index = 2)]
 					VerifierNotAvailable,
-					#[codec(index = 6)]
-					InvalidStorageRoot,
-					#[codec(index = 7)]
-					StorageRootMismatch,
-					#[codec(index = 8)]
+					#[codec(index = 3)]
 					BlockNotFound,
-					#[codec(index = 9)]
-					InvalidBlockNumber,
-					#[codec(index = 10)]
+					#[codec(index = 4)]
 					AggregatedVerifierNotAvailable,
-					#[codec(index = 11)]
+					#[codec(index = 5)]
 					AggregatedProofDeserializationFailed,
-					#[codec(index = 12)]
+					#[codec(index = 6)]
 					AggregatedVerificationFailed,
-					#[codec(index = 13)]
+					#[codec(index = 7)]
 					InvalidAggregatedPublicInputs,
-					#[codec(index = 14)]
+					#[codec(index = 8)]
 					#[doc = "The volume fee rate in the proof doesn't match the configured rate"]
 					InvalidVolumeFeeRate,
-					#[codec(index = 15)]
+					#[codec(index = 9)]
 					#[doc = "Transfer amount is below the minimum required"]
 					TransferAmountBelowMinimum,
+					#[codec(index = 10)]
+					#[doc = "Only native asset (asset_id = 0) is supported in this version"]
+					NonNativeAssetNotSupported,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
