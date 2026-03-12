@@ -419,7 +419,7 @@ async fn list_pending_transactions(
 	// Query pending transfers by sender (outgoing)
 	let sender_storage_address = crate::chain::quantus_subxt::api::storage()
 		.reversible_transfers()
-		.pending_transfers_by_sender(account_id.clone());
+		.pending_transfers_by_sender(account_id);
 
 	// Get the latest block hash to read from the latest state (not finalized)
 	let latest_block_hash = quantus_client.get_latest_block().await?;
@@ -429,19 +429,6 @@ async fn list_pending_transactions(
 		.storage()
 		.at(latest_block_hash)
 		.fetch(&sender_storage_address)
-		.await
-		.map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}")))?;
-
-	// Query pending transfers by recipient (incoming)
-	let recipient_storage_address = crate::chain::quantus_subxt::api::storage()
-		.reversible_transfers()
-		.pending_transfers_by_recipient(account_id);
-
-	let incoming_transfers = quantus_client
-		.client()
-		.storage()
-		.at(latest_block_hash)
-		.fetch(&recipient_storage_address)
 		.await
 		.map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}")))?;
 
@@ -471,43 +458,6 @@ async fn list_pending_transactions(
 					}) {
 					let formatted_amount = format_amount(transfer_details.amount);
 					log_print!("      👤 To: {}", transfer_details.to.to_quantus_ss58());
-					log_print!("      💰 Amount: {}", formatted_amount);
-					log_print!(
-						"      🔄 Interceptor: {}",
-						transfer_details.interceptor.to_quantus_ss58()
-					);
-				}
-			}
-		}
-	}
-
-	// Display incoming transfers
-	if let Some(incoming_hashes) = incoming_transfers {
-		if !incoming_hashes.0.is_empty() {
-			if total_transfers > 0 {
-				log_print!("");
-			}
-			log_print!("📥 Incoming pending transfers:");
-			for (i, hash) in incoming_hashes.0.iter().enumerate() {
-				total_transfers += 1;
-				log_print!("   {}. 0x{}", i + 1, hex::encode(hash.as_ref()));
-
-				// Try to get transfer details
-				let transfer_storage_address = crate::chain::quantus_subxt::api::storage()
-					.reversible_transfers()
-					.pending_transfers(*hash);
-
-				if let Ok(Some(transfer_details)) = quantus_client
-					.client()
-					.storage()
-					.at(latest_block_hash)
-					.fetch(&transfer_storage_address)
-					.await
-					.map_err(|e| {
-						crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
-					}) {
-					let formatted_amount = format_amount(transfer_details.amount);
-					log_print!("      👤 From: {}", transfer_details.from.to_quantus_ss58());
 					log_print!("      💰 Amount: {}", formatted_amount);
 					log_print!(
 						"      🔄 Interceptor: {}",
