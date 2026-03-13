@@ -288,23 +288,22 @@ pub enum DeveloperCommands {
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
 
-	/// Build wormhole circuit binaries and copy to CLI and chain directories
+	/// Build wormhole circuit binaries for the CLI (prover/aggregator)
+	///
+	/// The chain now generates its own verifier binaries at build time via build.rs,
+	/// so this command only generates binaries for the CLI's generated-bins/ directory.
 	BuildCircuits {
-		/// Path to qp-zk-circuits repository (default: ../qp-zk-circuits)
-		#[arg(long, default_value = "../qp-zk-circuits")]
-		circuits_path: String,
-
-		/// Path to chain repository (default: ../chain)
-		#[arg(long, default_value = "../chain")]
-		chain_path: String,
-
-		/// Number of leaf proofs aggregated into a single proof
+		/// Number of leaf proofs aggregated into a single layer-0 proof
 		#[arg(long)]
 		num_leaf_proofs: usize,
 
-		/// Skip copying to chain directory
+		/// Number of inner layer-0 proofs aggregated into a single layer-1 proof
 		#[arg(long)]
-		skip_chain: bool,
+		num_layer0_proofs: Option<usize>,
+
+		/// Skip generating prover binaries (only generate verifier binaries)
+		#[arg(long)]
+		skip_prover: bool,
 	},
 }
 
@@ -565,157 +564,87 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 
 			Ok(())
 		},
-		DeveloperCommands::BuildCircuits {
-			circuits_path,
-			chain_path,
-			num_leaf_proofs,
-			skip_chain,
-		} => build_wormhole_circuits(&circuits_path, &chain_path, num_leaf_proofs, skip_chain).await,
+		DeveloperCommands::BuildCircuits { num_leaf_proofs, num_layer0_proofs, skip_prover } =>
+			build_wormhole_circuits(num_leaf_proofs, num_layer0_proofs, skip_prover).await,
 	}
 }
 
-/// Build wormhole circuit binaries and copy them to the appropriate locations
+/// Build wormhole circuit binaries for the CLI (prover/aggregator)
+///
+/// The chain now generates its own verifier binaries at build time via build.rs,
+/// so this only generates binaries for the CLI's generated-bins/ directory.
 async fn build_wormhole_circuits(
-	circuits_path: &str,
-	chain_path: &str,
 	num_leaf_proofs: usize,
-	skip_chain: bool,
+	num_layer0_proofs: Option<usize>,
+	skip_prover: bool,
 ) -> crate::error::Result<()> {
-	use std::{path::Path, process::Command};
+	use std::path::Path;
 
-	log_print!("Building ZK circuit binaries (num_leaf_proofs={})", num_leaf_proofs);
+	log_print!(
+		"Building ZK circuit binaries (num_leaf_proofs={}, num_layer0_proofs={}, skip_prover={})",
+		num_leaf_proofs,
+		num_layer0_proofs.unwrap_or(0),
+		skip_prover
+	);
 	log_print!("");
 
-	let circuits_dir = Path::new(circuits_path);
-	let chain_dir = Path::new(chain_path);
-
-	// Verify circuits directory exists
-	if !circuits_dir.exists() {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Circuits directory not found: {}",
-			circuits_path
-		)));
-	}
-
-	// Step 1: Build the circuit builder
-	log_print!("Step 1/4: Building circuit builder...");
-	let build_output = Command::new("cargo")
-		.args(["build", "--release", "-p", "qp-wormhole-circuit-builder"])
-		.current_dir(circuits_dir)
-		.output()
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to run cargo build: {}", e))
-		})?;
-
-	if !build_output.status.success() {
-		let stderr = String::from_utf8_lossy(&build_output.stderr);
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Circuit builder compilation failed:\n{}",
-			stderr
-		)));
-	}
-	log_success!("   Done");
-
-	// Step 2: Run the circuit builder to generate binaries
-	log_print!("Step 2/4: Generating circuit binaries (this may take a while)...");
-	let builder_path = circuits_dir.join("target/release/qp-wormhole-circuit-builder");
-	let run_output = Command::new(&builder_path)
-		.args(["--num-leaf-proofs", &num_leaf_proofs.to_string()])
-		.current_dir(circuits_dir)
-		.output()
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to run circuit builder: {}", e))
-		})?;
-
-	if !run_output.status.success() {
-		let stderr = String::from_utf8_lossy(&run_output.stderr);
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Circuit builder failed:\n{}",
-			stderr
-		)));
-	}
-	log_success!("   Done");
-
-	// Step 3: Copy binaries to CLI and touch aggregator to force recompile
-	log_print!("Step 3/4: Copying binaries to CLI...");
-	let source_bins = circuits_dir.join("generated-bins");
 	let cli_bins = Path::new("generated-bins");
 
-	let cli_bin_files = [
-		"common.bin",
-		"verifier.bin",
-		"prover.bin",
-		"dummy_proof.bin",
-		"aggregated_common.bin",
-		"aggregated_verifier.bin",
-		"config.json",
+	let possible_cli_bin_files = [
+		"common.bin",              // leaf circuit
+		"verifier.bin",            // leaf circuit
+		"prover.bin",              // leaf circuit
+		"dummy_proof.bin",         // leaf dummy proof
+		"aggregated_common.bin",   // layer-0 aggregated circuit
+		"aggregated_verifier.bin", // layer-0 aggregated circuit
+		"aggregated_prover.bin",   // layer-0 aggregated circuit
+		"config.json",             // config file with metadata about the circuit bin data
+		// Layer-0 binaries are always generated, but layer-1 binaries are only generated if
+		// num_layer0_proofs is set
+		"layer1_common.bin",   // layer-1 aggregated circuit
+		"layer1_verifier.bin", // layer-1 aggregated circuit
+		"layer1_prover.bin",   // layer-1 aggregated circuit
 	];
 
-	for file in &cli_bin_files {
-		let src = source_bins.join(file);
-		let dst = cli_bins.join(file);
-		std::fs::copy(&src, &dst).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to copy {} to CLI: {}", file, e))
-		})?;
-		log_verbose!("   Copied {}", file);
-	}
+	// Step 1/2: Remove stale artifacts so config hashes only include binaries from this run.
+	log_print!("Step 1/2: Cleaning existing generated binaries...");
+	std::fs::create_dir_all(cli_bins).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to create CLI generated-bins directory: {}",
+			e
+		))
+	})?;
 
-	// Touch aggregator lib.rs to force cargo to recompile it
-	let aggregator_lib = circuits_dir.join("wormhole/aggregator/src/lib.rs");
-	if aggregator_lib.exists() {
-		if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&aggregator_lib) {
-			let _ = file.set_modified(std::time::SystemTime::now());
+	for file in &possible_cli_bin_files {
+		let path = cli_bins.join(file);
+		if path.exists() {
+			std::fs::remove_file(&path).map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to remove stale binary {}: {}",
+					file, e
+				))
+			})?;
+			log_verbose!("   Removed {}", file);
 		}
 	}
 	log_success!("   Done");
 
-	// Step 4: Copy binaries to chain directory (if not skipped)
-	if !skip_chain {
-		log_print!("Step 4/4: Copying binaries to chain...");
-
-		if !chain_dir.exists() {
-			log_error!("   Chain directory not found: {}", chain_path);
-			log_print!("   Use --skip-chain to skip this step");
-		} else {
-			let chain_bins = chain_dir.join("pallets/wormhole");
-
-			let chain_bin_files =
-				["aggregated_common.bin", "aggregated_verifier.bin", "config.json"];
-
-			for file in &chain_bin_files {
-				let src = source_bins.join(file);
-				let dst = chain_bins.join(file);
-				std::fs::copy(&src, &dst).map_err(|e| {
-					crate::error::QuantusError::Generic(format!(
-						"Failed to copy {} to chain: {}",
-						file, e
-					))
-				})?;
-				log_verbose!("   Copied {}", file);
-			}
-
-			// Touch pallet lib.rs to force cargo to recompile it
-			let pallet_lib = chain_bins.join("src/lib.rs");
-			if pallet_lib.exists() {
-				if let Ok(file) = std::fs::OpenOptions::new().write(true).open(&pallet_lib) {
-					let _ = file.set_modified(std::time::SystemTime::now());
-				}
-			}
-			log_success!("   Done");
-		}
-	} else {
-		log_print!("Step 4/4: Skipping chain copy (--skip-chain)");
-	}
+	// Step 2/2: Generate binaries directly through the library API.
+	log_print!("Step 2/2: Generating circuit binaries (this may take a while)...");
+	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
+		cli_bins,
+		!skip_prover,
+		num_leaf_proofs,
+		num_layer0_proofs,
+	)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Circuit binary generation failed: {}", e))
+	})?;
+	log_success!("   Done");
 
 	log_print!("");
 	log_success!("Circuit build complete!");
 	log_print!("");
-	if !skip_chain {
-		log_print!("{}", "Next steps:".bright_blue().bold());
-		log_print!("  1. Rebuild chain: cd {} && cargo build --release", chain_path);
-		log_print!("  2. Restart the chain node");
-		log_print!("");
-	}
 
 	Ok(())
 }

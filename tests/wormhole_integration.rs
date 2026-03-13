@@ -3,7 +3,7 @@
 //! These tests require a local Quantus node running at ws://127.0.0.1:9944
 //! with funded developer accounts (crystal_alice, crystal_bob, crystal_charlie).
 //!
-//! Run with: `cargo test --test wormhole_integration -- --ignored --nocapture`
+//! Run with: `cargo test --release --test wormhole_integration -- --ignored --nocapture`
 //!
 //! The tests verify the full end-to-end flow:
 //! 1. Fund an unspendable account via wormhole transfer
@@ -15,6 +15,8 @@
 //! with valid parent hash linkage. We use batch transfers to ensure same-block proofs.
 
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
+use qp_poseidon::ToFelts;
+use qp_wormhole_aggregator::aggregator::{AggregationBackend, Layer0Aggregator};
 use qp_wormhole_circuit::{
 	inputs::{CircuitInputs, PrivateCircuitInputs},
 	nullifier::Nullifier,
@@ -456,7 +458,7 @@ async fn generate_proof_from_transfer(
 async fn submit_single_proof_for_verification(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
-) -> Result<(), String> {
+) -> Result<subxt::utils::H256, String> {
 	println!("  Submitting single proof for on-chain verification...");
 
 	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
@@ -477,7 +479,7 @@ async fn submit_single_proof_for_verification(
 			TxStatus::InBestBlock(tx_in_block) => {
 				let block_hash = tx_in_block.block_hash();
 				println!("  ✅ Single proof verified on-chain! Block: {:?}", block_hash);
-				return Ok(());
+				return Ok(block_hash);
 			},
 			TxStatus::InFinalizedBlock(tx_in_block) => {
 				let block_hash = tx_in_block.block_hash();
@@ -485,7 +487,7 @@ async fn submit_single_proof_for_verification(
 					"  ✅ Single proof verified on-chain (finalized)! Block: {:?}",
 					block_hash
 				);
-				return Ok(());
+				return Ok(block_hash);
 			},
 			TxStatus::Error { message } | TxStatus::Invalid { message } => {
 				return Err(format!("Transaction failed: {}", message));
@@ -502,27 +504,24 @@ fn aggregate_proofs(
 	proof_contexts: Vec<ProofContext>,
 	num_leaf_proofs: usize,
 ) -> Result<AggregatedProofContext, String> {
-	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
-	use qp_zk_circuits_common::aggregation::AggregationConfig;
-
 	println!(
 		"  Aggregating {} proofs (num_leaf_proofs={})...",
 		proof_contexts.len(),
 		num_leaf_proofs,
 	);
 
-	let config = CircuitConfig::standard_recursion_zk_config();
-	let aggregation_config = AggregationConfig::new(num_leaf_proofs);
-
-	if proof_contexts.len() > aggregation_config.num_leaf_proofs {
+	if proof_contexts.len() > num_leaf_proofs {
 		return Err(format!(
 			"Too many proofs: {} provided, max {}",
 			proof_contexts.len(),
-			aggregation_config.num_leaf_proofs,
+			num_leaf_proofs,
 		));
 	}
 
-	let mut aggregator = WormholeProofAggregator::from_circuit_config(config, aggregation_config);
+	let bins_dir = std::path::Path::new("generated-bins");
+
+	let mut aggregator = Layer0Aggregator::new(bins_dir)
+		.map_err(|e| format!("Failed to create aggregator: {}", e))?;
 
 	for (idx, ctx) in proof_contexts.into_iter().enumerate() {
 		println!("    Adding proof {} to aggregator...", idx + 1);
@@ -543,23 +542,21 @@ fn aggregate_proofs(
 	}
 
 	println!("  Running aggregation (this may take ~60s)...");
-	let aggregated_result =
+	let aggregated_proof =
 		aggregator.aggregate().map_err(|e| format!("Aggregation failed: {}", e))?;
 
 	use qp_wormhole_circuit::inputs::ParseAggregatedPublicInputs;
-	let public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
-		aggregated_result.proof.public_inputs.as_slice(),
-	)
-	.map_err(|e| format!("Failed to parse aggregated public inputs: {}", e))?;
+	let public_inputs =
+		AggregatedPublicCircuitInputs::try_from_felts(aggregated_proof.public_inputs.as_slice())
+			.map_err(|e| format!("Failed to parse aggregated public inputs: {}", e))?;
 
 	// Verify locally first
 	println!("  Verifying aggregated proof locally...");
-	aggregated_result
-		.circuit_data
-		.verify(aggregated_result.proof.clone())
+	aggregator
+		.verify(aggregated_proof.clone())
 		.map_err(|e| format!("Local verification failed: {}", e))?;
 
-	let proof_bytes = aggregated_result.proof.to_bytes();
+	let proof_bytes = aggregated_proof.to_bytes();
 	println!(
 		"  Aggregation complete! Size: {} bytes, {} nullifiers",
 		proof_bytes.len(),
@@ -573,7 +570,7 @@ fn aggregate_proofs(
 async fn submit_aggregated_proof_for_verification(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
-) -> Result<(), String> {
+) -> Result<subxt::utils::H256, String> {
 	println!("  Submitting aggregated proof for on-chain verification...");
 
 	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
@@ -594,7 +591,7 @@ async fn submit_aggregated_proof_for_verification(
 			TxStatus::InBestBlock(tx_in_block) => {
 				let block_hash = tx_in_block.block_hash();
 				println!("  ✅ Aggregated proof verified on-chain! Block: {:?}", block_hash);
-				return Ok(());
+				return Ok(block_hash);
 			},
 			TxStatus::InFinalizedBlock(tx_in_block) => {
 				let block_hash = tx_in_block.block_hash();
@@ -602,7 +599,7 @@ async fn submit_aggregated_proof_for_verification(
 					"  ✅ Aggregated proof verified on-chain (finalized)! Block: {:?}",
 					block_hash
 				);
-				return Ok(());
+				return Ok(block_hash);
 			},
 			TxStatus::Error { message } | TxStatus::Invalid { message } => {
 				return Err(format!("Transaction failed: {}", message));
@@ -614,12 +611,20 @@ async fn submit_aggregated_proof_for_verification(
 	Err("Transaction stream ended unexpectedly".to_string())
 }
 
+const POW_ENGINE_ID: [u8; 4] = *b"pow_";
+
 fn author_from_header_digest(
 	header_digest: &subxt::config::substrate::Digest,
 ) -> Option<SubxtAccountId> {
 	header_digest.logs.iter().find_map(|item| match item {
-		subxt::config::substrate::DigestItem::PreRuntime(_engine_id, data) =>
-			SubxtAccountId::decode(&mut &data[..]).ok(),
+		subxt::config::substrate::DigestItem::PreRuntime(engine_id, data)
+			if *engine_id == POW_ENGINE_ID && data.len() == 32 =>
+		{
+			let preimage: [u8; 32] = data.as_slice().try_into().ok()?;
+			let author_bytes =
+				qp_poseidon::PoseidonHasher::hash_variable_length(preimage.to_felts());
+			SubxtAccountId::decode(&mut &author_bytes[..]).ok()
+		},
 		_ => None,
 	})
 }
@@ -703,16 +708,11 @@ async fn test_single_proof_on_chain_verification() {
 	// Submit for on-chain verification
 	println!("4. Verifying proof on-chain...");
 
-	// Submit extrinsic
-	submit_single_proof_for_verification(&quantus_client, proof_context.proof_bytes.clone())
-		.await
-		.expect("On-chain verification failed");
-
-	// Find the block that executed verification
-	let verify_block_hash = quantus_client
-		.get_latest_block()
-		.await
-		.expect("Failed to get latest block hash");
+	// Submit extrinsic and find the block that executed verification
+	let verify_block_hash =
+		submit_single_proof_for_verification(&quantus_client, proof_context.proof_bytes.clone())
+			.await
+			.expect("On-chain verification failed");
 
 	// Extract author from block digest
 	let verify_block = quantus_client.client().blocks().at(verify_block_hash).await.unwrap();
@@ -853,18 +853,12 @@ async fn test_aggregated_proof_on_chain_verification() {
 	println!("5. Verifying aggregated proof on-chain...");
 
 	// Submit aggregated verification
-	submit_aggregated_proof_for_verification(
+	let verify_block_hash = submit_aggregated_proof_for_verification(
 		&quantus_client,
 		aggregated_context.proof_bytes.clone(),
 	)
 	.await
 	.expect("On-chain aggregated verification failed");
-
-	// Identify verification block
-	let verify_block_hash = quantus_client
-		.get_latest_block()
-		.await
-		.expect("Failed to get latest block hash");
 
 	// Extract author
 	let verify_block = quantus_client.client().blocks().at(verify_block_hash).await.unwrap();
