@@ -28,7 +28,7 @@ pub enum ReferendaCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 
-		/// Origin type: signed (default), none (for signaling track), root
+		/// Origin type: signed (default) or root
 		#[arg(long, default_value = "signed")]
 		origin: String,
 	},
@@ -51,7 +51,7 @@ pub enum ReferendaCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 
-		/// Origin type: signed (default), none (for signaling track), root
+		/// Origin type: signed (default) or root
 		#[arg(long, default_value = "signed")]
 		origin: String,
 	},
@@ -332,19 +332,18 @@ async fn submit_remark_proposal(
 				);
 			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
 		},
-		"none" => {
-			let raw_origin =
-				quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::None;
-			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
-		},
 		"root" => {
 			let raw_origin =
 				quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
 			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
 		},
+		"none" =>
+			return Err(QuantusError::Generic(
+				"Invalid origin type: none. Use 'signed' or 'root'.".to_string(),
+			)),
 		_ =>
 			return Err(QuantusError::Generic(format!(
-				"Invalid origin type: {}. Must be 'signed', 'none', or 'root'",
+				"Invalid origin type: {}. Must be 'signed' or 'root'",
 				origin_type
 			))),
 	};
@@ -449,19 +448,18 @@ async fn submit_proposal(
 				);
 			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
 		},
-		"none" => {
-			let raw_origin =
-				quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::None;
-			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
-		},
 		"root" => {
 			let raw_origin =
 				quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
 			quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin)
 		},
+		"none" =>
+			return Err(QuantusError::Generic(
+				"Invalid origin type: none. Use 'signed' or 'root'.".to_string(),
+			)),
 		_ =>
 			return Err(QuantusError::Generic(format!(
-				"Invalid origin type: {}. Must be 'signed', 'none', or 'root'",
+				"Invalid origin type: {}. Must be 'signed' or 'root'",
 				origin_type
 			))),
 	};
@@ -720,12 +718,8 @@ async fn vote_on_referendum(
 
 	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
 
-	// Parse amount
-	let amount_value: u128 = (amount
-		.parse::<f64>()
-		.map_err(|_| QuantusError::Generic("Invalid amount format".to_string()))?
-		.max(0.0) *
-		1_000_000_000_000_000_000.0) as u128;
+	// Parse amount using chain decimals (12 for DEV)
+	let amount_value: u128 = crate::cli::send::parse_amount(quantus_client, amount).await?;
 
 	// Validate conviction
 	if conviction > 6 {

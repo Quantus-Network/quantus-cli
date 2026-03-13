@@ -773,8 +773,10 @@ mod tests {
 
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
-		let expected_address = "qzoog56PJKvDwqo9GwkzRN74kxEgDEspxu5zVA62y18ttt3tG"; // default derivation path index 0
-		let expected_address_no_derive = "qzofkFbmnEYLX6iHwqJ9uKYXFi7ypQwcBBMxcYYLVD17vGpsm";
+		// Addresses derived from mnemonic via DEFAULT_DERIVATION_PATH (m/44'/189189'/0'/0'/0')
+		// and no-derivation path (m/44'/189189'/0'). Update if qp-rusty-crystals-hdwallet changes.
+		let expected_address = "qznibgrYxiVTcBVLAoRPHgMqkXk16t1FfzGYcE4f4dVnJC3U8";
+		let expected_address_no_derive = "qzkpGYFNw3LshweJnW5PgkNrZcUxXyoHFQHqBjJoZ1MeiQThC";
 
 		let imported_wallet = wallet_manager
 			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))
