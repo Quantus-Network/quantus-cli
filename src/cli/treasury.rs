@@ -42,9 +42,9 @@ async fn show_treasury_info(
 		crate::error::QuantusError::Generic("Treasury account not set in storage".to_string())
 	})?;
 
-	// Portion of mining rewards that goes to treasury (0–100)
+	// Portion of mining rewards that goes to treasury (Permill: parts per million)
 	let portion_addr = quantus_subxt::api::storage().treasury_pallet().treasury_portion();
-	let portion = storage_at.fetch(&portion_addr).await?.unwrap_or(0);
+	let portion = storage_at.fetch(&portion_addr).await?.map(|p| p.0).unwrap_or(0);
 
 	// Account balance
 	let account_storage = quantus_subxt::api::storage().system().account(treasury_account.clone());
@@ -61,7 +61,9 @@ async fn show_treasury_info(
 
 	let account_ss58 = treasury_account.to_quantus_ss58();
 	log_print!("📍 Account: {}", account_ss58.bright_yellow());
-	log_print!("📊 Reward portion: {}%", portion.to_string().bright_cyan());
+	// Permill is parts per million, so divide by 10000 to get percentage
+	let portion_percent = portion as f64 / 10000.0;
+	log_print!("📊 Reward portion: {:.2}%", portion_percent.to_string().bright_cyan());
 	log_print!("💰 Free: {}", formatted_free);
 	log_print!("💰 Reserved: {}", formatted_reserved);
 

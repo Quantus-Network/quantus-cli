@@ -180,7 +180,6 @@ quantus wormhole aggregate \
 ```
 
 - `--proofs`: One or more hex-encoded proof files. The number must not exceed `num_leaf_proofs` from the circuit config.
-- Before aggregation, the CLI verifies binary hashes from `generated-bins/config.json` to detect stale circuit binaries.
 - Displays timing for dummy proof generation and aggregation separately.
 
 #### `quantus wormhole verify-aggregated`
@@ -273,7 +272,7 @@ quantus developer build-circuits \
 
 **What it does (3 steps):**
 1. Clears stale artifacts from the CLI's `generated-bins/` directory.
-2. Calls the `qp-wormhole-circuit-builder` library directly to regenerate binary files in `generated-bins/` (`verifier.bin`, `common.bin`, `aggregated_verifier.bin`, `aggregated_common.bin`, `config.json` with SHA256 hashes, plus prover binaries unless `--skip-prover` is set).
+2. Calls the `qp-wormhole-circuit-builder` library directly to regenerate binary files in `generated-bins/` (`verifier.bin`, `common.bin`, `aggregated_verifier.bin`, `aggregated_common.bin`, `config.json`, plus prover binaries unless `--skip-prover` is set).
 3. Copies chain-relevant binaries (`aggregated_common.bin`, `aggregated_verifier.bin`, `config.json`) to `chain/pallets/wormhole/` and touches the pallet source.
 
 After running, rebuild the chain (`cargo build --release` in the chain directory) so `include_bytes!()` picks up the new binaries.
