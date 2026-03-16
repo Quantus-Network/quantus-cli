@@ -1,4 +1,6 @@
 /target
 .idea
 *.hex
-/generated-bins/*prover.bin
+
+# Circuit binaries are generated at build time by build.rs
+/generated-bins/

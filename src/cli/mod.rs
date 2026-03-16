@@ -287,24 +287,6 @@ pub enum Commands {
 pub enum DeveloperCommands {
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
-
-	/// Build wormhole circuit binaries for the CLI (prover/aggregator)
-	///
-	/// The chain now generates its own verifier binaries at build time via build.rs,
-	/// so this command only generates binaries for the CLI's generated-bins/ directory.
-	BuildCircuits {
-		/// Number of leaf proofs aggregated into a single layer-0 proof
-		#[arg(long)]
-		num_leaf_proofs: usize,
-
-		/// Number of inner layer-0 proofs aggregated into a single layer-1 proof
-		#[arg(long)]
-		num_layer0_proofs: Option<usize>,
-
-		/// Skip generating prover binaries (only generate verifier binaries)
-		#[arg(long)]
-		skip_prover: bool,
-	},
 }
 
 /// Execute a CLI command
@@ -564,89 +546,7 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 
 			Ok(())
 		},
-		DeveloperCommands::BuildCircuits { num_leaf_proofs, num_layer0_proofs, skip_prover } =>
-			build_wormhole_circuits(num_leaf_proofs, num_layer0_proofs, skip_prover).await,
 	}
-}
-
-/// Build wormhole circuit binaries for the CLI (prover/aggregator)
-///
-/// The chain now generates its own verifier binaries at build time via build.rs,
-/// so this only generates binaries for the CLI's generated-bins/ directory.
-async fn build_wormhole_circuits(
-	num_leaf_proofs: usize,
-	num_layer0_proofs: Option<usize>,
-	skip_prover: bool,
-) -> crate::error::Result<()> {
-	use std::path::Path;
-
-	log_print!(
-		"Building ZK circuit binaries (num_leaf_proofs={}, num_layer0_proofs={}, skip_prover={})",
-		num_leaf_proofs,
-		num_layer0_proofs.unwrap_or(0),
-		skip_prover
-	);
-	log_print!("");
-
-	let cli_bins = Path::new("generated-bins");
-
-	let possible_cli_bin_files = [
-		"common.bin",              // leaf circuit
-		"verifier.bin",            // leaf circuit
-		"prover.bin",              // leaf circuit
-		"dummy_proof.bin",         // leaf dummy proof
-		"aggregated_common.bin",   // layer-0 aggregated circuit
-		"aggregated_verifier.bin", // layer-0 aggregated circuit
-		"aggregated_prover.bin",   // layer-0 aggregated circuit
-		"config.json",             // config file with metadata about the circuit bin data
-		// Layer-0 binaries are always generated, but layer-1 binaries are only generated if
-		// num_layer0_proofs is set
-		"layer1_common.bin",   // layer-1 aggregated circuit
-		"layer1_verifier.bin", // layer-1 aggregated circuit
-		"layer1_prover.bin",   // layer-1 aggregated circuit
-	];
-
-	// Step 1/2: Remove stale artifacts so config hashes only include binaries from this run.
-	log_print!("Step 1/2: Cleaning existing generated binaries...");
-	std::fs::create_dir_all(cli_bins).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to create CLI generated-bins directory: {}",
-			e
-		))
-	})?;
-
-	for file in &possible_cli_bin_files {
-		let path = cli_bins.join(file);
-		if path.exists() {
-			std::fs::remove_file(&path).map_err(|e| {
-				crate::error::QuantusError::Generic(format!(
-					"Failed to remove stale binary {}: {}",
-					file, e
-				))
-			})?;
-			log_verbose!("   Removed {}", file);
-		}
-	}
-	log_success!("   Done");
-
-	// Step 2/2: Generate binaries directly through the library API.
-	log_print!("Step 2/2: Generating circuit binaries (this may take a while)...");
-	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
-		cli_bins,
-		!skip_prover,
-		num_leaf_proofs,
-		num_layer0_proofs,
-	)
-	.map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Circuit binary generation failed: {}", e))
-	})?;
-	log_success!("   Done");
-
-	log_print!("");
-	log_success!("Circuit build complete!");
-	log_print!("");
-
-	Ok(())
 }
 
 /// Handle compatibility check command
