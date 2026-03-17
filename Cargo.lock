@@ -3794,6 +3794,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-aggregator"
 version = "1.1.1"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Ffull-leaf-check#09bc5f60d149f2555db4ab40e4d16b462edf6ba5"
 dependencies = [
  "anyhow",
  "hex",
@@ -3811,6 +3812,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-circuit"
 version = "1.1.1"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Ffull-leaf-check#09bc5f60d149f2555db4ab40e4d16b462edf6ba5"
 dependencies = [
  "anyhow",
  "hex",
@@ -3822,6 +3824,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-circuit-builder"
 version = "1.1.1"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Ffull-leaf-check#09bc5f60d149f2555db4ab40e4d16b462edf6ba5"
 dependencies = [
  "anyhow",
  "clap",
@@ -3834,6 +3837,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-inputs"
 version = "1.1.1"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Ffull-leaf-check#09bc5f60d149f2555db4ab40e4d16b462edf6ba5"
 dependencies = [
  "anyhow",
 ]
@@ -3841,6 +3845,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-prover"
 version = "1.1.1"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Ffull-leaf-check#09bc5f60d149f2555db4ab40e4d16b462edf6ba5"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3852,6 +3857,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-verifier"
 version = "1.1.1"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Ffull-leaf-check#09bc5f60d149f2555db4ab40e4d16b462edf6ba5"
 dependencies = [
  "anyhow",
  "qp-plonky2-verifier",
@@ -3861,6 +3867,7 @@ dependencies = [
 [[package]]
 name = "qp-zk-circuits-common"
 version = "1.1.1"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Ffull-leaf-check#09bc5f60d149f2555db4ab40e4d16b462edf6ba5"
 dependencies = [
  "anyhow",
  "hex",
