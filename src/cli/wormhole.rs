@@ -606,6 +606,24 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "/tmp/wormhole_dissolve")]
 		output_dir: String,
 	},
+	/// Fuzz test the leaf verification by attempting invalid proofs
+	Fuzz {
+		/// Wallet name to use for funding
+		#[arg(short, long)]
+		wallet: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Amount in DEV to use for the test transfer (default: 1.0)
+		#[arg(short, long, default_value = "1.0")]
+		amount: f64,
+	},
 }
 
 pub async fn handle_wormhole_command(
@@ -719,6 +737,11 @@ pub async fn handle_wormhole_command(
 				node_url,
 			)
 			.await
+		},
+		WormholeCommands::Fuzz { wallet, password, password_file, amount } => {
+			let amount_planck = (amount * 1_000_000_000_000.0) as u128;
+			let amount_aligned = (amount_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
+			run_fuzz_test(wallet, password, password_file, amount_aligned, node_url).await
 		},
 	}
 }
@@ -2664,6 +2687,771 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 	std::fs::write(output_file, &proof_hex).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
 	})?;
+
+	Ok(())
+}
+
+/// Goldilocks field order (2^64 - 2^32 + 1)
+const GOLDILOCKS_ORDER: u64 = 0xFFFFFFFF00000001;
+
+/// Fuzz inputs: (amount, from, to, transfer_count)
+type FuzzInputs = (u128, [u8; 32], [u8; 32], u64);
+
+/// Represents a fuzz test case
+struct FuzzCase {
+	name: &'static str,
+	description: &'static str,
+	/// Whether this case should pass (true) or fail (false)
+	/// Cases within quantization threshold should pass
+	expect_pass: bool,
+}
+
+/// Seeded random number generator for reproducible fuzz tests
+struct SeededRng {
+	state: u64,
+}
+
+impl SeededRng {
+	fn new(seed: u64) -> Self {
+		Self { state: seed }
+	}
+
+	fn next_u64(&mut self) -> u64 {
+		// Simple xorshift64 PRNG
+		self.state ^= self.state << 13;
+		self.state ^= self.state >> 7;
+		self.state ^= self.state << 17;
+		self.state
+	}
+
+	fn next_u128(&mut self) -> u128 {
+		let high = self.next_u64() as u128;
+		let low = self.next_u64() as u128;
+		(high << 64) | low
+	}
+}
+
+/// Add a u64 value to the first 8-byte chunk of an address (little-endian)
+fn add_to_address_chunk(addr: &mut [u8; 32], chunk_idx: usize, value: u64) {
+	let start = chunk_idx * 8;
+	let end = start + 8;
+	let current = u64::from_le_bytes(addr[start..end].try_into().unwrap());
+	let new_value = current.wrapping_add(value);
+	addr[start..end].copy_from_slice(&new_value.to_le_bytes());
+}
+
+/// Generate all fuzz cases with their fuzzed inputs
+#[allow(clippy::vec_init_then_push)]
+fn generate_fuzz_cases(
+	amount: u128,
+	from: [u8; 32],
+	to: [u8; 32],
+	count: u64,
+	rng: &mut SeededRng,
+) -> Vec<(FuzzCase, FuzzInputs)> {
+	let random_u64 = rng.next_u64();
+	let random_u128 = rng.next_u128();
+	let mut random_addr = [0u8; 32];
+	for chunk in random_addr.chunks_mut(8) {
+		chunk.copy_from_slice(&rng.next_u64().to_le_bytes());
+	}
+
+	let mut cases = Vec::new();
+
+	// ============================================================
+	// AMOUNT FUZZING
+	// ============================================================
+
+	// Check if amount is at a quantization boundary
+	let amount_quantized = amount / SCALE_DOWN_FACTOR;
+	let amount_plus_one_quantized = (amount + 1) / SCALE_DOWN_FACTOR;
+	let amount_minus_one_quantized = amount.saturating_sub(1) / SCALE_DOWN_FACTOR;
+
+	// Amount + 1 planck - passes only if it stays in the same quantization bucket
+	let plus_one_same_bucket = amount_quantized == amount_plus_one_quantized;
+	cases.push((
+		FuzzCase {
+			name: "amount_plus_one_planck",
+			description: "Amount + 1 planck",
+			expect_pass: plus_one_same_bucket,
+		},
+		(amount + 1, from, to, count),
+	));
+
+	// Amount - 1 planck - passes only if it stays in the same quantization bucket
+	let minus_one_same_bucket = amount_quantized == amount_minus_one_quantized;
+	cases.push((
+		FuzzCase {
+			name: "amount_minus_one_planck",
+			description: "Amount - 1 planck",
+			expect_pass: minus_one_same_bucket,
+		},
+		(amount.saturating_sub(1), from, to, count),
+	));
+
+	// Amount + SCALE_DOWN_FACTOR (one quantized unit, should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "amount_plus_one_quant_unit",
+			description: "Amount + 1 quantized unit",
+			expect_pass: false,
+		},
+		(amount + SCALE_DOWN_FACTOR, from, to, count),
+	));
+
+	// Amount - SCALE_DOWN_FACTOR (one quantized unit, should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "amount_minus_one_quant_unit",
+			description: "Amount - 1 quantized unit",
+			expect_pass: false,
+		},
+		(amount.saturating_sub(SCALE_DOWN_FACTOR), from, to, count),
+	));
+
+	// Amount * 2 (should FAIL)
+	cases.push((
+		FuzzCase { name: "amount_doubled", description: "Amount * 2", expect_pass: false },
+		(amount * 2, from, to, count),
+	));
+
+	// Amount = 0 (should FAIL)
+	cases.push((
+		FuzzCase { name: "amount_zero", description: "Amount = 0", expect_pass: false },
+		(0, from, to, count),
+	));
+
+	// Amount + random large value (should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "amount_plus_random",
+			description: "Amount + random u128",
+			expect_pass: false,
+		},
+		(amount.wrapping_add(random_u128), from, to, count),
+	));
+
+	// Amount + Goldilocks order (overflow attack, should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "amount_plus_goldilocks",
+			description: "Amount + Goldilocks field order",
+			expect_pass: false,
+		},
+		(amount.wrapping_add(GOLDILOCKS_ORDER as u128), from, to, count),
+	));
+
+	// ============================================================
+	// TRANSFER COUNT FUZZING
+	// ============================================================
+
+	// Count + 1 (should FAIL)
+	cases.push((
+		FuzzCase { name: "count_plus_one", description: "Transfer count + 1", expect_pass: false },
+		(amount, from, to, count.wrapping_add(1)),
+	));
+
+	// Count - 1 with wrapping (0 -> u64::MAX, should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "count_minus_one_wrap",
+			description: "Transfer count - 1 (wrapping)",
+			expect_pass: false,
+		},
+		(amount, from, to, count.wrapping_sub(1)),
+	));
+
+	// Count = u64::MAX (should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "count_max",
+			description: "Transfer count = u64::MAX",
+			expect_pass: false,
+		},
+		(amount, from, to, u64::MAX),
+	));
+
+	// Count + random (should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "count_plus_random",
+			description: "Transfer count + random u64",
+			expect_pass: false,
+		},
+		(amount, from, to, count.wrapping_add(random_u64)),
+	));
+
+	// Count + Goldilocks order (overflow attack, should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "count_plus_goldilocks",
+			description: "Transfer count + Goldilocks field order",
+			expect_pass: false,
+		},
+		(amount, from, to, count.wrapping_add(GOLDILOCKS_ORDER)),
+	));
+
+	// ============================================================
+	// FROM ADDRESS FUZZING
+	// ============================================================
+
+	// From: single bit flip (should FAIL)
+	let mut from_bit_flip = from;
+	from_bit_flip[0] ^= 0x01;
+	cases.push((
+		FuzzCase {
+			name: "from_single_bit_flip",
+			description: "From address single bit flip",
+			expect_pass: false,
+		},
+		(amount, from_bit_flip, to, count),
+	));
+
+	// From: zeroed (should FAIL)
+	cases.push((
+		FuzzCase { name: "from_zeroed", description: "From address zeroed", expect_pass: false },
+		(amount, [0u8; 32], to, count),
+	));
+
+	// From: add 1 to first chunk (should FAIL)
+	let mut from_plus_one = from;
+	add_to_address_chunk(&mut from_plus_one, 0, 1);
+	cases.push((
+		FuzzCase {
+			name: "from_plus_one",
+			description: "From address + 1 (first chunk)",
+			expect_pass: false,
+		},
+		(amount, from_plus_one, to, count),
+	));
+
+	// From: random address (should FAIL)
+	cases.push((
+		FuzzCase { name: "from_random", description: "From address random", expect_pass: false },
+		(amount, random_addr, to, count),
+	));
+
+	// From: add Goldilocks order to each chunk (should FAIL)
+	for chunk_idx in 0..4 {
+		let mut from_goldilocks = from;
+		add_to_address_chunk(&mut from_goldilocks, chunk_idx, GOLDILOCKS_ORDER);
+		cases.push((
+			FuzzCase {
+				name: match chunk_idx {
+					0 => "from_goldilocks_chunk0",
+					1 => "from_goldilocks_chunk1",
+					2 => "from_goldilocks_chunk2",
+					_ => "from_goldilocks_chunk3",
+				},
+				description: match chunk_idx {
+					0 => "From + Goldilocks order (chunk 0)",
+					1 => "From + Goldilocks order (chunk 1)",
+					2 => "From + Goldilocks order (chunk 2)",
+					_ => "From + Goldilocks order (chunk 3)",
+				},
+				expect_pass: false,
+			},
+			(amount, from_goldilocks, to, count),
+		));
+	}
+
+	// ============================================================
+	// TO ADDRESS FUZZING
+	// ============================================================
+
+	// To: single bit flip (should FAIL)
+	let mut to_bit_flip = to;
+	to_bit_flip[0] ^= 0x01;
+	cases.push((
+		FuzzCase {
+			name: "to_single_bit_flip",
+			description: "To address single bit flip",
+			expect_pass: false,
+		},
+		(amount, from, to_bit_flip, count),
+	));
+
+	// To: zeroed (should FAIL)
+	cases.push((
+		FuzzCase { name: "to_zeroed", description: "To address zeroed", expect_pass: false },
+		(amount, from, [0u8; 32], count),
+	));
+
+	// To: add 1 to first chunk (should FAIL)
+	let mut to_plus_one = to;
+	add_to_address_chunk(&mut to_plus_one, 0, 1);
+	cases.push((
+		FuzzCase {
+			name: "to_plus_one",
+			description: "To address + 1 (first chunk)",
+			expect_pass: false,
+		},
+		(amount, from, to_plus_one, count),
+	));
+
+	// To: add Goldilocks order to each chunk (should FAIL)
+	for chunk_idx in 0..4 {
+		let mut to_goldilocks = to;
+		add_to_address_chunk(&mut to_goldilocks, chunk_idx, GOLDILOCKS_ORDER);
+		cases.push((
+			FuzzCase {
+				name: match chunk_idx {
+					0 => "to_goldilocks_chunk0",
+					1 => "to_goldilocks_chunk1",
+					2 => "to_goldilocks_chunk2",
+					_ => "to_goldilocks_chunk3",
+				},
+				description: match chunk_idx {
+					0 => "To + Goldilocks order (chunk 0)",
+					1 => "To + Goldilocks order (chunk 1)",
+					2 => "To + Goldilocks order (chunk 2)",
+					_ => "To + Goldilocks order (chunk 3)",
+				},
+				expect_pass: false,
+			},
+			(amount, from, to_goldilocks, count),
+		));
+	}
+
+	// ============================================================
+	// SWAPPED/COMBINED
+	// ============================================================
+
+	// Swapped from/to (should FAIL)
+	cases.push((
+		FuzzCase {
+			name: "swapped_from_to",
+			description: "From and To addresses swapped",
+			expect_pass: false,
+		},
+		(amount, to, from, count),
+	));
+
+	// All inputs fuzzed with random offsets (should FAIL)
+	let mut all_fuzzed_from = from;
+	let mut all_fuzzed_to = to;
+	all_fuzzed_from[31] ^= 0xFF;
+	all_fuzzed_to[31] ^= 0xFF;
+	cases.push((
+		FuzzCase {
+			name: "all_random_fuzzed",
+			description: "All inputs fuzzed with random values",
+			expect_pass: false,
+		},
+		(
+			amount.wrapping_add(random_u128),
+			all_fuzzed_from,
+			all_fuzzed_to,
+			count.wrapping_add(random_u64),
+		),
+	));
+
+	// All inputs + Goldilocks order (should FAIL)
+	let mut all_gold_from = from;
+	let mut all_gold_to = to;
+	add_to_address_chunk(&mut all_gold_from, 0, GOLDILOCKS_ORDER);
+	add_to_address_chunk(&mut all_gold_to, 0, GOLDILOCKS_ORDER);
+	cases.push((
+		FuzzCase {
+			name: "all_goldilocks_fuzzed",
+			description: "All inputs + Goldilocks order",
+			expect_pass: false,
+		},
+		(
+			amount.wrapping_add(GOLDILOCKS_ORDER as u128),
+			all_gold_from,
+			all_gold_to,
+			count.wrapping_add(GOLDILOCKS_ORDER),
+		),
+	));
+
+	cases
+}
+
+/// Run fuzz tests on the leaf verification circuit.
+///
+/// This function:
+/// 1. Executes a real transfer to a wormhole address
+/// 2. Attempts to generate proofs with fuzzed inputs (wrong amount, wrong address, etc.)
+/// 3. Verifies that proof preparation fails for each fuzzed case (except within-threshold cases)
+/// 4. Reports which cases correctly passed/failed
+async fn run_fuzz_test(
+	wallet_name: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	amount: u128,
+	node_url: &str,
+) -> crate::error::Result<()> {
+	use colored::Colorize;
+
+	log_print!("");
+	log_print!("==================================================");
+	log_print!("  Wormhole Fuzz Test");
+	log_print!("==================================================");
+	log_print!("");
+
+	// Use block timestamp as seed for reproducibility within same block
+	let seed = std::time::SystemTime::now()
+		.duration_since(std::time::UNIX_EPOCH)
+		.unwrap()
+		.as_secs();
+	log_print!("  Random seed: {}", seed);
+
+	// Load wallet
+	let wallet = load_multiround_wallet(&wallet_name, password, password_file)?;
+
+	// Connect to node
+	let quantus_client = QuantusClient::new(node_url)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+
+	// Step 1: Generate a secret and derive wormhole address
+	log_print!("{}", "Step 1: Creating test transfer...".bright_yellow());
+
+	let mut secret_bytes = [0u8; 32];
+	rand::rng().fill_bytes(&mut secret_bytes);
+	let secret: BytesDigest = secret_bytes.try_into().map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
+	})?;
+
+	let unspendable_account =
+		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
+			.account_id;
+	let unspendable_account_bytes_digest =
+		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
+		.as_ref()
+		.try_into()
+		.expect("BytesDigest is always 32 bytes");
+
+	let wormhole_address = SubxtAccountId(unspendable_account_bytes);
+
+	// Execute transfer
+	let transfer_tx = quantus_node::api::tx().balances().transfer_allow_death(
+		subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
+		amount,
+	);
+
+	let quantum_keypair = QuantumKeyPair {
+		public_key: wallet.keypair.public_key.clone(),
+		private_key: wallet.keypair.private_key.clone(),
+	};
+
+	submit_transaction(
+		&quantus_client,
+		&quantum_keypair,
+		transfer_tx,
+		None,
+		ExecutionMode { finalized: false, wait_for_transaction: true },
+	)
+	.await
+	.map_err(|e| crate::error::QuantusError::Generic(format!("Transfer failed: {}", e)))?;
+
+	// Get block and event
+	let block = at_best_block(&quantus_client)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
+	let block_hash = block.hash();
+	let events_api =
+		quantus_client.client().events().at(block_hash).await.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
+		})?;
+
+	let event = events_api
+		.find::<wormhole::events::NativeTransferred>()
+		.find(|e| if let Ok(evt) = e { evt.to.0 == unspendable_account_bytes } else { false })
+		.ok_or_else(|| crate::error::QuantusError::Generic("No transfer event found".to_string()))?
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Event decode error: {}", e)))?;
+
+	let transfer_count = event.transfer_count;
+	let funding_account: [u8; 32] = wallet.keypair.to_account_id_32().into();
+
+	log_success!(
+		"  Transfer complete: {} to wormhole, transfer_count={}",
+		format_balance(amount),
+		transfer_count
+	);
+	log_print!("  Block: 0x{}", hex::encode(block_hash.0));
+
+	// Step 2: Test that correct inputs work (sanity check)
+	log_print!("");
+	log_print!("{}", "Step 2: Verifying correct inputs work...".bright_yellow());
+
+	let correct_result = try_prepare_proof_for_fuzz(
+		&quantus_client,
+		block_hash,
+		amount,
+		funding_account,
+		unspendable_account_bytes,
+		transfer_count,
+	)
+	.await;
+
+	match correct_result {
+		Ok(_) => log_success!("  Correct inputs: PASSED (proof preparation succeeded)"),
+		Err(e) => {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"FATAL: Correct inputs failed proof preparation: {}",
+				e
+			)));
+		},
+	}
+
+	// Step 3: Generate and run fuzz cases
+	log_print!("");
+	log_print!("{}", "Step 3: Running fuzz cases...".bright_yellow());
+	log_print!("");
+
+	let mut rng = SeededRng::new(seed);
+	let fuzz_cases = generate_fuzz_cases(
+		amount,
+		funding_account,
+		unspendable_account_bytes,
+		transfer_count,
+		&mut rng,
+	);
+
+	log_print!("  Total fuzz cases: {}", fuzz_cases.len());
+	log_print!("");
+
+	let mut passed = 0;
+	let mut failed = 0;
+
+	for (case, (fuzzed_amount, fuzzed_from, fuzzed_to, fuzzed_count)) in &fuzz_cases {
+		// Use catch_unwind to handle panics from field overflow validation
+		let result = run_fuzz_case_with_panic_catch(
+			&quantus_client,
+			block_hash,
+			*fuzzed_amount,
+			*fuzzed_from,
+			*fuzzed_to,
+			*fuzzed_count,
+		)
+		.await;
+
+		let succeeded = result.is_ok();
+
+		if succeeded == case.expect_pass {
+			// Correct behavior
+			log_print!("  {} {}: {}", "OK".bright_green(), case.name, case.description);
+			passed += 1;
+		} else {
+			// Wrong behavior
+			let problem = if case.expect_pass {
+				format!("Expected to pass but failed: {}", result.unwrap_err())
+			} else {
+				"Expected to fail but passed!".to_string()
+			};
+			log_print!(
+				"  {} {}: {} - {}",
+				"FAIL".bright_red(),
+				case.name,
+				case.description,
+				problem.red()
+			);
+			failed += 1;
+		}
+	}
+
+	// Summary
+	log_print!("");
+	log_print!("==================================================");
+	log_print!("  Fuzz Test Results");
+	log_print!("==================================================");
+	log_print!("");
+	log_print!("  Total cases: {}", fuzz_cases.len());
+	log_print!("  Passed: {} (correct behavior)", format!("{}", passed).bright_green());
+
+	if failed > 0 {
+		log_print!("  Failed: {} (incorrect behavior)", format!("{}", failed).bright_red());
+		log_print!("");
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Fuzz test failed: {} cases had incorrect behavior",
+			failed
+		)));
+	}
+
+	log_print!("");
+	log_success!("All fuzz cases behaved correctly!");
+
+	Ok(())
+}
+
+/// Run a single fuzz case, catching any panics (e.g., from field overflow validation)
+async fn run_fuzz_case_with_panic_catch(
+	quantus_client: &QuantusClient,
+	block_hash: subxt::utils::H256,
+	fuzzed_amount: u128,
+	fuzzed_from: [u8; 32],
+	fuzzed_to: [u8; 32],
+	fuzzed_count: u64,
+) -> Result<(), String> {
+	// First, try to compute the leaf hash synchronously with panic catching
+	// This is where field overflow panics typically occur
+	let leaf_hash_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+		compute_leaf_hash_for_fuzz(fuzzed_amount, fuzzed_from, fuzzed_to, fuzzed_count)
+	}));
+
+	let fuzzed_leaf_hash = match leaf_hash_result {
+		Ok(hash) => hash,
+		Err(_) => return Err("Panic during hash computation (field overflow?)".to_string()),
+	};
+
+	// Now do the async part (storage lookup and proof preparation)
+	try_prepare_proof_for_fuzz_with_hash(
+		quantus_client,
+		block_hash,
+		fuzzed_to,
+		fuzzed_count,
+		fuzzed_leaf_hash,
+	)
+	.await
+}
+
+/// Compute the leaf_inputs_hash for fuzz testing (synchronous, can panic on field overflow)
+fn compute_leaf_hash_for_fuzz(
+	fuzzed_amount: u128,
+	fuzzed_from: [u8; 32],
+	fuzzed_to: [u8; 32],
+	fuzzed_count: u64,
+) -> [u8; 32] {
+	use subxt::ext::codec::Encode;
+
+	let from_account = AccountId32::new(fuzzed_from);
+	let to_account = AccountId32::new(fuzzed_to);
+	let transfer_data_tuple =
+		(NATIVE_ASSET_ID, fuzzed_count, from_account, to_account, fuzzed_amount);
+	let encoded_data = transfer_data_tuple.encode();
+	qp_poseidon::PoseidonHasher::hash_storage::<TransferProofData>(&encoded_data)
+}
+
+/// Try to prepare a storage proof with the given pre-computed hash
+async fn try_prepare_proof_for_fuzz_with_hash(
+	quantus_client: &QuantusClient,
+	block_hash: subxt::utils::H256,
+	fuzzed_to: [u8; 32],
+	fuzzed_count: u64,
+	fuzzed_leaf_hash: [u8; 32],
+) -> Result<(), String> {
+	use subxt::ext::codec::Encode;
+
+	let client = quantus_client.client();
+	let to_account = AccountId32::new(fuzzed_to);
+
+	// Build the storage key using the fuzzed to_account and transfer_count
+	let pallet_hash = sp_core::twox_128(b"Wormhole");
+	let storage_hash = sp_core::twox_128(b"TransferProof");
+	let mut final_key = Vec::with_capacity(32 + 32);
+	final_key.extend_from_slice(&pallet_hash);
+	final_key.extend_from_slice(&storage_hash);
+
+	let key_tuple: TransferProofKey = (to_account, fuzzed_count);
+	let encoded_key = key_tuple.encode();
+	let key_hash = sp_core::blake2_256(&encoded_key);
+	final_key.extend_from_slice(&key_hash);
+
+	// Check if the storage key exists
+	let storage_api = client.storage().at(block_hash);
+	let val = storage_api.fetch_raw(final_key.clone()).await.map_err(|e| e.to_string())?;
+
+	if val.is_none() {
+		return Err("Storage key not found".to_string());
+	}
+
+	// Get storage proof from RPC
+	let proof_params = rpc_params![vec![to_hex(&final_key)], block_hash];
+	let read_proof: ReadProof<sp_core::H256> = quantus_client
+		.rpc_client()
+		.request("state_getReadProof", proof_params)
+		.await
+		.map_err(|e| e.to_string())?;
+
+	// Get state root from block header
+	let blocks = client.blocks().at(block_hash).await.map_err(|e| e.to_string())?;
+	let header = blocks.header();
+	let state_root_hex = hex::encode(header.state_root.0);
+
+	// Try to prepare the proof - this is where the validation happens
+	prepare_proof_for_circuit(
+		read_proof.proof.iter().map(|proof| proof.0.clone()).collect(),
+		state_root_hex,
+		fuzzed_leaf_hash,
+	)
+	.map_err(|e| e.to_string())?;
+
+	Ok(())
+}
+
+/// Try to prepare a storage proof with the given (possibly fuzzed) inputs.
+/// Returns Ok if proof preparation succeeds, Err if it fails.
+async fn try_prepare_proof_for_fuzz(
+	quantus_client: &QuantusClient,
+	block_hash: subxt::utils::H256,
+	fuzzed_amount: u128,
+	fuzzed_from: [u8; 32],
+	fuzzed_to: [u8; 32],
+	fuzzed_transfer_count: u64,
+) -> Result<(), String> {
+	use subxt::ext::codec::Encode;
+
+	let client = quantus_client.client();
+
+	// Compute the leaf_inputs_hash with fuzzed inputs
+	let from_account = AccountId32::new(fuzzed_from);
+	let to_account = AccountId32::new(fuzzed_to);
+	let transfer_data_tuple = (
+		NATIVE_ASSET_ID,
+		fuzzed_transfer_count,
+		from_account.clone(),
+		to_account.clone(),
+		fuzzed_amount,
+	);
+	let encoded_data = transfer_data_tuple.encode();
+	let fuzzed_leaf_hash =
+		qp_poseidon::PoseidonHasher::hash_storage::<TransferProofData>(&encoded_data);
+
+	// Build the storage key using the fuzzed to_account and transfer_count
+	// (this matches what the circuit would verify)
+	let pallet_hash = sp_core::twox_128(b"Wormhole");
+	let storage_hash = sp_core::twox_128(b"TransferProof");
+	let mut final_key = Vec::with_capacity(32 + 32);
+	final_key.extend_from_slice(&pallet_hash);
+	final_key.extend_from_slice(&storage_hash);
+
+	let key_tuple: TransferProofKey = (to_account, fuzzed_transfer_count);
+	let encoded_key = key_tuple.encode();
+	let key_hash = sp_core::blake2_256(&encoded_key);
+	final_key.extend_from_slice(&key_hash);
+
+	// Check if the storage key exists
+	let storage_api = client.storage().at(block_hash);
+	let val = storage_api.fetch_raw(final_key.clone()).await.map_err(|e| e.to_string())?;
+
+	if val.is_none() {
+		return Err("Storage key not found".to_string());
+	}
+
+	// Get storage proof from RPC
+	let proof_params = rpc_params![vec![to_hex(&final_key)], block_hash];
+	let read_proof: ReadProof<sp_core::H256> = quantus_client
+		.rpc_client()
+		.request("state_getReadProof", proof_params)
+		.await
+		.map_err(|e| e.to_string())?;
+
+	// Get state root from block header
+	let blocks = client.blocks().at(block_hash).await.map_err(|e| e.to_string())?;
+	let header = blocks.header();
+	let state_root_hex = hex::encode(header.state_root.0);
+
+	// Try to prepare the proof - this is where the validation happens
+	// If the fuzzed leaf_hash doesn't match the value node, this will fail
+	prepare_proof_for_circuit(
+		read_proof.proof.iter().map(|proof| proof.0.clone()).collect(),
+		state_root_hex,
+		fuzzed_leaf_hash,
+	)
+	.map_err(|e| e.to_string())?;
 
 	Ok(())
 }
