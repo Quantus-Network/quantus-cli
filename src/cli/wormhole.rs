@@ -3480,7 +3480,7 @@ fn try_generate_fuzz_proof(
 	.map_err(|e| e.to_string())?;
 
 	// Quantize input amount (may panic for invalid amounts, caught by caller)
-	let input_amount_quantized: u32 = quantize_funding_amount(fuzzed_amount).map_err(|e| e)?;
+	let input_amount_quantized: u32 = quantize_funding_amount(fuzzed_amount)?;
 
 	// Compute output amount (single output for simplicity)
 	let output_amount = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
