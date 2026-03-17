@@ -63,8 +63,14 @@ const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
 /// Volume fee rate in basis points (10 bps = 0.1%)
 const VOLUME_FEE_BPS: u32 = 10;
 
-/// Type alias for transfer proof storage key
-type TransferProofKey = (u32, u64, AccountId32, AccountId32, u128);
+/// Type alias for transfer proof storage key.
+/// Uses (to, transfer_count) since transfer_count is atomic per recipient.
+/// This is hashed with Blake2_256 to form the storage key suffix.
+type TransferProofKey = (AccountId32, u64);
+
+/// Full transfer data including amount - used to compute the leaf_inputs_hash via Poseidon2.
+/// This is what the ZK circuit verifies.
+type TransferProofData = (u32, u64, AccountId32, AccountId32, u128);
 
 /// Compute output amount after fee deduction
 fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
@@ -332,7 +338,9 @@ async fn generate_proof_from_transfer(
 	let from_account = AccountId32::new(transfer_data.from_account.0);
 	let to_account = AccountId32::new(transfer_data.to_account.0);
 
-	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofKey>(
+	// Compute leaf_inputs_hash (Poseidon2 hash of full transfer data including amount)
+	// This is what gets stored as the value and verified by the ZK circuit
+	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofData>(
 		&(
 			NATIVE_ASSET_ID,
 			transfer_data.transfer_count,
@@ -343,16 +351,19 @@ async fn generate_proof_from_transfer(
 			.encode(),
 	);
 
-	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
-		NATIVE_ASSET_ID,
-		transfer_data.transfer_count,
-		transfer_data.from_account.clone(),
-		transfer_data.to_account.clone(),
-		transfer_data.amount,
-	));
+	// Build the storage key manually:
+	// Key = Twox128("Wormhole") || Twox128("TransferProof") || Blake2_256(to, transfer_count)
+	// Compute the prefix using Twox128 hashes
+	let pallet_hash = sp_core::twox_128(b"Wormhole");
+	let storage_hash = sp_core::twox_128(b"TransferProof");
+	let mut final_key = Vec::with_capacity(32 + 32); // prefix + blake2_256 hash
+	final_key.extend_from_slice(&pallet_hash);
+	final_key.extend_from_slice(&storage_hash);
 
-	let mut final_key = proof_address.to_root_bytes();
-	final_key.extend_from_slice(&leaf_hash);
+	// Hash the key tuple with Blake2_256 and append
+	let key_tuple: TransferProofKey = (to_account.clone(), transfer_data.transfer_count);
+	let key_hash = sp_core::blake2_256(&key_tuple.encode());
+	final_key.extend_from_slice(&key_hash);
 
 	let storage_api = client.storage().at(block_hash);
 	let val = storage_api

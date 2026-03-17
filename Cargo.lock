@@ -3793,8 +3793,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-aggregator"
-version = "1.0.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#9d1e16a2a804ff59410f983fe62219db4bd9bef0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -3807,13 +3806,11 @@ dependencies = [
  "rayon",
  "serde",
  "serde_json",
- "sha2 0.10.9",
 ]
 
 [[package]]
 name = "qp-wormhole-circuit"
-version = "1.0.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#9d1e16a2a804ff59410f983fe62219db4bd9bef0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -3824,8 +3821,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit-builder"
-version = "1.0.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#9d1e16a2a804ff59410f983fe62219db4bd9bef0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -3837,16 +3833,14 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-inputs"
-version = "1.0.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#9d1e16a2a804ff59410f983fe62219db4bd9bef0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "qp-wormhole-prover"
-version = "1.0.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#9d1e16a2a804ff59410f983fe62219db4bd9bef0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3857,8 +3851,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-verifier"
-version = "1.0.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#9d1e16a2a804ff59410f983fe62219db4bd9bef0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "qp-plonky2-verifier",
@@ -3867,8 +3860,7 @@ dependencies = [
 
 [[package]]
 name = "qp-zk-circuits-common"
-version = "1.0.7"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?branch=refactor%2Fsep-prover-and-circuit-build#9d1e16a2a804ff59410f983fe62219db4bd9bef0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "hex",

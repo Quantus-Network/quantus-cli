@@ -1959,9 +1959,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				27u8, 173u8, 8u8, 29u8, 246u8, 96u8, 160u8, 168u8, 129u8, 99u8, 253u8, 126u8,
-				200u8, 123u8, 92u8, 105u8, 205u8, 109u8, 151u8, 5u8, 79u8, 30u8, 89u8, 227u8,
-				141u8, 251u8, 252u8, 205u8, 250u8, 12u8, 115u8, 198u8,
+				102u8, 120u8, 138u8, 209u8, 235u8, 43u8, 22u8, 126u8, 15u8, 254u8, 235u8, 13u8,
+				53u8, 147u8, 136u8, 199u8, 28u8, 235u8, 120u8, 7u8, 83u8, 84u8, 155u8, 202u8,
+				153u8, 239u8, 29u8, 11u8, 91u8, 17u8, 43u8, 111u8,
 			]
 	}
 	pub mod system {
@@ -5989,22 +5989,6 @@ pub mod api {
 							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
 							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
 							145u8,
-						],
-					)
-				}
-				#[doc = " Fixed point scale for calculations (default: 10^18)"]
-				pub fn fixed_u128_scale(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"QPoW",
-						"FixedU128Scale",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
 						],
 					)
 				}
@@ -20560,13 +20544,12 @@ pub mod api {
 				}
 				pub mod transfer_proof {
 					use super::runtime_types;
-					pub type TransferProof = ();
+					pub type TransferProof = [::core::primitive::u8; 32usize];
 					pub type Param0 = (
 						::core::primitive::u32,
 						::core::primitive::u64,
 						::subxt::ext::subxt_core::utils::AccountId32,
 						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u128,
 					);
 				}
 				pub mod transfer_count {
@@ -20622,7 +20605,13 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)"]
+				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
+				#[doc = ""]
+				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(key)"]
+				#[doc = " Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data including amount)"]
+				#[doc = ""]
+				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
+				#[doc = " the Poseidon2 hash of the transfer details, providing full 256-bit security."]
 				pub fn transfer_proof_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -20637,21 +20626,24 @@ pub mod api {
 						"TransferProof",
 						(),
 						[
-							114u8, 93u8, 194u8, 180u8, 234u8, 160u8, 121u8, 23u8, 201u8, 229u8,
-							249u8, 211u8, 159u8, 188u8, 127u8, 128u8, 32u8, 26u8, 209u8, 25u8,
-							176u8, 192u8, 221u8, 140u8, 46u8, 26u8, 47u8, 223u8, 210u8, 37u8,
-							137u8, 90u8,
+							91u8, 182u8, 230u8, 217u8, 177u8, 7u8, 154u8, 141u8, 238u8, 47u8, 96u8,
+							108u8, 4u8, 1u8, 197u8, 229u8, 197u8, 131u8, 17u8, 88u8, 221u8, 28u8,
+							94u8, 180u8, 132u8, 228u8, 144u8, 124u8, 182u8, 163u8, 83u8, 24u8,
 						],
 					)
 				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)"]
+				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
+				#[doc = ""]
+				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(key)"]
+				#[doc = " Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data including amount)"]
+				#[doc = ""]
+				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
+				#[doc = " the Poseidon2 hash of the transfer details, providing full 256-bit security."]
 				pub fn transfer_proof(
 					&self,
 					_0: types::transfer_proof::Param0,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::transfer_proof::Param0,
-					>,
+					(),
 					types::transfer_proof::TransferProof,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
@@ -20660,12 +20652,11 @@ pub mod api {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"Wormhole",
 						"TransferProof",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						(),
 						[
-							114u8, 93u8, 194u8, 180u8, 234u8, 160u8, 121u8, 23u8, 201u8, 229u8,
-							249u8, 211u8, 159u8, 188u8, 127u8, 128u8, 32u8, 26u8, 209u8, 25u8,
-							176u8, 192u8, 221u8, 140u8, 46u8, 26u8, 47u8, 223u8, 210u8, 37u8,
-							137u8, 90u8,
+							91u8, 182u8, 230u8, 217u8, 177u8, 7u8, 154u8, 141u8, 238u8, 47u8, 96u8,
+							108u8, 4u8, 1u8, 197u8, 229u8, 197u8, 131u8, 17u8, 88u8, 221u8, 28u8,
+							94u8, 180u8, 132u8, 228u8, 144u8, 124u8, 182u8, 163u8, 83u8, 24u8,
 						],
 					)
 				}

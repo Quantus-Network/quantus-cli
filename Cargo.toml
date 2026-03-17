@@ -77,18 +77,17 @@ subxt-metadata = "0.44"
 
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
-qp-wormhole-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-circuit", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-circuit-builder" }
-qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-prover", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-verifier", default-features = false, features = ["std"] }
-qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits", package = "qp-wormhole-aggregator", branch = "refactor/sep-prover-and-circuit-build", default-features = false, features = ["rayon", "std"] }
-# qp-wormhole-aggregator = { path = "../zk-circuits/wormhole/aggregator", package = "qp-wormhole-aggregator", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-inputs = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-inputs", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-zk-circuits-common", default-features = false, features = ["std"] }
+qp-wormhole-circuit = { path = "../qp-zk-circuits/wormhole/circuit", package = "qp-wormhole-circuit", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { path = "../qp-zk-circuits/wormhole/circuit-builder", package = "qp-wormhole-circuit-builder" }
+qp-wormhole-prover = { path = "../qp-zk-circuits/wormhole/prover", package = "qp-wormhole-prover", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { path = "../qp-zk-circuits/wormhole/verifier", package = "qp-wormhole-verifier", default-features = false, features = ["std"] }
+qp-wormhole-aggregator = { path = "../qp-zk-circuits/wormhole/aggregator", package = "qp-wormhole-aggregator", default-features = false, features = ["rayon", "std"] }
+qp-wormhole-inputs = { path = "../qp-zk-circuits/wormhole/inputs", package = "qp-wormhole-inputs", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { path = "../qp-zk-circuits/common", package = "qp-zk-circuits-common", default-features = false, features = ["std"] }
 qp-plonky2 = { version = "1.1.3", default-features = false, features = ["rand", "std"] }
 
 [build-dependencies]
-qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "refactor/sep-prover-and-circuit-build", package = "qp-wormhole-circuit-builder" }
+qp-wormhole-circuit-builder = { path = "../qp-zk-circuits/wormhole/circuit-builder", package = "qp-wormhole-circuit-builder" }
 
 [dev-dependencies]
 tempfile = "3.8.1"

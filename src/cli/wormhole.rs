@@ -723,7 +723,14 @@ pub async fn handle_wormhole_command(
 	}
 }
 
-pub type TransferProofKey = (u32, u64, AccountId32, AccountId32, u128);
+/// Key for TransferProof storage - uniquely identifies a transfer.
+/// Uses (to, transfer_count) since transfer_count is atomic per recipient.
+/// This is hashed with Blake2_256 to form the storage key suffix.
+pub type TransferProofKey = (AccountId32, u64);
+
+/// Full transfer data including amount - used to compute the leaf_inputs_hash via Poseidon2.
+/// This is what the ZK circuit verifies.
+pub type TransferProofData = (u32, u64, AccountId32, AccountId32, u128);
 
 /// Derive and display the unspendable wormhole address from a secret.
 /// Users can then send funds to this address using `quantus send`.
@@ -1894,28 +1901,31 @@ async fn generate_proof(
 			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
 		})?;
 
-	// Build storage key
-	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofKey>(
-		&(
-			NATIVE_ASSET_ID,
-			transfer_count,
-			from_account.clone(),
-			to_account.clone(),
-			funding_amount,
-		)
-			.encode(),
-	);
+	// Build storage key using the new format:
+	// - Key suffix: Blake2_256(asset_id, transfer_count, from, to) - without amount
+	// - Value: Poseidon2(asset_id, transfer_count, from, to, amount) - the leaf_inputs_hash
 
-	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
-		NATIVE_ASSET_ID,
-		transfer_count,
-		SubxtAccountId(from_account.clone().into()),
-		SubxtAccountId(to_account.clone().into()),
-		funding_amount,
-	));
+	// Compute leaf_inputs_hash (Poseidon2 hash of full transfer data including amount)
+	// This is what gets stored as the value and verified by the ZK circuit
+	let transfer_data_tuple =
+		(NATIVE_ASSET_ID, transfer_count, from_account.clone(), to_account.clone(), funding_amount);
+	let encoded_data = transfer_data_tuple.encode();
+	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofData>(&encoded_data);
 
-	let mut final_key = proof_address.to_root_bytes();
-	final_key.extend_from_slice(&leaf_hash);
+	// Build the storage key manually:
+	// Key = Twox128("Wormhole") || Twox128("TransferProof") || Blake2_256(to, transfer_count)
+	// Compute the prefix using Twox128 hashes
+	let pallet_hash = sp_core::twox_128(b"Wormhole");
+	let storage_hash = sp_core::twox_128(b"TransferProof");
+	let mut final_key = Vec::with_capacity(32 + 32); // prefix + blake2_256 hash
+	final_key.extend_from_slice(&pallet_hash);
+	final_key.extend_from_slice(&storage_hash);
+
+	// Hash the key tuple with Blake2_256 and append
+	let key_tuple: TransferProofKey = (to_account.clone(), transfer_count);
+	let encoded_key = key_tuple.encode();
+	let key_hash = sp_core::blake2_256(&encoded_key);
+	final_key.extend_from_slice(&key_hash);
 
 	// Verify storage key exists
 	let storage_api = client.storage().at(block_hash);
@@ -2908,28 +2918,12 @@ mod tests {
 		// If the upstream adds/removes/renames fields, this test will catch it.
 		let json = r#"{
 			"num_leaf_proofs": 8,
-			"num_layer0_proofs": null,
-			"hashes": {
-				"common": "aabbcc",
-				"verifier": "ddeeff",
-				"prover": "112233",
-				"aggregated_common": "445566",
-				"aggregated_verifier": "778899",
-				"aggregated_prover": "99aabb",
-				"dummy_proof": "bbccdd"
-			}
+			"num_layer0_proofs": null
 		}"#;
 
 		let config: CircuitBinsConfig = serde_json::from_str(json).unwrap();
 		assert_eq!(config.num_leaf_proofs, 8);
 		assert_eq!(config.num_layer0_proofs, None);
-
-		let hashes = config.hashes.unwrap();
-		assert_eq!(hashes.prover.as_deref(), Some("112233"));
-		assert_eq!(hashes.aggregated_common.as_deref(), Some("445566"));
-		assert_eq!(hashes.aggregated_verifier.as_deref(), Some("778899"));
-		assert_eq!(hashes.aggregated_prover.as_deref(), Some("99aabb"));
-		assert_eq!(hashes.dummy_proof.as_deref(), Some("bbccdd"));
 	}
 
 	fn mk_accounts(n: usize) -> Vec<[u8; 32]> {
