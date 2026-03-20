@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::crypto::Ss58AddressFormat;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
-	ByteArray,
+	ByteArray, Pair,
 };
 // Quantum-safe encryption imports
 use aes_gcm::{
@@ -58,19 +58,16 @@ impl QuantumKeyPair {
 
 	/// Convert to DilithiumPair for use with substrate-api-client
 	pub fn to_resonance_pair(&self) -> Result<DilithiumPair> {
-		// Convert our QuantumKeyPair to DilithiumPair using from_seed
-		// Use the private key as the seed
-		Ok(DilithiumPair {
-			public: self.public_key.as_slice().try_into().unwrap(),
-			secret: self.private_key.as_slice().try_into().unwrap(),
-		})
+		// Convert our QuantumKeyPair to DilithiumPair using from_raw
+		Ok(DilithiumPair::from_raw(&self.public_key, &self.private_key)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
 	}
 
 	#[allow(dead_code)]
 	pub fn from_resonance_pair(keypair: &DilithiumPair) -> Self {
 		Self {
-			public_key: keypair.public.as_ref().to_vec(),
-			private_key: keypair.secret.as_ref().to_vec(),
+			public_key: keypair.public().as_ref().to_vec(),
+			private_key: keypair.secret_bytes().to_vec(),
 		}
 	}
 

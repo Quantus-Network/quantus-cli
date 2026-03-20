@@ -7,7 +7,7 @@ use crate::{error::QuantusError, log_verbose};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use qp_dilithium_crypto::types::DilithiumSignatureScheme;
 use qp_poseidon::PoseidonHasher;
-use sp_core::{crypto::AccountId32, ByteArray};
+use sp_core::{crypto::AccountId32, ByteArray, Pair};
 use sp_runtime::{traits::IdentifyAccount, MultiAddress};
 use std::{sync::Arc, time::Duration};
 use subxt::{
@@ -256,7 +256,7 @@ impl QuantusClient {
 impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::DilithiumPair {
 	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
 		let resonance_public =
-			qp_dilithium_crypto::types::DilithiumPublic::from_slice(self.public.as_slice())
+			qp_dilithium_crypto::types::DilithiumPublic::from_slice(self.public().as_ref())
 				.expect("Invalid public key");
 		<qp_dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
 			resonance_public,

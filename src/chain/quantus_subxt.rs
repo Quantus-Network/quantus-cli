@@ -1959,9 +1959,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				102u8, 120u8, 138u8, 209u8, 235u8, 43u8, 22u8, 126u8, 15u8, 254u8, 235u8, 13u8,
-				53u8, 147u8, 136u8, 199u8, 28u8, 235u8, 120u8, 7u8, 83u8, 84u8, 155u8, 202u8,
-				153u8, 239u8, 29u8, 11u8, 91u8, 17u8, 43u8, 111u8,
+				9u8, 252u8, 101u8, 200u8, 161u8, 142u8, 241u8, 130u8, 224u8, 189u8, 72u8, 23u8,
+				15u8, 35u8, 16u8, 38u8, 233u8, 12u8, 177u8, 101u8, 41u8, 225u8, 185u8, 137u8,
+				187u8, 153u8, 77u8, 45u8, 214u8, 214u8, 215u8, 198u8,
 			]
 	}
 	pub mod system {
@@ -20545,12 +20545,8 @@ pub mod api {
 				pub mod transfer_proof {
 					use super::runtime_types;
 					pub type TransferProof = [::core::primitive::u8; 32usize];
-					pub type Param0 = (
-						::core::primitive::u32,
-						::core::primitive::u64,
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::subxt::ext::subxt_core::utils::AccountId32,
-					);
+					pub type Param0 =
+						(::subxt::ext::subxt_core::utils::AccountId32, ::core::primitive::u64);
 				}
 				pub mod transfer_count {
 					use super::runtime_types;
@@ -20607,11 +20603,13 @@ pub mod api {
 				}
 				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
 				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(key)"]
-				#[doc = " Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data including amount)"]
+				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
+				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
 				#[doc = ""]
+				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
 				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of the transfer details, providing full 256-bit security."]
+				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
+				#[doc = " providing full 256-bit security."]
 				pub fn transfer_proof_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -20626,19 +20624,22 @@ pub mod api {
 						"TransferProof",
 						(),
 						[
-							91u8, 182u8, 230u8, 217u8, 177u8, 7u8, 154u8, 141u8, 238u8, 47u8, 96u8,
-							108u8, 4u8, 1u8, 197u8, 229u8, 197u8, 131u8, 17u8, 88u8, 221u8, 28u8,
-							94u8, 180u8, 132u8, 228u8, 144u8, 124u8, 182u8, 163u8, 83u8, 24u8,
+							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
+							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
+							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
+							55u8,
 						],
 					)
 				}
 				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
 				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(key)"]
-				#[doc = " Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data including amount)"]
+				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
+				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
 				#[doc = ""]
+				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
 				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of the transfer details, providing full 256-bit security."]
+				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
+				#[doc = " providing full 256-bit security."]
 				pub fn transfer_proof(
 					&self,
 					_0: types::transfer_proof::Param0,
@@ -20654,9 +20655,10 @@ pub mod api {
 						"TransferProof",
 						(),
 						[
-							91u8, 182u8, 230u8, 217u8, 177u8, 7u8, 154u8, 141u8, 238u8, 47u8, 96u8,
-							108u8, 4u8, 1u8, 197u8, 229u8, 197u8, 131u8, 17u8, 88u8, 221u8, 28u8,
-							94u8, 180u8, 132u8, 228u8, 144u8, 124u8, 182u8, 163u8, 83u8, 24u8,
+							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
+							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
+							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
+							55u8,
 						],
 					)
 				}
