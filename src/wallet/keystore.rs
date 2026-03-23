@@ -314,8 +314,8 @@ mod tests {
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
 
 		// Verify the conversion
-		assert_eq!(quantum_keypair.public_key, resonance_pair.public.as_ref().to_vec());
-		assert_eq!(quantum_keypair.private_key, resonance_pair.secret.as_ref().to_vec());
+		assert_eq!(quantum_keypair.public_key, resonance_pair.public().as_ref().to_vec());
+		assert_eq!(quantum_keypair.private_key.as_slice(), resonance_pair.secret_bytes());
 	}
 
 	#[test]
@@ -327,8 +327,8 @@ mod tests {
 			quantum_keypair.to_resonance_pair().expect("Conversion should succeed");
 
 		// Verify round-trip conversion preserves data
-		assert_eq!(original_pair.public.as_ref(), converted_pair.public.as_ref());
-		assert_eq!(original_pair.secret.as_ref(), converted_pair.secret.as_ref());
+		assert_eq!(original_pair.public().as_ref(), converted_pair.public().as_ref());
+		assert_eq!(original_pair.secret_bytes(), converted_pair.secret_bytes());
 	}
 
 	/// Wallet address must match chain: same AccountId (Poseidon hash of Dilithium public)
