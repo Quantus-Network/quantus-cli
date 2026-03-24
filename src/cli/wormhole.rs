@@ -30,7 +30,7 @@ use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
-	utils::{digest_felts_to_bytes, BytesDigest},
+	utils::{digest_to_bytes, BytesDigest},
 };
 use rand::RngCore;
 use sp_core::crypto::{AccountId32, Ss58Codec};
@@ -770,7 +770,7 @@ fn show_wormhole_address(secret_hex: String) -> crate::error::Result<()> {
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
 	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
 		.as_ref()
 		.try_into()
@@ -1909,7 +1909,7 @@ async fn generate_proof(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
 	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
 		.as_ref()
 		.try_into()
@@ -2014,7 +2014,7 @@ async fn generate_proof(
 			output_amount_1: output_assignment.output_amount_1,
 			output_amount_2: output_assignment.output_amount_2,
 			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: digest_felts_to_bytes(Nullifier::from_preimage(secret, transfer_count).hash),
+			nullifier: digest_to_bytes(Nullifier::from_preimage(secret, transfer_count).hash),
 			exit_account_1: BytesDigest::try_from(output_assignment.exit_account_1.as_ref())
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			exit_account_2: BytesDigest::try_from(output_assignment.exit_account_2.as_ref())
@@ -3195,7 +3195,7 @@ async fn run_fuzz_test(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
 	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
 		.as_ref()
 		.try_into()
@@ -3490,7 +3490,7 @@ fn try_generate_fuzz_proof(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
 
 	// Build circuit inputs with fuzzed data
 	let inputs = CircuitInputs {
@@ -3511,7 +3511,7 @@ fn try_generate_fuzz_proof(
 			output_amount_1: output_amount,
 			output_amount_2: 0,
 			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: digest_felts_to_bytes(Nullifier::from_preimage(secret, fuzzed_count).hash),
+			nullifier: digest_to_bytes(Nullifier::from_preimage(secret, fuzzed_count).hash),
 			exit_account_1: BytesDigest::try_from(fuzzed_to.as_ref()).map_err(|e| e.to_string())?,
 			exit_account_2: BytesDigest::try_from([0u8; 32].as_ref()).map_err(|e| e.to_string())?,
 			block_hash: BytesDigest::try_from(block_hash.as_ref()).map_err(|e| e.to_string())?,

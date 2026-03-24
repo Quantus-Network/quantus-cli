@@ -49,11 +49,11 @@ rand = "0.9"
 aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 
 # Quantus crypto dependencies (aligned with chain)
-qp-rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/injective-wormhole" }
-qp-rusty-crystals-hdwallet = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/injective-wormhole" }
+qp-rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/new-poseidon-api" }
+qp-rusty-crystals-hdwallet = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/new-poseidon-api" }
 # Chain primitive
 qp-dilithium-crypto = { git = "https://github.com/Quantus-Network/chain.git", branch = "illuzen/no-length-trie" }
-qp-poseidon = { git = "https://github.com/Quantus-Network/qp-poseidon.git", branch = "illuzen/injectivity" }
+qp-poseidon = { git = "https://github.com/Quantus-Network/qp-poseidon.git", branch = "illuzen/injective-to-felts" }
 
 # HTTP client for Subsquid queries
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
@@ -84,22 +84,22 @@ qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuit
 qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits.git", branch = "illuzen/non-injectivity", default-features = false, features = ["rayon", "std"] }
 qp-wormhole-inputs = { git = "https://github.com/Quantus-Network/qp-zk-circuits.git", branch = "illuzen/non-injectivity", default-features = false, features = ["std"] }
 qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits.git", branch = "illuzen/non-injectivity", default-features = false, features = ["std"] }
-qp-plonky2 = { version = "1.1.3", default-features = false, features = ["rand", "std"] }
+qp-plonky2 = { git = "https://github.com/Quantus-Network/qp-plonky2.git", branch = "illuzen/new-rate", default-features = false, features = ["rand", "std"] }
 
 [build-dependencies]
 qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits.git", branch = "illuzen/non-injectivity" }
 
 [patch.crates-io]
 # Quantus dependencies
-qp-poseidon = { git = "https://github.com/Quantus-Network/qp-poseidon.git", branch = "illuzen/injectivity" }
-qp-poseidon-core = { git = "https://github.com/Quantus-Network/qp-poseidon.git", branch = "illuzen/injectivity" }
+qp-poseidon = { git = "https://github.com/Quantus-Network/qp-poseidon.git", branch = "illuzen/injective-to-felts" }
+qp-poseidon-core = { git = "https://github.com/Quantus-Network/qp-poseidon.git", branch = "illuzen/injective-to-felts" }
 qp-poseidon-constants = { git = "https://github.com/Quantus-Network/qp-poseidon-constants.git", tag = "v1.1.0" }
 qp-plonky2 = { git = "https://github.com/Quantus-Network/qp-plonky2.git", branch = "illuzen/new-rate" }
 qp-plonky2-verifier = { git = "https://github.com/Quantus-Network/qp-plonky2.git", branch = "illuzen/new-rate" }
 qp-plonky2-core = { git = "https://github.com/Quantus-Network/qp-plonky2.git", branch = "illuzen/new-rate" }
 qp-plonky2-field = { git = "https://github.com/Quantus-Network/qp-plonky2.git", branch = "illuzen/new-rate" }
-qp-rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/injective-wormhole" }
-qp-rusty-crystals-hdwallet = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/injective-wormhole" }
+qp-rusty-crystals-dilithium = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/new-poseidon-api" }
+qp-rusty-crystals-hdwallet = { git = "https://github.com/Quantus-Network/qp-rusty-crystals.git", branch = "illuzen/new-poseidon-api" }
 
 [dev-dependencies]
 tempfile = "3.8.1"
