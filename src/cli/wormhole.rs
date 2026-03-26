@@ -770,11 +770,8 @@ fn show_wormhole_address(secret_hex: String) -> crate::error::Result<()> {
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
-	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
-		.as_ref()
-		.try_into()
-		.expect("BytesDigest is always 32 bytes");
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
+	let unspendable_account_bytes: [u8; 32] = *unspendable_account_bytes_digest;
 
 	let account_id = sp_core::crypto::AccountId32::new(unspendable_account_bytes);
 	let ss58_address =
@@ -1909,11 +1906,8 @@ async fn generate_proof(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
-	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
-		.as_ref()
-		.try_into()
-		.expect("BytesDigest is always 32 bytes");
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
+	let unspendable_account_bytes: [u8; 32] = *unspendable_account_bytes_digest;
 
 	let from_account = funding_account.clone();
 	let to_account = AccountId32::new(unspendable_account_bytes);
@@ -3195,11 +3189,8 @@ async fn run_fuzz_test(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
-	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
-		.as_ref()
-		.try_into()
-		.expect("BytesDigest is always 32 bytes");
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
+	let unspendable_account_bytes: [u8; 32] = *unspendable_account_bytes_digest;
 
 	let wormhole_address = SubxtAccountId(unspendable_account_bytes);
 
@@ -3490,7 +3481,7 @@ fn try_generate_fuzz_proof(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::felts_to_digest(unspendable_account);
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
 
 	// Build circuit inputs with fuzzed data
 	let inputs = CircuitInputs {
