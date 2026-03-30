@@ -92,13 +92,13 @@ qp-wormhole-circuit-builder = { version = "1.2.1" }
 [patch.crates-io]
 qp-poseidon = { git = "https://github.com/Quantus-Network/qp-poseidon", branch = "illuzen/compact-storage-hasher" }
 qp-poseidon-core = { git = "https://github.com/Quantus-Network/qp-poseidon", branch = "illuzen/compact-storage-hasher" }
-qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/compact-storage-hasher" }
-qp-wormhole-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/compact-storage-hasher" }
-qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/compact-storage-hasher" }
-qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/compact-storage-hasher" }
-qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/compact-storage-hasher" }
-qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/compact-storage-hasher" }
-qp-wormhole-inputs = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/compact-storage-hasher" }
+qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/back-to-compact" }
+qp-wormhole-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/back-to-compact" }
+qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/back-to-compact" }
+qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/back-to-compact" }
+qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/back-to-compact" }
+qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/back-to-compact" }
+qp-wormhole-inputs = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "illuzen/back-to-compact" }
 
 [dev-dependencies]
 tempfile = "3.8.1"
