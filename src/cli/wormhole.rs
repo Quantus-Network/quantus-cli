@@ -884,13 +884,12 @@ async fn aggregate_proofs(
 
 	log_print!("  Loading aggregator and generating {} dummy proofs...", num_padding_proofs);
 
-	let mut aggregator = Layer0Aggregator::new(bins_dir)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to load aggregator from pre-built bins: {}",
-				e
-			))
-		})?;
+	let mut aggregator = Layer0Aggregator::new(bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to load aggregator from pre-built bins: {}",
+			e
+		))
+	})?;
 
 	log_verbose!("Aggregation config: num_leaf_proofs={}", aggregator.batch_size());
 	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
@@ -927,15 +926,14 @@ async fn aggregate_proofs(
 	log_print!("  Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
 
 	// Parse and display aggregated public inputs
-	let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
-		aggregated_proof.public_inputs.as_slice(),
-	)
-	.map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to parse aggregated public inputs: {}",
-			e
-		))
-	})?;
+	let aggregated_public_inputs =
+		AggregatedPublicCircuitInputs::try_from_felts(aggregated_proof.public_inputs.as_slice())
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to parse aggregated public inputs: {}",
+					e
+				))
+			})?;
 
 	log_verbose!("Aggregated public inputs: {:#?}", aggregated_public_inputs);
 
@@ -963,14 +961,9 @@ async fn aggregate_proofs(
 
 	// Verify the aggregated proof locally
 	log_verbose!("Verifying aggregated proof locally...");
-	aggregator
-		.verify(aggregated_proof.clone())
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Aggregated proof verification failed: {}",
-				e
-			))
-		})?;
+	aggregator.verify(aggregated_proof.clone()).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Aggregated proof verification failed: {}", e))
+	})?;
 
 	// Save aggregated proof using helper function
 	write_proof_file(&output_file, &aggregated_proof.to_bytes()).map_err(|e| {
@@ -2708,10 +2701,9 @@ fn aggregate_proofs_to_file(
 	use qp_wormhole_aggregator::aggregator::{AggregationBackend, CircuitType, Layer0Aggregator};
 
 	let bins_dir = std::path::Path::new("generated-bins");
-	let mut aggregator = Layer0Aggregator::new(bins_dir)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to create aggregator: {}", e))
-		})?;
+	let mut aggregator = Layer0Aggregator::new(bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create aggregator: {}", e))
+	})?;
 
 	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to load leaf circuit data: {}", e))

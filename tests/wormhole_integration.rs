@@ -558,10 +558,9 @@ fn aggregate_proofs(
 		aggregator.aggregate().map_err(|e| format!("Aggregation failed: {}", e))?;
 
 	use qp_wormhole_circuit::inputs::ParseAggregatedPublicInputs;
-	let public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
-		aggregated_result.public_inputs.as_slice(),
-	)
-	.map_err(|e| format!("Failed to parse aggregated public inputs: {}", e))?;
+	let public_inputs =
+		AggregatedPublicCircuitInputs::try_from_felts(aggregated_result.public_inputs.as_slice())
+			.map_err(|e| format!("Failed to parse aggregated public inputs: {}", e))?;
 
 	println!("  Verifying aggregated proof locally...");
 	aggregator
