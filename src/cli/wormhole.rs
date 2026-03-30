@@ -46,21 +46,11 @@ use subxt::{
 	OnlineClient,
 };
 
-/// Native asset id
-pub const NATIVE_ASSET_ID: u32 = 0;
-
-/// Scale down factor for quantizing amounts (10^10 to go from 12 to 2 decimal places)
-pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
-
-/// Volume fee rate in basis points (10 bps = 0.1%)
-/// This must match the on-chain VolumeFeeRateBps configuration
-pub const VOLUME_FEE_BPS: u32 = 10;
-
-/// Compute output amount after fee deduction
-/// output = input * (10000 - fee_bps) / 10000
-pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
-	((input_amount as u64) * (10000 - fee_bps as u64) / 10000) as u32
-}
+// Re-export constants and functions from wormhole_lib module for backward compatibility
+use crate::wormhole_lib;
+pub use crate::wormhole_lib::{
+	compute_output_amount, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
+};
 
 /// Parse a hex-encoded secret string into a 32-byte array
 pub fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32], String> {
@@ -98,11 +88,7 @@ pub fn parse_exit_account(exit_account_str: &str) -> Result<[u8; 32], String> {
 /// Quantize a funding amount from 12 decimal places to 2 decimal places
 /// Returns an error if the quantized value doesn't fit in u32
 pub fn quantize_funding_amount(amount: u128) -> Result<u32, String> {
-	let quantized = amount / SCALE_DOWN_FACTOR;
-
-	quantized
-		.try_into()
-		.map_err(|_| format!("Funding amount {} too large after quantization", quantized))
+	wormhole_lib::quantize_amount(amount).map_err(|e| e.message)
 }
 
 /// Read and decode a hex-encoded proof file
@@ -1866,6 +1852,9 @@ async fn run_multiround(
 }
 
 /// Generate a wormhole proof with dual outputs (used for random partitioning in multiround)
+///
+/// This function fetches the necessary data from the chain and delegates to
+/// `wormhole_lib::generate_proof` for the actual proof generation.
 async fn generate_proof(
 	secret_hex: &str,
 	funding_amount: u128,
@@ -1876,41 +1865,25 @@ async fn generate_proof(
 	output_file: &str,
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<()> {
-	// Parse secret
-	let secret_array = parse_secret_hex(secret_hex).map_err(crate::error::QuantusError::Generic)?;
-	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to convert secret: {:?}", e))
-	})?;
-
-	// Parse funding account
+	// Parse inputs
+	let secret = parse_secret_hex(secret_hex).map_err(crate::error::QuantusError::Generic)?;
 	let funding_account_bytes =
 		parse_exit_account(funding_account_str).map_err(crate::error::QuantusError::Generic)?;
-	let funding_account = AccountId32::new(funding_account_bytes);
+	let block_hash_bytes: [u8; 32] = hex::decode(block_hash_str.trim_start_matches("0x"))
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid block hash: {}", e)))?
+		.try_into()
+		.map_err(|_| crate::error::QuantusError::Generic("Block hash must be 32 bytes".into()))?;
 
-	// Parse block hash
-	let hash_bytes = hex::decode(block_hash_str.trim_start_matches("0x"))
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid block hash: {}", e)))?;
-	if hash_bytes.len() != 32 {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Block hash must be 32 bytes, got {}",
-			hash_bytes.len()
-		)));
-	}
-	let hash: [u8; 32] = hash_bytes.try_into().unwrap();
-	let block_hash = subxt::utils::H256::from(hash);
+	// Compute wormhole address using wormhole_lib
+	let wormhole_address = wormhole_lib::compute_wormhole_address(&secret)
+		.map_err(|e| crate::error::QuantusError::Generic(e.message))?;
 
+	// Compute storage key using wormhole_lib
+	let storage_key = wormhole_lib::compute_storage_key(&wormhole_address, transfer_count);
+
+	// Fetch data from chain
+	let block_hash = subxt::utils::H256::from(block_hash_bytes);
 	let client = quantus_client.client();
-
-	// Generate unspendable account from secret
-	let unspendable_account =
-		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
-			.account_id;
-	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
-	let unspendable_account_bytes: [u8; 32] = *unspendable_account_bytes_digest;
-
-	let from_account = funding_account.clone();
-	let to_account = AccountId32::new(unspendable_account_bytes);
 
 	// Get block
 	let blocks =
@@ -1918,36 +1891,10 @@ async fn generate_proof(
 			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
 		})?;
 
-	// Build storage key using the new format:
-	// - Key suffix: Blake2_256(asset_id, transfer_count, from, to) - without amount
-	// - Value: Poseidon2(asset_id, transfer_count, from, to, amount) - the leaf_inputs_hash
-
-	// Compute leaf_inputs_hash (Poseidon2 hash of full transfer data including amount)
-	// This is what gets stored as the value and verified by the ZK circuit
-	let transfer_data_tuple =
-		(NATIVE_ASSET_ID, transfer_count, from_account.clone(), to_account.clone(), funding_amount);
-	let encoded_data = transfer_data_tuple.encode();
-	let leaf_hash = qp_poseidon::PoseidonHasher::hash_storage::<TransferProofData>(&encoded_data);
-
-	// Build the storage key manually:
-	// Key = Twox128("Wormhole") || Twox128("TransferProof") || Blake2_256(to, transfer_count)
-	// Compute the prefix using Twox128 hashes
-	let pallet_hash = sp_core::twox_128(b"Wormhole");
-	let storage_hash = sp_core::twox_128(b"TransferProof");
-	let mut final_key = Vec::with_capacity(32 + 32); // prefix + blake2_256 hash
-	final_key.extend_from_slice(&pallet_hash);
-	final_key.extend_from_slice(&storage_hash);
-
-	// Hash the key tuple with Blake2_256 and append
-	let key_tuple: TransferProofKey = (to_account.clone(), transfer_count);
-	let encoded_key = key_tuple.encode();
-	let key_hash = sp_core::blake2_256(&encoded_key);
-	final_key.extend_from_slice(&key_hash);
-
 	// Verify storage key exists
 	let storage_api = client.storage().at(block_hash);
 	let val = storage_api
-		.fetch_raw(final_key.clone())
+		.fetch_raw(storage_key.clone())
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 	if val.is_none() {
@@ -1956,85 +1903,58 @@ async fn generate_proof(
 		));
 	}
 
-	// Get storage proof
-	let proof_params = rpc_params![vec![to_hex(&final_key)], block_hash];
+	// Get storage proof from chain
+	let proof_params = rpc_params![vec![to_hex(&storage_key)], block_hash];
 	let read_proof: ReadProof<sp_core::H256> = quantus_client
 		.rpc_client()
 		.request("state_getReadProof", proof_params)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
 
+	// Extract header data
 	let header = blocks.header();
-	let state_root = BytesDigest::try_from(header.state_root.as_bytes())
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let parent_hash = BytesDigest::try_from(header.parent_hash.as_bytes())
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let extrinsics_root = BytesDigest::try_from(header.extrinsics_root.as_bytes())
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let digest =
-		header.digest.encode().try_into().map_err(|_| {
-			crate::error::QuantusError::Generic("Failed to encode digest".to_string())
-		})?;
+	let parent_hash: [u8; 32] = header.parent_hash.0;
+	let state_root: [u8; 32] = header.state_root.0;
+	let extrinsics_root: [u8; 32] = header.extrinsics_root.0;
+	let digest = header.digest.encode();
 	let block_number = header.number;
 
-	// Prepare storage proof
-	let processed_storage_proof = prepare_proof_for_circuit(
-		read_proof.proof.iter().map(|proof| proof.0.clone()).collect(),
-		hex::encode(header.state_root.0),
-		leaf_hash,
-	)
-	.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
+	// Convert proof nodes
+	let proof_nodes: Vec<Vec<u8>> = read_proof.proof.iter().map(|p| p.0.clone()).collect();
 
-	// Quantize input amount
-	let input_amount_quantized: u32 =
-		quantize_funding_amount(funding_amount).map_err(crate::error::QuantusError::Generic)?;
-
-	// Use the output assignment directly (already quantized)
-	let inputs = CircuitInputs {
-		private: PrivateCircuitInputs {
-			secret,
-			transfer_count,
-			funding_account: BytesDigest::try_from(funding_account.as_ref() as &[u8])
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			storage_proof: processed_storage_proof,
-			unspendable_account: unspendable_account_bytes_digest,
-			parent_hash,
-			state_root,
-			extrinsics_root,
-			digest,
-			input_amount: input_amount_quantized,
-		},
-		public: PublicCircuitInputs {
-			output_amount_1: output_assignment.output_amount_1,
-			output_amount_2: output_assignment.output_amount_2,
-			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: digest_to_bytes(Nullifier::from_preimage(secret, transfer_count).hash),
-			exit_account_1: BytesDigest::try_from(output_assignment.exit_account_1.as_ref())
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			exit_account_2: BytesDigest::try_from(output_assignment.exit_account_2.as_ref())
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			block_hash: BytesDigest::try_from(block_hash.as_ref())
-				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
-			block_number,
-			asset_id: NATIVE_ASSET_ID,
-		},
+	// Build ProofGenerationInput using wormhole_lib types
+	let input = wormhole_lib::ProofGenerationInput {
+		secret,
+		transfer_count,
+		funding_account: funding_account_bytes,
+		wormhole_address,
+		funding_amount,
+		block_hash: block_hash_bytes,
+		block_number,
+		parent_hash,
+		state_root,
+		extrinsics_root,
+		digest,
+		proof_nodes,
+		exit_account_1: output_assignment.exit_account_1.into(),
+		exit_account_2: output_assignment.exit_account_2.into(),
+		output_amount_1: output_assignment.output_amount_1,
+		output_amount_2: output_assignment.output_amount_2,
+		volume_fee_bps: VOLUME_FEE_BPS,
+		asset_id: NATIVE_ASSET_ID,
 	};
 
-	// Load prover from pre-built bins
+	// Generate proof using wormhole_lib
 	let bins_dir = Path::new("generated-bins");
-	let prover =
-		WormholeProver::new_from_files(&bins_dir.join("prover.bin"), &bins_dir.join("common.bin"))
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to load prover: {}", e))
-			})?;
-	let prover_next = prover
-		.commit(&inputs)
-		.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?;
-	let proof: ProofWithPublicInputs<_, _, 2> = prover_next.prove().map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Proof generation failed: {}", e))
-	})?;
+	let result = wormhole_lib::generate_proof(
+		&input,
+		&bins_dir.join("prover.bin"),
+		&bins_dir.join("common.bin"),
+	)
+	.map_err(|e| crate::error::QuantusError::Generic(e.message))?;
 
-	let proof_hex = hex::encode(proof.to_bytes());
+	// Write proof to file
+	let proof_hex = hex::encode(result.proof_bytes);
 	std::fs::write(output_file, proof_hex).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
 	})?;

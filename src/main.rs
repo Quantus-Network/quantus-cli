@@ -15,6 +15,7 @@ mod error;
 mod log;
 mod subsquid;
 mod wallet;
+mod wormhole_lib;
 
 use cli::Commands;
 use error::QuantusError;
