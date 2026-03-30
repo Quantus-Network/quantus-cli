@@ -3392,7 +3392,8 @@ dependencies = [
 [[package]]
 name = "plonky2_maybe_rayon"
 version = "1.0.0"
-source = "git+https://github.com/Quantus-Network/qp-plonky2.git?branch=illuzen%2Fnew-rate#f46043c4a205de1c6cbb3bae4ea4213f9fb9d2bc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e1e554181dc95243b8d9948ae7bae5759c7fb2502fed28f671f95ef38079406"
 dependencies = [
  "rayon",
 ]
@@ -3400,7 +3401,8 @@ dependencies = [
 [[package]]
 name = "plonky2_util"
 version = "1.0.0"
-source = "git+https://github.com/Quantus-Network/qp-plonky2.git?branch=illuzen%2Fnew-rate#f46043c4a205de1c6cbb3bae4ea4213f9fb9d2bc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c32c137808ca984ab2458b612b7eb0462d853ee041a3136e83d54b96074c7610"
 
 [[package]]
 name = "polkavm-common"
@@ -3613,8 +3615,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2"
-version = "1.1.5"
-source = "git+https://github.com/Quantus-Network/qp-plonky2.git?branch=illuzen%2Fnew-rate#f46043c4a205de1c6cbb3bae4ea4213f9fb9d2bc"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d74c09b03472d90b14309122930a9efb80541e0df2b83eae0ee280dc60d09657"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3644,8 +3647,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2-core"
-version = "1.1.5"
-source = "git+https://github.com/Quantus-Network/qp-plonky2.git?branch=illuzen%2Fnew-rate#f46043c4a205de1c6cbb3bae4ea4213f9fb9d2bc"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6d4b67b899994eae278d802c9d8735fc824f4ecfc1b61f8a2a9163b88384162a"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3669,8 +3673,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2-field"
-version = "1.1.5"
-source = "git+https://github.com/Quantus-Network/qp-plonky2.git?branch=illuzen%2Fnew-rate#f46043c4a205de1c6cbb3bae4ea4213f9fb9d2bc"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c90a6abc681568deeb0a1f238225de5d3bf11e89373894e5199395268c68cd8"
 dependencies = [
  "anyhow",
  "itertools 0.11.0",
@@ -3685,8 +3690,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2-verifier"
-version = "1.1.5"
-source = "git+https://github.com/Quantus-Network/qp-plonky2.git?branch=illuzen%2Fnew-rate#f46043c4a205de1c6cbb3bae4ea4213f9fb9d2bc"
+version = "1.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5283d4b8c9bf9f5488643f46b8a9886161acfc654ef8b7d77c53745f3c6e0f56"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3710,13 +3716,13 @@ dependencies = [
 
 [[package]]
 name = "qp-poseidon"
-version = "1.2.0"
-source = "git+https://github.com/Quantus-Network/qp-poseidon.git?branch=illuzen%2Finjective-to-felts#df2963aae3f818466351810ff7b2061e75cd9836"
+version = "1.3.0"
 dependencies = [
  "log",
  "p3-field",
  "p3-goldilocks",
  "parity-scale-codec",
+ "qp-poseidon-constants",
  "qp-poseidon-core",
  "scale-info",
  "serde",
@@ -3729,7 +3735,8 @@ dependencies = [
 [[package]]
 name = "qp-poseidon-constants"
 version = "1.1.0"
-source = "git+https://github.com/Quantus-Network/qp-poseidon-constants.git?tag=v1.1.0#46916523e57f5412574fc0d9546032f70a66d23e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "300d8b01e4a492b202e739ab5f73215b261905911020cc0f74a22109365e3bd7"
 dependencies = [
  "p3-field",
  "p3-goldilocks",
@@ -3740,8 +3747,7 @@ dependencies = [
 
 [[package]]
 name = "qp-poseidon-core"
-version = "1.2.0"
-source = "git+https://github.com/Quantus-Network/qp-poseidon.git?branch=illuzen%2Finjective-to-felts#df2963aae3f818466351810ff7b2061e75cd9836"
+version = "1.3.0"
 dependencies = [
  "p3-field",
  "p3-goldilocks",
@@ -3753,16 +3759,18 @@ dependencies = [
 
 [[package]]
 name = "qp-rusty-crystals-dilithium"
-version = "2.2.0"
-source = "git+https://github.com/Quantus-Network/qp-rusty-crystals.git?branch=illuzen%2Fnew-poseidon-api#141d1e28b28419068f00d15b23de19c71d3adbfa"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e223f0218cd3d55a04d96cc9a82415d2edd5e37b5ebd0f466d44a22bf8b34532"
 dependencies = [
  "zeroize",
 ]
 
 [[package]]
 name = "qp-rusty-crystals-hdwallet"
-version = "2.2.0"
-source = "git+https://github.com/Quantus-Network/qp-rusty-crystals.git?branch=illuzen%2Fnew-poseidon-api#141d1e28b28419068f00d15b23de19c71d3adbfa"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "45f830cd4baeeeaf8d885fe118d9f4a0e81691283c372a82969caeb38b020e10"
 dependencies = [
  "bip39",
  "getrandom 0.2.17",
@@ -3780,8 +3788,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-aggregator"
-version = "1.1.1"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Fnon-injectivity#9cda538d243f797a20bc7cb967719befeea411e6"
+version = "1.2.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -3798,8 +3805,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit"
-version = "1.1.1"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Fnon-injectivity#9cda538d243f797a20bc7cb967719befeea411e6"
+version = "1.2.1"
 dependencies = [
  "anyhow",
  "hex",
@@ -3810,8 +3816,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit-builder"
-version = "1.1.1"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Fnon-injectivity#9cda538d243f797a20bc7cb967719befeea411e6"
+version = "1.2.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -3823,16 +3828,14 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-inputs"
-version = "1.1.1"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Fnon-injectivity#9cda538d243f797a20bc7cb967719befeea411e6"
+version = "1.2.1"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "qp-wormhole-prover"
-version = "1.1.1"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Fnon-injectivity#9cda538d243f797a20bc7cb967719befeea411e6"
+version = "1.2.1"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3843,8 +3846,7 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-verifier"
-version = "1.1.1"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Fnon-injectivity#9cda538d243f797a20bc7cb967719befeea411e6"
+version = "1.2.1"
 dependencies = [
  "anyhow",
  "qp-plonky2-verifier",
@@ -3853,8 +3855,7 @@ dependencies = [
 
 [[package]]
 name = "qp-zk-circuits-common"
-version = "1.1.1"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits.git?branch=illuzen%2Fnon-injectivity#9cda538d243f797a20bc7cb967719befeea411e6"
+version = "1.2.1"
 dependencies = [
  "anyhow",
  "hex",
