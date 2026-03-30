@@ -25,7 +25,7 @@ use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
-	utils::{digest_felts_to_bytes, BytesDigest},
+	utils::{digest_to_bytes, BytesDigest},
 };
 use quantus_cli::{
 	chain::{
@@ -238,7 +238,7 @@ async fn submit_wormhole_transfer(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret_digest)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
 	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
 		.as_ref()
 		.try_into()
@@ -411,7 +411,7 @@ async fn generate_proof_from_transfer(
 			funding_account: BytesDigest::try_from(transfer_data.funding_account.as_ref() as &[u8])
 				.map_err(|e| format!("Failed to convert funding account: {}", e))?,
 			storage_proof: processed_storage_proof,
-			unspendable_account: digest_felts_to_bytes(transfer_data.unspendable_account),
+			unspendable_account: digest_to_bytes(transfer_data.unspendable_account),
 			parent_hash,
 			state_root,
 			extrinsics_root,
@@ -422,7 +422,7 @@ async fn generate_proof_from_transfer(
 			output_amount_1: output_amount_quantized,
 			output_amount_2: 0, // No change output for single-output spend
 			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: digest_felts_to_bytes(
+			nullifier: digest_to_bytes(
 				Nullifier::from_preimage(secret_digest, transfer_data.transfer_count).hash,
 			),
 			exit_account_1: exit_account_digest,
@@ -502,8 +502,11 @@ fn aggregate_proofs(
 	proof_contexts: Vec<ProofContext>,
 	num_leaf_proofs: usize,
 ) -> Result<AggregatedProofContext, String> {
-	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
-	use qp_zk_circuits_common::aggregation::AggregationConfig;
+	use qp_wormhole_aggregator::aggregator::{AggregationBackend, Layer0Aggregator};
+	use std::sync::Once;
+
+	static BINS_INIT: Once = Once::new();
+	const TEST_BINS_DIR: &str = "test-generated-bins";
 
 	println!(
 		"  Aggregating {} proofs (num_leaf_proofs={})...",
@@ -511,18 +514,26 @@ fn aggregate_proofs(
 		num_leaf_proofs,
 	);
 
-	let config = CircuitConfig::standard_recursion_zk_config();
-	let aggregation_config = AggregationConfig::new(num_leaf_proofs);
+	BINS_INIT.call_once(|| {
+		qp_wormhole_circuit_builder::generate_all_circuit_binaries(
+			TEST_BINS_DIR,
+			true,
+			num_leaf_proofs,
+			None,
+		)
+		.expect("Failed to generate circuit binaries");
+	});
 
-	if proof_contexts.len() > aggregation_config.num_leaf_proofs {
+	let mut aggregator = Layer0Aggregator::new(TEST_BINS_DIR)
+		.map_err(|e| format!("Failed to create aggregator: {}", e))?;
+
+	if proof_contexts.len() > aggregator.batch_size() {
 		return Err(format!(
 			"Too many proofs: {} provided, max {}",
 			proof_contexts.len(),
-			aggregation_config.num_leaf_proofs,
+			aggregator.batch_size(),
 		));
 	}
-
-	let mut aggregator = WormholeProofAggregator::from_circuit_config(config, aggregation_config);
 
 	for (idx, ctx) in proof_contexts.into_iter().enumerate() {
 		println!("    Adding proof {} to aggregator...", idx + 1);
@@ -548,18 +559,16 @@ fn aggregate_proofs(
 
 	use qp_wormhole_circuit::inputs::ParseAggregatedPublicInputs;
 	let public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
-		aggregated_result.proof.public_inputs.as_slice(),
+		aggregated_result.public_inputs.as_slice(),
 	)
 	.map_err(|e| format!("Failed to parse aggregated public inputs: {}", e))?;
 
-	// Verify locally first
 	println!("  Verifying aggregated proof locally...");
-	aggregated_result
-		.circuit_data
-		.verify(aggregated_result.proof.clone())
+	aggregator
+		.verify(aggregated_result.clone())
 		.map_err(|e| format!("Local verification failed: {}", e))?;
 
-	let proof_bytes = aggregated_result.proof.to_bytes();
+	let proof_bytes = aggregated_result.to_bytes();
 	println!(
 		"  Aggregation complete! Size: {} bytes, {} nullifiers",
 		proof_bytes.len(),

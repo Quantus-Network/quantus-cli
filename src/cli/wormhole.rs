@@ -26,7 +26,7 @@ use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
-	utils::{digest_felts_to_bytes, BytesDigest},
+	utils::{digest_to_bytes, BytesDigest},
 };
 use rand::RngCore;
 use sp_core::crypto::{AccountId32, Ss58Codec};
@@ -825,7 +825,7 @@ fn show_wormhole_address(secret_hex: String) -> crate::error::Result<()> {
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
 	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
 		.as_ref()
 		.try_into()
@@ -857,8 +857,7 @@ async fn aggregate_proofs(
 	proof_files: Vec<String>,
 	output_file: String,
 ) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
-	use qp_zk_circuits_common::aggregation::AggregationConfig as AggConfig;
+	use qp_wormhole_aggregator::aggregator::{AggregationBackend, CircuitType, Layer0Aggregator};
 
 	use std::path::Path;
 
@@ -883,13 +882,9 @@ async fn aggregate_proofs(
 
 	let num_padding_proofs = agg_config.num_leaf_proofs - proof_files.len();
 
-	// Create progress bar for padding proof generation (if needed)
-	// Load aggregator from pre-built bins (reads config from config.json)
-	// This also generates the padding (dummy) proofs needed
 	log_print!("  Loading aggregator and generating {} dummy proofs...", num_padding_proofs);
 
-	let aggr_config = AggConfig::new(agg_config.num_leaf_proofs);
-	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(bins_dir, aggr_config)
+	let mut aggregator = Layer0Aggregator::new(bins_dir)
 		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
 				"Failed to load aggregator from pre-built bins: {}",
@@ -897,8 +892,10 @@ async fn aggregate_proofs(
 			))
 		})?;
 
-	log_verbose!("Aggregation config: num_leaf_proofs={}", aggregator.config.num_leaf_proofs);
-	let common_data = aggregator.leaf_circuit_data.common.clone();
+	log_verbose!("Aggregation config: num_leaf_proofs={}", aggregator.batch_size());
+	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to load leaf circuit data: {}", e))
+	})?;
 
 	// Load and add proofs using helper function
 	for (idx, proof_file) in proof_files.iter().enumerate() {
@@ -931,7 +928,7 @@ async fn aggregate_proofs(
 
 	// Parse and display aggregated public inputs
 	let aggregated_public_inputs = AggregatedPublicCircuitInputs::try_from_felts(
-		aggregated_proof.proof.public_inputs.as_slice(),
+		aggregated_proof.public_inputs.as_slice(),
 	)
 	.map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
@@ -966,9 +963,8 @@ async fn aggregate_proofs(
 
 	// Verify the aggregated proof locally
 	log_verbose!("Verifying aggregated proof locally...");
-	aggregated_proof
-		.circuit_data
-		.verify(aggregated_proof.proof.clone())
+	aggregator
+		.verify(aggregated_proof.clone())
 		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
 				"Aggregated proof verification failed: {}",
@@ -977,7 +973,7 @@ async fn aggregate_proofs(
 		})?;
 
 	// Save aggregated proof using helper function
-	write_proof_file(&output_file, &aggregated_proof.proof.to_bytes()).map_err(|e| {
+	write_proof_file(&output_file, &aggregated_proof.to_bytes()).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
 	})?;
 
@@ -1965,7 +1961,7 @@ async fn generate_proof(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
 	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
 		.as_ref()
 		.try_into()
@@ -2067,7 +2063,7 @@ async fn generate_proof(
 			output_amount_1: output_assignment.output_amount_1,
 			output_amount_2: output_assignment.output_amount_2,
 			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: digest_felts_to_bytes(Nullifier::from_preimage(secret, transfer_count).hash),
+			nullifier: digest_to_bytes(Nullifier::from_preimage(secret, transfer_count).hash),
 			exit_account_1: BytesDigest::try_from(output_assignment.exit_account_1.as_ref())
 				.map_err(|e| crate::error::QuantusError::Generic(e.to_string()))?,
 			exit_account_2: BytesDigest::try_from(output_assignment.exit_account_2.as_ref())
@@ -2707,19 +2703,19 @@ async fn run_dissolve(
 fn aggregate_proofs_to_file(
 	proof_files: &[String],
 	output_file: &str,
-	agg_config: &AggregationConfig,
+	_agg_config: &AggregationConfig,
 ) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::aggregator::WormholeProofAggregator;
-	use qp_zk_circuits_common::aggregation::AggregationConfig as AggConfig;
+	use qp_wormhole_aggregator::aggregator::{AggregationBackend, CircuitType, Layer0Aggregator};
 
 	let bins_dir = std::path::Path::new("generated-bins");
-	let aggr_config = AggConfig::new(agg_config.num_leaf_proofs);
-	let mut aggregator = WormholeProofAggregator::from_prebuilt_dir(bins_dir, aggr_config)
+	let mut aggregator = Layer0Aggregator::new(bins_dir)
 		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to create aggregator: {}", e))
 		})?;
 
-	let common_data = aggregator.leaf_circuit_data.common.clone();
+	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to load leaf circuit data: {}", e))
+	})?;
 
 	for proof_file in proof_files {
 		let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
@@ -2742,7 +2738,7 @@ fn aggregate_proofs_to_file(
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("    Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
 
-	let proof_hex = hex::encode(result.proof.to_bytes());
+	let proof_hex = hex::encode(result.to_bytes());
 	std::fs::write(output_file, &proof_hex).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
 	})?;
