@@ -74,12 +74,9 @@ impl WalletManager {
 		rng().fill_bytes(&mut seed);
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
-		let hd_keypair = derive_key_from_mnemonic(&mnemonic, None, derivation_path)
+		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, derivation_path)
 			.map_err(|_| WalletError::KeyGeneration)?;
-		let dilithium_pair =
-			DilithiumPair::from_raw(&hd_keypair.public.to_bytes(), &hd_keypair.secret.to_bytes())
-				.map_err(|_| WalletError::KeyGeneration)?;
-		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
+		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
@@ -327,12 +324,9 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		let hd_keypair = derive_key_from_mnemonic(mnemonic, None, derivation_path)
+		let dilithium_pair = derive_key_from_mnemonic(mnemonic, None, derivation_path)
 			.map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_pair =
-			DilithiumPair::from_raw(&hd_keypair.public.to_bytes(), &hd_keypair.secret.to_bytes())
-				.map_err(|_| WalletError::KeyGeneration)?;
-		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
+		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_pair);
 
 		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
