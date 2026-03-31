@@ -274,6 +274,7 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
+		// No derivation path - get the seed and create a key from the seed
 		let seed64 = mnemonic_to_seed(mnemonic.to_string(), None)
 			.map_err(|_| WalletError::InvalidMnemonic)?;
 		let dilithium_pair =
