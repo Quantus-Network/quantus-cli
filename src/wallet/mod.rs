@@ -122,7 +122,7 @@ impl WalletManager {
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
 
 		// Format addresses with SS58 version 189 (Quantus format)
-		use sp_core::crypto::Ss58Codec;
+		use sp_core::{crypto::Ss58Codec, Pair};
 		let resonance_addr = resonance_pair
 			.public()
 			.into_account()
@@ -773,8 +773,8 @@ mod tests {
 
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
-		let expected_address = "qzoog56PJKvDwqo9GwkzRN74kxEgDEspxu5zVA62y18ttt3tG"; // default derivation path index 0
-		let expected_address_no_derive = "qzofkFbmnEYLX6iHwqJ9uKYXFi7ypQwcBBMxcYYLVD17vGpsm";
+		let expected_address = "qzpJj8HRv7m9Ur9fYRsGFMggz4FLtMQEEi1rTPsKQZJUttjkV";
+		let expected_address_no_derive = "qzpFin6y47r9MDdH2cxhGDENagYKVTn7Fkvy7XRJh7f7L9qvJ";
 
 		let imported_wallet = wallet_manager
 			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))

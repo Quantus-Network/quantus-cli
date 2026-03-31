@@ -58,19 +58,16 @@ impl QuantumKeyPair {
 
 	/// Convert to DilithiumPair for use with substrate-api-client
 	pub fn to_resonance_pair(&self) -> Result<DilithiumPair> {
-		// Convert our QuantumKeyPair to DilithiumPair using from_seed
-		// Use the private key as the seed
-		Ok(DilithiumPair {
-			public: self.public_key.as_slice().try_into().unwrap(),
-			secret: self.private_key.as_slice().try_into().unwrap(),
-		})
+		DilithiumPair::from_raw(&self.public_key, &self.private_key)
+			.map_err(|_| WalletError::KeyGeneration.into())
 	}
 
 	#[allow(dead_code)]
 	pub fn from_resonance_pair(keypair: &DilithiumPair) -> Self {
+		use sp_core::Pair;
 		Self {
-			public_key: keypair.public.as_ref().to_vec(),
-			private_key: keypair.secret.as_ref().to_vec(),
+			public_key: keypair.public().as_ref().to_vec(),
+			private_key: keypair.secret_bytes().to_vec(),
 		}
 	}
 
@@ -278,6 +275,7 @@ mod tests {
 	use super::*;
 	use qp_dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
 	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
+	use sp_core::Pair;
 	use tempfile::TempDir;
 
 	#[test]
@@ -317,8 +315,8 @@ mod tests {
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
 
 		// Verify the conversion
-		assert_eq!(quantum_keypair.public_key, resonance_pair.public.as_ref().to_vec());
-		assert_eq!(quantum_keypair.private_key, resonance_pair.secret.as_ref().to_vec());
+		assert_eq!(quantum_keypair.public_key, resonance_pair.public().as_ref().to_vec());
+		assert_eq!(quantum_keypair.private_key, resonance_pair.secret_bytes().to_vec());
 	}
 
 	#[test]
@@ -330,8 +328,8 @@ mod tests {
 			quantum_keypair.to_resonance_pair().expect("Conversion should succeed");
 
 		// Verify round-trip conversion preserves data
-		assert_eq!(original_pair.public.as_ref(), converted_pair.public.as_ref());
-		assert_eq!(original_pair.secret.as_ref(), converted_pair.secret.as_ref());
+		assert_eq!(original_pair.public().as_ref(), converted_pair.public().as_ref());
+		assert_eq!(original_pair.secret_bytes(), converted_pair.secret_bytes());
 	}
 
 	/// Wallet address must match chain: same AccountId (Poseidon hash of Dilithium public)
