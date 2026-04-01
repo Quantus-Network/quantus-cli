@@ -1870,7 +1870,9 @@ async fn generate_proof(
 	let block_hash_bytes: [u8; 32] = hex::decode(block_hash_str.trim_start_matches("0x"))
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid block hash: {}", e)))?
 		.try_into()
-		.map_err(|_| crate::error::QuantusError::Generic("Block hash must be 32 bytes".to_string()))?;
+		.map_err(|_| {
+			crate::error::QuantusError::Generic("Block hash must be 32 bytes".to_string())
+		})?;
 
 	// Compute wormhole address using wormhole_lib
 	let wormhole_address = wormhole_lib::compute_wormhole_address(&secret)
