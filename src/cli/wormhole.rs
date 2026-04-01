@@ -1869,6 +1869,8 @@ async fn generate_proof(
 
 	let block_hash_bytes: [u8; 32] = hex::decode(block_hash_str.trim_start_matches("0x"))
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid block hash: {}", e)))?
+		.try_into()
+		.map_err(|_| crate::error::QuantusError::Generic("Block hash must be 32 bytes".to_string()))?;
 
 	// Compute wormhole address using wormhole_lib
 	let wormhole_address = wormhole_lib::compute_wormhole_address(&secret)
@@ -2593,7 +2595,7 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("    Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
 
-	let proof_hex = hex::encode(result.to_bytes());
+	let proof_hex = hex::encode(proof.to_bytes());
 	std::fs::write(output_file, &proof_hex).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
 	})?;

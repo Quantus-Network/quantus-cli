@@ -13,7 +13,7 @@ pub use keystore::{Keystore, QuantumKeyPair, WalletData};
 use qp_rusty_crystals_hdwallet::{derive_key_from_mnemonic, generate_mnemonic, SensitiveBytes32};
 use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
-use sp_core::Pair;
+
 use sp_runtime::traits::IdentifyAccount;
 
 /// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'

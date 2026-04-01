@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::crypto::Ss58AddressFormat;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
-	ByteArray, Pair,
+	ByteArray,
 };
 // Quantum-safe encryption imports
 use aes_gcm::{

@@ -7,7 +7,7 @@ use crate::{error::QuantusError, log_verbose};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use qp_dilithium_crypto::types::DilithiumSignatureScheme;
 use qp_poseidon::PoseidonHasher;
-use sp_core::{crypto::AccountId32, ByteArray, Pair};
+use sp_core::{crypto::AccountId32, ByteArray};
 use sp_runtime::{traits::IdentifyAccount, MultiAddress};
 use std::{sync::Arc, time::Duration};
 use subxt::{
