@@ -1936,8 +1936,8 @@ async fn generate_proof(
 		extrinsics_root,
 		digest,
 		proof_nodes,
-		exit_account_1: output_assignment.exit_account_1.into(),
-		exit_account_2: output_assignment.exit_account_2.into(),
+		exit_account_1: output_assignment.exit_account_1,
+		exit_account_2: output_assignment.exit_account_2,
 		output_amount_1: output_assignment.output_amount_1,
 		output_amount_2: output_assignment.output_amount_2,
 		volume_fee_bps: VOLUME_FEE_BPS,
@@ -3511,7 +3511,7 @@ mod tests {
 		assert_eq!(quantize_funding_amount(max_valid).unwrap(), u32::MAX);
 		assert!(quantize_funding_amount(max_valid + SCALE_DOWN_FACTOR)
 			.unwrap_err()
-			.contains("too large"));
+			.contains("exceeds u32::MAX"));
 	}
 
 	#[test]

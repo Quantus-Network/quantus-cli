@@ -110,7 +110,8 @@ pub struct ProofGenerationInput {
 pub struct ProofGenerationOutput {
 	/// Generated proof as bytes
 	pub proof_bytes: Vec<u8>,
-	/// Nullifier as 32 bytes
+	/// Nullifier as 32 bytes (available for callers who need it)
+	#[allow(dead_code)]
 	pub nullifier: [u8; 32],
 }
 
@@ -201,6 +202,7 @@ pub fn compute_wormhole_address(secret: &[u8; 32]) -> Result<[u8; 32]> {
 ///
 /// # Returns
 /// 32-byte nullifier
+#[allow(dead_code)]
 pub fn compute_nullifier(secret: &[u8; 32], transfer_count: u64) -> Result<[u8; 32]> {
 	let secret_digest: BytesDigest = (*secret)
 		.try_into()

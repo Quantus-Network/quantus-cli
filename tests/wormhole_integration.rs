@@ -15,7 +15,6 @@
 //! with valid parent hash linkage. We use batch transfers to ensure same-block proofs.
 
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
-use qp_poseidon::ToFelts;
 use qp_wormhole_aggregator::aggregator::{AggregationBackend, Layer0Aggregator};
 use qp_wormhole_circuit::{
 	inputs::{CircuitInputs, PrivateCircuitInputs},
@@ -27,7 +26,7 @@ use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	storage_proof::prepare_proof_for_circuit,
-	utils::{digest_felts_to_bytes, BytesDigest},
+	utils::{digest_to_bytes, BytesDigest},
 };
 use quantus_cli::{
 	chain::{
@@ -246,7 +245,7 @@ async fn submit_wormhole_transfer(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret_digest)
 			.account_id;
 	let unspendable_account_bytes_digest =
-		qp_zk_circuits_common::utils::digest_felts_to_bytes(unspendable_account);
+		qp_zk_circuits_common::utils::digest_to_bytes(unspendable_account);
 	let unspendable_account_bytes: [u8; 32] = unspendable_account_bytes_digest
 		.as_ref()
 		.try_into()
@@ -424,7 +423,7 @@ async fn generate_proof_from_transfer(
 			funding_account: BytesDigest::try_from(transfer_data.funding_account.as_ref() as &[u8])
 				.map_err(|e| format!("Failed to convert funding account: {}", e))?,
 			storage_proof: processed_storage_proof,
-			unspendable_account: digest_felts_to_bytes(transfer_data.unspendable_account),
+			unspendable_account: digest_to_bytes(transfer_data.unspendable_account),
 			parent_hash,
 			state_root,
 			extrinsics_root,
@@ -435,7 +434,7 @@ async fn generate_proof_from_transfer(
 			output_amount_1: output_amount_quantized,
 			output_amount_2: 0, // No change output for single-output spend
 			volume_fee_bps: VOLUME_FEE_BPS,
-			nullifier: digest_felts_to_bytes(
+			nullifier: digest_to_bytes(
 				Nullifier::from_preimage(secret_digest, transfer_data.transfer_count).hash,
 			),
 			exit_account_1: exit_account_digest,
@@ -632,8 +631,7 @@ fn author_from_header_digest(
 			if *engine_id == POW_ENGINE_ID && data.len() == 32 =>
 		{
 			let preimage: [u8; 32] = data.as_slice().try_into().ok()?;
-			let author_bytes =
-				qp_poseidon::PoseidonHasher::hash_variable_length(preimage.to_felts());
+			let author_bytes = qp_poseidon_core::rehash_to_bytes(&preimage);
 			SubxtAccountId::decode(&mut &author_bytes[..]).ok()
 		},
 		_ => None,
