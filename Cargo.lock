@@ -3620,13 +3620,14 @@ dependencies = [
 
 [[package]]
 name = "qp-dilithium-crypto"
-version = "0.2.5"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1cbee2023e15bc2788fcefb124efd3c6a465c779cb442b92007e11db76f8e3eb"
+checksum = "0f0fd02160344940ad1d2542ac4e68f19f5b8824d3250446b999012ae25d5575"
 dependencies = [
  "log",
  "parity-scale-codec",
  "qp-poseidon",
+ "qp-poseidon-core",
  "qp-rusty-crystals-dilithium",
  "qp-rusty-crystals-hdwallet",
  "scale-info",
