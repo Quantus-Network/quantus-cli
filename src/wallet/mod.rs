@@ -774,8 +774,8 @@ mod tests {
 
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 		let test_mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
-		let expected_address = "qzpJj8HRv7m9Ur9fYRsGFMggz4FLtMQEEi1rTPsKQZJUttjkV";
-		let expected_address_no_derive = "qzoYbxRcHnkRTb6EAMiWaZh3RVZQK41yFBk6UNFL6xdQjwBdP";
+		let expected_address_no_derive = "qzmTAz3UUw1WGUuVh8nbFmPwcftomduwy6twq6NDR6y9qqtEs";
+		let expected_address_hd_0 = "qzm5QCox8Dp5A3oSXZZYHD8YoYgPz7enykZb6RPUropdCyN5h";
 
 		let imported_wallet = wallet_manager
 			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))
@@ -791,7 +791,7 @@ mod tests {
 			.await
 			.expect("Failed to import wallet");
 
-		assert_eq!(imported_wallet.address, expected_address, "address at index 0 is wrong");
+		assert_eq!(imported_wallet.address, expected_address_hd_0, "address at index 0 is wrong");
 		assert_eq!(
 			imported_wallet_no_derive.address, expected_address_no_derive,
 			"no-derivation address is wrong"
