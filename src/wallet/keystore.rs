@@ -63,7 +63,6 @@ impl QuantumKeyPair {
 			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
 	}
 
-	#[allow(dead_code)]
 	pub fn from_resonance_pair(keypair: &DilithiumPair) -> Self {
 		use sp_core::Pair;
 		Self {
