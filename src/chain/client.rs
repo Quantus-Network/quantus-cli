@@ -255,8 +255,9 @@ impl QuantusClient {
 // Implement subxt::tx::Signer for ResonancePair
 impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::DilithiumPair {
 	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
+		use sp_core::Pair;
 		let resonance_public =
-			qp_dilithium_crypto::types::DilithiumPublic::from_slice(self.public().as_ref())
+			qp_dilithium_crypto::types::DilithiumPublic::from_slice(self.public().as_slice())
 				.expect("Invalid public key");
 		<qp_dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
 			resonance_public,

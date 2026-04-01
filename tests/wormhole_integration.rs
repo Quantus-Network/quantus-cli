@@ -560,7 +560,6 @@ fn aggregate_proofs(
 		AggregatedPublicCircuitInputs::try_from_felts(aggregated_proof.public_inputs.as_slice())
 			.map_err(|e| format!("Failed to parse aggregated public inputs: {}", e))?;
 
-	// Verify locally first
 	println!("  Verifying aggregated proof locally...");
 	aggregator
 		.verify(aggregated_proof.clone())

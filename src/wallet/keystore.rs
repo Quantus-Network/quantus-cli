@@ -65,6 +65,7 @@ impl QuantumKeyPair {
 
 	#[allow(dead_code)]
 	pub fn from_resonance_pair(keypair: &DilithiumPair) -> Self {
+		use sp_core::Pair;
 		Self {
 			public_key: keypair.public().as_ref().to_vec(),
 			private_key: keypair.secret_bytes().to_vec(),
@@ -275,6 +276,7 @@ mod tests {
 	use super::*;
 	use qp_dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
 	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
+	use sp_core::Pair;
 	use tempfile::TempDir;
 
 	#[test]
