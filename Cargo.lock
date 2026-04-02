@@ -3620,9 +3620,9 @@ dependencies = [
 
 [[package]]
 name = "qp-dilithium-crypto"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f0fd02160344940ad1d2542ac4e68f19f5b8824d3250446b999012ae25d5575"
+checksum = "add1f1ae035a1c77d93ac6165caeaa07848a99760aa79ed7bde7720c1795e78e"
 dependencies = [
  "log",
  "parity-scale-codec",
@@ -3796,9 +3796,9 @@ dependencies = [
 
 [[package]]
 name = "qp-rusty-crystals-hdwallet"
-version = "2.3.0"
+version = "2.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45f830cd4baeeeaf8d885fe118d9f4a0e81691283c372a82969caeb38b020e10"
+checksum = "ddbfc888856ab9d7b729d94ada8ddd4916cd3abbe67c1fc6af80c0ed32d17d3d"
 dependencies = [
  "bip39",
  "getrandom 0.2.17",
