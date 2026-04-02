@@ -180,7 +180,6 @@ quantus wormhole aggregate \
 ```
 
 - `--proofs`: One or more hex-encoded proof files. The number must not exceed `num_leaf_proofs` from the circuit config.
-- Before aggregation, the CLI verifies binary hashes from `generated-bins/config.json` to detect stale circuit binaries.
 - Displays timing for dummy proof generation and aggregation separately.
 
 #### `quantus wormhole verify-aggregated`
@@ -250,23 +249,31 @@ Build ZK circuit binaries from the `qp-zk-circuits` repository, then copy them t
 
 ```bash
 quantus developer build-circuits \
-  --branching-factor 2 \
-  --depth 1 \
-  --circuits-path ../qp-zk-circuits \
+  --num-leaf-proofs 2 \
+  --num-layer0-proofs 2 \
   --chain-path ../chain
 ```
 
-- `--branching-factor`: Number of proofs aggregated at each tree level.
-- `--depth`: Depth of the aggregation tree. Total leaf proofs = `branching_factor ^ depth`.
-- `--circuits-path`: Path to the `qp-zk-circuits` repo (default: `../qp-zk-circuits`).
+Add `--skip-prover` when you only need verifier artifacts:
+
+```bash
+quantus developer build-circuits \
+  --num-leaf-proofs 2 \
+  --num-layer0-proofs 2 \
+  --chain-path ../chain \
+  --skip-prover
+```
+
+- `--num-leaf-proofs`: Number of leaf proofs per layer-0 aggregation.
+- `--num-layer0-proofs`: Number of inner proofs per layer-1 aggregation.
 - `--chain-path`: Path to the chain repo (default: `../chain`).
 - `--skip-chain`: Skip copying binaries to the chain directory.
+- `--skip-prover`: Skip generating prover binaries.
 
-**What it does (4 steps):**
-1. Builds the `qp-wormhole-circuit-builder` binary.
-2. Runs the circuit builder to generate binary files in `generated-bins/` (includes `prover.bin`, `verifier.bin`, `common.bin`, `aggregated_verifier.bin`, `aggregated_common.bin`, `config.json` with SHA256 hashes).
-3. Copies binaries to the CLI's `generated-bins/` directory and touches the aggregator source to force recompilation.
-4. Copies chain-relevant binaries (`aggregated_common.bin`, `aggregated_verifier.bin`, `config.json`) to `chain/pallets/wormhole/` and touches the pallet source.
+**What it does (3 steps):**
+1. Clears stale artifacts from the CLI's `generated-bins/` directory.
+2. Calls the `qp-wormhole-circuit-builder` library directly to regenerate binary files in `generated-bins/` (`verifier.bin`, `common.bin`, `aggregated_verifier.bin`, `aggregated_common.bin`, `config.json`, plus prover binaries unless `--skip-prover` is set).
+3. Copies chain-relevant binaries (`aggregated_common.bin`, `aggregated_verifier.bin`, `config.json`) to `chain/pallets/wormhole/` and touches the pallet source.
 
 After running, rebuild the chain (`cargo build --release` in the chain directory) so `include_bytes!()` picks up the new binaries.
 

@@ -3929,6 +3929,7 @@ dependencies = [
  "qp-dilithium-crypto",
  "qp-plonky2",
  "qp-poseidon",
+ "qp-poseidon-core",
  "qp-rusty-crystals-dilithium",
  "qp-rusty-crystals-hdwallet",
  "qp-wormhole-aggregator",

@@ -58,8 +58,9 @@ impl QuantumKeyPair {
 
 	/// Convert to DilithiumPair for use with substrate-api-client
 	pub fn to_resonance_pair(&self) -> Result<DilithiumPair> {
-		DilithiumPair::from_raw(&self.public_key, &self.private_key)
-			.map_err(|_| WalletError::KeyGeneration.into())
+		// Convert our QuantumKeyPair to DilithiumPair using from_raw
+		Ok(DilithiumPair::from_raw(&self.public_key, &self.private_key)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
 	}
 
 	pub fn from_resonance_pair(keypair: &DilithiumPair) -> Self {
@@ -315,7 +316,7 @@ mod tests {
 
 		// Verify the conversion
 		assert_eq!(quantum_keypair.public_key, resonance_pair.public().as_ref().to_vec());
-		assert_eq!(quantum_keypair.private_key, resonance_pair.secret_bytes().to_vec());
+		assert_eq!(quantum_keypair.private_key.as_slice(), resonance_pair.secret_bytes());
 	}
 
 	#[test]

@@ -11,6 +11,7 @@ pub mod error;
 pub mod log;
 pub mod subsquid;
 pub mod wallet;
+pub mod wormhole_lib;
 
 // Re-export commonly used types and functions
 pub use error::{QuantusError as Error, Result};
@@ -36,6 +37,14 @@ pub use cli::multisig::{
 	get_multisig_info, get_proposal_info, list_proposals, parse_amount as parse_multisig_amount,
 	predict_multisig_address, propose_custom, propose_transfer, MultisigInfo, ProposalInfo,
 	ProposalStatus,
+};
+
+// Re-export wormhole library functions for SDK usage
+pub use wormhole_lib::{
+	compute_leaf_hash, compute_nullifier, compute_output_amount, compute_storage_key,
+	compute_wormhole_address, generate_proof as generate_wormhole_proof, quantize_amount,
+	ProofGenerationInput, ProofGenerationOutput, TransferProofData, TransferProofKey,
+	WormholeLibError, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
 };
 
 /// Library version

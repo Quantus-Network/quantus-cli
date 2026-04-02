@@ -16,6 +16,7 @@ use qp_rusty_crystals_hdwallet::{
 };
 use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
+
 use sp_runtime::traits::IdentifyAccount;
 
 /// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'
