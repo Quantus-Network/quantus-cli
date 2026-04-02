@@ -1981,16 +1981,12 @@ async fn generate_proof(
 			.encode(),
 	);
 
-	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
-		NATIVE_ASSET_ID,
-		transfer_count,
-		SubxtAccountId(from_account.clone().into()),
-		SubxtAccountId(to_account.clone().into()),
-		funding_amount,
-	));
+	// Map key: Blake2_256((to, transfer_count)); value: leaf hash over full transfer tuple.
+	let proof_address = quantus_node::api::storage()
+		.wormhole()
+		.transfer_proof((SubxtAccountId(to_account.clone().into()), transfer_count));
 
-	let mut final_key = proof_address.to_root_bytes();
-	final_key.extend_from_slice(&leaf_hash);
+	let final_key = proof_address.to_root_bytes();
 
 	// Verify storage key exists
 	let storage_api = client.storage().at(block_hash);
