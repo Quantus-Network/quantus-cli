@@ -341,11 +341,16 @@ async fn generate_proof_from_transfer(
 			.encode(),
 	);
 
-	let proof_address = quantus_node::api::storage()
-		.wormhole()
-		.transfer_proof((transfer_data.to_account.clone(), transfer_data.transfer_count));
+	let proof_address = quantus_node::api::storage().wormhole().transfer_proof((
+		NATIVE_ASSET_ID,
+		transfer_data.transfer_count,
+		transfer_data.from_account.clone(),
+		transfer_data.to_account.clone(),
+		transfer_data.amount,
+	));
 
-	let final_key = proof_address.to_root_bytes();
+	let mut final_key = proof_address.to_root_bytes();
+	final_key.extend_from_slice(&leaf_hash);
 
 	let storage_api = client.storage().at(block_hash);
 	let val = storage_api

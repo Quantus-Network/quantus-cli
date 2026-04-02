@@ -2,11 +2,7 @@
 //!
 //! The chain Treasury is a single account that receives a configurable portion of mining rewards.
 //! This command shows the treasury account and its balance.
-use crate::{
-	chain::quantus_subxt::{self, api::runtime_types::sp_arithmetic::per_things::Permill},
-	cli::address_format::QuantusSS58,
-	log_print,
-};
+use crate::{chain::quantus_subxt, cli::address_format::QuantusSS58, log_print};
 use clap::Subcommand;
 use colored::Colorize;
 
@@ -46,10 +42,9 @@ async fn show_treasury_info(
 		crate::error::QuantusError::Generic("Treasury account not set in storage".to_string())
 	})?;
 
-	// Portion of mining rewards that goes to treasury (on-chain Permill: 1_000_000 = 100%)
+	// Portion of mining rewards that goes to treasury (0–100)
 	let portion_addr = quantus_subxt::api::storage().treasury_pallet().treasury_portion();
-	let portion = storage_at.fetch(&portion_addr).await?.unwrap_or(Permill(0));
-	let portion_percent = portion.0 as f64 / 10_000.0;
+	let portion = storage_at.fetch(&portion_addr).await?.unwrap_or(0);
 
 	// Account balance
 	let account_storage = quantus_subxt::api::storage().system().account(treasury_account.clone());
@@ -66,7 +61,7 @@ async fn show_treasury_info(
 
 	let account_ss58 = treasury_account.to_quantus_ss58();
 	log_print!("📍 Account: {}", account_ss58.bright_yellow());
-	log_print!("📊 Reward portion: {}%", format!("{:.4}", portion_percent).bright_cyan());
+	log_print!("📊 Reward portion: {}%", portion.to_string().bright_cyan());
 	log_print!("💰 Free: {}", formatted_free);
 	log_print!("💰 Reserved: {}", formatted_reserved);
 

@@ -1432,10 +1432,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							218u8, 133u8, 148u8, 251u8, 115u8, 98u8, 41u8, 181u8, 220u8, 98u8,
-							96u8, 5u8, 83u8, 71u8, 198u8, 107u8, 19u8, 120u8, 188u8, 127u8, 50u8,
-							201u8, 132u8, 73u8, 13u8, 118u8, 124u8, 200u8, 48u8, 103u8, 188u8,
-							219u8,
+							59u8, 44u8, 99u8, 66u8, 11u8, 94u8, 211u8, 6u8, 243u8, 46u8, 231u8,
+							78u8, 147u8, 43u8, 186u8, 119u8, 84u8, 5u8, 35u8, 154u8, 58u8, 175u8,
+							180u8, 197u8, 176u8, 160u8, 53u8, 155u8, 145u8, 42u8, 23u8, 102u8,
 						],
 					)
 				}
@@ -1453,10 +1452,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							222u8, 82u8, 209u8, 219u8, 210u8, 175u8, 13u8, 207u8, 13u8, 17u8,
-							234u8, 166u8, 55u8, 25u8, 194u8, 92u8, 155u8, 69u8, 143u8, 95u8, 18u8,
-							181u8, 70u8, 191u8, 64u8, 119u8, 244u8, 116u8, 44u8, 172u8, 251u8,
-							66u8,
+							135u8, 58u8, 229u8, 112u8, 19u8, 128u8, 2u8, 114u8, 132u8, 7u8, 98u8,
+							170u8, 14u8, 148u8, 33u8, 57u8, 125u8, 107u8, 77u8, 66u8, 33u8, 10u8,
+							65u8, 28u8, 121u8, 233u8, 63u8, 109u8, 189u8, 9u8, 189u8, 122u8,
 						],
 					)
 				}
@@ -1959,9 +1957,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				9u8, 252u8, 101u8, 200u8, 161u8, 142u8, 241u8, 130u8, 224u8, 189u8, 72u8, 23u8,
-				15u8, 35u8, 16u8, 38u8, 233u8, 12u8, 177u8, 101u8, 41u8, 225u8, 185u8, 137u8,
-				187u8, 153u8, 77u8, 45u8, 214u8, 214u8, 215u8, 198u8,
+				235u8, 241u8, 231u8, 143u8, 238u8, 18u8, 134u8, 210u8, 142u8, 123u8, 23u8, 238u8,
+				7u8, 116u8, 199u8, 36u8, 101u8, 103u8, 107u8, 11u8, 141u8, 9u8, 176u8, 251u8,
+				185u8, 220u8, 173u8, 198u8, 201u8, 167u8, 78u8, 188u8,
 			]
 	}
 	pub mod system {
@@ -3060,9 +3058,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							219u8, 135u8, 2u8, 5u8, 35u8, 85u8, 207u8, 98u8, 136u8, 150u8, 109u8,
-							92u8, 64u8, 218u8, 201u8, 111u8, 25u8, 157u8, 42u8, 17u8, 112u8, 204u8,
-							180u8, 241u8, 138u8, 97u8, 146u8, 96u8, 223u8, 24u8, 107u8, 44u8,
+							16u8, 202u8, 95u8, 126u8, 59u8, 71u8, 99u8, 58u8, 52u8, 83u8, 147u8,
+							29u8, 27u8, 91u8, 11u8, 178u8, 100u8, 183u8, 107u8, 163u8, 243u8,
+							160u8, 155u8, 46u8, 55u8, 109u8, 210u8, 242u8, 84u8, 21u8, 0u8, 174u8,
 						],
 					)
 				}
@@ -5543,10 +5541,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							92u8, 222u8, 38u8, 218u8, 220u8, 120u8, 153u8, 82u8, 131u8, 21u8,
-							133u8, 192u8, 226u8, 24u8, 106u8, 70u8, 156u8, 171u8, 231u8, 175u8,
-							152u8, 51u8, 118u8, 15u8, 247u8, 6u8, 137u8, 153u8, 189u8, 181u8,
-							207u8, 118u8,
+							224u8, 201u8, 98u8, 222u8, 12u8, 81u8, 22u8, 130u8, 86u8, 67u8, 141u8,
+							83u8, 170u8, 107u8, 209u8, 158u8, 237u8, 186u8, 132u8, 61u8, 103u8,
+							153u8, 37u8, 72u8, 59u8, 69u8, 181u8, 245u8, 166u8, 244u8, 62u8, 119u8,
 						],
 					)
 				}
@@ -5569,9 +5566,9 @@ pub mod api {
 							weight,
 						},
 						[
-							18u8, 172u8, 114u8, 181u8, 239u8, 91u8, 227u8, 49u8, 11u8, 101u8, 81u8,
-							116u8, 159u8, 79u8, 57u8, 170u8, 121u8, 12u8, 231u8, 89u8, 163u8, 95u8,
-							8u8, 144u8, 157u8, 93u8, 162u8, 156u8, 198u8, 99u8, 4u8, 123u8,
+							171u8, 105u8, 36u8, 170u8, 167u8, 130u8, 207u8, 182u8, 35u8, 146u8,
+							100u8, 18u8, 244u8, 232u8, 92u8, 75u8, 128u8, 183u8, 56u8, 211u8, 8u8,
+							44u8, 56u8, 99u8, 239u8, 143u8, 82u8, 65u8, 6u8, 26u8, 231u8, 216u8,
 						],
 					)
 				}
@@ -5609,10 +5606,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							25u8, 155u8, 115u8, 44u8, 183u8, 108u8, 169u8, 74u8, 11u8, 123u8,
-							235u8, 102u8, 23u8, 199u8, 181u8, 104u8, 66u8, 183u8, 147u8, 133u8,
-							155u8, 30u8, 203u8, 92u8, 78u8, 234u8, 38u8, 168u8, 178u8, 73u8, 108u8,
-							50u8,
+							225u8, 229u8, 154u8, 137u8, 127u8, 113u8, 207u8, 149u8, 115u8, 222u8,
+							119u8, 97u8, 241u8, 115u8, 146u8, 82u8, 97u8, 105u8, 97u8, 45u8, 237u8,
+							82u8, 84u8, 145u8, 235u8, 153u8, 200u8, 108u8, 222u8, 27u8, 149u8,
+							202u8,
 						],
 					)
 				}
@@ -5992,6 +5989,22 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = " Fixed point scale for calculations (default: 10^18)"]
+				pub fn fixed_u128_scale(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					::core::primitive::u128,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"QPoW",
+						"FixedU128Scale",
+						[
+							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
+							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
+							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
+						],
+					)
+				}
 			}
 		}
 	}
@@ -6061,27 +6074,6 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for TreasuryRewarded {
 				const PALLET: &'static str = "MiningRewards";
 				const EVENT: &'static str = "TreasuryRewarded";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Miner reward was redirected to treasury due to mint failure"]
-			pub struct MinerRewardRedirected {
-				pub miner: miner_reward_redirected::Miner,
-				pub reward: miner_reward_redirected::Reward,
-			}
-			pub mod miner_reward_redirected {
-				use super::runtime_types;
-				pub type Miner = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Reward = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for MinerRewardRedirected {
-				const PALLET: &'static str = "MiningRewards";
-				const EVENT: &'static str = "MinerRewardRedirected";
 			}
 		}
 		pub mod storage {
@@ -7009,10 +7001,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							166u8, 18u8, 39u8, 234u8, 251u8, 53u8, 21u8, 117u8, 134u8, 194u8,
-							163u8, 196u8, 144u8, 31u8, 132u8, 122u8, 44u8, 9u8, 134u8, 32u8, 222u8,
-							32u8, 173u8, 128u8, 182u8, 71u8, 87u8, 253u8, 109u8, 104u8, 222u8,
-							32u8,
+							59u8, 142u8, 42u8, 82u8, 31u8, 67u8, 95u8, 118u8, 24u8, 55u8, 82u8,
+							141u8, 2u8, 133u8, 213u8, 81u8, 84u8, 109u8, 6u8, 239u8, 46u8, 233u8,
+							125u8, 136u8, 15u8, 160u8, 240u8, 29u8, 238u8, 12u8, 114u8, 8u8,
 						],
 					)
 				}
@@ -7051,10 +7042,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							232u8, 133u8, 188u8, 74u8, 36u8, 170u8, 171u8, 99u8, 255u8, 226u8,
-							174u8, 26u8, 109u8, 166u8, 144u8, 41u8, 219u8, 85u8, 170u8, 155u8,
-							192u8, 22u8, 176u8, 97u8, 47u8, 17u8, 44u8, 223u8, 100u8, 65u8, 69u8,
-							35u8,
+							132u8, 98u8, 238u8, 26u8, 202u8, 171u8, 103u8, 75u8, 126u8, 49u8, 0u8,
+							201u8, 239u8, 60u8, 78u8, 218u8, 23u8, 147u8, 136u8, 131u8, 252u8,
+							205u8, 89u8, 30u8, 83u8, 236u8, 25u8, 10u8, 149u8, 147u8, 56u8, 207u8,
 						],
 					)
 				}
@@ -7090,10 +7080,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							128u8, 96u8, 130u8, 203u8, 5u8, 21u8, 127u8, 65u8, 92u8, 180u8, 92u8,
-							228u8, 4u8, 71u8, 196u8, 224u8, 121u8, 194u8, 193u8, 213u8, 150u8,
-							149u8, 253u8, 188u8, 121u8, 221u8, 209u8, 133u8, 46u8, 247u8, 221u8,
-							29u8,
+							123u8, 115u8, 44u8, 60u8, 131u8, 182u8, 245u8, 36u8, 29u8, 238u8,
+							226u8, 239u8, 76u8, 4u8, 170u8, 52u8, 245u8, 83u8, 217u8, 193u8, 100u8,
+							58u8, 144u8, 126u8, 232u8, 17u8, 219u8, 120u8, 99u8, 154u8, 255u8,
+							116u8,
 						],
 					)
 				}
@@ -7115,10 +7105,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							143u8, 66u8, 101u8, 79u8, 129u8, 219u8, 60u8, 16u8, 207u8, 159u8,
-							231u8, 137u8, 114u8, 222u8, 149u8, 153u8, 60u8, 133u8, 35u8, 124u8,
-							175u8, 66u8, 67u8, 97u8, 172u8, 207u8, 100u8, 13u8, 27u8, 169u8, 51u8,
-							128u8,
+							51u8, 123u8, 141u8, 168u8, 243u8, 27u8, 146u8, 86u8, 92u8, 47u8, 205u8,
+							24u8, 66u8, 124u8, 97u8, 95u8, 171u8, 35u8, 140u8, 188u8, 58u8, 138u8,
+							115u8, 200u8, 132u8, 253u8, 68u8, 16u8, 112u8, 132u8, 121u8, 68u8,
 						],
 					)
 				}
@@ -7466,7 +7455,7 @@ pub mod api {
 								[::core::primitive::u8; 32usize],
 								runtime_types::frame_support::traits::preimages::Bounded<
 									runtime_types::quantus_runtime::RuntimeCall,
-									runtime_types::sp_runtime::traits::BlakeTwo256,
+									runtime_types::qp_poseidon::PoseidonHasher,
 								>,
 								::core::primitive::u32,
 								runtime_types::quantus_runtime::OriginCaller,
@@ -8113,9 +8102,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							12u8, 35u8, 169u8, 238u8, 108u8, 124u8, 242u8, 241u8, 158u8, 144u8,
-							55u8, 181u8, 164u8, 80u8, 109u8, 149u8, 149u8, 89u8, 202u8, 4u8, 65u8,
-							16u8, 217u8, 49u8, 232u8, 146u8, 244u8, 123u8, 48u8, 8u8, 45u8, 101u8,
+							175u8, 251u8, 47u8, 139u8, 42u8, 213u8, 29u8, 121u8, 126u8, 160u8,
+							31u8, 182u8, 18u8, 35u8, 57u8, 165u8, 44u8, 5u8, 237u8, 46u8, 120u8,
+							177u8, 32u8, 135u8, 177u8, 20u8, 87u8, 229u8, 64u8, 13u8, 127u8, 38u8,
 						],
 					)
 				}
@@ -8145,9 +8134,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							58u8, 129u8, 55u8, 87u8, 210u8, 249u8, 143u8, 136u8, 81u8, 237u8, 43u8,
-							136u8, 156u8, 85u8, 92u8, 204u8, 228u8, 131u8, 218u8, 62u8, 54u8, 87u8,
-							20u8, 248u8, 249u8, 118u8, 83u8, 233u8, 174u8, 3u8, 69u8, 110u8,
+							163u8, 103u8, 246u8, 62u8, 75u8, 102u8, 59u8, 101u8, 118u8, 106u8,
+							209u8, 68u8, 186u8, 60u8, 209u8, 233u8, 79u8, 179u8, 41u8, 65u8, 154u8,
+							146u8, 145u8, 126u8, 183u8, 212u8, 239u8, 26u8, 76u8, 22u8, 239u8,
+							228u8,
 						],
 					)
 				}
@@ -8173,9 +8163,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							160u8, 132u8, 211u8, 158u8, 79u8, 68u8, 196u8, 4u8, 17u8, 136u8, 198u8,
-							11u8, 217u8, 69u8, 52u8, 19u8, 244u8, 95u8, 1u8, 43u8, 47u8, 107u8,
-							71u8, 70u8, 129u8, 180u8, 96u8, 162u8, 243u8, 62u8, 255u8, 246u8,
+							150u8, 227u8, 254u8, 10u8, 63u8, 29u8, 209u8, 16u8, 78u8, 200u8, 2u8,
+							1u8, 45u8, 134u8, 126u8, 227u8, 213u8, 206u8, 28u8, 11u8, 248u8, 34u8,
+							208u8, 245u8, 115u8, 226u8, 51u8, 80u8, 157u8, 19u8, 214u8, 7u8,
 						],
 					)
 				}
@@ -8198,9 +8188,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							70u8, 236u8, 128u8, 245u8, 79u8, 164u8, 36u8, 254u8, 249u8, 100u8,
-							132u8, 160u8, 42u8, 245u8, 92u8, 122u8, 66u8, 71u8, 16u8, 194u8, 241u8,
-							243u8, 146u8, 27u8, 3u8, 164u8, 155u8, 37u8, 133u8, 93u8, 15u8, 255u8,
+							26u8, 167u8, 149u8, 52u8, 49u8, 181u8, 232u8, 189u8, 214u8, 103u8,
+							142u8, 80u8, 167u8, 149u8, 40u8, 66u8, 198u8, 220u8, 22u8, 169u8,
+							249u8, 194u8, 40u8, 241u8, 212u8, 216u8, 96u8, 42u8, 107u8, 229u8,
+							250u8, 169u8,
 						],
 					)
 				}
@@ -8226,10 +8217,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							201u8, 43u8, 241u8, 144u8, 76u8, 120u8, 232u8, 97u8, 84u8, 126u8,
-							227u8, 232u8, 69u8, 158u8, 222u8, 176u8, 144u8, 160u8, 104u8, 207u8,
-							5u8, 106u8, 72u8, 119u8, 162u8, 214u8, 219u8, 131u8, 207u8, 153u8,
-							24u8, 247u8,
+							214u8, 226u8, 85u8, 46u8, 75u8, 28u8, 254u8, 199u8, 162u8, 194u8,
+							192u8, 69u8, 103u8, 7u8, 126u8, 201u8, 242u8, 24u8, 85u8, 53u8, 69u8,
+							91u8, 182u8, 111u8, 205u8, 250u8, 109u8, 233u8, 52u8, 9u8, 171u8, 11u8,
 						],
 					)
 				}
@@ -8252,9 +8242,9 @@ pub mod api {
 							weight,
 						},
 						[
-							241u8, 184u8, 146u8, 128u8, 160u8, 33u8, 170u8, 130u8, 105u8, 26u8,
-							128u8, 181u8, 154u8, 95u8, 76u8, 32u8, 133u8, 8u8, 115u8, 144u8, 198u8,
-							25u8, 84u8, 96u8, 155u8, 30u8, 249u8, 235u8, 223u8, 158u8, 37u8, 13u8,
+							164u8, 25u8, 18u8, 51u8, 125u8, 4u8, 172u8, 80u8, 236u8, 99u8, 192u8,
+							159u8, 103u8, 231u8, 83u8, 188u8, 32u8, 54u8, 11u8, 101u8, 127u8, 14u8,
+							78u8, 134u8, 146u8, 112u8, 165u8, 108u8, 89u8, 10u8, 184u8, 131u8,
 						],
 					)
 				}
@@ -8294,9 +8284,10 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							199u8, 6u8, 145u8, 140u8, 251u8, 79u8, 237u8, 173u8, 162u8, 41u8, 31u8,
-							94u8, 225u8, 34u8, 245u8, 153u8, 233u8, 225u8, 87u8, 190u8, 233u8,
-							191u8, 3u8, 25u8, 216u8, 212u8, 30u8, 180u8, 168u8, 145u8, 54u8, 150u8,
+							92u8, 81u8, 197u8, 222u8, 38u8, 170u8, 79u8, 51u8, 116u8, 62u8, 50u8,
+							58u8, 150u8, 250u8, 110u8, 71u8, 27u8, 159u8, 43u8, 203u8, 156u8,
+							187u8, 239u8, 196u8, 87u8, 161u8, 156u8, 23u8, 146u8, 234u8, 101u8,
+							3u8,
 						],
 					)
 				}
@@ -8319,10 +8310,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							222u8, 246u8, 25u8, 101u8, 155u8, 44u8, 93u8, 141u8, 239u8, 33u8,
-							186u8, 124u8, 253u8, 4u8, 203u8, 161u8, 102u8, 220u8, 158u8, 48u8,
-							81u8, 82u8, 9u8, 99u8, 50u8, 26u8, 210u8, 64u8, 165u8, 102u8, 227u8,
-							84u8,
+							130u8, 99u8, 92u8, 78u8, 42u8, 115u8, 255u8, 247u8, 224u8, 97u8, 137u8,
+							129u8, 227u8, 245u8, 204u8, 255u8, 128u8, 231u8, 43u8, 191u8, 72u8,
+							241u8, 154u8, 16u8, 23u8, 72u8, 130u8, 40u8, 219u8, 191u8, 118u8, 34u8,
 						],
 					)
 				}
@@ -8531,7 +8521,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::sp_runtime::traits::BlakeTwo256,
+						runtime_types::qp_poseidon::PoseidonHasher,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -9022,7 +9012,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::sp_runtime::traits::BlakeTwo256,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -9116,7 +9106,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::sp_runtime::traits::BlakeTwo256,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 				pub type Tally =
 					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
@@ -9373,7 +9363,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::sp_runtime::traits::BlakeTwo256,
+								runtime_types::qp_poseidon::PoseidonHasher,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_conviction_voting::types::Tally<
@@ -10344,7 +10334,7 @@ pub mod api {
 							::core::primitive::u128,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::sp_runtime::traits::BlakeTwo256,
+								runtime_types::qp_poseidon::PoseidonHasher,
 							>,
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::H256;
@@ -12501,7 +12491,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::sp_runtime::traits::BlakeTwo256,
+						runtime_types::qp_poseidon::PoseidonHasher,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -12992,7 +12982,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::sp_runtime::traits::BlakeTwo256,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -13086,7 +13076,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::sp_runtime::traits::BlakeTwo256,
+					runtime_types::qp_poseidon::PoseidonHasher,
 				>;
 				pub type Tally = runtime_types::pallet_ranked_collective::Tally;
 			}
@@ -13337,7 +13327,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::sp_runtime::traits::BlakeTwo256,
+								runtime_types::qp_poseidon::PoseidonHasher,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_ranked_collective::Tally,
@@ -13725,7 +13715,7 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Set the treasury account. Root only. Zero address is rejected (funds would be locked)."]
+				#[doc = "Set the treasury account. Root only."]
 				pub struct SetTreasuryAccount {
 					pub account: set_treasury_account::Account,
 				}
@@ -13748,13 +13738,13 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Set the treasury portion (Permill, 0–100%). Root only."]
+				#[doc = "Set the treasury portion (0-100). Root only."]
 				pub struct SetTreasuryPortion {
 					pub portion: set_treasury_portion::Portion,
 				}
 				pub mod set_treasury_portion {
 					use super::runtime_types;
-					pub type Portion = runtime_types::sp_arithmetic::per_things::Permill;
+					pub type Portion = ::core::primitive::u8;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetTreasuryPortion {
 					const PALLET: &'static str = "TreasuryPallet";
@@ -13763,7 +13753,7 @@ pub mod api {
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Set the treasury account. Root only. Zero address is rejected (funds would be locked)."]
+				#[doc = "Set the treasury account. Root only."]
 				pub fn set_treasury_account(
 					&self,
 					account: types::set_treasury_account::Account,
@@ -13781,7 +13771,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Set the treasury portion (Permill, 0–100%). Root only."]
+				#[doc = "Set the treasury portion (0-100). Root only."]
 				pub fn set_treasury_portion(
 					&self,
 					portion: types::set_treasury_portion::Portion,
@@ -13792,9 +13782,10 @@ pub mod api {
 						"set_treasury_portion",
 						types::SetTreasuryPortion { portion },
 						[
-							226u8, 74u8, 96u8, 96u8, 120u8, 14u8, 29u8, 33u8, 85u8, 192u8, 26u8,
-							67u8, 86u8, 203u8, 21u8, 96u8, 127u8, 87u8, 217u8, 185u8, 8u8, 68u8,
-							126u8, 227u8, 38u8, 172u8, 9u8, 97u8, 172u8, 27u8, 17u8, 199u8,
+							233u8, 84u8, 25u8, 145u8, 26u8, 255u8, 146u8, 109u8, 128u8, 122u8,
+							219u8, 78u8, 209u8, 193u8, 255u8, 120u8, 59u8, 121u8, 225u8, 15u8,
+							12u8, 203u8, 250u8, 6u8, 174u8, 6u8, 221u8, 153u8, 35u8, 240u8, 88u8,
+							204u8,
 						],
 					)
 				}
@@ -13834,7 +13825,7 @@ pub mod api {
 			}
 			pub mod treasury_portion_updated {
 				use super::runtime_types;
-				pub type NewPortion = runtime_types::sp_arithmetic::per_things::Permill;
+				pub type NewPortion = ::core::primitive::u8;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for TreasuryPortionUpdated {
 				const PALLET: &'static str = "TreasuryPallet";
@@ -13851,7 +13842,7 @@ pub mod api {
 				}
 				pub mod treasury_portion {
 					use super::runtime_types;
-					pub type TreasuryPortion = runtime_types::sp_arithmetic::per_things::Permill;
+					pub type TreasuryPortion = ::core::primitive::u8;
 				}
 			}
 			pub struct StorageApi;
@@ -13878,15 +13869,14 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " The portion of mining rewards that goes to treasury (Permill, 0–100%)."]
-				#[doc = " Uses OptionQuery so genesis is required. Permill allows fine granularity (e.g. 33.3%)."]
+				#[doc = " The portion of mining rewards that goes to treasury (0-100)."]
 				pub fn treasury_portion(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					(),
 					types::treasury_portion::TreasuryPortion,
 					::subxt::ext::subxt_core::utils::Yes,
-					(),
+					::subxt::ext::subxt_core::utils::Yes,
 					(),
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
@@ -13894,9 +13884,9 @@ pub mod api {
 						"TreasuryPortion",
 						(),
 						[
-							27u8, 148u8, 61u8, 76u8, 110u8, 174u8, 202u8, 184u8, 62u8, 134u8,
-							238u8, 169u8, 40u8, 112u8, 83u8, 192u8, 156u8, 67u8, 1u8, 145u8, 11u8,
-							88u8, 249u8, 1u8, 37u8, 163u8, 238u8, 131u8, 242u8, 232u8, 20u8, 195u8,
+							102u8, 185u8, 214u8, 4u8, 191u8, 165u8, 131u8, 24u8, 160u8, 179u8,
+							59u8, 196u8, 73u8, 169u8, 17u8, 104u8, 66u8, 3u8, 202u8, 255u8, 195u8,
+							96u8, 65u8, 22u8, 145u8, 163u8, 6u8, 44u8, 47u8, 11u8, 42u8, 0u8,
 						],
 					)
 				}
@@ -14312,9 +14302,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							0u8, 144u8, 16u8, 19u8, 207u8, 225u8, 184u8, 92u8, 212u8, 17u8, 156u8,
-							224u8, 97u8, 23u8, 96u8, 104u8, 207u8, 206u8, 163u8, 26u8, 91u8, 130u8,
-							113u8, 130u8, 171u8, 57u8, 255u8, 83u8, 240u8, 20u8, 199u8, 126u8,
+							138u8, 215u8, 99u8, 222u8, 139u8, 128u8, 44u8, 8u8, 70u8, 23u8, 174u8,
+							102u8, 142u8, 62u8, 176u8, 98u8, 216u8, 41u8, 138u8, 101u8, 201u8,
+							105u8, 99u8, 164u8, 144u8, 176u8, 94u8, 228u8, 191u8, 175u8, 145u8,
+							30u8,
 						],
 					)
 				}
@@ -20544,9 +20535,14 @@ pub mod api {
 				}
 				pub mod transfer_proof {
 					use super::runtime_types;
-					pub type TransferProof = [::core::primitive::u8; 32usize];
-					pub type Param0 =
-						(::subxt::ext::subxt_core::utils::AccountId32, ::core::primitive::u64);
+					pub type TransferProof = ();
+					pub type Param0 = (
+						::core::primitive::u32,
+						::core::primitive::u64,
+						::subxt::ext::subxt_core::utils::AccountId32,
+						::subxt::ext::subxt_core::utils::AccountId32,
+						::core::primitive::u128,
+					);
 				}
 				pub mod transfer_count {
 					use super::runtime_types;
@@ -20601,15 +20597,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
-				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
-				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
-				#[doc = ""]
-				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
-				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
-				#[doc = " providing full 256-bit security."]
+				#[doc = " Transfer proofs for wormhole transfers (both native and assets)"]
 				pub fn transfer_proof_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -20624,27 +20612,21 @@ pub mod api {
 						"TransferProof",
 						(),
 						[
-							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
-							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
-							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
-							55u8,
+							114u8, 93u8, 194u8, 180u8, 234u8, 160u8, 121u8, 23u8, 201u8, 229u8,
+							249u8, 211u8, 159u8, 188u8, 127u8, 128u8, 32u8, 26u8, 209u8, 25u8,
+							176u8, 192u8, 221u8, 140u8, 46u8, 26u8, 47u8, 223u8, 210u8, 37u8,
+							137u8, 90u8,
 						],
 					)
 				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
-				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
-				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
-				#[doc = ""]
-				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
-				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
-				#[doc = " providing full 256-bit security."]
+				#[doc = " Transfer proofs for wormhole transfers (both native and assets)"]
 				pub fn transfer_proof(
 					&self,
 					_0: types::transfer_proof::Param0,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::transfer_proof::Param0,
+					>,
 					types::transfer_proof::TransferProof,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
@@ -20653,12 +20635,12 @@ pub mod api {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"Wormhole",
 						"TransferProof",
-						(),
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
-							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
-							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
-							55u8,
+							114u8, 93u8, 194u8, 180u8, 234u8, 160u8, 121u8, 23u8, 201u8, 229u8,
+							249u8, 211u8, 159u8, 188u8, 127u8, 128u8, 32u8, 26u8, 209u8, 25u8,
+							176u8, 192u8, 221u8, 140u8, 46u8, 26u8, 47u8, 223u8, 210u8, 37u8,
+							137u8, 90u8,
 						],
 					)
 				}
@@ -23780,12 +23762,6 @@ pub mod api {
 					#[codec(index = 2)]
 					#[doc = "Rewards were sent to Treasury when no miner was specified"]
 					TreasuryRewarded { reward: ::core::primitive::u128 },
-					#[codec(index = 3)]
-					#[doc = "Miner reward was redirected to treasury due to mint failure"]
-					MinerRewardRedirected {
-						miner: ::subxt::ext::subxt_core::utils::AccountId32,
-						reward: ::core::primitive::u128,
-					},
 				}
 			}
 		}
@@ -25033,7 +25009,7 @@ pub mod api {
 						>,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::sp_runtime::traits::BlakeTwo256,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 						enactment_moment:
 							runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -25190,7 +25166,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::sp_runtime::traits::BlakeTwo256,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 					},
 					#[codec(index = 1)]
@@ -25220,7 +25196,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::sp_runtime::traits::BlakeTwo256,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 						tally: runtime_types::pallet_conviction_voting::types::Tally<
 							::core::primitive::u128,
@@ -25313,7 +25289,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::sp_runtime::traits::BlakeTwo256,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 					},
 					#[codec(index = 1)]
@@ -25343,7 +25319,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::sp_runtime::traits::BlakeTwo256,
+							runtime_types::qp_poseidon::PoseidonHasher,
 						>,
 						tally: runtime_types::pallet_ranked_collective::Tally,
 					},
@@ -26451,13 +26427,11 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
-					#[doc = "Set the treasury account. Root only. Zero address is rejected (funds would be locked)."]
+					#[doc = "Set the treasury account. Root only."]
 					set_treasury_account { account: ::subxt::ext::subxt_core::utils::AccountId32 },
 					#[codec(index = 1)]
-					#[doc = "Set the treasury portion (Permill, 0–100%). Root only."]
-					set_treasury_portion {
-						portion: runtime_types::sp_arithmetic::per_things::Permill,
-					},
+					#[doc = "Set the treasury portion (0-100). Root only."]
+					set_treasury_portion { portion: ::core::primitive::u8 },
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26474,9 +26448,6 @@ pub mod api {
 				pub enum Error {
 					#[codec(index = 0)]
 					InvalidPortion,
-					#[codec(index = 1)]
-					#[doc = "Treasury account cannot be zero address (funds would be permanently locked)."]
-					InvalidTreasuryAccount,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26496,9 +26467,7 @@ pub mod api {
 						new_account: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 1)]
-					TreasuryPortionUpdated {
-						new_portion: runtime_types::sp_arithmetic::per_things::Permill,
-					},
+					TreasuryPortionUpdated { new_portion: ::core::primitive::u8 },
 				}
 			}
 		}
@@ -26905,6 +26874,17 @@ pub mod api {
 				pub extrinsics_root: ::subxt::ext::subxt_core::utils::H256,
 				pub digest: runtime_types::sp_runtime::generic::digest::Digest,
 			}
+		}
+		pub mod qp_poseidon {
+			use super::runtime_types;
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct PoseidonHasher;
 		}
 		pub mod qp_scheduler {
 			use super::runtime_types;
@@ -27956,21 +27936,6 @@ pub mod api {
 					#[codec(index = 13)]
 					DecodeError,
 				}
-			}
-			pub mod traits {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct BlakeTwo256;
 			}
 			pub mod transaction_validity {
 				use super::runtime_types;

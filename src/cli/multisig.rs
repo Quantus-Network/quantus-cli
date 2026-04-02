@@ -477,13 +477,13 @@ pub fn predict_multisig_address(
 	data.extend_from_slice(&nonce.encode());
 
 	// Hash the data and map it deterministically into an AccountId
-	// Must match pallet_multisig::derive_multisig_address: T::Hashing is frame_system::Hashing
-	// (BlakeTwo256), not the block-header Poseidon hasher.
+	// CRITICAL: Use PoseidonHasher (same as runtime!) and TrailingZeroInput
 	use codec::Decode;
+	use qp_poseidon::PoseidonHasher;
 	use sp_core::crypto::AccountId32;
-	use sp_runtime::traits::{BlakeTwo256, Hash as HashT, TrailingZeroInput};
+	use sp_runtime::traits::{Hash as HashT, TrailingZeroInput};
 
-	let hash = BlakeTwo256::hash(&data);
+	let hash = PoseidonHasher::hash(&data);
 	let account_id = AccountId32::decode(&mut TrailingZeroInput::new(hash.as_ref()))
 		.expect("TrailingZeroInput provides sufficient bytes; qed");
 
