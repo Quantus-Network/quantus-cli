@@ -3,19 +3,25 @@
 //! Generates circuit binaries (prover, verifier, aggregator) at build time.
 //! This ensures the binaries are always consistent with the circuit crate version
 //! and eliminates the need to manually run `quantus developer build-circuits`.
+//!
+//! Outputs are written to `OUT_DIR` (required by cargo) and then copied to
+//! `generated-bins/` in the project root for runtime access — but only during
+//! normal builds, **not** during `cargo publish` verification where modifying the
+//! source directory is forbidden.
 
 use std::{env, path::Path, time::Instant};
 
 fn main() {
+	let out_dir = env::var("OUT_DIR").expect("OUT_DIR not set");
 	let manifest_dir = env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
-	let output_dir = Path::new(&manifest_dir).join("generated-bins");
+
+	let build_output_dir = Path::new(&out_dir).join("generated-bins");
 
 	let num_leaf_proofs: usize = env::var("QP_NUM_LEAF_PROOFS")
 		.unwrap_or_else(|_| "16".to_string())
 		.parse()
 		.expect("QP_NUM_LEAF_PROOFS must be a valid usize");
 
-	// Rerun if the circuit builder crate changes
 	println!("cargo:rerun-if-changed=build.rs");
 
 	println!(
@@ -25,15 +31,14 @@ fn main() {
 
 	let start = Instant::now();
 
-	// Create the output directory if it doesn't exist
-	std::fs::create_dir_all(&output_dir).expect("Failed to create generated-bins directory");
+	std::fs::create_dir_all(&build_output_dir)
+		.expect("Failed to create generated-bins directory in OUT_DIR");
 
-	// Generate all circuit binaries (leaf + aggregated, WITH prover)
 	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
-		&output_dir,
-		true, // include_prover = true (CLI needs prover for proof generation)
+		&build_output_dir,
+		true,
 		num_leaf_proofs,
-		None, // num_layer0_proofs - no layer-1 aggregation
+		None,
 	)
 	.expect("Failed to generate circuit binaries");
 
@@ -42,4 +47,17 @@ fn main() {
 		"cargo:warning=[quantus-cli] ZK circuit binaries generated in {:.2}s",
 		elapsed.as_secs_f64()
 	);
+
+	// Copy bins to project root for runtime access, but NOT during `cargo publish`
+	// verification (manifest_dir is inside target/package/ in that case).
+	let project_bins = Path::new(&manifest_dir).join("generated-bins");
+	if !manifest_dir.contains("target/package/") {
+		let _ = std::fs::create_dir_all(&project_bins);
+		if let Ok(entries) = std::fs::read_dir(&build_output_dir) {
+			for entry in entries.flatten() {
+				let dest = project_bins.join(entry.file_name());
+				let _ = std::fs::copy(entry.path(), dest);
+			}
+		}
+	}
 }
