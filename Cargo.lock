@@ -3830,7 +3830,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-aggregator"
-version = "1.3.0"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2a96cf6018afa939953257a738e503ce305546c85d8777aa66153f21dc535ffe"
 dependencies = [
  "anyhow",
  "hex",
@@ -3847,7 +3849,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit"
-version = "1.3.0"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b86a9f070a7cc9d00e69caed517d2add5913484ce05052e3fb9849cd9c0587d4"
 dependencies = [
  "anyhow",
  "hex",
@@ -3858,7 +3862,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit-builder"
-version = "1.3.0"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "177ce48156dd5fe8d84e581ba70ffaf4ee1334986697f58305b04c11b9d3566c"
 dependencies = [
  "anyhow",
  "clap",
@@ -3870,14 +3876,18 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-inputs"
-version = "1.3.0"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6b81b137f4cf98b62f4437694fb1849e07b65f2b556dddeea6e91e7209cbf168"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "qp-wormhole-prover"
-version = "1.3.0"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4fae60b441328ecf956c5bd34c98810cb7d536bccdc65ceccfed5bf2b46344eb"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3888,7 +3898,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-verifier"
-version = "1.3.0"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3f9d517f9570578944a22a53f514ce9f7643857f28b256252c6ba82cbebc308a"
 dependencies = [
  "anyhow",
  "qp-plonky2-verifier",
@@ -3897,7 +3909,9 @@ dependencies = [
 
 [[package]]
 name = "qp-zk-circuits-common"
-version = "1.3.0"
+version = "1.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d0649182166496ef48ad23f9c94062baf5d98499c409ff9a92f784bf5fa4efe"
 dependencies = [
  "anyhow",
  "hex",
