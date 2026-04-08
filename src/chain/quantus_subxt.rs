@@ -1959,9 +1959,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				9u8, 252u8, 101u8, 200u8, 161u8, 142u8, 241u8, 130u8, 224u8, 189u8, 72u8, 23u8,
-				15u8, 35u8, 16u8, 38u8, 233u8, 12u8, 177u8, 101u8, 41u8, 225u8, 185u8, 137u8,
-				187u8, 153u8, 77u8, 45u8, 214u8, 214u8, 215u8, 198u8,
+				126u8, 218u8, 159u8, 250u8, 59u8, 149u8, 173u8, 241u8, 56u8, 124u8, 210u8, 212u8,
+				182u8, 54u8, 120u8, 239u8, 158u8, 147u8, 158u8, 70u8, 131u8, 157u8, 164u8, 69u8,
+				167u8, 177u8, 13u8, 11u8, 12u8, 225u8, 206u8, 202u8,
 			]
 	}
 	pub mod system {
@@ -7466,7 +7466,7 @@ pub mod api {
 								[::core::primitive::u8; 32usize],
 								runtime_types::frame_support::traits::preimages::Bounded<
 									runtime_types::quantus_runtime::RuntimeCall,
-									runtime_types::qp_poseidon::PoseidonHasher,
+									runtime_types::sp_runtime::traits::BlakeTwo256,
 								>,
 								::core::primitive::u32,
 								runtime_types::quantus_runtime::OriginCaller,
@@ -8531,7 +8531,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::qp_poseidon::PoseidonHasher,
+						runtime_types::sp_runtime::traits::BlakeTwo256,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -9022,7 +9022,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::sp_runtime::traits::BlakeTwo256,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -9116,7 +9116,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::sp_runtime::traits::BlakeTwo256,
 				>;
 				pub type Tally =
 					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
@@ -9373,7 +9373,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::qp_poseidon::PoseidonHasher,
+								runtime_types::sp_runtime::traits::BlakeTwo256,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_conviction_voting::types::Tally<
@@ -10344,7 +10344,7 @@ pub mod api {
 							::core::primitive::u128,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::qp_poseidon::PoseidonHasher,
+								runtime_types::sp_runtime::traits::BlakeTwo256,
 							>,
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::H256;
@@ -12501,7 +12501,7 @@ pub mod api {
 					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
 					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::qp_poseidon::PoseidonHasher,
+						runtime_types::sp_runtime::traits::BlakeTwo256,
 					>;
 					pub type EnactmentMoment =
 						runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -12992,7 +12992,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::sp_runtime::traits::BlakeTwo256,
 				>;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
@@ -13086,7 +13086,7 @@ pub mod api {
 				pub type Track = ::core::primitive::u16;
 				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
 					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::qp_poseidon::PoseidonHasher,
+					runtime_types::sp_runtime::traits::BlakeTwo256,
 				>;
 				pub type Tally = runtime_types::pallet_ranked_collective::Tally;
 			}
@@ -13337,7 +13337,7 @@ pub mod api {
 							::core::primitive::u32,
 							runtime_types::frame_support::traits::preimages::Bounded<
 								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::qp_poseidon::PoseidonHasher,
+								runtime_types::sp_runtime::traits::BlakeTwo256,
 							>,
 							::core::primitive::u128,
 							runtime_types::pallet_ranked_collective::Tally,
@@ -20420,7 +20420,11 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch"]
+				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+				#[doc = ""]
+				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
+				#[doc = "If pre-validation fails (deserialization, cheap checks), we return the actual"]
+				#[doc = "consumed weight to free block capacity for other transactions."]
 				pub struct VerifyAggregatedProof {
 					pub proof_bytes: verify_aggregated_proof::ProofBytes,
 				}
@@ -20436,7 +20440,11 @@ pub mod api {
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch"]
+				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+				#[doc = ""]
+				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
+				#[doc = "If pre-validation fails (deserialization, cheap checks), we return the actual"]
+				#[doc = "consumed weight to free block capacity for other transactions."]
 				pub fn verify_aggregated_proof(
 					&self,
 					proof_bytes: types::verify_aggregated_proof::ProofBytes,
@@ -20552,6 +20560,12 @@ pub mod api {
 					use super::runtime_types;
 					pub type TransferCount = ::core::primitive::u64;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
+				pub mod genesis_endowments_pending {
+					use super::runtime_types;
+					pub type GenesisEndowmentsPending = ::subxt::ext::subxt_core::alloc::vec::Vec<
+						(::subxt::ext::subxt_core::utils::AccountId32, ::core::primitive::u128),
+					>;
 				}
 			}
 			pub struct StorageApi;
@@ -20706,6 +20720,32 @@ pub mod api {
 							171u8, 84u8, 194u8, 43u8, 94u8, 219u8, 28u8, 230u8, 224u8, 180u8,
 							153u8, 223u8, 95u8, 3u8, 28u8, 119u8, 58u8, 220u8, 6u8, 146u8, 145u8,
 							4u8,
+						],
+					)
+				}
+				#[doc = " Genesis endowments pending event emission."]
+				#[doc = " Stores (to_address, amount) for each genesis endowment."]
+				#[doc = " These are processed in on_initialize at block 1 to emit NativeTransferred events,"]
+				#[doc = " then cleared. This ensures indexers like Subsquid can track genesis transfers."]
+				#[doc = ""]
+				#[doc = " Unbounded because it's only populated at genesis and cleared on block 1."]
+				pub fn genesis_endowments_pending(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::genesis_endowments_pending::GenesisEndowmentsPending,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Wormhole",
+						"GenesisEndowmentsPending",
+						(),
+						[
+							92u8, 149u8, 109u8, 170u8, 10u8, 130u8, 163u8, 174u8, 224u8, 98u8,
+							190u8, 125u8, 213u8, 240u8, 211u8, 23u8, 222u8, 20u8, 104u8, 45u8, 7u8,
+							73u8, 225u8, 73u8, 21u8, 88u8, 91u8, 57u8, 207u8, 252u8, 25u8, 76u8,
 						],
 					)
 				}
@@ -25033,7 +25073,7 @@ pub mod api {
 						>,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::sp_runtime::traits::BlakeTwo256,
 						>,
 						enactment_moment:
 							runtime_types::frame_support::traits::schedule::DispatchTime<
@@ -25190,7 +25230,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::sp_runtime::traits::BlakeTwo256,
 						>,
 					},
 					#[codec(index = 1)]
@@ -25220,7 +25260,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::sp_runtime::traits::BlakeTwo256,
 						>,
 						tally: runtime_types::pallet_conviction_voting::types::Tally<
 							::core::primitive::u128,
@@ -25313,7 +25353,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::sp_runtime::traits::BlakeTwo256,
 						>,
 					},
 					#[codec(index = 1)]
@@ -25343,7 +25383,7 @@ pub mod api {
 						track: ::core::primitive::u16,
 						proposal: runtime_types::frame_support::traits::preimages::Bounded<
 							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::qp_poseidon::PoseidonHasher,
+							runtime_types::sp_runtime::traits::BlakeTwo256,
 						>,
 						tally: runtime_types::pallet_ranked_collective::Tally,
 					},
@@ -26758,7 +26798,11 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 2)]
-					#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch"]
+					#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+					#[doc = ""]
+					#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
+					#[doc = "If pre-validation fails (deserialization, cheap checks), we return the actual"]
+					#[doc = "consumed weight to free block capacity for other transactions."]
 					verify_aggregated_proof {
 						proof_bytes:
 							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
@@ -26782,24 +26826,22 @@ pub mod api {
 					#[codec(index = 1)]
 					NullifierAlreadyUsed,
 					#[codec(index = 2)]
-					VerifierNotAvailable,
-					#[codec(index = 3)]
 					BlockNotFound,
-					#[codec(index = 4)]
+					#[codec(index = 3)]
 					AggregatedVerifierNotAvailable,
-					#[codec(index = 5)]
+					#[codec(index = 4)]
 					AggregatedProofDeserializationFailed,
-					#[codec(index = 6)]
+					#[codec(index = 5)]
 					AggregatedVerificationFailed,
-					#[codec(index = 7)]
+					#[codec(index = 6)]
 					InvalidAggregatedPublicInputs,
-					#[codec(index = 8)]
+					#[codec(index = 7)]
 					#[doc = "The volume fee rate in the proof doesn't match the configured rate"]
 					InvalidVolumeFeeRate,
-					#[codec(index = 9)]
+					#[codec(index = 8)]
 					#[doc = "Transfer amount is below the minimum required"]
 					TransferAmountBelowMinimum,
-					#[codec(index = 10)]
+					#[codec(index = 9)]
 					#[doc = "Only native asset (asset_id = 0) is supported in this version"]
 					NonNativeAssetNotSupported,
 				}
@@ -26905,17 +26947,6 @@ pub mod api {
 				pub extrinsics_root: ::subxt::ext::subxt_core::utils::H256,
 				pub digest: runtime_types::sp_runtime::generic::digest::Digest,
 			}
-		}
-		pub mod qp_poseidon {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct PoseidonHasher;
 		}
 		pub mod qp_scheduler {
 			use super::runtime_types;
@@ -27967,6 +27998,21 @@ pub mod api {
 					#[codec(index = 13)]
 					DecodeError,
 				}
+			}
+			pub mod traits {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct BlakeTwo256;
 			}
 			pub mod transaction_validity {
 				use super::runtime_types;

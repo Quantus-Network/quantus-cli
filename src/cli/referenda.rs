@@ -311,7 +311,7 @@ async fn submit_remark_proposal(
 	type ProposalBounded =
 		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded<
 			quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall,
-			quantus_subxt::api::runtime_types::qp_poseidon::PoseidonHasher,
+			quantus_subxt::api::runtime_types::sp_runtime::traits::BlakeTwo256,
 		>;
 
 	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash;
@@ -427,7 +427,7 @@ async fn submit_proposal(
 	type ProposalBounded =
 		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded<
 			quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall,
-			quantus_subxt::api::runtime_types::qp_poseidon::PoseidonHasher,
+			quantus_subxt::api::runtime_types::sp_runtime::traits::BlakeTwo256,
 		>;
 
 	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash_parsed;
