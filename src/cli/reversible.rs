@@ -389,8 +389,11 @@ async fn list_pending_transactions(
 	// Determine which address to query
 	let target_address = match (address, wallet_name) {
 		(Some(addr), _) => {
-			// --address accepts SS58 or wallet name
-			resolve_address(&addr)?
+			// Validate the provided address
+			SpAccountId32::from_ss58check(&addr).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Invalid address: {e:?}"))
+			})?;
+			addr
 		},
 		(None, Some(wallet)) => {
 			// Load wallet and get its address
@@ -413,66 +416,55 @@ async fn list_pending_transactions(
 
 	log_verbose!("🔍 Querying pending transfers for: {}", target_address);
 
-	let latest_block_hash = quantus_client.get_latest_block().await?;
-	let storage_at = quantus_client.client().storage().at(latest_block_hash);
-	let pending_iter = crate::chain::quantus_subxt::api::storage()
+	// Query pending transfers by sender (outgoing)
+	let sender_storage_address = crate::chain::quantus_subxt::api::storage()
 		.reversible_transfers()
-		.pending_transfers_iter();
+		.pending_transfers_by_sender(account_id);
 
-	let mut outgoing = Vec::new();
-	let mut incoming = Vec::new();
-	let mut iter = storage_at.iter(pending_iter).await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Storage iter error: {e:?}"))
-	})?;
+	// Get the latest block hash to read from the latest state (not finalized)
+	let latest_block_hash = quantus_client.get_latest_block().await?;
 
-	while let Some(result) = iter.next().await {
-		match result {
-			Ok(entry) => {
-				// Key is storage prefix + tx_id (H256, 32 bytes). Extract last 32 bytes.
-				let tx_id_hex = if entry.key_bytes.len() >= 32 {
-					hex::encode(&entry.key_bytes[entry.key_bytes.len() - 32..])
-				} else {
-					hex::encode(&entry.key_bytes)
-				};
-				let transfer = entry.value;
-				if transfer.from == account_id {
-					outgoing.push((tx_id_hex, transfer));
-				} else if transfer.to == account_id {
-					incoming.push((tx_id_hex, transfer));
-				}
-			},
-			Err(e) => {
-				log_verbose!("⚠️  Error reading pending transfer: {:?}", e);
-			},
-		}
-	}
+	let outgoing_transfers = quantus_client
+		.client()
+		.storage()
+		.at(latest_block_hash)
+		.fetch(&sender_storage_address)
+		.await
+		.map_err(|e| crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}")))?;
 
 	let mut total_transfers = 0;
 
-	if !outgoing.is_empty() {
-		log_print!("📤 Outgoing pending transfers:");
-		for (i, (tx_id_hex, transfer)) in outgoing.iter().enumerate() {
-			total_transfers += 1;
-			log_print!("   {}. 0x{}", i + 1, tx_id_hex);
-			let formatted_amount = format_amount(transfer.amount);
-			log_print!("      👤 To: {}", transfer.to.to_quantus_ss58());
-			log_print!("      💰 Amount: {}", formatted_amount);
-			log_print!("      🔄 Interceptor: {}", transfer.interceptor.to_quantus_ss58());
-		}
-	}
+	// Display outgoing transfers
+	if let Some(outgoing_hashes) = outgoing_transfers {
+		if !outgoing_hashes.0.is_empty() {
+			log_print!("📤 Outgoing pending transfers:");
+			for (i, hash) in outgoing_hashes.0.iter().enumerate() {
+				total_transfers += 1;
+				log_print!("   {}. 0x{}", i + 1, hex::encode(hash.as_ref()));
 
-	if !incoming.is_empty() {
-		if total_transfers > 0 {
-			log_print!("");
-		}
-		log_print!("📥 Incoming pending transfers:");
-		for (i, (tx_id_hex, transfer)) in incoming.iter().enumerate() {
-			total_transfers += 1;
-			log_print!("   {}. 0x{}", i + 1, tx_id_hex);
-			let formatted_amount = format_amount(transfer.amount);
-			log_print!("      👤 From: {}", transfer.from.to_quantus_ss58());
-			log_print!("      💰 Amount: {}", formatted_amount);
-			log_print!("      🔄 Interceptor: {}", transfer.interceptor.to_quantus_ss58());
+				// Try to get transfer details
+				let transfer_storage_address = crate::chain::quantus_subxt::api::storage()
+					.reversible_transfers()
+					.pending_transfers(*hash);
+
+				if let Ok(Some(transfer_details)) = quantus_client
+					.client()
+					.storage()
+					.at(latest_block_hash)
+					.fetch(&transfer_storage_address)
+					.await
+					.map_err(|e| {
+						crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
+					}) {
+					let formatted_amount = format_amount(transfer_details.amount);
+					log_print!("      👤 To: {}", transfer_details.to.to_quantus_ss58());
+					log_print!("      💰 Amount: {}", formatted_amount);
+					log_print!(
+						"      🔄 Interceptor: {}",
+						transfer_details.interceptor.to_quantus_ss58()
+					);
+				}
+			}
 		}
 	}
 
