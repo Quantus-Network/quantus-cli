@@ -360,7 +360,7 @@ async fn submit_runtime_upgrade_with_preimage(
 	password_file: Option<String>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
-	use qp_poseidon::PoseidonHasher;
+	use sp_runtime::traits::{BlakeTwo256, Hash};
 
 	log_print!("📝 Submitting Runtime Upgrade Proposal to Tech Referenda");
 	log_print!("   📂 WASM file: {}", wasm_file.display().to_string().bright_cyan());
@@ -393,9 +393,8 @@ async fn submit_runtime_upgrade_with_preimage(
 
 	log_verbose!("📝 Encoded call size: {} bytes", encoded_call.len());
 
-	// Compute preimage hash using Poseidon (runtime uses PoseidonHasher)
-	let preimage_hash: sp_core::H256 =
-		<PoseidonHasher as sp_runtime::traits::Hash>::hash(&encoded_call);
+	// Must match `frame_system::Config::Hashing` (BlakeTwo256) — same key as `pallet_preimage`.
+	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded_call);
 
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 

@@ -269,7 +269,7 @@ async fn submit_remark_proposal(
 	origin_type: &str,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
-	use qp_poseidon::PoseidonHasher;
+	use sp_runtime::traits::{BlakeTwo256, Hash};
 
 	log_print!("📝 Submitting System::remark Proposal to Referenda");
 	log_print!("   💬 Message: {}", message.bright_cyan());
@@ -288,9 +288,8 @@ async fn submit_remark_proposal(
 
 	log_verbose!("📝 Encoded call size: {} bytes", encoded_call.len());
 
-	// Compute preimage hash using Poseidon
-	let preimage_hash: sp_core::H256 =
-		<PoseidonHasher as sp_runtime::traits::Hash>::hash(&encoded_call);
+	// Must match `frame_system::Config::Hashing` (BlakeTwo256) — same key as `pallet_preimage`.
+	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded_call);
 
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
