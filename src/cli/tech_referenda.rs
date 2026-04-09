@@ -48,6 +48,27 @@ pub enum TechReferendaCommands {
 		password_file: Option<String>,
 	},
 
+	/// Submit a proposal to set Treasury `treasury_portion` (Permill) via Tech Referenda (creates preimage first)
+	SubmitTreasuryPortion {
+		/// New treasury portion in Permill (parts per million): 0..=1_000_000
+		///
+		/// Example: 500_000 = 50%
+		#[arg(long, value_parser = clap::value_parser!(u32).range(0..=1_000_000))]
+		portion_permill: u32,
+
+		/// Wallet name to sign with (must be a Tech Collective member or root)
+		#[arg(short, long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
 	/// List all active Tech Referenda proposals
 	List,
 
@@ -206,6 +227,21 @@ pub async fn handle_tech_referenda_command(
 			submit_runtime_upgrade_with_preimage(
 				&quantus_client,
 				&wasm_file,
+				&from,
+				password,
+				password_file,
+				execution_mode,
+			)
+			.await,
+		TechReferendaCommands::SubmitTreasuryPortion {
+			portion_permill,
+			from,
+			password,
+			password_file,
+		} =>
+			submit_treasury_portion_with_preimage(
+				&quantus_client,
+				portion_permill,
 				&from,
 				password,
 				password_file,
@@ -443,6 +479,97 @@ async fn submit_runtime_upgrade_with_preimage(
 		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Runtime upgrade proposal submitted! Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		tx_hash
+	);
+
+	log_print!("💡 Use 'quantus tech-referenda list' to see active proposals");
+	Ok(())
+}
+
+/// Submit a Tech Referenda proposal to set the Treasury portion (creates preimage first)
+async fn submit_treasury_portion_with_preimage(
+	quantus_client: &crate::chain::client::QuantusClient,
+	portion_permill: u32,
+	from: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> crate::error::Result<()> {
+	use sp_runtime::traits::{BlakeTwo256, Hash};
+
+	log_print!("📝 Submitting Treasury Portion Update Proposal to Tech Referenda");
+	log_print!("   📊 New portion (Permill): {}", portion_permill.to_string().bright_cyan());
+	log_print!(
+		"   📊 New portion (%): {}",
+		format!("{:.2}%", (portion_permill as f64) / 10000.0).bright_cyan()
+	);
+	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
+
+	// Load wallet keypair
+	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+
+	// Build a static payload for TreasuryPallet::set_treasury_portion and encode full call data
+	// Note: runtime_types::Permill is a tuple struct (u32 parts-per-million).
+	let portion =
+		quantus_subxt::api::runtime_types::sp_arithmetic::per_things::Permill(portion_permill);
+	let set_portion_payload =
+		quantus_subxt::api::tx().treasury_pallet().set_treasury_portion(portion);
+
+	let metadata = quantus_client.client().metadata();
+	let encoded_call = <_ as subxt::tx::Payload>::encode_call_data(&set_portion_payload, &metadata)
+		.map_err(|e| QuantusError::Generic(format!("Failed to encode call data: {:?}", e)))?;
+
+	log_verbose!("📝 Encoded call size: {} bytes", encoded_call.len());
+
+	// Must match `frame_system::Config::Hashing` (BlakeTwo256) — same key as `pallet_preimage`.
+	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded_call);
+	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
+
+	// Submit Preimage::note_preimage with bounded bytes
+	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
+	let bounded_bytes: PreimageBytes = encoded_call.clone();
+
+	log_print!("📝 Submitting preimage...");
+	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
+	let preimage_tx_hash =
+		submit_transaction(quantus_client, &keypair, note_preimage_tx, None, execution_mode)
+			.await?;
+	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
+
+	log_print!("⏳ Waiting for preimage transaction confirmation...");
+
+	// Build TechReferenda::submit call using Lookup preimage reference
+	type ProposalBounded =
+		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded<
+			quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall,
+			quantus_subxt::api::runtime_types::sp_runtime::traits::BlakeTwo256,
+		>;
+
+	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash;
+	let proposal: ProposalBounded =
+		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: encoded_call.len() as u32 };
+
+	let raw_origin_root =
+		quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
+	let origin_caller =
+		quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin_root);
+
+	let enactment =
+		quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime::After(
+			0u32,
+		);
+
+	log_print!("🔧 Creating TechReferenda::submit call...");
+	let submit_call =
+		quantus_subxt::api::tx()
+			.tech_referenda()
+			.submit(origin_caller, proposal, enactment);
+
+	let tx_hash =
+		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
+	log_print!(
+		"✅ {} Treasury portion proposal submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
 		tx_hash
 	);
