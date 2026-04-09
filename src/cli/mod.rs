@@ -91,7 +91,7 @@ pub enum Commands {
 	#[command(subcommand)]
 	Scheduler(scheduler::SchedulerCommands),
 
-	/// Direct interaction with chain storage (Sudo required for set)
+	/// Direct interaction with chain storage (read-only)
 	#[command(subcommand)]
 	Storage(storage::StorageCommands),
 
@@ -119,7 +119,7 @@ pub enum Commands {
 	#[command(subcommand)]
 	Transfers(transfers::TransfersCommands),
 
-	/// Runtime management commands (requires root/sudo permissions)
+	/// Runtime management commands (via governance where required)
 	#[command(subcommand)]
 	Runtime(runtime::RuntimeCommands),
 

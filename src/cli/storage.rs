@@ -7,11 +7,11 @@ use crate::{
 	log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
-use codec::{Decode, Encode};
+use codec::Decode;
 use colored::Colorize;
 use serde::Deserialize;
 use sp_core::{
-	crypto::{AccountId32, Ss58Codec},
+	crypto::{AccountId32},
 	twox_128,
 };
 use std::{collections::BTreeMap, str::FromStr};
@@ -52,7 +52,7 @@ fn validate_pallet_exists(
 	Ok(())
 }
 
-/// Direct interaction with chain storage (Sudo required for set)
+/// Direct interaction with chain storage (read-only)
 #[derive(Subcommand, Debug)]
 pub enum StorageCommands {
 	/// Get a storage value from a pallet.
@@ -152,40 +152,6 @@ pub enum StorageCommands {
 		block: Option<String>,
 	},
 
-	/// Set a storage value on the chain.
-	///
-	/// This requires sudo privileges. It constructs a `system.set_storage` call
-	/// and wraps it in a `sudo.sudo` extrinsic. The provided value should be
-	/// a hex-encoded SCALE representation of the value.
-	Set {
-		/// The name of the pallet (e.g., "Scheduler")
-		#[arg(long)]
-		pallet: String,
-
-		/// The name of the storage item (e.g., "LastProcessedTimestamp")
-		#[arg(long)]
-		name: String,
-
-		/// The new value. Can be a plain string if --type is used, otherwise a hex string.
-		#[arg(long)]
-		value: String,
-
-		/// The type of the value to be encoded (e.g., "u64", "moment", "accountid")
-		#[arg(long)]
-		r#type: Option<String>,
-
-		/// The name of the wallet to sign the transaction with (must have sudo rights)
-		#[arg(long)]
-		wallet: String,
-
-		/// The password for the wallet
-		#[arg(long)]
-		password: Option<String>,
-
-		/// Read password from file (for scripting)
-		#[arg(long)]
-		password_file: Option<String>,
-	},
 }
 
 /// Get block hash from block number or parse existing hash
@@ -249,39 +215,6 @@ pub async fn get_storage_raw_at_block(
 	let result = storage_at.fetch_raw(key).await?;
 
 	Ok(result)
-}
-
-/// Set storage value using sudo (requires sudo privileges)
-pub async fn set_storage_value(
-	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
-	storage_key: Vec<u8>,
-	value_bytes: Vec<u8>,
-	execution_mode: crate::cli::common::ExecutionMode,
-) -> crate::error::Result<subxt::utils::H256> {
-	log_verbose!("✍️  Creating set_storage transaction...");
-
-	// Create the System::set_storage call using RuntimeCall type alias
-	let set_storage_call =
-		quantus_subxt::api::Call::System(quantus_subxt::api::system::Call::set_storage {
-			items: vec![(storage_key, value_bytes)],
-		});
-
-	// Wrap in Sudo::sudo call
-	let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_storage_call);
-
-	let tx_hash = crate::cli::common::submit_transaction(
-		quantus_client,
-		from_keypair,
-		sudo_call,
-		None,
-		execution_mode,
-	)
-	.await?;
-
-	log_verbose!("📋 Set storage transaction submitted: {:?}", tx_hash);
-
-	Ok(tx_hash)
 }
 
 /// List all storage items in a pallet
@@ -805,7 +738,7 @@ async fn get_storage_by_parts(
 pub async fn handle_storage_command(
 	command: StorageCommands,
 	node_url: &str,
-	execution_mode: crate::cli::common::ExecutionMode,
+	_execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("🗄️  Storage");
 
@@ -847,82 +780,6 @@ pub async fn handle_storage_command(
 			show_storage_stats(&quantus_client, pallet, detailed).await,
 		StorageCommands::Iterate { pallet, name, limit, decode_as, block } =>
 			iterate_storage_entries(&quantus_client, &pallet, &name, limit, decode_as, block).await,
-
-		StorageCommands::Set { pallet, name, value, wallet, password, password_file, r#type } => {
-			log_print!("✍️  Setting storage for {}::{}", pallet.bright_green(), name.bright_cyan());
-			log_print!("\n{}", "🛑 This is a SUDO operation!".bright_red().bold());
-
-			// Validate pallet exists
-			validate_pallet_exists(quantus_client.client(), &pallet)?;
-
-			// 1. Load wallet
-			let keypair =
-				crate::wallet::load_keypair_from_wallet(&wallet, password, password_file)?;
-			log_verbose!("🔐 Using wallet: {}", wallet.bright_green());
-
-			// 2. Encode the value based on the --type flag
-			let value_bytes = match r#type.as_deref() {
-				Some("u64") | Some("moment") => value
-					.parse::<u64>()
-					.map_err(|e| QuantusError::Generic(format!("Invalid u64 value: {e}")))?
-					.encode(),
-				Some("u128") | Some("balance") => value
-					.parse::<u128>()
-					.map_err(|e| QuantusError::Generic(format!("Invalid u128 value: {e}")))?
-					.encode(),
-				Some("accountid") | Some("accountid32") => AccountId32::from_ss58check(&value)
-					.map_err(|e| QuantusError::Generic(format!("Invalid AccountId value: {e:?}")))?
-					.encode(),
-				None => {
-					// Default to hex decoding if no type is specified
-					// Try to parse as H256 first, then fall back to hex decode
-					if value.starts_with("0x") && value.len() == 66 {
-						// 0x + 64 hex chars = 66 (32 bytes)
-						// Try to parse as H256
-						let h256_value = subxt::utils::H256::from_str(&value).map_err(|e| {
-							QuantusError::Generic(format!("Invalid H256 value: {e}"))
-						})?;
-						h256_value.0.to_vec()
-					} else {
-						// Fall back to hex decode for other hex values
-						let value_hex = value.strip_prefix("0x").unwrap_or(&value);
-						hex::decode(value_hex)
-							.map_err(|e| QuantusError::Generic(format!("Invalid hex value: {e}")))?
-					}
-				},
-				Some(unsupported) =>
-					return Err(QuantusError::Generic(format!(
-						"Unsupported type for --type: {unsupported}"
-					))),
-			};
-
-			log_verbose!("Encoded value bytes: 0x{}", hex::encode(&value_bytes).dimmed());
-
-			// 3. Construct the storage key
-			let storage_key = {
-				let mut key = twox_128(pallet.as_bytes()).to_vec();
-				key.extend(&twox_128(name.as_bytes()));
-				key
-			};
-
-			// 4. Submit the set storage transaction
-			let tx_hash = set_storage_value(
-				&quantus_client,
-				&keypair,
-				storage_key,
-				value_bytes,
-				execution_mode,
-			)
-			.await?;
-
-			log_print!(
-				"✅ {} Set storage transaction submitted! Hash: {:?}",
-				"SUCCESS".bright_green().bold(),
-				tx_hash
-			);
-
-			Ok(())
-		},
 	}
 }
 

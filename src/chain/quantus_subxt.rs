@@ -6,12 +6,11 @@ pub mod api {
 	mod root_mod {
 		pub use super::*;
 	}
-	pub static PALLETS: [&str; 21usize] = [
+	pub static PALLETS: [&str; 20usize] = [
 		"System",
 		"Timestamp",
 		"Balances",
 		"TransactionPayment",
-		"Sudo",
 		"QPoW",
 		"MiningRewards",
 		"Preimage",
@@ -1432,10 +1431,10 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							218u8, 133u8, 148u8, 251u8, 115u8, 98u8, 41u8, 181u8, 220u8, 98u8,
-							96u8, 5u8, 83u8, 71u8, 198u8, 107u8, 19u8, 120u8, 188u8, 127u8, 50u8,
-							201u8, 132u8, 73u8, 13u8, 118u8, 124u8, 200u8, 48u8, 103u8, 188u8,
-							219u8,
+							251u8, 117u8, 187u8, 14u8, 196u8, 176u8, 208u8, 219u8, 61u8, 234u8,
+							23u8, 241u8, 174u8, 156u8, 167u8, 160u8, 89u8, 42u8, 178u8, 155u8,
+							190u8, 179u8, 124u8, 114u8, 251u8, 186u8, 67u8, 205u8, 239u8, 51u8,
+							177u8, 90u8,
 						],
 					)
 				}
@@ -1453,10 +1452,10 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							222u8, 82u8, 209u8, 219u8, 210u8, 175u8, 13u8, 207u8, 13u8, 17u8,
-							234u8, 166u8, 55u8, 25u8, 194u8, 92u8, 155u8, 69u8, 143u8, 95u8, 18u8,
-							181u8, 70u8, 191u8, 64u8, 119u8, 244u8, 116u8, 44u8, 172u8, 251u8,
-							66u8,
+							213u8, 155u8, 136u8, 5u8, 157u8, 246u8, 224u8, 16u8, 227u8, 103u8,
+							222u8, 116u8, 172u8, 213u8, 203u8, 43u8, 153u8, 98u8, 75u8, 158u8,
+							131u8, 22u8, 186u8, 186u8, 116u8, 25u8, 242u8, 159u8, 130u8, 122u8,
+							152u8, 125u8,
 						],
 					)
 				}
@@ -1841,9 +1840,6 @@ pub mod api {
 		pub fn transaction_payment(&self) -> transaction_payment::storage::StorageApi {
 			transaction_payment::storage::StorageApi
 		}
-		pub fn sudo(&self) -> sudo::storage::StorageApi {
-			sudo::storage::StorageApi
-		}
 		pub fn q_po_w(&self) -> q_po_w::storage::StorageApi {
 			q_po_w::storage::StorageApi
 		}
@@ -1901,9 +1897,6 @@ pub mod api {
 		pub fn balances(&self) -> balances::calls::TransactionApi {
 			balances::calls::TransactionApi
 		}
-		pub fn sudo(&self) -> sudo::calls::TransactionApi {
-			sudo::calls::TransactionApi
-		}
 		pub fn preimage(&self) -> preimage::calls::TransactionApi {
 			preimage::calls::TransactionApi
 		}
@@ -1959,9 +1952,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				126u8, 218u8, 159u8, 250u8, 59u8, 149u8, 173u8, 241u8, 56u8, 124u8, 210u8, 212u8,
-				182u8, 54u8, 120u8, 239u8, 158u8, 147u8, 158u8, 70u8, 131u8, 157u8, 164u8, 69u8,
-				167u8, 177u8, 13u8, 11u8, 12u8, 225u8, 206u8, 202u8,
+				95u8, 161u8, 29u8, 63u8, 6u8, 191u8, 169u8, 252u8, 9u8, 18u8, 126u8, 99u8, 29u8,
+				6u8, 27u8, 29u8, 251u8, 189u8, 252u8, 166u8, 35u8, 141u8, 155u8, 35u8, 238u8, 85u8,
+				244u8, 246u8, 49u8, 113u8, 167u8, 219u8,
 			]
 	}
 	pub mod system {
@@ -3060,9 +3053,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							219u8, 135u8, 2u8, 5u8, 35u8, 85u8, 207u8, 98u8, 136u8, 150u8, 109u8,
-							92u8, 64u8, 218u8, 201u8, 111u8, 25u8, 157u8, 42u8, 17u8, 112u8, 204u8,
-							180u8, 241u8, 138u8, 97u8, 146u8, 96u8, 223u8, 24u8, 107u8, 44u8,
+							114u8, 203u8, 75u8, 252u8, 183u8, 122u8, 99u8, 127u8, 226u8, 41u8,
+							125u8, 202u8, 177u8, 177u8, 136u8, 66u8, 221u8, 204u8, 240u8, 189u8,
+							146u8, 54u8, 190u8, 211u8, 240u8, 69u8, 233u8, 62u8, 78u8, 177u8, 97u8,
+							8u8,
 						],
 					)
 				}
@@ -5387,369 +5381,6 @@ pub mod api {
 			}
 		}
 	}
-	pub mod sudo {
-		use super::{root_mod, runtime_types};
-		#[doc = "Error for the Sudo pallet."]
-		pub type Error = runtime_types::pallet_sudo::pallet::Error;
-		#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-		pub type Call = runtime_types::pallet_sudo::pallet::Call;
-		pub mod calls {
-			use super::{root_mod, runtime_types};
-			type DispatchError = runtime_types::sp_runtime::DispatchError;
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Authenticates the sudo key and dispatches a function call with `Root` origin."]
-				pub struct Sudo {
-					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<sudo::Call>,
-				}
-				pub mod sudo {
-					use super::runtime_types;
-					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Sudo {
-					const PALLET: &'static str = "Sudo";
-					const CALL: &'static str = "sudo";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Authenticates the sudo key and dispatches a function call with `Root` origin."]
-				#[doc = "This function does not check the weight of the call, and instead allows the"]
-				#[doc = "Sudo user to specify the weight of the call."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				pub struct SudoUncheckedWeight {
-					pub call:
-						::subxt::ext::subxt_core::alloc::boxed::Box<sudo_unchecked_weight::Call>,
-					pub weight: sudo_unchecked_weight::Weight,
-				}
-				pub mod sudo_unchecked_weight {
-					use super::runtime_types;
-					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
-					pub type Weight = runtime_types::sp_weights::weight_v2::Weight;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SudoUncheckedWeight {
-					const PALLET: &'static str = "Sudo";
-					const CALL: &'static str = "sudo_unchecked_weight";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo"]
-				#[doc = "key."]
-				pub struct SetKey {
-					pub new: set_key::New,
-				}
-				pub mod set_key {
-					use super::runtime_types;
-					pub type New = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetKey {
-					const PALLET: &'static str = "Sudo";
-					const CALL: &'static str = "set_key";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Authenticates the sudo key and dispatches a function call with `Signed` origin from"]
-				#[doc = "a given account."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				pub struct SudoAs {
-					pub who: sudo_as::Who,
-					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<sudo_as::Call>,
-				}
-				pub mod sudo_as {
-					use super::runtime_types;
-					pub type Who = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SudoAs {
-					const PALLET: &'static str = "Sudo";
-					const CALL: &'static str = "sudo_as";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Permanently removes the sudo key."]
-				#[doc = ""]
-				#[doc = "**This cannot be un-done.**"]
-				pub struct RemoveKey;
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for RemoveKey {
-					const PALLET: &'static str = "Sudo";
-					const CALL: &'static str = "remove_key";
-				}
-			}
-			pub struct TransactionApi;
-			impl TransactionApi {
-				#[doc = "Authenticates the sudo key and dispatches a function call with `Root` origin."]
-				pub fn sudo(
-					&self,
-					call: types::sudo::Call,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Sudo> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Sudo",
-						"sudo",
-						types::Sudo {
-							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
-						},
-						[
-							92u8, 222u8, 38u8, 218u8, 220u8, 120u8, 153u8, 82u8, 131u8, 21u8,
-							133u8, 192u8, 226u8, 24u8, 106u8, 70u8, 156u8, 171u8, 231u8, 175u8,
-							152u8, 51u8, 118u8, 15u8, 247u8, 6u8, 137u8, 153u8, 189u8, 181u8,
-							207u8, 118u8,
-						],
-					)
-				}
-				#[doc = "Authenticates the sudo key and dispatches a function call with `Root` origin."]
-				#[doc = "This function does not check the weight of the call, and instead allows the"]
-				#[doc = "Sudo user to specify the weight of the call."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				pub fn sudo_unchecked_weight(
-					&self,
-					call: types::sudo_unchecked_weight::Call,
-					weight: types::sudo_unchecked_weight::Weight,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SudoUncheckedWeight>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Sudo",
-						"sudo_unchecked_weight",
-						types::SudoUncheckedWeight {
-							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
-							weight,
-						},
-						[
-							18u8, 172u8, 114u8, 181u8, 239u8, 91u8, 227u8, 49u8, 11u8, 101u8, 81u8,
-							116u8, 159u8, 79u8, 57u8, 170u8, 121u8, 12u8, 231u8, 89u8, 163u8, 95u8,
-							8u8, 144u8, 157u8, 93u8, 162u8, 156u8, 198u8, 99u8, 4u8, 123u8,
-						],
-					)
-				}
-				#[doc = "Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo"]
-				#[doc = "key."]
-				pub fn set_key(
-					&self,
-					new: types::set_key::New,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetKey> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Sudo",
-						"set_key",
-						types::SetKey { new },
-						[
-							9u8, 73u8, 39u8, 205u8, 188u8, 127u8, 143u8, 54u8, 128u8, 94u8, 8u8,
-							227u8, 197u8, 44u8, 70u8, 93u8, 228u8, 196u8, 64u8, 165u8, 226u8,
-							158u8, 101u8, 192u8, 22u8, 193u8, 102u8, 84u8, 21u8, 35u8, 92u8, 198u8,
-						],
-					)
-				}
-				#[doc = "Authenticates the sudo key and dispatches a function call with `Signed` origin from"]
-				#[doc = "a given account."]
-				#[doc = ""]
-				#[doc = "The dispatch origin for this call must be _Signed_."]
-				pub fn sudo_as(
-					&self,
-					who: types::sudo_as::Who,
-					call: types::sudo_as::Call,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SudoAs> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Sudo",
-						"sudo_as",
-						types::SudoAs {
-							who,
-							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
-						},
-						[
-							25u8, 155u8, 115u8, 44u8, 183u8, 108u8, 169u8, 74u8, 11u8, 123u8,
-							235u8, 102u8, 23u8, 199u8, 181u8, 104u8, 66u8, 183u8, 147u8, 133u8,
-							155u8, 30u8, 203u8, 92u8, 78u8, 234u8, 38u8, 168u8, 178u8, 73u8, 108u8,
-							50u8,
-						],
-					)
-				}
-				#[doc = "Permanently removes the sudo key."]
-				#[doc = ""]
-				#[doc = "**This cannot be un-done.**"]
-				pub fn remove_key(
-					&self,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::RemoveKey> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Sudo",
-						"remove_key",
-						types::RemoveKey {},
-						[
-							133u8, 253u8, 54u8, 175u8, 202u8, 239u8, 5u8, 198u8, 180u8, 138u8,
-							25u8, 28u8, 109u8, 40u8, 30u8, 56u8, 126u8, 100u8, 52u8, 205u8, 250u8,
-							191u8, 61u8, 195u8, 172u8, 142u8, 184u8, 239u8, 247u8, 10u8, 211u8,
-							79u8,
-						],
-					)
-				}
-			}
-		}
-		#[doc = "The `Event` enum of this pallet"]
-		pub type Event = runtime_types::pallet_sudo::pallet::Event;
-		pub mod events {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A sudo call just took place."]
-			pub struct Sudid {
-				pub sudo_result: sudid::SudoResult,
-			}
-			pub mod sudid {
-				use super::runtime_types;
-				pub type SudoResult =
-					::core::result::Result<(), runtime_types::sp_runtime::DispatchError>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Sudid {
-				const PALLET: &'static str = "Sudo";
-				const EVENT: &'static str = "Sudid";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The sudo key has been updated."]
-			pub struct KeyChanged {
-				pub old: key_changed::Old,
-				pub new: key_changed::New,
-			}
-			pub mod key_changed {
-				use super::runtime_types;
-				pub type Old = ::core::option::Option<::subxt::ext::subxt_core::utils::AccountId32>;
-				pub type New = ::subxt::ext::subxt_core::utils::AccountId32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for KeyChanged {
-				const PALLET: &'static str = "Sudo";
-				const EVENT: &'static str = "KeyChanged";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The key was permanently removed."]
-			pub struct KeyRemoved;
-			impl ::subxt::ext::subxt_core::events::StaticEvent for KeyRemoved {
-				const PALLET: &'static str = "Sudo";
-				const EVENT: &'static str = "KeyRemoved";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A [sudo_as](Pallet::sudo_as) call just took place."]
-			pub struct SudoAsDone {
-				pub sudo_result: sudo_as_done::SudoResult,
-			}
-			pub mod sudo_as_done {
-				use super::runtime_types;
-				pub type SudoResult =
-					::core::result::Result<(), runtime_types::sp_runtime::DispatchError>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for SudoAsDone {
-				const PALLET: &'static str = "Sudo";
-				const EVENT: &'static str = "SudoAsDone";
-			}
-		}
-		pub mod storage {
-			use super::runtime_types;
-			pub mod types {
-				use super::runtime_types;
-				pub mod key {
-					use super::runtime_types;
-					pub type Key = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
-			}
-			pub struct StorageApi;
-			impl StorageApi {
-				#[doc = " The `AccountId` of the sudo key."]
-				pub fn key(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::key::Key,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Sudo",
-						"Key",
-						(),
-						[
-							72u8, 14u8, 225u8, 162u8, 205u8, 247u8, 227u8, 105u8, 116u8, 57u8, 4u8,
-							31u8, 84u8, 137u8, 227u8, 228u8, 133u8, 245u8, 206u8, 227u8, 117u8,
-							36u8, 252u8, 151u8, 107u8, 15u8, 180u8, 4u8, 4u8, 152u8, 195u8, 144u8,
-						],
-					)
-				}
-			}
-		}
-	}
 	pub mod q_po_w {
 		use super::{root_mod, runtime_types};
 		#[doc = "The `Event` enum of this pallet"]
@@ -7009,10 +6640,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							166u8, 18u8, 39u8, 234u8, 251u8, 53u8, 21u8, 117u8, 134u8, 194u8,
-							163u8, 196u8, 144u8, 31u8, 132u8, 122u8, 44u8, 9u8, 134u8, 32u8, 222u8,
-							32u8, 173u8, 128u8, 182u8, 71u8, 87u8, 253u8, 109u8, 104u8, 222u8,
-							32u8,
+							209u8, 44u8, 38u8, 115u8, 192u8, 245u8, 230u8, 98u8, 4u8, 221u8, 48u8,
+							218u8, 180u8, 45u8, 205u8, 242u8, 98u8, 60u8, 73u8, 209u8, 152u8,
+							217u8, 39u8, 90u8, 46u8, 7u8, 50u8, 50u8, 214u8, 210u8, 178u8, 180u8,
 						],
 					)
 				}
@@ -7051,10 +6681,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							232u8, 133u8, 188u8, 74u8, 36u8, 170u8, 171u8, 99u8, 255u8, 226u8,
-							174u8, 26u8, 109u8, 166u8, 144u8, 41u8, 219u8, 85u8, 170u8, 155u8,
-							192u8, 22u8, 176u8, 97u8, 47u8, 17u8, 44u8, 223u8, 100u8, 65u8, 69u8,
-							35u8,
+							168u8, 23u8, 39u8, 121u8, 55u8, 131u8, 250u8, 35u8, 37u8, 194u8, 185u8,
+							120u8, 150u8, 83u8, 251u8, 46u8, 33u8, 65u8, 144u8, 38u8, 77u8, 195u8,
+							178u8, 91u8, 237u8, 254u8, 91u8, 211u8, 168u8, 181u8, 160u8, 137u8,
 						],
 					)
 				}
@@ -7090,10 +6719,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							128u8, 96u8, 130u8, 203u8, 5u8, 21u8, 127u8, 65u8, 92u8, 180u8, 92u8,
-							228u8, 4u8, 71u8, 196u8, 224u8, 121u8, 194u8, 193u8, 213u8, 150u8,
-							149u8, 253u8, 188u8, 121u8, 221u8, 209u8, 133u8, 46u8, 247u8, 221u8,
-							29u8,
+							72u8, 139u8, 81u8, 86u8, 46u8, 244u8, 58u8, 159u8, 117u8, 243u8, 134u8,
+							98u8, 80u8, 240u8, 110u8, 81u8, 213u8, 76u8, 158u8, 96u8, 72u8, 193u8,
+							249u8, 80u8, 251u8, 116u8, 166u8, 73u8, 81u8, 215u8, 75u8, 220u8,
 						],
 					)
 				}
@@ -7115,10 +6743,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							143u8, 66u8, 101u8, 79u8, 129u8, 219u8, 60u8, 16u8, 207u8, 159u8,
-							231u8, 137u8, 114u8, 222u8, 149u8, 153u8, 60u8, 133u8, 35u8, 124u8,
-							175u8, 66u8, 67u8, 97u8, 172u8, 207u8, 100u8, 13u8, 27u8, 169u8, 51u8,
-							128u8,
+							79u8, 224u8, 38u8, 251u8, 249u8, 207u8, 215u8, 115u8, 81u8, 65u8, 63u8,
+							214u8, 84u8, 8u8, 50u8, 37u8, 55u8, 55u8, 61u8, 128u8, 25u8, 111u8,
+							143u8, 130u8, 144u8, 164u8, 26u8, 145u8, 105u8, 180u8, 88u8, 94u8,
 						],
 					)
 				}
@@ -8113,9 +7740,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							12u8, 35u8, 169u8, 238u8, 108u8, 124u8, 242u8, 241u8, 158u8, 144u8,
-							55u8, 181u8, 164u8, 80u8, 109u8, 149u8, 149u8, 89u8, 202u8, 4u8, 65u8,
-							16u8, 217u8, 49u8, 232u8, 146u8, 244u8, 123u8, 48u8, 8u8, 45u8, 101u8,
+							241u8, 24u8, 68u8, 209u8, 219u8, 28u8, 161u8, 192u8, 127u8, 101u8,
+							153u8, 143u8, 78u8, 9u8, 24u8, 122u8, 110u8, 250u8, 63u8, 159u8, 174u8,
+							88u8, 85u8, 23u8, 195u8, 141u8, 225u8, 43u8, 138u8, 241u8, 44u8, 111u8,
 						],
 					)
 				}
@@ -8145,9 +7772,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							58u8, 129u8, 55u8, 87u8, 210u8, 249u8, 143u8, 136u8, 81u8, 237u8, 43u8,
-							136u8, 156u8, 85u8, 92u8, 204u8, 228u8, 131u8, 218u8, 62u8, 54u8, 87u8,
-							20u8, 248u8, 249u8, 118u8, 83u8, 233u8, 174u8, 3u8, 69u8, 110u8,
+							165u8, 80u8, 171u8, 13u8, 254u8, 5u8, 209u8, 126u8, 47u8, 137u8, 90u8,
+							96u8, 227u8, 196u8, 159u8, 55u8, 118u8, 49u8, 178u8, 50u8, 178u8, 34u8,
+							131u8, 3u8, 41u8, 245u8, 119u8, 197u8, 221u8, 20u8, 174u8, 102u8,
 						],
 					)
 				}
@@ -8173,9 +7800,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							160u8, 132u8, 211u8, 158u8, 79u8, 68u8, 196u8, 4u8, 17u8, 136u8, 198u8,
-							11u8, 217u8, 69u8, 52u8, 19u8, 244u8, 95u8, 1u8, 43u8, 47u8, 107u8,
-							71u8, 70u8, 129u8, 180u8, 96u8, 162u8, 243u8, 62u8, 255u8, 246u8,
+							96u8, 62u8, 146u8, 237u8, 252u8, 60u8, 1u8, 202u8, 235u8, 81u8, 106u8,
+							115u8, 226u8, 96u8, 214u8, 188u8, 216u8, 173u8, 83u8, 15u8, 78u8, 97u8,
+							158u8, 66u8, 225u8, 63u8, 117u8, 196u8, 242u8, 185u8, 28u8, 145u8,
 						],
 					)
 				}
@@ -8198,9 +7825,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							70u8, 236u8, 128u8, 245u8, 79u8, 164u8, 36u8, 254u8, 249u8, 100u8,
-							132u8, 160u8, 42u8, 245u8, 92u8, 122u8, 66u8, 71u8, 16u8, 194u8, 241u8,
-							243u8, 146u8, 27u8, 3u8, 164u8, 155u8, 37u8, 133u8, 93u8, 15u8, 255u8,
+							47u8, 109u8, 230u8, 121u8, 146u8, 49u8, 97u8, 31u8, 138u8, 224u8,
+							206u8, 114u8, 57u8, 169u8, 75u8, 158u8, 2u8, 183u8, 138u8, 243u8,
+							116u8, 32u8, 225u8, 61u8, 124u8, 106u8, 167u8, 238u8, 236u8, 20u8,
+							202u8, 50u8,
 						],
 					)
 				}
@@ -8226,10 +7854,10 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							201u8, 43u8, 241u8, 144u8, 76u8, 120u8, 232u8, 97u8, 84u8, 126u8,
-							227u8, 232u8, 69u8, 158u8, 222u8, 176u8, 144u8, 160u8, 104u8, 207u8,
-							5u8, 106u8, 72u8, 119u8, 162u8, 214u8, 219u8, 131u8, 207u8, 153u8,
-							24u8, 247u8,
+							59u8, 222u8, 239u8, 78u8, 48u8, 183u8, 141u8, 107u8, 147u8, 104u8,
+							49u8, 128u8, 119u8, 239u8, 68u8, 174u8, 68u8, 200u8, 166u8, 210u8,
+							70u8, 69u8, 239u8, 174u8, 193u8, 143u8, 14u8, 45u8, 194u8, 153u8,
+							198u8, 118u8,
 						],
 					)
 				}
@@ -8252,9 +7880,9 @@ pub mod api {
 							weight,
 						},
 						[
-							241u8, 184u8, 146u8, 128u8, 160u8, 33u8, 170u8, 130u8, 105u8, 26u8,
-							128u8, 181u8, 154u8, 95u8, 76u8, 32u8, 133u8, 8u8, 115u8, 144u8, 198u8,
-							25u8, 84u8, 96u8, 155u8, 30u8, 249u8, 235u8, 223u8, 158u8, 37u8, 13u8,
+							86u8, 251u8, 42u8, 213u8, 7u8, 59u8, 69u8, 56u8, 170u8, 21u8, 184u8,
+							32u8, 192u8, 34u8, 250u8, 122u8, 236u8, 31u8, 174u8, 104u8, 80u8,
+							255u8, 209u8, 64u8, 251u8, 39u8, 162u8, 198u8, 163u8, 61u8, 73u8, 91u8,
 						],
 					)
 				}
@@ -8294,9 +7922,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							199u8, 6u8, 145u8, 140u8, 251u8, 79u8, 237u8, 173u8, 162u8, 41u8, 31u8,
-							94u8, 225u8, 34u8, 245u8, 153u8, 233u8, 225u8, 87u8, 190u8, 233u8,
-							191u8, 3u8, 25u8, 216u8, 212u8, 30u8, 180u8, 168u8, 145u8, 54u8, 150u8,
+							63u8, 128u8, 67u8, 20u8, 83u8, 111u8, 204u8, 20u8, 153u8, 162u8, 212u8,
+							42u8, 117u8, 96u8, 212u8, 248u8, 70u8, 189u8, 85u8, 158u8, 136u8,
+							110u8, 142u8, 61u8, 39u8, 54u8, 195u8, 118u8, 241u8, 6u8, 55u8, 130u8,
 						],
 					)
 				}
@@ -8319,10 +7947,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							222u8, 246u8, 25u8, 101u8, 155u8, 44u8, 93u8, 141u8, 239u8, 33u8,
-							186u8, 124u8, 253u8, 4u8, 203u8, 161u8, 102u8, 220u8, 158u8, 48u8,
-							81u8, 82u8, 9u8, 99u8, 50u8, 26u8, 210u8, 64u8, 165u8, 102u8, 227u8,
-							84u8,
+							167u8, 171u8, 21u8, 97u8, 73u8, 57u8, 83u8, 87u8, 141u8, 218u8, 49u8,
+							79u8, 243u8, 165u8, 230u8, 26u8, 227u8, 116u8, 81u8, 203u8, 246u8,
+							196u8, 209u8, 183u8, 16u8, 236u8, 9u8, 87u8, 169u8, 76u8, 73u8, 46u8,
 						],
 					)
 				}
@@ -14312,9 +13939,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							0u8, 144u8, 16u8, 19u8, 207u8, 225u8, 184u8, 92u8, 212u8, 17u8, 156u8,
-							224u8, 97u8, 23u8, 96u8, 104u8, 207u8, 206u8, 163u8, 26u8, 91u8, 130u8,
-							113u8, 130u8, 171u8, 57u8, 255u8, 83u8, 240u8, 20u8, 199u8, 126u8,
+							145u8, 166u8, 24u8, 188u8, 62u8, 129u8, 16u8, 49u8, 10u8, 139u8, 33u8,
+							24u8, 183u8, 248u8, 92u8, 239u8, 141u8, 11u8, 109u8, 166u8, 232u8,
+							206u8, 123u8, 228u8, 213u8, 173u8, 87u8, 199u8, 92u8, 239u8, 240u8,
+							30u8,
 						],
 					)
 				}
@@ -20423,8 +20051,8 @@ pub mod api {
 				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
 				#[doc = ""]
 				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
-				#[doc = "If pre-validation fails (deserialization, cheap checks), we return the actual"]
-				#[doc = "consumed weight to free block capacity for other transactions."]
+				#[doc = "If validation fails before ZK verification, we return minimal weight."]
+				#[doc = "If ZK verification fails, we return full weight since the work was done."]
 				pub struct VerifyAggregatedProof {
 					pub proof_bytes: verify_aggregated_proof::ProofBytes,
 				}
@@ -20443,8 +20071,8 @@ pub mod api {
 				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
 				#[doc = ""]
 				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
-				#[doc = "If pre-validation fails (deserialization, cheap checks), we return the actual"]
-				#[doc = "consumed weight to free block capacity for other transactions."]
+				#[doc = "If validation fails before ZK verification, we return minimal weight."]
+				#[doc = "If ZK verification fails, we return full weight since the work was done."]
 				pub fn verify_aggregated_proof(
 					&self,
 					proof_bytes: types::verify_aggregated_proof::ProofBytes,
@@ -26209,125 +25837,6 @@ pub mod api {
 				pub __ignore: ::core::marker::PhantomData<(_4, _5, _2)>,
 			}
 		}
-		pub mod pallet_sudo {
-			use super::runtime_types;
-			pub mod pallet {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-				pub enum Call {
-					#[codec(index = 0)]
-					#[doc = "Authenticates the sudo key and dispatches a function call with `Root` origin."]
-					sudo {
-						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
-							runtime_types::quantus_runtime::RuntimeCall,
-						>,
-					},
-					#[codec(index = 1)]
-					#[doc = "Authenticates the sudo key and dispatches a function call with `Root` origin."]
-					#[doc = "This function does not check the weight of the call, and instead allows the"]
-					#[doc = "Sudo user to specify the weight of the call."]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Signed_."]
-					sudo_unchecked_weight {
-						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
-							runtime_types::quantus_runtime::RuntimeCall,
-						>,
-						weight: runtime_types::sp_weights::weight_v2::Weight,
-					},
-					#[codec(index = 2)]
-					#[doc = "Authenticates the current sudo key and sets the given AccountId (`new`) as the new sudo"]
-					#[doc = "key."]
-					set_key {
-						new: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 3)]
-					#[doc = "Authenticates the sudo key and dispatches a function call with `Signed` origin from"]
-					#[doc = "a given account."]
-					#[doc = ""]
-					#[doc = "The dispatch origin for this call must be _Signed_."]
-					sudo_as {
-						who: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
-							runtime_types::quantus_runtime::RuntimeCall,
-						>,
-					},
-					#[codec(index = 4)]
-					#[doc = "Permanently removes the sudo key."]
-					#[doc = ""]
-					#[doc = "**This cannot be un-done.**"]
-					remove_key,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Error for the Sudo pallet."]
-				pub enum Error {
-					#[codec(index = 0)]
-					#[doc = "Sender must be the Sudo account."]
-					RequireSudo,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "The `Event` enum of this pallet"]
-				pub enum Event {
-					#[codec(index = 0)]
-					#[doc = "A sudo call just took place."]
-					Sudid {
-						sudo_result:
-							::core::result::Result<(), runtime_types::sp_runtime::DispatchError>,
-					},
-					#[codec(index = 1)]
-					#[doc = "The sudo key has been updated."]
-					KeyChanged {
-						old: ::core::option::Option<::subxt::ext::subxt_core::utils::AccountId32>,
-						new: ::subxt::ext::subxt_core::utils::AccountId32,
-					},
-					#[codec(index = 2)]
-					#[doc = "The key was permanently removed."]
-					KeyRemoved,
-					#[codec(index = 3)]
-					#[doc = "A [sudo_as](Pallet::sudo_as) call just took place."]
-					SudoAsDone {
-						sudo_result:
-							::core::result::Result<(), runtime_types::sp_runtime::DispatchError>,
-					},
-				}
-			}
-		}
 		pub mod pallet_timestamp {
 			use super::runtime_types;
 			pub mod pallet {
@@ -26801,8 +26310,8 @@ pub mod api {
 					#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
 					#[doc = ""]
 					#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
-					#[doc = "If pre-validation fails (deserialization, cheap checks), we return the actual"]
-					#[doc = "consumed weight to free block capacity for other transactions."]
+					#[doc = "If validation fails before ZK verification, we return minimal weight."]
+					#[doc = "If ZK verification fails, we return full weight since the work was done."]
 					verify_aggregated_proof {
 						proof_bytes:
 							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
@@ -27063,8 +26572,6 @@ pub mod api {
 				Timestamp(runtime_types::pallet_timestamp::pallet::Call),
 				#[codec(index = 2)]
 				Balances(runtime_types::pallet_balances::pallet::Call),
-				#[codec(index = 4)]
-				Sudo(runtime_types::pallet_sudo::pallet::Call),
 				#[codec(index = 7)]
 				Preimage(runtime_types::pallet_preimage::pallet::Call),
 				#[codec(index = 8)]
@@ -27104,8 +26611,6 @@ pub mod api {
 				System(runtime_types::frame_system::pallet::Error),
 				#[codec(index = 2)]
 				Balances(runtime_types::pallet_balances::pallet::Error),
-				#[codec(index = 4)]
-				Sudo(runtime_types::pallet_sudo::pallet::Error),
 				#[codec(index = 7)]
 				Preimage(runtime_types::pallet_preimage::pallet::Error),
 				#[codec(index = 8)]
@@ -27149,8 +26654,6 @@ pub mod api {
 				Balances(runtime_types::pallet_balances::pallet::Event),
 				#[codec(index = 3)]
 				TransactionPayment(runtime_types::pallet_transaction_payment::pallet::Event),
-				#[codec(index = 4)]
-				Sudo(runtime_types::pallet_sudo::pallet::Event),
 				#[codec(index = 5)]
 				QPoW(runtime_types::pallet_qpow::pallet::Event),
 				#[codec(index = 6)]

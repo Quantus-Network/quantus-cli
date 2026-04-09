@@ -12,13 +12,13 @@ use subxt::OnlineClient;
 
 #[derive(Subcommand, Debug)]
 pub enum RuntimeCommands {
-	/// Update the runtime using a WASM file (requires root permissions)
+	/// Propose a runtime upgrade using a WASM file (via Tech Referenda; creates preimage first)
 	Update {
 		/// Path to the runtime WASM file
 		#[arg(short, long)]
 		wasm_file: PathBuf,
 
-		/// Wallet name to sign with (must have root/sudo permissions)
+		/// Wallet name to sign with (must be allowed to submit Tech Referenda)
 		#[arg(short, long)]
 		from: String,
 
@@ -43,7 +43,7 @@ pub enum RuntimeCommands {
 	},
 }
 
-/// Update runtime with sudo wrapper
+/// Propose runtime upgrade via Tech Referenda (no sudo pallet)
 pub async fn update_runtime(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_code: Vec<u8>,
@@ -55,6 +55,8 @@ pub async fn update_runtime(
 
 	log_print!("📋 Current runtime version:");
 	log_print!("   • Use 'quantus system --runtime' to see current version");
+	log_print!("📋 Upgrade path:");
+	log_print!("   • This submits a Tech Referendum with Root origin (not an immediate root call)");
 
 	// Show confirmation prompt unless force is used
 	if !force {
@@ -64,9 +66,9 @@ pub async fn update_runtime(
 			"WARNING:".bright_red().bold(),
 			"Runtime update is a critical operation!"
 		);
-		log_print!("   • This will update the blockchain runtime immediately");
-		log_print!("   • All nodes will need to upgrade to stay in sync");
-		log_print!("   • This operation cannot be easily reversed");
+		log_print!("   • This will submit a governance proposal to upgrade the runtime");
+		log_print!("   • If approved and enacted, all nodes will need to upgrade to stay in sync");
+		log_print!("   • Governance operations cannot be easily reversed");
 		log_print!("");
 
 		// Simple confirmation prompt
@@ -83,18 +85,62 @@ pub async fn update_runtime(
 		}
 	}
 
-	// Create the System::set_code call using RuntimeCall type alias
-	let set_code_call =
-		quantus_subxt::api::Call::System(quantus_subxt::api::system::Call::set_code {
-			code: wasm_code,
-		});
+	// Build a static payload for System::set_code and encode full call data (pallet + call + args)
+	use sp_runtime::traits::{BlakeTwo256, Hash};
+	let set_code_payload = quantus_subxt::api::tx().system().set_code(wasm_code.clone());
+	let metadata = quantus_client.client().metadata();
+	let encoded_call = <_ as subxt::tx::Payload>::encode_call_data(&set_code_payload, &metadata)
+		.map_err(|e| QuantusError::Generic(format!("Failed to encode call data: {:?}", e)))?;
 
-	// Wrap with sudo for root permissions
-	let sudo_call = quantus_subxt::api::tx().sudo().sudo(set_code_call);
-
-	// Submit transaction
-	log_print!("📡 Submitting runtime update transaction...");
+	log_print!("📡 Submitting runtime upgrade proposal (preimage + referendum)...");
 	log_print!("⏳ This may take longer than usual due to WASM size...");
+	log_verbose!("📝 Encoded call size: {} bytes", encoded_call.len());
+
+	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded_call);
+	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
+
+	// Submit Preimage::note_preimage with bounded bytes
+	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
+	let bounded_bytes: PreimageBytes = encoded_call.clone();
+
+	log_print!("📝 Submitting preimage...");
+	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
+	let preimage_tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		note_preimage_tx,
+		None,
+		execution_mode,
+	)
+	.await?;
+	log_success!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
+
+	// Build TechReferenda::submit call using Lookup preimage reference
+	type ProposalBounded =
+		quantus_subxt::api::runtime_types::frame_support::traits::preimages::Bounded<
+			quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall,
+			quantus_subxt::api::runtime_types::sp_runtime::traits::BlakeTwo256,
+		>;
+
+	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash;
+	let proposal: ProposalBounded =
+		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: encoded_call.len() as u32 };
+
+	let raw_origin_root =
+		quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
+	let origin_caller =
+		quantus_subxt::api::runtime_types::quantus_runtime::OriginCaller::system(raw_origin_root);
+
+	let enactment =
+		quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime::After(
+			0u32,
+		);
+
+	log_print!("🔧 Creating TechReferenda::submit call...");
+	let submit_call =
+		quantus_subxt::api::tx()
+			.tech_referenda()
+			.submit(origin_caller, proposal, enactment);
 
 	if !execution_mode.finalized {
 		log_print!(
@@ -105,14 +151,14 @@ pub async fn update_runtime(
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
 		from_keypair,
-		sudo_call,
+		submit_call,
 		None,
 		execution_mode,
 	)
 	.await?;
 
 	log_success!(
-		"✅ SUCCESS Runtime update transaction submitted! Hash: 0x{}",
+		"✅ SUCCESS Runtime upgrade proposal submitted! Hash: 0x{}",
 		hex::encode(tx_hash)
 	);
 

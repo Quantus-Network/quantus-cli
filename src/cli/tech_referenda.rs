@@ -48,7 +48,8 @@ pub enum TechReferendaCommands {
 		password_file: Option<String>,
 	},
 
-	/// Submit a proposal to set Treasury `treasury_portion` (Permill) via Tech Referenda (creates preimage first)
+	/// Submit a proposal to set Treasury `treasury_portion` (Permill) via Tech Referenda (creates
+	/// preimage first)
 	SubmitTreasuryPortion {
 		/// New treasury portion in Permill (parts per million): 0..=1_000_000
 		///
@@ -89,63 +90,6 @@ pub enum TechReferendaCommands {
 	/// Place a decision deposit for a Tech Referendum
 	PlaceDecisionDeposit {
 		/// Referendum index
-		#[arg(short, long)]
-		index: u32,
-
-		/// Wallet name to sign with
-		#[arg(short, long)]
-		from: String,
-
-		/// Password for the wallet
-		#[arg(short, long)]
-		password: Option<String>,
-
-		/// Read password from file
-		#[arg(long)]
-		password_file: Option<String>,
-	},
-
-	/// Cancel a Tech Referendum (requires root permissions)
-	Cancel {
-		/// Referendum index to cancel
-		#[arg(short, long)]
-		index: u32,
-
-		/// Wallet name to sign with (must have root permissions)
-		#[arg(short, long)]
-		from: String,
-
-		/// Password for the wallet
-		#[arg(short, long)]
-		password: Option<String>,
-
-		/// Read password from file
-		#[arg(long)]
-		password_file: Option<String>,
-	},
-
-	/// Kill a Tech Referendum (requires root permissions)
-	Kill {
-		/// Referendum index to kill
-		#[arg(short, long)]
-		index: u32,
-
-		/// Wallet name to sign with (must have root permissions)
-		#[arg(short, long)]
-		from: String,
-
-		/// Password for the wallet
-		#[arg(short, long)]
-		password: Option<String>,
-
-		/// Read password from file
-		#[arg(long)]
-		password_file: Option<String>,
-	},
-
-	/// Nudge a Tech Referendum to next phase (sudo origin)
-	Nudge {
-		/// Referendum index to nudge
 		#[arg(short, long)]
 		index: u32,
 
@@ -262,15 +206,6 @@ pub async fn handle_tech_referenda_command(
 				execution_mode,
 			)
 			.await,
-		TechReferendaCommands::Cancel { index, from, password, password_file } =>
-			cancel_proposal(&quantus_client, index, &from, password, password_file, execution_mode)
-				.await,
-		TechReferendaCommands::Kill { index, from, password, password_file } =>
-			kill_proposal(&quantus_client, index, &from, password, password_file, execution_mode)
-				.await,
-		TechReferendaCommands::Nudge { index, from, password, password_file } =>
-			nudge_proposal(&quantus_client, index, &from, password, password_file, execution_mode)
-				.await,
 		TechReferendaCommands::RefundSubmissionDeposit { index, from, password, password_file } =>
 			refund_submission_deposit(
 				&quantus_client,
@@ -715,83 +650,6 @@ async fn place_decision_deposit(
 	let tx_hash =
 		submit_transaction(quantus_client, &keypair, deposit_call, None, execution_mode).await?;
 	log_success!("✅ Decision deposit placed! Hash: {:?}", tx_hash.to_string().bright_yellow());
-	Ok(())
-}
-
-/// Cancel a Tech Referendum (sudo)
-async fn cancel_proposal(
-	quantus_client: &crate::chain::client::QuantusClient,
-	index: u32,
-	from: &str,
-	password: Option<String>,
-	password_file: Option<String>,
-	execution_mode: crate::cli::common::ExecutionMode,
-) -> crate::error::Result<()> {
-	log_print!("❌ Cancelling Tech Referendum #{}", index);
-	log_print!("   🔑 Cancelled by: {}", from.bright_yellow());
-
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
-
-	let inner =
-		quantus_subxt::api::Call::TechReferenda(quantus_subxt::api::tech_referenda::Call::cancel {
-			index,
-		});
-	let sudo_call = quantus_subxt::api::tx().sudo().sudo(inner);
-
-	let tx_hash =
-		submit_transaction(quantus_client, &keypair, sudo_call, None, execution_mode).await?;
-	log_success!("✅ Referendum cancelled! Hash: {:?}", tx_hash.to_string().bright_yellow());
-	Ok(())
-}
-
-/// Kill a Tech Referendum (sudo)
-async fn kill_proposal(
-	quantus_client: &crate::chain::client::QuantusClient,
-	index: u32,
-	from: &str,
-	password: Option<String>,
-	password_file: Option<String>,
-	execution_mode: crate::cli::common::ExecutionMode,
-) -> crate::error::Result<()> {
-	log_print!("💀 Killing Tech Referendum #{}", index);
-	log_print!("   🔑 Killed by: {}", from.bright_yellow());
-
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
-
-	let inner =
-		quantus_subxt::api::Call::TechReferenda(quantus_subxt::api::tech_referenda::Call::kill {
-			index,
-		});
-	let sudo_call = quantus_subxt::api::tx().sudo().sudo(inner);
-
-	let tx_hash =
-		submit_transaction(quantus_client, &keypair, sudo_call, None, execution_mode).await?;
-	log_success!("✅ Referendum killed! Hash: {:?}", tx_hash.to_string().bright_yellow());
-	Ok(())
-}
-
-/// Nudge a Tech Referendum to next phase (sudo)
-async fn nudge_proposal(
-	quantus_client: &crate::chain::client::QuantusClient,
-	index: u32,
-	from: &str,
-	password: Option<String>,
-	password_file: Option<String>,
-	execution_mode: crate::cli::common::ExecutionMode,
-) -> crate::error::Result<()> {
-	log_print!("🔄 Nudging Tech Referendum #{}", index);
-	log_print!("   🔑 Nudged by: {}", from.bright_yellow());
-
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
-
-	let inner = quantus_subxt::api::Call::TechReferenda(
-		quantus_subxt::api::tech_referenda::Call::nudge_referendum { index },
-	);
-	let sudo_call = quantus_subxt::api::tx().sudo().sudo(inner);
-
-	let tx_hash =
-		submit_transaction(quantus_client, &keypair, sudo_call, None, execution_mode).await?;
-	log_success!("✅ Referendum nudged! Hash: {:?}", tx_hash.to_string().bright_yellow());
 	Ok(())
 }
 
