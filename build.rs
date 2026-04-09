@@ -22,7 +22,8 @@ fn main() {
 		.parse()
 		.expect("QP_NUM_LEAF_PROOFS must be a valid usize");
 
-	println!("cargo:rerun-if-changed=build.rs");
+	// Don't emit any rerun-if-changed directives - this forces the build script
+	// to run on every build. Circuit generation is fast enough in release mode.
 
 	println!(
 		"cargo:warning=[quantus-cli] Generating ZK circuit binaries (num_leaf_proofs={})...",

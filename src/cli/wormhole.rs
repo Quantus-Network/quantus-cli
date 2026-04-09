@@ -4,6 +4,7 @@ use crate::{
 		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
 	cli::{
+		address_format::{bytes_to_quantus_ss58, slice_to_quantus_ss58},
 		common::{submit_transaction, ExecutionMode},
 		send::get_balance,
 	},
@@ -880,10 +881,11 @@ async fn aggregate_proofs(
 			// De-quantize to show actual amount that will be minted
 			let dequantized_amount =
 				(account_data.summed_output_amount as u128) * SCALE_DOWN_FACTOR;
+			let ss58_address = slice_to_quantus_ss58(exit_bytes);
 			log_print!(
 				"    [{}] {} -> {} quantized ({} planck = {})",
 				idx,
-				hex::encode(exit_bytes),
+				ss58_address,
 				account_data.summed_output_amount,
 				dequantized_amount,
 				format_balance(dequantized_amount)
@@ -1304,8 +1306,13 @@ fn print_multiround_config(
 
 /// Execute initial transfers from wallet to wormhole addresses (round 1 only).
 ///
-/// Sends all transfers in a single batched extrinsic using `utility.batch()`,
-/// then parses the `NativeTransferred` events to extract transfer info for proof generation.
+/// Sends all transfers in a single batched extrinsic using `utility.batch()`.
+/// Transfer counts are queried from chain storage (not events) to determine the
+/// `transfer_count` for each recipient, which is needed for proof generation.
+///
+/// Note: We query `TransferCount` storage BEFORE submitting the batch because
+/// the transfer_count in the proof must be the value at the time of transfer
+/// (i.e., before the increment that happens during `record_transfer`).
 async fn execute_initial_transfers(
 	quantus_client: &QuantusClient,
 	wallet: &MultiroundWalletContext,
@@ -1349,6 +1356,33 @@ async fn execute_initial_transfers(
 
 	log_print!("  Submitting batch of {} transfers...", num_proofs);
 
+	// Query transfer counts BEFORE submitting the batch.
+	// The transfer_count used in the proof is the count at the time of transfer,
+	// which equals the count before the transfer (since it increments after).
+	let client = quantus_client.client();
+	let mut transfer_counts_before: Vec<u64> = Vec::with_capacity(num_proofs);
+	for secret in secrets.iter() {
+		let wormhole_address = SubxtAccountId(secret.address);
+		let count = client
+			.storage()
+			.at_latest()
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to get storage: {}", e))
+			})?
+			.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address))
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to fetch transfer count for {}: {}",
+					hex::encode(secret.address),
+					e
+				))
+			})?
+			.unwrap_or(0);
+		transfer_counts_before.push(count);
+	}
+
 	submit_transaction(
 		quantus_client,
 		&quantum_keypair,
@@ -1359,40 +1393,20 @@ async fn execute_initial_transfers(
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Batch transfer failed: {}", e)))?;
 
-	// Get the block and find all NativeTransferred events
-	let client = quantus_client.client();
+	// Get the block hash for the transfer info (any recent block works since we use storage)
 	let block = at_best_block(quantus_client)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
 	let block_hash = block.hash();
 
-	let events_api =
-		client.events().at(block_hash).await.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
-		})?;
-
-	// Match each secret's wormhole address to its NativeTransferred event
+	// Build transfer info using the transfer counts we captured before the batch
 	let funding_account: SubxtAccountId = SubxtAccountId(wallet.keypair.to_account_id_32().into());
 	let mut transfers = Vec::with_capacity(num_proofs);
 
 	for (i, secret) in secrets.iter().enumerate() {
-		let event = events_api
-			.find::<wormhole::events::NativeTransferred>()
-			.find(|e| if let Ok(evt) = e { evt.to.0 == secret.address } else { false })
-			.ok_or_else(|| {
-				crate::error::QuantusError::Generic(format!(
-					"No NativeTransferred event found for wormhole address {} (proof {})",
-					hex::encode(secret.address),
-					i + 1
-				))
-			})?
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Event decode error: {}", e))
-			})?;
-
 		transfers.push(TransferInfo {
 			block_hash,
-			transfer_count: event.transfer_count,
+			transfer_count: transfer_counts_before[i],
 			amount: partition_amounts[i],
 			wormhole_address: SubxtAccountId(secret.address),
 			funding_account: funding_account.clone(),
@@ -1440,25 +1454,27 @@ async fn generate_round_proofs(
 	log_print!("  Random output partition:");
 	for (i, assignment) in output_assignments.iter().enumerate() {
 		let amt1_planck = (assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR;
+		let ss58_1 = bytes_to_quantus_ss58(&assignment.exit_account_1);
 		if assignment.output_amount_2 > 0 {
 			let amt2_planck = (assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR;
+			let ss58_2 = bytes_to_quantus_ss58(&assignment.exit_account_2);
 			log_print!(
-				"    Proof {}: {} ({}) -> 0x{}..., {} ({}) -> 0x{}...",
+				"    Proof {}: {} ({}) -> {}, {} ({}) -> {}",
 				i + 1,
 				assignment.output_amount_1,
 				format_balance(amt1_planck),
-				hex::encode(&assignment.exit_account_1[..4]),
+				ss58_1,
 				assignment.output_amount_2,
 				format_balance(amt2_planck),
-				hex::encode(&assignment.exit_account_2[..4])
+				ss58_2
 			);
 		} else {
 			log_print!(
-				"    Proof {}: {} ({}) -> 0x{}...",
+				"    Proof {}: {} ({}) -> {}",
 				i + 1,
 				assignment.output_amount_1,
 				format_balance(amt1_planck),
-				hex::encode(&assignment.exit_account_1[..4])
+				ss58_1
 			);
 		}
 	}
@@ -1978,6 +1994,25 @@ async fn verify_aggregated_and_get_events(
 	// Verify locally before submitting on-chain
 	log_verbose!("Verifying aggregated proof locally before on-chain submission...");
 	let bins_dir = Path::new("generated-bins");
+
+	// Log circuit binary hashes for debugging
+	let common_bytes = std::fs::read(bins_dir.join("aggregated_common.bin")).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read aggregated_common.bin: {}", e))
+	})?;
+	let verifier_bytes = std::fs::read(bins_dir.join("aggregated_verifier.bin")).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to read aggregated_verifier.bin: {}",
+			e
+		))
+	})?;
+	println!(
+		"[quantus-cli] Circuit binaries: common_bytes.len={}, verifier_bytes.len={}, common_hash={}, verifier_hash={}",
+		common_bytes.len(),
+		verifier_bytes.len(),
+		hex::encode(blake3::hash(&common_bytes).as_bytes()),
+		hex::encode(blake3::hash(&verifier_bytes).as_bytes()),
+	);
+
 	let verifier = WormholeVerifier::new_from_files(
 		&bins_dir.join("aggregated_verifier.bin"),
 		&bins_dir.join("aggregated_common.bin"),
@@ -2030,11 +2065,11 @@ async fn verify_aggregated_and_get_events(
 	// Log minted amounts
 	log_print!("  Tokens minted (from NativeTransferred events):");
 	for (idx, transfer) in transfer_events.iter().enumerate() {
-		let to_hex = hex::encode(transfer.to.0);
+		let ss58_address = bytes_to_quantus_ss58(&transfer.to.0);
 		log_print!(
 			"    [{}] {} -> {} planck ({})",
 			idx,
-			to_hex,
+			ss58_address,
 			transfer.amount,
 			format_balance(transfer.amount)
 		);
