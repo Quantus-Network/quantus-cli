@@ -53,12 +53,40 @@ fn main() {
 	// verification (manifest_dir is inside target/package/ in that case).
 	let project_bins = Path::new(&manifest_dir).join("generated-bins");
 	if !manifest_dir.contains("target/package/") {
-		let _ = std::fs::create_dir_all(&project_bins);
-		if let Ok(entries) = std::fs::read_dir(&build_output_dir) {
-			for entry in entries.flatten() {
-				let dest = project_bins.join(entry.file_name());
-				let _ = std::fs::copy(entry.path(), dest);
+		// Prefer a symlink to avoid copying large prover binaries on every build.
+		// If symlink creation fails (e.g. on filesystems without symlink support),
+		// fall back to copying and surface errors.
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::symlink;
+			// Remove any existing dir/file/symlink at destination.
+			if let Ok(meta) = std::fs::symlink_metadata(&project_bins) {
+				if meta.is_dir() {
+					std::fs::remove_dir_all(&project_bins)
+						.expect("Failed to remove existing generated-bins directory");
+				} else {
+					std::fs::remove_file(&project_bins)
+						.expect("Failed to remove existing generated-bins file/symlink");
+				}
 			}
+			if let Err(e) = symlink(&build_output_dir, &project_bins) {
+				println!(
+					"cargo:warning=[quantus-cli] Failed to symlink generated-bins ({}). Falling back to copy...",
+					e
+				);
+			} else {
+				// Symlink created successfully; we're done.
+				return;
+			}
+		}
+
+		std::fs::create_dir_all(&project_bins).expect("Failed to create generated-bins directory");
+		let entries = std::fs::read_dir(&build_output_dir)
+			.expect("Failed to read generated-bins directory in OUT_DIR");
+		for entry in entries {
+			let entry = entry.expect("Failed to read generated-bins entry");
+			let dest = project_bins.join(entry.file_name());
+			std::fs::copy(entry.path(), dest).expect("Failed to copy generated-bins file");
 		}
 	}
 }

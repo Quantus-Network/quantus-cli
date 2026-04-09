@@ -79,9 +79,6 @@ pub async fn execute_generic_call(
 			submit_system_remark(quantus_client, from_keypair, &args, tip_amount, execution_mode)
 				.await?,
 
-		// Sudo pallet calls
-		("Sudo", "sudo") => submit_sudo_call(quantus_client, from_keypair, &args).await?,
-
 		// TechCollective pallet calls
 		("TechCollective", "add_member") =>
 			submit_tech_collective_add_member(quantus_client, from_keypair, &args, execution_mode)
@@ -117,7 +114,6 @@ pub async fn execute_generic_call(
 			log_print!("💡 Supported pallets in SubXT:");
 			log_print!("   • Balances: transfer_allow_death, transfer_keep_alive");
 			log_print!("   • System: remark");
-			log_print!("   • Sudo: sudo");
 			log_print!("   • TechCollective: add_member, remove_member, vote");
 			log_print!("   • ReversibleTransfers: schedule_transfer");
 			log_print!("   • Scheduler: schedule, cancel");
@@ -225,20 +221,6 @@ async fn submit_system_remark(
 	.await
 }
 
-/// Submit sudo call
-async fn submit_sudo_call(
-	_quantus_client: &crate::chain::client::QuantusClient,
-	_from_keypair: &QuantumKeyPair,
-	_args: &[Value],
-) -> crate::error::Result<subxt::utils::H256> {
-	// For now, this is a placeholder - sudo calls need the inner call to be constructed
-	log_error!("❌ Sudo calls through generic call are complex - use specific sudo wrappers");
-	log_print!("💡 Use dedicated subxt commands that already wrap calls in sudo");
-	Err(QuantusError::Generic(
-		"Sudo calls not supported in generic call - use specific commands".to_string(),
-	))
-}
-
 /// Submit tech collective add member
 async fn submit_tech_collective_add_member(
 	quantus_client: &crate::chain::client::QuantusClient,
@@ -264,21 +246,12 @@ async fn submit_tech_collective_add_member(
 	let member_account_id_subxt =
 		subxt::ext::subxt_core::utils::AccountId32::from(member_account_id_bytes);
 
-	// Wrap in sudo for privileged operation
-	let sudo_call = quantus_subxt::api::tx().sudo().sudo(quantus_subxt::api::Call::TechCollective(
-		quantus_subxt::api::tech_collective::Call::add_member {
-			who: subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id_subxt),
-		},
-	));
+	let call = quantus_subxt::api::tx()
+		.tech_collective()
+		.add_member(subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id_subxt));
 
-	crate::cli::common::submit_transaction(
-		quantus_client,
-		from_keypair,
-		sudo_call,
-		None,
-		execution_mode,
-	)
-	.await
+	crate::cli::common::submit_transaction(quantus_client, from_keypair, call, None, execution_mode)
+		.await
 }
 
 /// Submit tech collective remove member
@@ -306,22 +279,13 @@ async fn submit_tech_collective_remove_member(
 	let member_account_id_subxt =
 		subxt::ext::subxt_core::utils::AccountId32::from(member_account_id_bytes);
 
-	// Wrap in sudo for privileged operation
-	let sudo_call = quantus_subxt::api::tx().sudo().sudo(quantus_subxt::api::Call::TechCollective(
-		quantus_subxt::api::tech_collective::Call::remove_member {
-			who: subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id_subxt),
-			min_rank: 0, // Default rank
-		},
-	));
+	let call = quantus_subxt::api::tx().tech_collective().remove_member(
+		subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id_subxt),
+		0u16, // Default rank
+	);
 
-	crate::cli::common::submit_transaction(
-		quantus_client,
-		from_keypair,
-		sudo_call,
-		None,
-		execution_mode,
-	)
-	.await
+	crate::cli::common::submit_transaction(quantus_client, from_keypair, call, None, execution_mode)
+		.await
 }
 
 /// Submit tech collective vote

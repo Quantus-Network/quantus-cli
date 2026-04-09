@@ -14,6 +14,8 @@ pub mod multisend;
 pub mod multisig;
 pub mod preimage;
 pub mod recovery;
+pub mod referenda;
+pub mod referenda_decode;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
@@ -21,6 +23,7 @@ pub mod send;
 pub mod storage;
 pub mod system;
 pub mod tech_collective;
+pub mod tech_referenda;
 pub mod transfers;
 pub mod treasury;
 pub mod wallet;
@@ -88,7 +91,7 @@ pub enum Commands {
 	#[command(subcommand)]
 	Scheduler(scheduler::SchedulerCommands),
 
-	/// Direct interaction with chain storage (Sudo required for set)
+	/// Direct interaction with chain storage (read-only)
 	#[command(subcommand)]
 	Storage(storage::StorageCommands),
 
@@ -96,9 +99,17 @@ pub enum Commands {
 	#[command(subcommand)]
 	TechCollective(tech_collective::TechCollectiveCommands),
 
-	/// Tech Referenda management commands (for runtime upgrade proposals)
+	/// Preimage management commands
 	#[command(subcommand)]
 	Preimage(preimage::PreimageCommands),
+
+	/// Tech Referenda management commands (for runtime upgrade proposals)
+	#[command(subcommand)]
+	TechReferenda(tech_referenda::TechReferendaCommands),
+
+	/// Standard Referenda management commands (public governance)
+	#[command(subcommand)]
+	Referenda(referenda::ReferendaCommands),
 
 	/// Treasury account info
 	#[command(subcommand)]
@@ -108,7 +119,7 @@ pub enum Commands {
 	#[command(subcommand)]
 	Transfers(transfers::TransfersCommands),
 
-	/// Runtime management commands (requires root/sudo permissions)
+	/// Runtime management commands (via governance where required)
 	#[command(subcommand)]
 	Runtime(runtime::RuntimeCommands),
 
@@ -334,6 +345,15 @@ pub async fn execute_command(
 			.await,
 		Commands::Preimage(preimage_cmd) =>
 			preimage::handle_preimage_command(preimage_cmd, node_url, execution_mode).await,
+		Commands::TechReferenda(tech_referenda_cmd) =>
+			tech_referenda::handle_tech_referenda_command(
+				tech_referenda_cmd,
+				node_url,
+				execution_mode,
+			)
+			.await,
+		Commands::Referenda(referenda_cmd) =>
+			referenda::handle_referenda_command(referenda_cmd, node_url, execution_mode).await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
 		Commands::Transfers(transfers_cmd) =>

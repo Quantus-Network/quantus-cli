@@ -4,3 +4,4 @@
 
 # Circuit binaries are generated at build time by build.rs
 /generated-bins/
+/generated-bins

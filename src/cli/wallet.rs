@@ -240,28 +240,43 @@ async fn fetch_pending_transfers_for_guardian(
 ) -> crate::error::Result<(u32, Vec<(String, u32)>)> {
 	let latest = quantus_client.get_latest_block().await?;
 	let storage = quantus_client.client().storage().at(latest);
+	let pending_iter =
+		quantus_subxt::api::storage().reversible_transfers().pending_transfers_iter();
+
+	let entrusted_ids: Vec<[u8; 32]> = entrusted_ss58
+		.iter()
+		.map(|s| {
+			let id = SpAccountId32::from_ss58check(s).map_err(|e| {
+				QuantusError::Generic(format!("Invalid SS58 for pending lookup: {e:?}"))
+			})?;
+			Ok::<_, crate::error::QuantusError>(*id.as_ref())
+		})
+		.collect::<Result<Vec<_>, _>>()?;
+
+	let mut counts: std::collections::HashMap<[u8; 32], u32> =
+		entrusted_ids.iter().map(|id| (*id, 0u32)).collect();
+
+	let mut iter = storage
+		.iter(pending_iter)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Pending transfers iter: {e:?}")))?;
+
+	while let Some(result) = iter.next().await {
+		if let Ok(entry) = result {
+			let from_bytes: [u8; 32] = *entry.value.from.as_ref();
+			if let Some(c) = counts.get_mut(&from_bytes) {
+				*c += 1;
+			}
+		}
+	}
+
 	let mut total = 0u32;
 	let mut per_account = Vec::with_capacity(entrusted_ss58.len());
-
-	for ss58 in entrusted_ss58 {
-		let account_id_sp = SpAccountId32::from_ss58check(ss58).map_err(|e| {
-			QuantusError::Generic(format!("Invalid SS58 for pending lookup: {e:?}"))
-		})?;
-		let account_bytes: [u8; 32] = *account_id_sp.as_ref();
-		let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
-
-		let addr = quantus_subxt::api::storage()
-			.reversible_transfers()
-			.pending_transfers_by_sender(account_id);
-		let value = storage.fetch(&addr).await.map_err(|e| {
-			QuantusError::NetworkError(format!("Fetch pending_transfers_by_sender: {e:?}"))
-		})?;
-
-		let count = value.map(|bounded| bounded.0.len() as u32).unwrap_or(0);
+	for (ss58, id) in entrusted_ss58.iter().zip(entrusted_ids.iter()) {
+		let count = *counts.get(id).unwrap_or(&0);
 		total += count;
 		per_account.push((ss58.clone(), count));
 	}
-
 	Ok((total, per_account))
 }
 
