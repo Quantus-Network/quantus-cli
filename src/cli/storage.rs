@@ -10,10 +10,7 @@ use clap::Subcommand;
 use codec::Decode;
 use colored::Colorize;
 use serde::Deserialize;
-use sp_core::{
-	crypto::{AccountId32},
-	twox_128,
-};
+use sp_core::{crypto::AccountId32, twox_128};
 use std::{collections::BTreeMap, str::FromStr};
 use subxt::OnlineClient;
 
@@ -151,7 +148,6 @@ pub enum StorageCommands {
 		#[arg(long)]
 		block: Option<String>,
 	},
-
 }
 
 /// Get block hash from block number or parse existing hash

@@ -114,9 +114,9 @@ pub async fn add_member(
 
 	log_verbose!("✍️  Creating add_member transaction...");
 
-	let add_member_call = quantus_subxt::api::tx().tech_collective().add_member(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id),
-	);
+	let add_member_call = quantus_subxt::api::tx()
+		.tech_collective()
+		.add_member(subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id));
 
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,

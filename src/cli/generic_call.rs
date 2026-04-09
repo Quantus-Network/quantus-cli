@@ -246,18 +246,12 @@ async fn submit_tech_collective_add_member(
 	let member_account_id_subxt =
 		subxt::ext::subxt_core::utils::AccountId32::from(member_account_id_bytes);
 
-	let call = quantus_subxt::api::tx().tech_collective().add_member(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id_subxt),
-	);
+	let call = quantus_subxt::api::tx()
+		.tech_collective()
+		.add_member(subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id_subxt));
 
-	crate::cli::common::submit_transaction(
-		quantus_client,
-		from_keypair,
-		call,
-		None,
-		execution_mode,
-	)
-	.await
+	crate::cli::common::submit_transaction(quantus_client, from_keypair, call, None, execution_mode)
+		.await
 }
 
 /// Submit tech collective remove member
@@ -290,14 +284,8 @@ async fn submit_tech_collective_remove_member(
 		0u16, // Default rank
 	);
 
-	crate::cli::common::submit_transaction(
-		quantus_client,
-		from_keypair,
-		call,
-		None,
-		execution_mode,
-	)
-	.await
+	crate::cli::common::submit_transaction(quantus_client, from_keypair, call, None, execution_mode)
+		.await
 }
 
 /// Submit tech collective vote

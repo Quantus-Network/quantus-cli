@@ -157,10 +157,7 @@ pub async fn update_runtime(
 	)
 	.await?;
 
-	log_success!(
-		"✅ SUCCESS Runtime upgrade proposal submitted! Hash: 0x{}",
-		hex::encode(tx_hash)
-	);
+	log_success!("✅ SUCCESS Runtime upgrade proposal submitted! Hash: 0x{}", hex::encode(tx_hash));
 
 	Ok(tx_hash)
 }
