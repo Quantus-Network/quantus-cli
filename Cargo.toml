@@ -77,18 +77,18 @@ subxt-metadata = "0.44"
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
 
-qp-plonky2 = { version = "1.4.0", default-features = false, features = ["rand", "std"] }
-qp-wormhole-circuit = { version = "1.4.0", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "1.4.0", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "1.4.0", default-features = false, features = ["std"] }
-qp-wormhole-aggregator = { version = "1.4.0", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-inputs = { version = "1.4.0", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "1.4.0", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = { version = "1.4.0" }
+qp-plonky2 = { version = "1.4.1", default-features = false, features = ["rand", "std"] }
+qp-wormhole-circuit = { version = "1.4.1", default-features = false, features = ["std"] }
+qp-wormhole-prover = { version = "1.4.1", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { version = "1.4.1", default-features = false, features = ["std"] }
+qp-wormhole-aggregator = { version = "1.4.1", default-features = false, features = ["rayon", "std"] }
+qp-wormhole-inputs = { version = "1.4.1", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { version = "1.4.1", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { version = "1.4.1" }
 
 
 [build-dependencies]
-qp-wormhole-circuit-builder = { version = "1.4.0" }
+qp-wormhole-circuit-builder = { version = "1.4.1" }
 
 [dev-dependencies]
 tempfile = "3.8.1"
