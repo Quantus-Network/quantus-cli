@@ -88,6 +88,8 @@ qp-wormhole-circuit-builder = { version = "1.4.2" }
 
 
 [build-dependencies]
+hex = "0.4"
+qp-poseidon-core = "1.4.0"
 qp-wormhole-circuit-builder = { version = "1.4.2" }
 
 [dev-dependencies]

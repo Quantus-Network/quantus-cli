@@ -95,13 +95,13 @@ jobs:
             libclang-dev \
             protobuf-compiler
       - name: Run clippy (all targets)
-        run: cargo clippy --all-targets --locked -- -D warnings
+        run: SKIP_CIRCUIT_BUILD=1 cargo clippy --all-targets --locked -- -D warnings
       - name: Run clippy (library only)
-        run: cargo clippy --lib --locked -- -D warnings
+        run: SKIP_CIRCUIT_BUILD=1 cargo clippy --lib --locked -- -D warnings
       - name: Generate documentation
-        run: cargo doc --locked --no-deps
+        run: SKIP_CIRCUIT_BUILD=1 cargo doc --locked --no-deps
       - name: Check documentation (with private items)
-        run: cargo doc --locked --no-deps --document-private-items
+        run: SKIP_CIRCUIT_BUILD=1 cargo doc --locked --no-deps --document-private-items
 
   security-audit:
     name: 🔒 Security Audit
