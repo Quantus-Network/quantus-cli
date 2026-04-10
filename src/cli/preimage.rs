@@ -379,8 +379,6 @@ async fn create_preimage(
 	password_file: Option<String>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
-	use qp_poseidon::PoseidonHasher;
-
 	log_print!("📦 Creating preimage from WASM file: {}", wasm_file.display());
 	log_print!("   👤 From: {}", from_str.bright_yellow());
 
@@ -405,9 +403,8 @@ async fn create_preimage(
 
 	log_verbose!("📝 Encoded call size: {} bytes", encoded_call.len());
 
-	// Compute preimage hash using Poseidon (runtime uses PoseidonHasher)
 	let preimage_hash: sp_core::H256 =
-		<PoseidonHasher as sp_runtime::traits::Hash>::hash(&encoded_call);
+		<sp_runtime::traits::BlakeTwo256 as sp_runtime::traits::Hash>::hash(&encoded_call);
 
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
