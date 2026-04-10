@@ -7,6 +7,7 @@ use crate::{
 };
 use clap::Subcommand;
 use colored::Colorize;
+use qp_poseidon::PoseidonHasher;
 use sp_core::crypto::Ss58Codec;
 use std::str::FromStr;
 use subxt::events::EventDetails;
