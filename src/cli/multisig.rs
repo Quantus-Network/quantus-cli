@@ -1425,6 +1425,43 @@ async fn handle_propose_transfer(
 	}
 }
 
+async fn fetch_proposal_id(
+	quantus_client: &crate::chain::client::QuantusClient,
+	multisig_ss58: &str,
+) -> Option<u32> {
+	let latest_block_hash = quantus_client.get_latest_block().await.ok()?;
+	let events = quantus_client.client().events().at(latest_block_hash).await.ok()?;
+	for ev in events.find::<quantus_subxt::api::multisig::events::ProposalCreated>() {
+		if let Ok(created) = ev {
+			let addr_bytes: &[u8; 32] = created.multisig_address.as_ref();
+			let addr = SpAccountId32::from(*addr_bytes);
+			let addr_ss58 =
+				addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+			if addr_ss58 == multisig_ss58 {
+				return Some(created.proposal_id);
+			}
+		}
+	}
+	None
+}
+
+fn log_proposal_result(multisig_ss58: &str, proposal_id: Option<u32>) {
+	if let Some(id) = proposal_id {
+		log_print!("");
+		log_success!("✅ Proposal #{} confirmed on-chain", id.to_string().bright_cyan().bold());
+		log_print!("");
+		log_print!("🚀 {} To approve this proposal, signers run:", "NEXT".bright_blue().bold());
+		log_print!(
+			"   quantus multisig approve --address {} --proposal-id {} --from <SIGNER_WALLET>",
+			multisig_ss58.bright_cyan(),
+			id
+		);
+	} else {
+		log_success!("✅ Proposal confirmed on-chain");
+		log_print!("   Run `quantus multisig list-proposals --address {}` to find the proposal ID", multisig_ss58);
+	}
+}
+
 /// Propose a custom transaction
 async fn handle_propose(
 	multisig_address: String,
@@ -1564,7 +1601,8 @@ async fn handle_propose(
 	)
 	.await?;
 
-	log_success!("✅ Proposal confirmed on-chain");
+	let proposal_id = fetch_proposal_id(&quantus_client, &multisig_ss58).await;
+	log_proposal_result(&multisig_ss58, proposal_id);
 
 	Ok(())
 }
@@ -1631,7 +1669,8 @@ async fn handle_propose_with_call_data(
 	)
 	.await?;
 
-	log_success!("✅ Proposal confirmed on-chain");
+	let proposal_id = fetch_proposal_id(quantus_client, &multisig_ss58).await;
+	log_proposal_result(&multisig_ss58, proposal_id);
 
 	Ok(())
 }
@@ -3174,18 +3213,13 @@ async fn handle_high_security_set(
 	)
 	.await?;
 
-	log_print!("");
-	log_success!("✅ High-Security proposal confirmed on-chain!");
-	log_print!("");
+	let proposal_id = fetch_proposal_id(&quantus_client, &multisig_ss58).await;
+	log_proposal_result(&multisig_ss58, proposal_id);
 	log_print!(
 		"💡 {} Once this proposal reaches threshold, High-Security will be enabled",
 		"NEXT STEPS".bright_blue().bold()
 	);
-	log_print!(
-		"   - Other signers need to approve: quantus multisig approve --address {} --proposal-id <ID> --from <SIGNER>",
-		multisig_ss58.bright_cyan()
-	);
-	log_print!("   - After threshold is reached, all transfers will be delayed and reversible");
+	log_print!("   After threshold is reached, all transfers will be delayed and reversible");
 	log_print!("");
 
 	Ok(())
