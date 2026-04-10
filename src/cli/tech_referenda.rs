@@ -7,144 +7,154 @@ use clap::Subcommand;
 use colored::Colorize;
 use std::{path::PathBuf, str::FromStr};
 
-/// Tech Referenda management commands
+/// Tech Referenda: governance system for technical proposals (runtime upgrades, parameter changes).
+///
+/// Proposals go through: Submit -> Decision Deposit -> Voting -> Enactment.
+/// Only Tech Collective members can submit proposals.
 #[derive(Subcommand, Debug)]
 pub enum TechReferendaCommands {
-	/// Submit a runtime upgrade proposal to Tech Referenda (requires existing preimage)
+	/// Submit a runtime upgrade proposal using an existing on-chain preimage
+	#[command(arg_required_else_help = true)]
 	Submit {
-		/// Preimage hash (must already exist on chain)
-		#[arg(long)]
+		/// Hash of the preimage already stored on-chain (hex, with or without 0x prefix)
+		#[arg(long, value_name = "HASH")]
 		preimage_hash: String,
 
-		/// Wallet name to sign with (must be a Tech Collective member or root)
-		#[arg(short, long)]
+		/// Wallet name to sign with (must be a Tech Collective member)
+		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
 
-		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
 	},
 
-	/// Submit a runtime upgrade proposal to Tech Referenda (creates preimage first)
+	/// Submit a runtime upgrade proposal (uploads WASM as preimage, then submits)
+	#[command(arg_required_else_help = true)]
 	SubmitWithPreimage {
-		/// Path to the runtime WASM file
-		#[arg(short, long)]
+		/// Path to the compiled runtime WASM file to propose
+		#[arg(short, long, value_name = "PATH")]
 		wasm_file: PathBuf,
 
-		/// Wallet name to sign with (must be a Tech Collective member or root)
-		#[arg(short, long)]
+		/// Wallet name to sign with (must be a Tech Collective member)
+		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
 
-		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
 	},
 
-	/// Submit a proposal to set Treasury `treasury_portion` (Permill) via Tech Referenda (creates
-	/// preimage first)
+	/// Propose a new Treasury portion (% of block rewards sent to treasury)
+	///
+	/// Creates the preimage and submits the referendum in one step.
+	#[command(
+		arg_required_else_help = true,
+		after_help = "Examples:\n  quantus tech-referenda submit-treasury-portion --portion-permill 500000 --from alice   # 50%\n  quantus tech-referenda submit-treasury-portion --portion-permill 100000 --from alice   # 10%"
+	)]
 	SubmitTreasuryPortion {
-		/// New treasury portion in Permill (parts per million): 0..=1_000_000
-		///
-		/// Example: 500_000 = 50%
-		#[arg(long, value_parser = clap::value_parser!(u32).range(0..=1_000_000))]
+		/// New treasury portion in Permill (parts per million, 0-1000000). 500000 = 50%
+		#[arg(long, value_name = "PERMILL", value_parser = clap::value_parser!(u32).range(0..=1_000_000))]
 		portion_permill: u32,
 
-		/// Wallet name to sign with (must be a Tech Collective member or root)
-		#[arg(short, long)]
+		/// Wallet name to sign with (must be a Tech Collective member)
+		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
 
-		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
 	},
 
-	/// List all active Tech Referenda proposals
+	/// List all Tech Referenda proposals and their current status
 	List,
 
-	/// Get details of a specific Tech Referendum
+	/// Show full details of a specific Tech Referendum (raw on-chain data)
+	#[command(arg_required_else_help = true)]
 	Get {
-		/// Referendum index
-		#[arg(short, long)]
+		/// Referendum index (shown in `list` output)
+		#[arg(short, long, value_name = "REFERENDUM_INDEX")]
 		index: u32,
 	},
 
-	/// Check the status of a Tech Referendum
+	/// Check the voting status and tally for a specific Tech Referendum
+	#[command(arg_required_else_help = true)]
 	Status {
-		/// Referendum index
-		#[arg(short, long)]
+		/// Referendum index (shown in `list` output)
+		#[arg(short, long, value_name = "REFERENDUM_INDEX")]
 		index: u32,
 	},
 
-	/// Place a decision deposit for a Tech Referendum
+	/// Place the decision deposit to move a referendum from Preparing to Deciding phase
+	///
+	/// Required before voting can begin. The deposit is refundable after the referendum ends.
+	#[command(
+		arg_required_else_help = true,
+		after_help = "Example:\n  quantus tech-referenda place-decision-deposit --index 0 --from alice"
+	)]
 	PlaceDecisionDeposit {
-		/// Referendum index
-		#[arg(short, long)]
+		/// Referendum index to place the deposit for
+		#[arg(short, long, value_name = "REFERENDUM_INDEX")]
 		index: u32,
 
-		/// Wallet name to sign with
-		#[arg(short, long)]
+		/// Wallet name to pay the deposit from (anyone can place it, not just the proposer)
+		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
 
-		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
 	},
 
-	/// Refund submission deposit for a completed Tech Referendum
+	/// Refund the submission deposit after a Tech Referendum has completed
+	///
+	/// Only callable after the referendum is no longer ongoing (approved/rejected/timed out).
+	#[command(arg_required_else_help = true)]
 	RefundSubmissionDeposit {
-		/// Referendum index
-		#[arg(short, long)]
+		/// Referendum index to refund for
+		#[arg(short, long, value_name = "REFERENDUM_INDEX")]
 		index: u32,
 
-		/// Wallet name that submitted the referendum
-		#[arg(short, long)]
+		/// Wallet name to sign the refund transaction
+		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
 
-		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
 	},
 
-	/// Refund decision deposit for a completed Tech Referendum
+	/// Refund the decision deposit after a Tech Referendum has completed
+	///
+	/// Only callable after the referendum is no longer ongoing (approved/rejected/timed out).
+	#[command(arg_required_else_help = true)]
 	RefundDecisionDeposit {
-		/// Referendum index
-		#[arg(short, long)]
+		/// Referendum index to refund for
+		#[arg(short, long, value_name = "REFERENDUM_INDEX")]
 		index: u32,
 
-		/// Wallet name that placed the decision deposit
-		#[arg(short, long)]
+		/// Wallet name to sign the refund transaction
+		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
 
-		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
 	},
 
-	/// Get Tech Referenda configuration
+	/// Show Tech Referenda on-chain configuration (tracks, periods, deposits)
 	Config,
 }
 
@@ -369,19 +379,9 @@ async fn submit_runtime_upgrade_with_preimage(
 
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
-	// Submit Preimage::note_preimage with bounded bytes
-	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes = encoded_call.clone();
-
-	log_print!("📝 Submitting preimage...");
-	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
-	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, note_preimage_tx, None, execution_mode)
-			.await?;
-	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
-
-	// Wait for preimage transaction confirmation
-	log_print!("⏳ Waiting for preimage transaction confirmation...");
+	let call_len = encoded_call.len() as u32;
+	crate::cli::common::submit_preimage(quantus_client, &keypair, encoded_call, execution_mode)
+		.await?;
 
 	// Build TechReferenda::submit call using Lookup preimage reference
 	type ProposalBounded =
@@ -392,7 +392,7 @@ async fn submit_runtime_upgrade_with_preimage(
 
 	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash;
 	let proposal: ProposalBounded =
-		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: encoded_call.len() as u32 };
+		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: call_len };
 
 	let raw_origin_root =
 		quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
@@ -404,7 +404,7 @@ async fn submit_runtime_upgrade_with_preimage(
 			0u32,
 		);
 
-	log_print!("🔧 Creating TechReferenda::submit call...");
+	log_print!("🔧 Submitting TechReferenda::submit...");
 	let submit_call =
 		quantus_subxt::api::tx()
 			.tech_referenda()
@@ -412,9 +412,8 @@ async fn submit_runtime_upgrade_with_preimage(
 
 	let tx_hash =
 		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
-	log_print!(
-		"✅ {} Runtime upgrade proposal submitted! Hash: {:?}",
-		"SUCCESS".bright_green().bold(),
+	log_success!(
+		"Runtime upgrade proposal submitted! Hash: {:?}",
 		tx_hash
 	);
 
@@ -461,18 +460,9 @@ async fn submit_treasury_portion_with_preimage(
 	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded_call);
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
-	// Submit Preimage::note_preimage with bounded bytes
-	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes = encoded_call.clone();
-
-	log_print!("📝 Submitting preimage...");
-	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
-	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, note_preimage_tx, None, execution_mode)
-			.await?;
-	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
-
-	log_print!("⏳ Waiting for preimage transaction confirmation...");
+	let call_len = encoded_call.len() as u32;
+	crate::cli::common::submit_preimage(quantus_client, &keypair, encoded_call, execution_mode)
+		.await?;
 
 	// Build TechReferenda::submit call using Lookup preimage reference
 	type ProposalBounded =
@@ -483,7 +473,7 @@ async fn submit_treasury_portion_with_preimage(
 
 	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash;
 	let proposal: ProposalBounded =
-		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: encoded_call.len() as u32 };
+		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: call_len };
 
 	let raw_origin_root =
 		quantus_subxt::api::runtime_types::frame_support::dispatch::RawOrigin::Root;
@@ -495,7 +485,7 @@ async fn submit_treasury_portion_with_preimage(
 			0u32,
 		);
 
-	log_print!("🔧 Creating TechReferenda::submit call...");
+	log_print!("🔧 Submitting TechReferenda::submit...");
 	let submit_call =
 		quantus_subxt::api::tx()
 			.tech_referenda()
@@ -503,9 +493,8 @@ async fn submit_treasury_portion_with_preimage(
 
 	let tx_hash =
 		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
-	log_print!(
-		"✅ {} Treasury portion proposal submitted! Hash: {:?}",
-		"SUCCESS".bright_green().bold(),
+	log_success!(
+		"Treasury portion proposal submitted! Hash: {:?}",
 		tx_hash
 	);
 

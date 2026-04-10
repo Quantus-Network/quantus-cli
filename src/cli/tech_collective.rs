@@ -5,9 +5,15 @@ use crate::{
 	error::QuantusError,
 	log_print, log_success, log_verbose,
 };
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use sp_core::crypto::{AccountId32, Ss58Codec};
+
+#[derive(Debug, Clone, ValueEnum)]
+pub enum VoteChoice {
+	Aye,
+	Nay,
+}
 
 /// Tech Collective management commands
 #[derive(Subcommand, Debug)]
@@ -56,9 +62,9 @@ pub enum TechCollectiveCommands {
 		#[arg(short, long)]
 		referendum_index: u32,
 
-		/// Vote (true for aye, false for nay)
+		/// Vote: "aye" or "nay"
 		#[arg(short, long)]
-		aye: bool,
+		vote: VoteChoice,
 
 		/// Wallet name to sign with (must be a collective member)
 		#[arg(short, long)]
@@ -188,16 +194,14 @@ pub async fn vote_on_referendum(
 	// Create the TechCollective::vote call
 	let vote_call = quantus_subxt::api::tx().tech_collective().vote(referendum_index, aye);
 
-	let tx_hash = crate::cli::common::submit_transaction(
-		quantus_client,
-		from_keypair,
-		vote_call,
-		None,
-		execution_mode,
-	)
-	.await?;
+	let wait_mode =
+		crate::cli::common::ExecutionMode { wait_for_transaction: true, ..execution_mode };
 
-	log_verbose!("📋 Vote transaction submitted: {:?}", tx_hash);
+	let tx_hash =
+		crate::cli::common::submit_transaction(quantus_client, from_keypair, vote_call, None, wait_mode)
+			.await?;
+
+	log_verbose!("📋 Vote transaction confirmed: {:?}", tx_hash);
 
 	Ok(tx_hash)
 }
@@ -348,7 +352,8 @@ pub async fn handle_tech_collective_command(
 			);
 		},
 
-		TechCollectiveCommands::Vote { referendum_index, aye, from, password, password_file } => {
+		TechCollectiveCommands::Vote { referendum_index, vote, from, password, password_file } => {
+			let aye = matches!(vote, VoteChoice::Aye);
 			log_print!("🗳️  Voting on Tech Referendum #{} ", referendum_index);
 			log_print!(
 				"   📊 Vote: {}",
@@ -356,10 +361,8 @@ pub async fn handle_tech_collective_command(
 			);
 			log_print!("   🔑 Signed by: {}", from.bright_yellow());
 
-			// Load wallet
 			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
-			// Submit transaction
 			let tx_hash = vote_on_referendum(
 				&quantus_client,
 				&keypair,
@@ -370,7 +373,7 @@ pub async fn handle_tech_collective_command(
 			.await?;
 
 			log_print!(
-				"✅ {} Vote transaction submitted! Hash: {:?}",
+				"✅ {} Vote confirmed in block! Hash: {:?}",
 				"SUCCESS".bright_green().bold(),
 				tx_hash
 			);

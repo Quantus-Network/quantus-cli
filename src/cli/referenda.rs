@@ -3,6 +3,7 @@ use crate::{
 	chain::quantus_subxt, cli::common::submit_transaction, error::QuantusError, log_error,
 	log_print, log_success, log_verbose,
 };
+use crate::cli::tech_collective::VoteChoice;
 use clap::Subcommand;
 use colored::Colorize;
 use std::str::FromStr;
@@ -102,9 +103,9 @@ pub enum ReferendaCommands {
 		#[arg(short, long)]
 		index: u32,
 
-		/// Vote aye (true) or nay (false)
+		/// Vote: "aye" or "nay"
 		#[arg(long)]
-		aye: bool,
+		vote: VoteChoice,
 
 		/// Conviction (0=None, 1=Locked1x, 2=Locked2x, up to 6=Locked6x)
 		#[arg(long, default_value = "0")]
@@ -216,7 +217,7 @@ pub async fn handle_referenda_command(
 			.await,
 		ReferendaCommands::Vote {
 			index,
-			aye,
+			vote,
 			conviction,
 			amount,
 			from,
@@ -226,7 +227,7 @@ pub async fn handle_referenda_command(
 			vote_on_referendum(
 				&quantus_client,
 				index,
-				aye,
+				matches!(vote, VoteChoice::Aye),
 				conviction,
 				&amount,
 				&from,
@@ -293,19 +294,9 @@ async fn submit_remark_proposal(
 
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
-	// Submit Preimage::note_preimage
-	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes = encoded_call.clone();
-
-	log_print!("📝 Submitting preimage...");
-	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
-	let preimage_tx_hash =
-		submit_transaction(quantus_client, &keypair, note_preimage_tx, None, execution_mode)
-			.await?;
-	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
-
-	// Wait for preimage transaction confirmation
-	log_print!("⏳ Waiting for preimage transaction confirmation...");
+	let call_len = encoded_call.len() as u32;
+	crate::cli::common::submit_preimage(quantus_client, &keypair, encoded_call, execution_mode)
+		.await?;
 
 	// Build Referenda::submit call using Lookup preimage reference
 	type ProposalBounded =
@@ -316,7 +307,7 @@ async fn submit_remark_proposal(
 
 	let preimage_hash_subxt: subxt::utils::H256 = preimage_hash;
 	let proposal: ProposalBounded =
-		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: encoded_call.len() as u32 };
+		ProposalBounded::Lookup { hash: preimage_hash_subxt, len: call_len };
 
 	// Create origin based on origin_type parameter
 	let account_id_sp = keypair.to_account_id_32();
