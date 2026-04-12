@@ -191,7 +191,7 @@ pub fn compute_merkle_positions(
 	let mut sorted_siblings = Vec::with_capacity(unsorted_siblings.len());
 	let mut positions = Vec::with_capacity(unsorted_siblings.len());
 
-	for level_siblings in unsorted_siblings {
+	for level_siblings in unsorted_siblings.iter() {
 		// Combine current hash with the 3 siblings
 		let mut all_four: [Hash256; 4] =
 			[current_hash, level_siblings[0], level_siblings[1], level_siblings[2]];
@@ -2198,28 +2198,74 @@ async fn generate_proof(
 }
 
 /// Decode the input amount from SCALE-encoded ZkLeaf data.
-/// ZkLeaf structure: (to: AccountId32, transfer_count: u64, asset_id: u32, amount: u32)
+/// ZkLeaf structure: (to: AccountId32, transfer_count: u64, asset_id: u32, amount: u128)
+///
+/// The chain stores the RAW amount (in planck), but hash_leaf() quantizes it.
+/// We need to return the QUANTIZED amount for the circuit.
 fn decode_input_amount_from_leaf(leaf_data: &[u8]) -> crate::error::Result<u32> {
-	// ZkLeaf is: (AccountId32, u64, u32, u32)
+	// ZkLeaf is: (AccountId32, u64, u32, u128)
 	// AccountId32 = 32 bytes
-	// u64 = 8 bytes
+	// u64 = 8 bytes (transfer_count)
 	// u32 = 4 bytes (asset_id)
-	// u32 = 4 bytes (amount - quantized)
-	// Total = 48 bytes
+	// u128 = 16 bytes (amount - RAW in planck)
+	// Total = 60 bytes
 
-	if leaf_data.len() < 48 {
+	if leaf_data.len() < 60 {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Invalid leaf data length: expected at least 48 bytes, got {}",
+			"Invalid leaf data length: expected at least 60 bytes, got {}",
 			leaf_data.len()
 		)));
 	}
 
-	// The amount is the last 4 bytes (u32, little-endian)
-	let amount_bytes: [u8; 4] = leaf_data[44..48].try_into().map_err(|_| {
+	// The amount is bytes 44-60 (u128, little-endian)
+	let amount_bytes: [u8; 16] = leaf_data[44..60].try_into().map_err(|_| {
 		crate::error::QuantusError::Generic("Failed to extract amount bytes".to_string())
 	})?;
 
-	Ok(u32::from_le_bytes(amount_bytes))
+	let raw_amount = u128::from_le_bytes(amount_bytes);
+
+	// Quantize: divide by 10^10 to get 2 decimal places (matches chain's hash_leaf)
+	const AMOUNT_SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
+	let quantized = (raw_amount / AMOUNT_SCALE_DOWN_FACTOR) as u32;
+
+	Ok(quantized)
+}
+
+/// Decode all fields from SCALE-encoded ZkLeaf data.
+/// Returns (to_account, transfer_count, asset_id, raw_amount_u128)
+#[allow(dead_code)]
+fn decode_full_leaf_data(leaf_data: &[u8]) -> crate::error::Result<([u8; 32], u64, u32, u128)> {
+	// ZkLeaf is: (AccountId32, u64, u32, u128)
+	// AccountId32 = 32 bytes
+	// u64 = 8 bytes (transfer_count)
+	// u32 = 4 bytes (asset_id)
+	// u128 = 16 bytes (amount - RAW in planck)
+	// Total = 60 bytes
+
+	if leaf_data.len() < 60 {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Invalid leaf data length: expected at least 60 bytes, got {}",
+			leaf_data.len()
+		)));
+	}
+
+	let to_account: [u8; 32] = leaf_data[0..32].try_into().map_err(|_| {
+		crate::error::QuantusError::Generic("Failed to extract to_account".to_string())
+	})?;
+
+	let transfer_count = u64::from_le_bytes(leaf_data[32..40].try_into().map_err(|_| {
+		crate::error::QuantusError::Generic("Failed to extract transfer_count".to_string())
+	})?);
+
+	let asset_id = u32::from_le_bytes(leaf_data[40..44].try_into().map_err(|_| {
+		crate::error::QuantusError::Generic("Failed to extract asset_id".to_string())
+	})?);
+
+	let amount = u128::from_le_bytes(leaf_data[44..60].try_into().map_err(|_| {
+		crate::error::QuantusError::Generic("Failed to extract amount".to_string())
+	})?);
+
+	Ok((to_account, transfer_count, asset_id, amount))
 }
 
 /// Verify an aggregated proof and return the block hash, extrinsic hash, and transfer events
