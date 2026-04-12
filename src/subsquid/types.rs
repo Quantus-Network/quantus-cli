@@ -38,6 +38,9 @@ pub struct Transfer {
 
 	/// Blake3 hash of the recipient's raw address
 	pub to_hash: String,
+
+	/// Index in the ZK trie for Merkle proof generation
+	pub leaf_index: String,
 }
 
 /// Result from a prefix query.
@@ -186,7 +189,8 @@ mod tests {
             "amount": "1000000000000",
             "fee": "1000000",
             "fromHash": "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
-            "toHash": "5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh"
+            "toHash": "5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh",
+            "leafIndex": "42"
         }"#;
 
 		let transfer: Transfer = serde_json::from_str(json).expect("should deserialize");
@@ -200,6 +204,7 @@ mod tests {
 		assert_eq!(transfer.to_id, "qzBob456");
 		assert_eq!(transfer.amount, "1000000000000");
 		assert_eq!(transfer.fee, "1000000");
+		assert_eq!(transfer.leaf_index, "42");
 	}
 
 	#[test]
@@ -215,7 +220,8 @@ mod tests {
             "amount": "1000000000000",
             "fee": "1000000",
             "fromHash": "abcd1234",
-            "toHash": "5678efgh"
+            "toHash": "5678efgh",
+            "leafIndex": "0"
         }"#;
 
 		let transfer: Transfer = serde_json::from_str(json).expect("should deserialize");

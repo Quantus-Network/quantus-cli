@@ -1,5 +1,15 @@
 //! Integration tests for wormhole proof verification on-chain
 //!
+//! **TEMPORARILY DISABLED** - These tests use the old MPT storage proof workflow.
+//! They need to be rewritten to use ZK trie Merkle proofs once pallet-zk-trie is deployed.
+//!
+//! To re-enable these tests:
+//! 1. Deploy pallet-zk-trie to a test chain
+//! 2. Update the tests to use zkTrie_getMerkleProof RPC
+//! 3. Update PrivateCircuitInputs to use zk_trie_root, zk_merkle_siblings, zk_merkle_positions
+//! 4. Remove the #![cfg(feature = "legacy_storage_proofs")] flag below
+//!
+//! Original description:
 //! These tests require a local Quantus node running at ws://127.0.0.1:9944
 //! with funded developer accounts (crystal_alice, crystal_bob, crystal_charlie).
 //!
@@ -13,6 +23,9 @@
 //!
 //! Note: For aggregation, proofs must be from the same block or consecutive blocks
 //! with valid parent hash linkage. We use batch transfers to ensure same-block proofs.
+
+// Disable this entire test file until ZK trie integration is complete
+#![cfg(feature = "legacy_storage_proofs")]
 
 use plonky2::plonk::{circuit_data::CircuitConfig, proof::ProofWithPublicInputs};
 use qp_wormhole_aggregator::aggregator::{AggregationBackend, Layer0Aggregator};

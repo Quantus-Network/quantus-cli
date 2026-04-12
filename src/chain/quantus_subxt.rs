@@ -20109,6 +20109,8 @@ pub mod api {
 				pub to: native_transferred::To,
 				pub amount: native_transferred::Amount,
 				pub transfer_count: native_transferred::TransferCount,
+				/// Index of this transfer in the ZK trie (for Merkle proof lookup)
+				pub leaf_index: native_transferred::LeafIndex,
 			}
 			pub mod native_transferred {
 				use super::runtime_types;
@@ -20116,6 +20118,7 @@ pub mod api {
 				pub type To = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Amount = ::core::primitive::u128;
 				pub type TransferCount = ::core::primitive::u64;
+				pub type LeafIndex = ::core::primitive::u64;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for NativeTransferred {
 				const PALLET: &'static str = "Wormhole";
@@ -20134,6 +20137,8 @@ pub mod api {
 				pub to: asset_transferred::To,
 				pub amount: asset_transferred::Amount,
 				pub transfer_count: asset_transferred::TransferCount,
+				/// Index of this transfer in the ZK trie (for Merkle proof lookup)
+				pub leaf_index: asset_transferred::LeafIndex,
 			}
 			pub mod asset_transferred {
 				use super::runtime_types;
@@ -20142,6 +20147,7 @@ pub mod api {
 				pub type To = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Amount = ::core::primitive::u128;
 				pub type TransferCount = ::core::primitive::u64;
+				pub type LeafIndex = ::core::primitive::u64;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for AssetTransferred {
 				const PALLET: &'static str = "Wormhole";

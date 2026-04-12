@@ -5,11 +5,10 @@
 //! a chain client connection.
 //!
 //! These functions handle the core cryptographic operations:
-//! - Computing leaf hashes for storage proof verification
-//! - Computing storage keys
+//! - Computing leaf hashes for ZK Merkle proof verification
+//! - Computing wormhole addresses from secrets
 //! - Generating ZK proofs from raw inputs
 
-use codec::Encode;
 use qp_wormhole_circuit::{
 	inputs::{CircuitInputs, PrivateCircuitInputs},
 	nullifier::Nullifier,
@@ -17,10 +16,9 @@ use qp_wormhole_circuit::{
 use qp_wormhole_inputs::PublicCircuitInputs;
 use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
-	storage_proof::prepare_proof_for_circuit,
 	utils::{digest_to_bytes, BytesDigest},
+	zk_merkle::SIBLINGS_PER_LEVEL,
 };
-use sp_core::crypto::AccountId32;
 use std::path::Path;
 
 /// Native asset id for QTU token
@@ -31,14 +29,6 @@ pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
 
 /// Volume fee rate in basis points (10 bps = 0.1%)
 pub const VOLUME_FEE_BPS: u32 = 10;
-
-/// Full transfer data type - used to compute the leaf_inputs_hash via Poseidon2.
-/// Order: (asset_id, transfer_count, from, to, amount)
-pub type TransferProofData = (u32, u64, AccountId32, AccountId32, u128);
-
-/// Storage key type - (wormhole_address, transfer_count)
-/// This is hashed with Blake2_256 to form the storage key suffix.
-pub type TransferProofKey = (AccountId32, u64);
 
 /// Result type for wormhole library operations
 pub type Result<T> = std::result::Result<T, WormholeLibError>;
@@ -71,26 +61,28 @@ pub struct ProofGenerationInput {
 	pub secret: [u8; 32],
 	/// Transfer count (atomic counter per recipient)
 	pub transfer_count: u64,
-	/// Funding account (sender) as 32 bytes
-	pub funding_account: [u8; 32],
 	/// Wormhole address (recipient/unspendable account) as 32 bytes
 	pub wormhole_address: [u8; 32],
-	/// Funding amount in planck (12 decimals)
-	pub funding_amount: u128,
+	/// Input amount (quantized, 2 decimals) - from ZK leaf data
+	pub input_amount: u32,
 	/// Block hash as 32 bytes
 	pub block_hash: [u8; 32],
 	/// Block number
 	pub block_number: u32,
 	/// Parent hash as 32 bytes
 	pub parent_hash: [u8; 32],
-	/// State root as 32 bytes
+	/// State root as 32 bytes (still needed for block hash computation)
 	pub state_root: [u8; 32],
 	/// Extrinsics root as 32 bytes
 	pub extrinsics_root: [u8; 32],
 	/// SCALE-encoded digest (variable length, padded to 110 bytes internally)
 	pub digest: Vec<u8>,
-	/// Storage proof nodes (each node is a Vec<u8>)
-	pub proof_nodes: Vec<Vec<u8>>,
+	/// ZK trie root (from block digest)
+	pub zk_trie_root: [u8; 32],
+	/// ZK Merkle proof siblings at each level (3 siblings per level, in sorted order)
+	pub zk_merkle_siblings: Vec<[[u8; 32]; SIBLINGS_PER_LEVEL]>,
+	/// Position hints (0-3) for each level
+	pub zk_merkle_positions: Vec<u8>,
 	/// Exit account 1 as 32 bytes
 	pub exit_account_1: [u8; 32],
 	/// Exit account 2 as 32 bytes (use zeros for single output)
@@ -113,67 +105,6 @@ pub struct ProofGenerationOutput {
 	/// Nullifier as 32 bytes (available for callers who need it)
 	#[allow(dead_code)]
 	pub nullifier: [u8; 32],
-}
-
-/// Compute the leaf hash (leaf_inputs_hash) for storage proof verification.
-///
-/// This uses Poseidon2 hashing via `hash_storage` to match the chain's
-/// PoseidonStorageHasher behavior.
-///
-/// # Arguments
-/// * `asset_id` - Asset ID (0 for native token)
-/// * `transfer_count` - Atomic transfer counter
-/// * `funding_account` - Sender account as 32 bytes
-/// * `wormhole_address` - Recipient (unspendable) account as 32 bytes
-/// * `amount` - Transfer amount in planck
-///
-/// # Returns
-/// 32-byte leaf hash
-pub fn compute_leaf_hash(
-	asset_id: u32,
-	transfer_count: u64,
-	funding_account: &[u8; 32],
-	wormhole_address: &[u8; 32],
-	amount: u128,
-) -> [u8; 32] {
-	// Use AccountId32 to match the chain's type exactly
-	let from_account = AccountId32::new(*funding_account);
-	let to_account = AccountId32::new(*wormhole_address);
-
-	let transfer_data: TransferProofData =
-		(asset_id, transfer_count, from_account, to_account, amount);
-	let encoded_data = transfer_data.encode();
-
-	qp_poseidon::PoseidonHasher::hash_storage::<TransferProofData>(&encoded_data)
-}
-
-/// Compute the storage key for a transfer proof.
-///
-/// The storage key is: Twox128("Wormhole") || Twox128("TransferProof") ||
-/// Blake2_256(wormhole_address, transfer_count)
-///
-/// # Arguments
-/// * `wormhole_address` - The unspendable wormhole account as 32 bytes
-/// * `transfer_count` - The atomic transfer counter
-///
-/// # Returns
-/// Full storage key as bytes
-pub fn compute_storage_key(wormhole_address: &[u8; 32], transfer_count: u64) -> Vec<u8> {
-	let pallet_hash = sp_core::twox_128(b"Wormhole");
-	let storage_hash = sp_core::twox_128(b"TransferProof");
-
-	let mut final_key = Vec::with_capacity(32 + 32);
-	final_key.extend_from_slice(&pallet_hash);
-	final_key.extend_from_slice(&storage_hash);
-
-	// Hash the key tuple with Blake2_256
-	let to_account = AccountId32::new(*wormhole_address);
-	let key_tuple: TransferProofKey = (to_account, transfer_count);
-	let encoded_key = key_tuple.encode();
-	let key_hash = sp_core::blake2_256(&encoded_key);
-	final_key.extend_from_slice(&key_hash);
-
-	final_key
 }
 
 /// Compute the unspendable wormhole account from a secret.
@@ -243,7 +174,7 @@ pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 /// It does not require a chain client - all data must be pre-fetched.
 ///
 /// # Arguments
-/// * `input` - All input data for proof generation
+/// * `input` - All input data for proof generation (including ZK Merkle proof)
 /// * `prover_bin_path` - Path to prover.bin
 /// * `common_bin_path` - Path to common.bin
 ///
@@ -260,26 +191,6 @@ pub fn generate_proof(
 		.try_into()
 		.map_err(|e| WormholeLibError::from(format!("Invalid secret: {:?}", e)))?;
 
-	// Compute leaf hash for storage proof
-	let leaf_hash = compute_leaf_hash(
-		input.asset_id,
-		input.transfer_count,
-		&input.funding_account,
-		&input.wormhole_address,
-		input.funding_amount,
-	);
-
-	// Prepare storage proof
-	let processed_proof = prepare_proof_for_circuit(
-		input.proof_nodes.clone(),
-		hex::encode(input.state_root),
-		leaf_hash,
-	)
-	.map_err(|e| WormholeLibError::from(format!("Storage proof preparation failed: {}", e)))?;
-
-	// Quantize input amount
-	let input_amount_quantized = quantize_amount(input.funding_amount)?;
-
 	// Compute nullifier
 	let nullifier = Nullifier::from_preimage(secret_digest, input.transfer_count);
 	let nullifier_bytes = digest_to_bytes(nullifier.hash);
@@ -289,22 +200,24 @@ pub fn generate_proof(
 		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret_digest);
 	let unspendable_bytes = digest_to_bytes(unspendable.account_id);
 
+	// Verify the wormhole address matches what we computed from the secret
+	if *unspendable_bytes != input.wormhole_address {
+		return Err(WormholeLibError::from(
+			"Wormhole address doesn't match the computed unspendable account from secret"
+				.to_string(),
+		));
+	}
+
 	// Prepare digest (padded to 110 bytes)
 	const DIGEST_LOGS_SIZE: usize = 110;
 	let mut digest_padded = [0u8; DIGEST_LOGS_SIZE];
 	let copy_len = input.digest.len().min(DIGEST_LOGS_SIZE);
 	digest_padded[..copy_len].copy_from_slice(&input.digest[..copy_len]);
 
-	// Build circuit inputs
+	// Build circuit inputs with ZK Merkle proof
 	let private = PrivateCircuitInputs {
 		secret: secret_digest,
 		transfer_count: input.transfer_count,
-		funding_account: input
-			.funding_account
-			.as_slice()
-			.try_into()
-			.map_err(|e| WormholeLibError::from(format!("Invalid funding account: {:?}", e)))?,
-		storage_proof: processed_proof,
 		unspendable_account: unspendable_bytes,
 		parent_hash: input
 			.parent_hash
@@ -322,7 +235,10 @@ pub fn generate_proof(
 			.try_into()
 			.map_err(|e| WormholeLibError::from(format!("Invalid extrinsics root: {:?}", e)))?,
 		digest: digest_padded,
-		input_amount: input_amount_quantized,
+		input_amount: input.input_amount,
+		zk_trie_root: input.zk_trie_root,
+		zk_merkle_siblings: input.zk_merkle_siblings.clone(),
+		zk_merkle_positions: input.zk_merkle_positions.clone(),
 	};
 
 	let public = PublicCircuitInputs {
@@ -393,11 +309,13 @@ mod tests {
 	}
 
 	#[test]
-	fn test_storage_key_computation() {
-		// Just verify it doesn't panic and returns expected length
-		let wormhole_address = [0u8; 32];
-		let key = compute_storage_key(&wormhole_address, 1);
-		// 16 (pallet) + 16 (storage) + 32 (blake2_256) = 64 bytes
-		assert_eq!(key.len(), 64);
+	fn test_compute_wormhole_address() {
+		// Just verify it doesn't panic and returns 32 bytes
+		let secret = [42u8; 32];
+		let address = compute_wormhole_address(&secret).unwrap();
+		assert_eq!(address.len(), 32);
+		// Should be deterministic
+		let address2 = compute_wormhole_address(&secret).unwrap();
+		assert_eq!(address, address2);
 	}
 }

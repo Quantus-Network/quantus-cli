@@ -74,6 +74,7 @@ impl SubsquidClient {
                         fee
                         fromHash
                         toHash
+                        leafIndex
                     }
                     totalCount
                 }
