@@ -41,10 +41,9 @@ pub use cli::multisig::{
 
 // Re-export wormhole library functions for SDK usage
 pub use wormhole_lib::{
-	compute_leaf_hash, compute_nullifier, compute_output_amount, compute_storage_key,
-	compute_wormhole_address, generate_proof as generate_wormhole_proof, quantize_amount,
-	ProofGenerationInput, ProofGenerationOutput, TransferProofData, TransferProofKey,
-	WormholeLibError, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
+	compute_nullifier, compute_output_amount, compute_wormhole_address,
+	generate_proof as generate_wormhole_proof, quantize_amount, ProofGenerationInput,
+	ProofGenerationOutput, WormholeLibError, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
 };
 
 /// Library version

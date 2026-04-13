@@ -78,19 +78,19 @@ subxt-metadata = "0.44"
 anyhow = "1.0"
 
 qp-plonky2 = { version = "1.4.1", default-features = false, features = ["rand", "std"] }
-qp-wormhole-circuit = { version = "1.4.2", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "1.4.2", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "1.4.2", default-features = false, features = ["std"] }
-qp-wormhole-aggregator = { version = "1.4.2", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-inputs = { version = "1.4.2", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "1.4.2", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = { version = "1.4.2" }
+qp-wormhole-circuit = { version = "2.0.1", default-features = false, features = ["std"] }
+qp-wormhole-prover = { version = "2.0.1", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { version = "2.0.1", default-features = false, features = ["std"] }
+qp-wormhole-aggregator = { version = "2.0.1", default-features = false, features = ["rayon", "std"] }
+qp-wormhole-inputs = { version = "2.0.1", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { version = "2.0.1", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { version = "2.0.1" }
 
 
 [build-dependencies]
 hex = "0.4"
 qp-poseidon-core = "1.4.0"
-qp-wormhole-circuit-builder = { version = "1.4.2" }
+qp-wormhole-circuit-builder = { version = "2.0.1" }
 
 [dev-dependencies]
 tempfile = "3.8.1"

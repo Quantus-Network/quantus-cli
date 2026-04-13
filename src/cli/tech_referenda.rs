@@ -412,10 +412,7 @@ async fn submit_runtime_upgrade_with_preimage(
 
 	let tx_hash =
 		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
-	log_success!(
-		"Runtime upgrade proposal submitted! Hash: {:?}",
-		tx_hash
-	);
+	log_success!("Runtime upgrade proposal submitted! Hash: {:?}", tx_hash);
 
 	log_print!("💡 Use 'quantus tech-referenda list' to see active proposals");
 	Ok(())
@@ -493,10 +490,7 @@ async fn submit_treasury_portion_with_preimage(
 
 	let tx_hash =
 		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
-	log_success!(
-		"Treasury portion proposal submitted! Hash: {:?}",
-		tx_hash
-	);
+	log_success!("Treasury portion proposal submitted! Hash: {:?}", tx_hash);
 
 	log_print!("💡 Use 'quantus tech-referenda list' to see active proposals");
 	Ok(())

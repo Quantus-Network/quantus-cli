@@ -197,9 +197,14 @@ pub async fn vote_on_referendum(
 	let wait_mode =
 		crate::cli::common::ExecutionMode { wait_for_transaction: true, ..execution_mode };
 
-	let tx_hash =
-		crate::cli::common::submit_transaction(quantus_client, from_keypair, vote_call, None, wait_mode)
-			.await?;
+	let tx_hash = crate::cli::common::submit_transaction(
+		quantus_client,
+		from_keypair,
+		vote_call,
+		None,
+		wait_mode,
+	)
+	.await?;
 
 	log_verbose!("📋 Vote transaction confirmed: {:?}", tx_hash);
 

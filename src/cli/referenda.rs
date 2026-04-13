@@ -1,9 +1,10 @@
 //! `quantus referenda` subcommand - manage standard Referenda proposals
 use crate::{
-	chain::quantus_subxt, cli::common::submit_transaction, error::QuantusError, log_error,
-	log_print, log_success, log_verbose,
+	chain::quantus_subxt,
+	cli::{common::submit_transaction, tech_collective::VoteChoice},
+	error::QuantusError,
+	log_error, log_print, log_success, log_verbose,
 };
-use crate::cli::tech_collective::VoteChoice;
 use clap::Subcommand;
 use colored::Colorize;
 use std::str::FromStr;
