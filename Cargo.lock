@@ -3830,7 +3830,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-aggregator"
-version = "1.4.2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ba5a23eea8e17c97632f5056d1fecdb83d2e997f79d823fb97c514823fce8580"
 dependencies = [
  "anyhow",
  "hex",
@@ -3847,7 +3849,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit"
-version = "1.4.2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b72abd3357e1c486621431109d83a259076ed941fcc7f035353a629940c443d9"
 dependencies = [
  "anyhow",
  "hex",
@@ -3858,7 +3862,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-circuit-builder"
-version = "1.4.2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d27c981d34a35cb10ee96e16c1fb44fbb4c52f3e58a787ce089c21bf5469514"
 dependencies = [
  "anyhow",
  "clap",
@@ -3870,14 +3876,18 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-inputs"
-version = "1.4.2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f69e54a0f450d349cb1169bbb743a7a846475a1210760308e38f55841e5aa5c0"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "qp-wormhole-prover"
-version = "1.4.2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68cee4d6a0317f89d1ec7a6c40a9592e5525c75b9cb21bd7d5d3b408301068bd"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -3888,9 +3898,9 @@ dependencies = [
 
 [[package]]
 name = "qp-wormhole-verifier"
-version = "1.4.2"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf5d21d7c8c07cfa7bfea14240c63d09fad5c1396b111ab72063dbe07aeae121"
+checksum = "83f7c0134a766c6624183d129abf12523247e38fc27860e3a9778f73321008ae"
 dependencies = [
  "anyhow",
  "qp-plonky2-verifier",
@@ -3899,7 +3909,9 @@ dependencies = [
 
 [[package]]
 name = "qp-zk-circuits-common"
-version = "1.4.2"
+version = "2.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6d5e1d764560fd797f71defbf75a1618596945c53e33033ac42cc7c2e4689f6"
 dependencies = [
  "anyhow",
  "hex",
