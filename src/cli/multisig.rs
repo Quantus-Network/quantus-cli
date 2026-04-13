@@ -1458,7 +1458,10 @@ fn log_proposal_result(multisig_ss58: &str, proposal_id: Option<u32>) {
 		);
 	} else {
 		log_success!("✅ Proposal confirmed on-chain");
-		log_print!("   Run `quantus multisig list-proposals --address {}` to find the proposal ID", multisig_ss58);
+		log_print!(
+			"   Run `quantus multisig list-proposals --address {}` to find the proposal ID",
+			multisig_ss58
+		);
 	}
 }
 
