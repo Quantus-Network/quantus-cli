@@ -138,30 +138,42 @@ mod siblings_format {
 	}
 }
 
-/// Fetch a ZK Merkle proof from the chain via RPC.
+/// Fetch a ZK Merkle proof from the chain via RPC at a specific block.
 ///
 /// # Arguments
 /// * `quantus_client` - The chain client
 /// * `leaf_index` - The index of the leaf to get the proof for
+/// * `at_block` - The block hash to fetch the proof at (MUST match the block you're proving against)
 ///
 /// # Returns
 /// The Merkle proof if the leaf exists, or an error
-#[allow(dead_code)] // Will be used when ZK trie is deployed to production
+///
+/// # Important
+/// The `at_block` parameter is critical for ZK proof generation. The tree root changes
+/// with each block, so the Merkle proof MUST be fetched at the same block whose header
+/// you're including in the ZK proof.
+#[allow(dead_code)] // Will be used when ZK tree is deployed to production
 pub async fn get_zk_merkle_proof(
 	quantus_client: &QuantusClient,
 	leaf_index: u64,
+	at_block: subxt::utils::H256,
 ) -> crate::error::Result<ZkMerkleProofRpc> {
-	let proof_params = rpc_params![leaf_index];
+	let proof_params = rpc_params![leaf_index, at_block];
 	let proof: Option<ZkMerkleProofRpc> = quantus_client
 		.rpc_client()
 		.request("zkTree_getMerkleProof", proof_params)
 		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("RPC error: {}", e)))?;
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"RPC error fetching proof at block {:?}: {}",
+				at_block, e
+			))
+		})?;
 
 	proof.ok_or_else(|| {
 		crate::error::QuantusError::Generic(format!(
-			"Leaf index {} not found in ZK tree",
-			leaf_index
+			"Leaf index {} not found in ZK tree at block {:?}",
+			leaf_index, at_block
 		))
 	})
 }
@@ -2123,13 +2135,18 @@ async fn generate_proof(
 		})?;
 
 	// Fetch ZK Merkle proof from chain via RPC using the leaf_index
-	let proof_params = rpc_params![leaf_index];
+	// CRITICAL: We MUST fetch the proof at the same block we're proving against.
+	// The tree root changes with each block, so proof must match header.zk_tree_root.
+	let proof_params = rpc_params![leaf_index, block_hash];
 	let zk_proof: Option<ZkMerkleProofRpc> = quantus_client
 		.rpc_client()
 		.request("zkTree_getMerkleProof", proof_params)
 		.await
 		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to get ZK Merkle proof: {}", e))
+			crate::error::QuantusError::Generic(format!(
+				"Failed to get ZK Merkle proof at block {:?}: {}",
+				block_hash, e
+			))
 		})?;
 
 	let zk_proof = zk_proof.ok_or_else(|| {
