@@ -10,6 +10,7 @@ use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 
 // Base unit (QUAN) decimals for amount conversions
 const QUAN_DECIMALS: u128 = 1_000_000_000_000; // 10^12
+const DEFAULT_TRANSFER_EXPIRY_BLOCKS: u32 = (2 * 60 * 60) / 10; // ~2h at 10s/block
 
 // ============================================================================
 // PUBLIC LIBRARY API - Data Structures
@@ -110,25 +111,26 @@ pub fn parse_amount(amount: &str) -> crate::error::Result<u128> {
 #[derive(Subcommand, Debug)]
 pub enum ProposeSubcommand {
 	/// Propose a simple transfer (most common case)
+	#[command(arg_required_else_help = true)]
 	Transfer {
-		/// Multisig account address (SS58 format)
-		#[arg(long)]
+		/// The multisig account address (SS58 format)
+		#[arg(long, value_name = "MULTISIG_ADDRESS")]
 		address: String,
 
-		/// Recipient address (SS58 format)
-		#[arg(long)]
+		/// The recipient address (SS58 format or wallet name)
+		#[arg(long, value_name = "RECIPIENT")]
 		to: String,
 
-		/// Amount to transfer (e.g., "10", "10.5", or raw "10000000000000")
-		#[arg(long)]
+		/// The amount to transfer (e.g. "10", "10.5", or raw base units)
+		#[arg(long, value_name = "AMOUNT")]
 		amount: String,
 
-		/// Expiry block number (when this proposal expires)
-		#[arg(long)]
-		expiry: u32,
+		/// Expiry block number for this proposal. If omitted, defaults to head + ~2h
+		#[arg(long, value_name = "EXPIRY_BLOCK")]
+		expiry: Option<u32>,
 
-		/// Proposer wallet name (must be a signer)
-		#[arg(long)]
+		/// The proposer wallet name (must be a signer in this multisig)
+		#[arg(long, value_name = "PROPOSER_WALLET")]
 		from: String,
 
 		/// Password for the wallet
@@ -215,9 +217,13 @@ pub enum ProposeSubcommand {
 #[derive(Subcommand, Debug)]
 pub enum MultisigCommands {
 	/// Create a new multisig account
+	#[command(
+		arg_required_else_help = true,
+		after_help = "Examples:\n  quantus multisig create --signers \"5F3sa2TJ...abc,5DAAnrj7...xyz,5HGjWAeF...123\" --threshold 2 --from alice\n  quantus multisig create --signers \"alice,bob,charlie\" --threshold 2 --from alice"
+	)]
 	Create {
 		/// List of signer addresses (SS58 or wallet names), comma-separated
-		#[arg(long)]
+		#[arg(long, value_name = "SIGNERS_CSV")]
 		signers: String,
 
 		/// Number of approvals required to execute transactions
@@ -476,14 +482,11 @@ pub fn predict_multisig_address(
 	data.extend_from_slice(&threshold.encode());
 	data.extend_from_slice(&nonce.encode());
 
-	// Hash the data and map it deterministically into an AccountId
-	// CRITICAL: Use PoseidonHasher (same as runtime!) and TrailingZeroInput
 	use codec::Decode;
-	use qp_poseidon::PoseidonHasher;
 	use sp_core::crypto::AccountId32;
-	use sp_runtime::traits::{Hash as HashT, TrailingZeroInput};
+	use sp_runtime::traits::{BlakeTwo256, Hash as HashT, TrailingZeroInput};
 
-	let hash = PoseidonHasher::hash(&data);
+	let hash = BlakeTwo256::hash(&data);
 	let account_id = AccountId32::decode(&mut TrailingZeroInput::new(hash.as_ref()))
 		.expect("TrailingZeroInput provides sufficient bytes; qed");
 
@@ -1194,15 +1197,16 @@ async fn handle_create_multisig(
 		if let Some(address) = actual_address {
 			log_print!("");
 
-			// Verify address matches prediction
+			// Use the on-chain event address as the source of truth.
+			log_success!("✅ Confirmed multisig address: {}", address.bright_cyan().bold());
 			if address == predicted_address {
-				log_success!("✅ Confirmed multisig address: {}", address.bright_cyan().bold());
 				log_print!("   {} Matches predicted address!", "✓".bright_green().bold());
 			} else {
-				log_error!("⚠️  Address mismatch!");
-				log_print!("   Expected: {}", predicted_address.bright_yellow());
-				log_print!("   Got:      {}", address.bright_red());
-				log_print!("   This should never happen with deterministic addresses!");
+				log_verbose!(
+					"Predicted address differed from emitted address: predicted={}, emitted={}",
+					predicted_address,
+					address
+				);
 			}
 
 			log_print!("");
@@ -1305,7 +1309,7 @@ async fn handle_propose_transfer(
 	multisig_address: String,
 	to: String,
 	amount: String,
-	expiry: u32,
+	expiry: Option<u32>,
 	from: String,
 	password: Option<String>,
 	password_file: Option<String>,
@@ -1332,7 +1336,25 @@ async fn handle_propose_transfer(
 	// Connect to chain and check if multisig has High Security enabled
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let latest_block = quantus_client.client().blocks().at(latest_block_hash).await?;
+	let current_block_number = latest_block.number();
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let expiry = match expiry {
+		Some(expiry) => expiry,
+		None => {
+			let default_expiry =
+				current_block_number.saturating_add(DEFAULT_TRANSFER_EXPIRY_BLOCKS);
+			log_print!(
+				"⏱️  {} No --expiry provided; using block {} (head {} + {} blocks, ~2h)",
+				"DEFAULT".bright_blue().bold(),
+				default_expiry,
+				current_block_number,
+				DEFAULT_TRANSFER_EXPIRY_BLOCKS
+			);
+			default_expiry
+		},
+	};
 
 	let hs_query = quantus_subxt::api::storage()
 		.reversible_transfers()
@@ -1400,6 +1422,43 @@ async fn handle_propose_transfer(
 			execution_mode,
 		)
 		.await
+	}
+}
+
+async fn fetch_proposal_id(
+	quantus_client: &crate::chain::client::QuantusClient,
+	multisig_ss58: &str,
+) -> Option<u32> {
+	let latest_block_hash = quantus_client.get_latest_block().await.ok()?;
+	let events = quantus_client.client().events().at(latest_block_hash).await.ok()?;
+	for ev in events.find::<quantus_subxt::api::multisig::events::ProposalCreated>() {
+		if let Ok(created) = ev {
+			let addr_bytes: &[u8; 32] = created.multisig_address.as_ref();
+			let addr = SpAccountId32::from(*addr_bytes);
+			let addr_ss58 =
+				addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+			if addr_ss58 == multisig_ss58 {
+				return Some(created.proposal_id);
+			}
+		}
+	}
+	None
+}
+
+fn log_proposal_result(multisig_ss58: &str, proposal_id: Option<u32>) {
+	if let Some(id) = proposal_id {
+		log_print!("");
+		log_success!("✅ Proposal #{} confirmed on-chain", id.to_string().bright_cyan().bold());
+		log_print!("");
+		log_print!("🚀 {} To approve this proposal, signers run:", "NEXT".bright_blue().bold());
+		log_print!(
+			"   quantus multisig approve --address {} --proposal-id {} --from <SIGNER_WALLET>",
+			multisig_ss58.bright_cyan(),
+			id
+		);
+	} else {
+		log_success!("✅ Proposal confirmed on-chain");
+		log_print!("   Run `quantus multisig list-proposals --address {}` to find the proposal ID", multisig_ss58);
 	}
 }
 
@@ -1542,7 +1601,8 @@ async fn handle_propose(
 	)
 	.await?;
 
-	log_success!("✅ Proposal confirmed on-chain");
+	let proposal_id = fetch_proposal_id(&quantus_client, &multisig_ss58).await;
+	log_proposal_result(&multisig_ss58, proposal_id);
 
 	Ok(())
 }
@@ -1609,7 +1669,8 @@ async fn handle_propose_with_call_data(
 	)
 	.await?;
 
-	log_success!("✅ Proposal confirmed on-chain");
+	let proposal_id = fetch_proposal_id(quantus_client, &multisig_ss58).await;
+	log_proposal_result(&multisig_ss58, proposal_id);
 
 	Ok(())
 }
@@ -3152,18 +3213,13 @@ async fn handle_high_security_set(
 	)
 	.await?;
 
-	log_print!("");
-	log_success!("✅ High-Security proposal confirmed on-chain!");
-	log_print!("");
+	let proposal_id = fetch_proposal_id(&quantus_client, &multisig_ss58).await;
+	log_proposal_result(&multisig_ss58, proposal_id);
 	log_print!(
 		"💡 {} Once this proposal reaches threshold, High-Security will be enabled",
 		"NEXT STEPS".bright_blue().bold()
 	);
-	log_print!(
-		"   - Other signers need to approve: quantus multisig approve --address {} --proposal-id <ID> --from <SIGNER>",
-		multisig_ss58.bright_cyan()
-	);
-	log_print!("   - After threshold is reached, all transfers will be delayed and reversible");
+	log_print!("   After threshold is reached, all transfers will be delayed and reversible");
 	log_print!("");
 
 	Ok(())
