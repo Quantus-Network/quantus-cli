@@ -521,6 +521,38 @@ fn format_dispatch_error(
 	}
 }
 
+/// Submit a preimage, treating AlreadyNoted as success (idempotent).
+/// Always waits for inclusion so subsequent txs from the same sender get a fresh nonce.
+pub async fn submit_preimage(
+	quantus_client: &crate::chain::client::QuantusClient,
+	keypair: &crate::wallet::QuantumKeyPair,
+	encoded_call: Vec<u8>,
+	execution_mode: ExecutionMode,
+) -> Result<()> {
+	type PreimageBytes =
+		crate::chain::quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
+	let bounded_bytes: PreimageBytes = encoded_call;
+
+	crate::log_print!("📝 Submitting preimage...");
+	let note_preimage_tx =
+		crate::chain::quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
+	let wait_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
+
+	match submit_transaction(quantus_client, keypair, note_preimage_tx, None, wait_mode).await {
+		Ok(_) => {
+			crate::log_success!("Preimage submitted");
+		},
+		Err(e) if e.to_string().contains("AlreadyNoted") => {
+			crate::log_print!(
+				"✅ {} Preimage already exists on-chain, continuing",
+				"OK".bright_green().bold()
+			);
+		},
+		Err(e) => return Err(e),
+	}
+	Ok(())
+}
+
 async fn check_execution_success(
 	client: &OnlineClient<ChainConfig>,
 	block_hash: &subxt::utils::H256,
