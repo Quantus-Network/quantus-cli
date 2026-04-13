@@ -1431,15 +1431,14 @@ async fn fetch_proposal_id(
 ) -> Option<u32> {
 	let latest_block_hash = quantus_client.get_latest_block().await.ok()?;
 	let events = quantus_client.client().events().at(latest_block_hash).await.ok()?;
-	for ev in events.find::<quantus_subxt::api::multisig::events::ProposalCreated>() {
-		if let Ok(created) = ev {
-			let addr_bytes: &[u8; 32] = created.multisig_address.as_ref();
-			let addr = SpAccountId32::from(*addr_bytes);
-			let addr_ss58 =
-				addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
-			if addr_ss58 == multisig_ss58 {
-				return Some(created.proposal_id);
-			}
+	for created in events.find::<quantus_subxt::api::multisig::events::ProposalCreated>().flatten()
+	{
+		let addr_bytes: &[u8; 32] = created.multisig_address.as_ref();
+		let addr = SpAccountId32::from(*addr_bytes);
+		let addr_ss58 =
+			addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+		if addr_ss58 == multisig_ss58 {
+			return Some(created.proposal_id);
 		}
 	}
 	None
