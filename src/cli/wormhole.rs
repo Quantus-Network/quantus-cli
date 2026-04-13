@@ -48,15 +48,15 @@ pub use crate::wormhole_lib::{
 };
 
 // ============================================================================
-// ZK Trie Types (for 4-ary Poseidon Merkle proofs)
+// ZK Tree Types (for 4-ary Poseidon Merkle proofs)
 // ============================================================================
 
 /// A 32-byte hash output.
 pub type Hash256 = [u8; 32];
 
-/// Merkle proof from the ZK trie RPC.
+/// Merkle proof from the ZK tree RPC.
 ///
-/// This is the client-side representation of the proof returned by `zkTrie_getMerkleProof`.
+/// This is the client-side representation of the proof returned by `zkTree_getMerkleProof`.
 /// Siblings are unsorted - the client computes position hints by sorting siblings + current hash.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)] // Fields used for deserialization and future use when ZK trie is deployed
@@ -154,13 +154,13 @@ pub async fn get_zk_merkle_proof(
 	let proof_params = rpc_params![leaf_index];
 	let proof: Option<ZkMerkleProofRpc> = quantus_client
 		.rpc_client()
-		.request("zkTrie_getMerkleProof", proof_params)
+		.request("zkTree_getMerkleProof", proof_params)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("RPC error: {}", e)))?;
 
 	proof.ok_or_else(|| {
 		crate::error::QuantusError::Generic(format!(
-			"Leaf index {} not found in ZK trie",
+			"Leaf index {} not found in ZK tree",
 			leaf_index
 		))
 	})
@@ -848,10 +848,12 @@ pub async fn handle_wormhole_command(
 			Ok(())
 		},
 		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
-		WormholeCommands::VerifyAggregated { proof } =>
-			verify_aggregated_proof(proof, node_url).await,
-		WormholeCommands::ParseProof { proof, aggregated, verify } =>
-			parse_proof_file(proof, aggregated, verify).await,
+		WormholeCommands::VerifyAggregated { proof } => {
+			verify_aggregated_proof(proof, node_url).await
+		},
+		WormholeCommands::ParseProof { proof, aggregated, verify } => {
+			parse_proof_file(proof, aggregated, verify).await
+		},
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -906,14 +908,14 @@ pub async fn handle_wormhole_command(
 			.await
 		},
 		WormholeCommands::Fuzz { wallet: _, password: _, password_file: _, amount: _ } => {
-			// TODO: Re-enable fuzz tests once ZK trie is deployed to a test chain.
-			// The fuzz tests need to be rewritten to use zkTrie_getMerkleProof RPC
+			// TODO: Re-enable fuzz tests once ZK tree is deployed to a test chain.
+			// The fuzz tests need to be rewritten to use zkTree_getMerkleProof RPC
 			// instead of the old state_getReadProof storage proofs.
 			// See run_fuzz_test() and try_generate_fuzz_proof() below for the old implementation.
 			Err(crate::error::QuantusError::Generic(
-				"Fuzz testing is temporarily disabled during the migration to ZK trie proofs. \
-				 The fuzz tests require a chain with pallet-zk-trie deployed and the \
-				 zkTrie_getMerkleProof RPC endpoint available."
+				"Fuzz testing is temporarily disabled during the migration to ZK tree proofs. \
+				 The fuzz tests require a chain with pallet-zk-tree deployed and the \
+				 zkTree_getMerkleProof RPC endpoint available."
 					.to_string(),
 			))
 		},
@@ -921,7 +923,7 @@ pub async fn handle_wormhole_command(
 }
 
 // NOTE: TransferProofKey and TransferProofData type aliases were removed during
-// the migration to ZK trie. The new ZK leaf structure is:
+// the migration to ZK tree. The new ZK leaf structure is:
 // (to: AccountId32, transfer_count: u64, asset_id: u32, amount: u32)
 // No longer includes `from` (funding_account).
 
@@ -2124,7 +2126,7 @@ async fn generate_proof(
 	let proof_params = rpc_params![leaf_index];
 	let zk_proof: Option<ZkMerkleProofRpc> = quantus_client
 		.rpc_client()
-		.request("zkTrie_getMerkleProof", proof_params)
+		.request("zkTree_getMerkleProof", proof_params)
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to get ZK Merkle proof: {}", e))
@@ -2168,7 +2170,7 @@ async fn generate_proof(
 		state_root,
 		extrinsics_root,
 		digest,
-		zk_trie_root: zk_proof.root,
+		zk_tree_root: zk_proof.root,
 		zk_merkle_siblings: sorted_siblings,
 		zk_merkle_positions: positions,
 		exit_account_1: output_assignment.exit_account_1,
@@ -2940,12 +2942,12 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 // =============================================================================
 //
 // The fuzz tests below are temporarily disabled during the migration from MPT
-// storage proofs to ZK trie Merkle proofs. To re-enable:
+// storage proofs to ZK tree Merkle proofs. To re-enable:
 //
-// 1. Deploy pallet-zk-trie to a test chain
-// 2. Update run_fuzz_test() to use zkTrie_getMerkleProof RPC instead of state_getReadProof
+// 1. Deploy pallet-zk-tree to a test chain
+// 2. Update run_fuzz_test() to use zkTree_getMerkleProof RPC instead of state_getReadProof
 // 3. Update try_generate_fuzz_proof() to use the new PrivateCircuitInputs fields:
-//    - zk_trie_root: [u8; 32]
+//    - zk_tree_root: [u8; 32]
 //    - zk_merkle_siblings: Vec<[[u8; 32]; 3]>
 //    - zk_merkle_positions: Vec<u8>
 // 4. Note: The ZK leaf no longer contains `from` (funding_account) - it's now: (to: AccountId,
@@ -2956,16 +2958,16 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 // how to construct ZK Merkle proofs for testing.
 // =============================================================================
 
-// TODO: Re-enable fuzz tests once ZK trie is deployed
+// TODO: Re-enable fuzz tests once ZK tree is deployed
 // The old implementation used:
 // - state_getReadProof RPC to fetch MPT storage proofs
 // - prepare_proof_for_circuit() to process proofs
 // - PrivateCircuitInputs with funding_account and storage_proof fields
 //
 // The new implementation should:
-// - Use zkTrie_getMerkleProof RPC
+// - Use zkTree_getMerkleProof RPC
 // - Directly use ZkMerkleProofRpc response (siblings, positions)
-// - Use PrivateCircuitInputs with zk_trie_root, zk_merkle_siblings, zk_merkle_positions
+// - Use PrivateCircuitInputs with zk_tree_root, zk_merkle_siblings, zk_merkle_positions
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -3081,8 +3083,8 @@ mod tests {
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
 		assert_eq!(output_medium, 9990);
 		assert!(
-			(output_medium as u64) * 10000 <=
-				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
+			(output_medium as u64) * 10000
+				<= (input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
 		// Large amounts near u32::MAX

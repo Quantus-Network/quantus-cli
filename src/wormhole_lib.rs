@@ -77,8 +77,8 @@ pub struct ProofGenerationInput {
 	pub extrinsics_root: [u8; 32],
 	/// SCALE-encoded digest (variable length, padded to 110 bytes internally)
 	pub digest: Vec<u8>,
-	/// ZK trie root (from block digest)
-	pub zk_trie_root: [u8; 32],
+	/// ZK tree root (from block header's zk_tree_root field)
+	pub zk_tree_root: [u8; 32],
 	/// ZK Merkle proof siblings at each level (3 siblings per level, in sorted order)
 	pub zk_merkle_siblings: Vec<[[u8; 32]; SIBLINGS_PER_LEVEL]>,
 	/// Position hints (0-3) for each level
@@ -236,7 +236,7 @@ pub fn generate_proof(
 			.map_err(|e| WormholeLibError::from(format!("Invalid extrinsics root: {:?}", e)))?,
 		digest: digest_padded,
 		input_amount: input.input_amount,
-		zk_trie_root: input.zk_trie_root,
+		zk_tree_root: input.zk_tree_root,
 		zk_merkle_siblings: input.zk_merkle_siblings.clone(),
 		zk_merkle_positions: input.zk_merkle_positions.clone(),
 	};

@@ -1,12 +1,12 @@
 //! Integration tests for wormhole proof verification on-chain
 //!
 //! **TEMPORARILY DISABLED** - These tests use the old MPT storage proof workflow.
-//! They need to be rewritten to use ZK trie Merkle proofs once pallet-zk-trie is deployed.
+//! They need to be rewritten to use ZK tree Merkle proofs once pallet-zk-tree is deployed.
 //!
 //! To re-enable these tests:
-//! 1. Deploy pallet-zk-trie to a test chain
-//! 2. Update the tests to use zkTrie_getMerkleProof RPC
-//! 3. Update PrivateCircuitInputs to use zk_trie_root, zk_merkle_siblings, zk_merkle_positions
+//! 1. Deploy pallet-zk-tree to a test chain
+//! 2. Update the tests to use zkTree_getMerkleProof RPC
+//! 3. Update PrivateCircuitInputs to use zk_tree_root, zk_merkle_siblings, zk_merkle_positions
 //! 4. Remove the #![cfg(feature = "legacy_storage_proofs")] flag below
 //!
 //! Original description:
