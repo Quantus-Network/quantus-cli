@@ -6,7 +6,6 @@
 use crate::{error::QuantusError, log_verbose};
 use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
 use qp_dilithium_crypto::types::DilithiumSignatureScheme;
-use qp_poseidon::PoseidonHasher;
 use sp_core::{crypto::AccountId32, ByteArray};
 use sp_runtime::{traits::IdentifyAccount, MultiAddress};
 use std::{sync::Arc, time::Duration};
@@ -18,17 +17,17 @@ use subxt::{
 use subxt_metadata::Metadata as SubxtMetadata;
 
 #[derive(Debug, Clone, Copy)]
-pub struct SubxtPoseidonHasher;
+pub struct SubxtBlake2bHasher;
 
-impl subxt::config::Hasher for SubxtPoseidonHasher {
+impl subxt::config::Hasher for SubxtBlake2bHasher {
 	type Output = sp_core::H256;
 
 	fn new(_metadata: &SubxtMetadata) -> Self {
-		SubxtPoseidonHasher
+		SubxtBlake2bHasher
 	}
 
 	fn hash(&self, bytes: &[u8]) -> Self::Output {
-		<PoseidonHasher as sp_runtime::traits::Hash>::hash(bytes)
+		<sp_runtime::traits::BlakeTwo256 as sp_runtime::traits::Hash>::hash(bytes)
 	}
 }
 
@@ -38,8 +37,8 @@ impl Config for ChainConfig {
 	type AccountId = AccountId32;
 	type Address = MultiAddress<Self::AccountId, ()>;
 	type Signature = DilithiumSignatureScheme;
-	type Hasher = SubxtPoseidonHasher;
-	type Header = SubstrateHeader<u32, SubxtPoseidonHasher>;
+	type Hasher = SubxtBlake2bHasher;
+	type Header = SubstrateHeader<u32, SubxtBlake2bHasher>;
 	type AssetId = u32;
 	type ExtrinsicParams = DefaultExtrinsicParams<Self>;
 }

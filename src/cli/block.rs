@@ -7,8 +7,8 @@ use crate::{
 };
 use clap::Subcommand;
 use colored::Colorize;
-use qp_poseidon::PoseidonHasher;
 use sp_core::crypto::Ss58Codec;
+use sp_runtime::traits::Hash;
 use std::str::FromStr;
 use subxt::events::EventDetails;
 
@@ -706,8 +706,8 @@ fn summarize_extrinsic(ext_hex: &str) -> (usize, String, String) {
 		(ext_str.as_bytes().to_vec(), ext_str.len())
 	};
 
-	// Compute extrinsic hash using Poseidon (chain hasher)
-	let h = <PoseidonHasher as sp_runtime::traits::Hash>::hash(&bytes);
+	// Compute extrinsic hash using Blake2b (chain hasher)
+	let h = sp_runtime::traits::BlakeTwo256::hash(&bytes);
 	let hash_hex = format!("{h:#x}");
 
 	let preview = if ext_str.len() > 20 { ext_str[..20].to_string() } else { ext_str.to_string() };
