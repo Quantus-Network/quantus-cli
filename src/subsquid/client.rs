@@ -75,6 +75,7 @@ impl SubsquidClient {
                         fromHash
                         toHash
                         leafIndex
+                        transferCount
                     }
                     totalCount
                 }

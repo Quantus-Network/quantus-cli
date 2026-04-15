@@ -41,6 +41,9 @@ pub struct Transfer {
 
 	/// Index in the ZK trie for Merkle proof generation
 	pub leaf_index: String,
+
+	/// Transfer count from Wormhole pallet - required for nullifier computation
+	pub transfer_count: String,
 }
 
 /// Result from a prefix query.
@@ -190,7 +193,8 @@ mod tests {
             "fee": "1000000",
             "fromHash": "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
             "toHash": "5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh",
-            "leafIndex": "42"
+            "leafIndex": "42",
+            "transferCount": "100"
         }"#;
 
 		let transfer: Transfer = serde_json::from_str(json).expect("should deserialize");
@@ -205,6 +209,7 @@ mod tests {
 		assert_eq!(transfer.amount, "1000000000000");
 		assert_eq!(transfer.fee, "1000000");
 		assert_eq!(transfer.leaf_index, "42");
+		assert_eq!(transfer.transfer_count, "100");
 	}
 
 	#[test]
@@ -221,7 +226,8 @@ mod tests {
             "fee": "1000000",
             "fromHash": "abcd1234",
             "toHash": "5678efgh",
-            "leafIndex": "0"
+            "leafIndex": "0",
+            "transferCount": "1"
         }"#;
 
 		let transfer: Transfer = serde_json::from_str(json).expect("should deserialize");

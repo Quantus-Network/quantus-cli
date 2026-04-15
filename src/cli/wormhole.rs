@@ -802,6 +802,58 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "1.0")]
 		amount: f64,
 	},
+	/// Collect miner rewards from a wormhole address.
+	///
+	/// This command queries Subsquid for pending transfers to your wormhole address,
+	/// generates ZK proofs, and submits a withdrawal transaction to claim your rewards.
+	/// It mirrors the withdrawal flow used by the miner app.
+	CollectRewards {
+		/// Wallet name (used for HD derivation of wormhole secret and exit address)
+		/// Either --wallet or --mnemonic must be provided.
+		#[arg(short, long, required_unless_present = "mnemonic")]
+		wallet: Option<String>,
+
+		/// Mnemonic phrase for HD derivation (alternative to --wallet)
+		/// Use this to derive wormhole secrets without a stored wallet.
+		#[arg(short = 'm', long, required_unless_present = "wallet")]
+		mnemonic: Option<String>,
+
+		/// Password for the wallet (only used with --wallet)
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file (only used with --wallet)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Amount in DEV to withdraw (default: withdraw all available)
+		#[arg(short, long)]
+		amount: Option<f64>,
+
+		/// Destination address for withdrawn funds (required when using --mnemonic)
+		#[arg(long)]
+		destination: Option<String>,
+
+		/// Subsquid indexer URL for querying transfers
+		#[arg(long)]
+		subsquid_url: String,
+
+		/// Wormhole address index for HD derivation (default: 0)
+		#[arg(long, default_value = "0")]
+		wormhole_index: usize,
+
+		/// Output directory for proof files
+		#[arg(short, long, default_value = "/tmp/wormhole_collect")]
+		output_dir: String,
+
+		/// Keep proof files after completion
+		#[arg(short, long)]
+		keep_files: bool,
+
+		/// Dry run - show available transfers without withdrawing
+		#[arg(long)]
+		dry_run: bool,
+	},
 }
 
 pub async fn handle_wormhole_command(
@@ -930,6 +982,34 @@ pub async fn handle_wormhole_command(
 					.to_string(),
 			))
 		},
+		WormholeCommands::CollectRewards {
+			wallet,
+			mnemonic,
+			password,
+			password_file,
+			amount,
+			destination,
+			subsquid_url,
+			wormhole_index,
+			output_dir,
+			keep_files,
+			dry_run,
+		} =>
+			run_collect_rewards(
+				wallet,
+				mnemonic,
+				password,
+				password_file,
+				amount,
+				destination,
+				subsquid_url,
+				wormhole_index,
+				output_dir,
+				keep_files,
+				dry_run,
+				node_url,
+			)
+			.await,
 	}
 }
 
@@ -2904,6 +2984,368 @@ async fn run_dissolve(
 	if keep_files {
 		log_print!("  Proof files preserved in: {}", output_dir);
 	} else {
+		log_print!("  Cleaning up proof files...");
+		std::fs::remove_dir_all(&output_dir).ok();
+	}
+
+	Ok(())
+}
+
+/// Collect miner rewards from a wormhole address.
+///
+/// This mirrors the withdrawal flow from the miner app:
+/// 1. Query Subsquid for pending transfers to the wormhole address
+/// 2. Select transfers to cover the requested amount
+/// 3. Generate ZK proofs for each transfer
+/// 4. Aggregate proofs
+/// 5. Submit withdrawal transaction
+#[allow(clippy::too_many_arguments)]
+async fn run_collect_rewards(
+	wallet_name: Option<String>,
+	mnemonic_arg: Option<String>,
+	password: Option<String>,
+	password_file: Option<String>,
+	amount: Option<f64>,
+	destination: Option<String>,
+	subsquid_url: String,
+	wormhole_index: usize,
+	output_dir: String,
+	keep_files: bool,
+	dry_run: bool,
+	node_url: &str,
+) -> crate::error::Result<()> {
+	use crate::subsquid::{
+		compute_address_hash, get_hash_prefix, SubsquidClient, TransferQueryParams,
+	};
+	use colored::Colorize;
+
+	log_print!("");
+	log_print!("==================================================");
+	log_print!("  Wormhole Collect Rewards");
+	log_print!("==================================================");
+	log_print!("");
+
+	// Get mnemonic and wallet address from either wallet or direct mnemonic
+	let (mnemonic, wallet_address) = if let Some(wallet_name) = wallet_name {
+		// Load from stored wallet
+		let wallet = load_multiround_wallet(&wallet_name, password, password_file)?;
+		(wallet.mnemonic, Some(wallet.wallet_address))
+	} else if let Some(mnemonic) = mnemonic_arg {
+		// Use provided mnemonic directly
+		(mnemonic, None)
+	} else {
+		return Err(crate::error::QuantusError::Generic(
+			"Either --wallet or --mnemonic must be provided".to_string(),
+		));
+	};
+
+	// Derive the wormhole secret using HD path for miner rewards (purpose = 1)
+	// Path: m/44'/189189189'/0'/1'/{index}'
+	let wormhole_secret = derive_wormhole_from_mnemonic(
+		&mnemonic,
+		None,
+		&format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index),
+	)
+	.map_err(|e| crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e)))?;
+
+	let _wormhole_address = SubxtAccountId(wormhole_secret.address);
+	let wormhole_address_ss58 = slice_to_quantus_ss58(&wormhole_secret.address);
+	let secret_hex = hex::encode(&wormhole_secret.secret.as_ref());
+
+	// Destination address - required when using mnemonic directly
+	let exit_address = if let Some(dest) = &destination {
+		dest.clone()
+	} else if let Some(addr) = wallet_address.as_ref() {
+		addr.clone()
+	} else {
+		return Err(crate::error::QuantusError::Generic(
+			"--destination is required when using --mnemonic".to_string(),
+		));
+	};
+
+	if let Some(ref addr) = wallet_address {
+		log_print!("  Wallet:            {}", addr.bright_yellow());
+	} else {
+		log_print!("  Wallet:            {}", "(from mnemonic)".bright_yellow());
+	}
+	log_print!("  Wormhole address:  {}", wormhole_address_ss58.bright_cyan());
+	log_print!("  Wormhole index:    {}", wormhole_index);
+	log_print!("  Destination:       {}", exit_address.bright_green());
+	log_print!("  Subsquid URL:      {}", subsquid_url);
+	log_print!("");
+
+	// Query Subsquid for transfers to this wormhole address
+	log_print!("{}", "Step 1: Querying transfers from Subsquid...".bright_yellow());
+
+	let subsquid_client = SubsquidClient::new(subsquid_url.clone())?;
+	let wormhole_address_bytes: [u8; 32] = wormhole_secret.address;
+	let address_hash = compute_address_hash(&wormhole_address_bytes);
+	let prefix = get_hash_prefix(&address_hash, 8); // Use 8 hex chars for good privacy
+
+	let params = TransferQueryParams::new().with_limit(1000);
+	let transfers = subsquid_client
+		.query_transfers_by_prefix(Some(vec![prefix]), None, params)
+		.await?;
+
+	// Filter to only transfers TO our wormhole address
+	let incoming_transfers: Vec<_> =
+		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
+
+	if incoming_transfers.is_empty() {
+		log_print!("  No pending transfers found for wormhole address.");
+		log_print!("  Make sure the miner is configured with this wormhole address.");
+		return Ok(());
+	}
+
+	// Calculate total available
+	let mut total_available: u128 = 0;
+	for t in &incoming_transfers {
+		let amount: u128 = t.amount.parse().unwrap_or(0);
+		total_available += amount;
+	}
+
+	log_print!(
+		"  Found {} transfer(s) totaling {} ({})",
+		incoming_transfers.len().to_string().bright_green(),
+		total_available,
+		format_balance(total_available).bright_cyan()
+	);
+
+	// List transfers
+	for (i, t) in incoming_transfers.iter().enumerate() {
+		let amt: u128 = t.amount.parse().unwrap_or(0);
+		log_print!(
+			"    [{:2}] Block {:8} | {} | leaf_index={}",
+			i + 1,
+			t.block_height,
+			format_balance(amt).bright_cyan(),
+			t.leaf_index
+		);
+	}
+	log_print!("");
+
+	// Determine amount to withdraw
+	let withdraw_amount = if let Some(amt) = amount {
+		let planck = (amt * 1_000_000_000_000.0) as u128;
+		if planck > total_available {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"Requested {} but only {} available",
+				format_balance(planck),
+				format_balance(total_available)
+			)));
+		}
+		planck
+	} else {
+		total_available
+	};
+
+	log_print!(
+		"  Withdrawing: {} ({})",
+		withdraw_amount,
+		format_balance(withdraw_amount).bright_green()
+	);
+
+	if dry_run {
+		log_print!("");
+		log_print!("{}", "Dry run complete - no transactions submitted.".bright_blue());
+		return Ok(());
+	}
+
+	// Select transfers to cover the amount (largest first)
+	let mut sorted_transfers = incoming_transfers.clone();
+	sorted_transfers.sort_by(|a, b| {
+		let amt_a: u128 = b.amount.parse().unwrap_or(0);
+		let amt_b: u128 = a.amount.parse().unwrap_or(0);
+		amt_a.cmp(&amt_b)
+	});
+
+	let mut selected_transfers = Vec::new();
+	let mut selected_total: u128 = 0;
+	for t in sorted_transfers {
+		if selected_total >= withdraw_amount {
+			break;
+		}
+		let amt: u128 = t.amount.parse().unwrap_or(0);
+		selected_transfers.push(t);
+		selected_total += amt;
+	}
+
+	log_print!("  Selected {} transfer(s) for proof generation", selected_transfers.len());
+	log_print!("");
+
+	// Connect to node
+	log_print!("{}", "Step 2: Connecting to chain...".bright_yellow());
+	let quantus_client = QuantusClient::new(node_url).await.map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to connect to node: {}", e))
+	})?;
+
+	// Create output directory
+	std::fs::create_dir_all(&output_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create output directory: {}", e))
+	})?;
+
+	// Get current best block for proofs
+	let proof_block = at_best_block(&quantus_client)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
+	let proof_block_hash = proof_block.hash();
+	log_print!("  Using proof block: {}", hex::encode(proof_block_hash.0));
+	log_print!("");
+
+	// Parse exit account
+	let exit_account_bytes =
+		parse_exit_account(&exit_address).map_err(crate::error::QuantusError::Generic)?;
+
+	// Generate proofs for each selected transfer
+	log_print!("{}", "Step 3: Generating proofs...".bright_yellow());
+
+	let mut proof_files = Vec::new();
+	let num_transfers = selected_transfers.len();
+
+	for (i, transfer) in selected_transfers.iter().enumerate() {
+		let leaf_index: u64 = transfer.leaf_index.parse().map_err(|_| {
+			crate::error::QuantusError::Generic(format!(
+				"Invalid leaf_index: {}",
+				transfer.leaf_index
+			))
+		})?;
+
+		// We need to find the transfer_count for this leaf
+		// The transfer_count is stored in the leaf data, which we get from the merkle proof
+		// For now, we query the chain for the merkle proof and extract transfer_count from
+		// leaf_data
+		let proof_params = rpc_params![leaf_index, proof_block_hash];
+		let zk_proof: Option<ZkMerkleProofRpc> = quantus_client
+			.rpc_client()
+			.request("zkTree_getMerkleProof", proof_params)
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to get ZK Merkle proof for leaf {}: {}",
+					leaf_index, e
+				))
+			})?;
+
+		let zk_proof = zk_proof.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"No ZK Merkle proof found for leaf_index {}",
+				leaf_index
+			))
+		})?;
+
+		// Decode transfer_count from leaf_data
+		let (_, transfer_count, _, _) = decode_full_leaf_data(&zk_proof.leaf_data)?;
+
+		// Decode input amount from leaf
+		let input_amount = decode_input_amount_from_leaf(&zk_proof.leaf_data)?;
+		let output_amount = compute_output_amount(input_amount, VOLUME_FEE_BPS);
+
+		log_print!(
+			"  [{}/{}] leaf_index={} transfer_count={} input={} output={}",
+			i + 1,
+			num_transfers,
+			leaf_index,
+			transfer_count,
+			input_amount,
+			output_amount
+		);
+
+		// Create output assignment (single output, no change for simplicity)
+		let output_assignment = ProofOutputAssignment {
+			output_amount_1: output_amount,
+			exit_account_1: exit_account_bytes,
+			output_amount_2: 0,
+			exit_account_2: [0u8; 32],
+		};
+
+		let proof_file = format!("{}/proof_{}.hex", output_dir, i);
+
+		let prove_start = std::time::Instant::now();
+		generate_proof(
+			&secret_hex,
+			0, // amount not used - comes from leaf_data
+			&output_assignment,
+			&hex::encode(proof_block_hash.0),
+			transfer_count,
+			"", // funding_account not used in ZK tree
+			leaf_index,
+			&proof_file,
+			&quantus_client,
+		)
+		.await?;
+
+		let prove_elapsed = prove_start.elapsed();
+		log_print!("    Proof generated in {:.2}s", prove_elapsed.as_secs_f64());
+
+		proof_files.push(proof_file);
+	}
+
+	log_print!("");
+
+	// Batch proofs into groups of 16 (max supported by aggregation circuit)
+	const MAX_PROOFS_PER_BATCH: usize = 16;
+	let batches: Vec<Vec<String>> =
+		proof_files.chunks(MAX_PROOFS_PER_BATCH).map(|chunk| chunk.to_vec()).collect();
+
+	log_print!(
+		"{} Aggregating and submitting {} batch(es)...",
+		"Step 4:".bright_yellow(),
+		batches.len()
+	);
+	log_print!("");
+
+	let mut total_transferred: u128 = 0;
+	let mut all_transfer_events = Vec::new();
+
+	for (batch_idx, batch) in batches.iter().enumerate() {
+		log_print!("  Batch {}/{}: {} proofs", batch_idx + 1, batches.len(), batch.len());
+
+		// Aggregate this batch
+		let aggregated_file = format!("{}/aggregated_batch_{}.hex", output_dir, batch_idx);
+		let agg_start = std::time::Instant::now();
+		aggregate_proofs(batch.clone(), aggregated_file.clone()).await?;
+		let agg_elapsed = agg_start.elapsed();
+		log_print!("    Aggregated in {:.2}s", agg_elapsed.as_secs_f64());
+
+		// Submit on-chain
+		log_print!("    Submitting to chain...");
+		let submit_start = std::time::Instant::now();
+		let (verification_block, extrinsic_hash, transfer_events) =
+			verify_aggregated_and_get_events(&aggregated_file, &quantus_client).await?;
+		let submit_elapsed = submit_start.elapsed();
+
+		// Sum up transferred amounts
+		let batch_total: u128 = transfer_events.iter().map(|e| e.amount).sum();
+		total_transferred += batch_total;
+
+		log_print!(
+			"    {} Verified in {:.2}s - {} withdrawn (block: {}, tx: 0x{})",
+			"✓".bright_green(),
+			submit_elapsed.as_secs_f64(),
+			format_balance(batch_total).bright_cyan(),
+			hex::encode(&verification_block.0[..4]),
+			hex::encode(&extrinsic_hash.0[..8])
+		);
+
+		all_transfer_events.extend(transfer_events);
+	}
+
+	// Show summary
+	log_print!("");
+	log_print!("{}", "Withdrawal complete!".bright_green().bold());
+	log_print!(
+		"  Total withdrawn: {} across {} transaction(s)",
+		format_balance(total_transferred).bright_cyan(),
+		batches.len()
+	);
+	log_print!("  Destination: {}", exit_address.bright_green());
+
+	// Cleanup
+	if keep_files {
+		log_print!("");
+		log_print!("  Proof files preserved in: {}", output_dir);
+	} else {
+		log_print!("");
 		log_print!("  Cleaning up proof files...");
 		std::fs::remove_dir_all(&output_dir).ok();
 	}
