@@ -312,6 +312,42 @@ quantus wallet view --name my_wallet
 quantus wallet export --name my_wallet --format mnemonic
 ```
 
+#### HD Derivation Paths
+
+Quantus uses BIP-44-style hierarchical deterministic (HD) derivation so a single mnemonic can produce an unlimited number of independent keypairs. All paths use hardened indices (indicated by `'`).
+
+**Normal wallet accounts** — coin type `189189`:
+
+```
+m / 44' / 189189' / 0' / account' / index'
+```
+
+| Level | Value | Meaning |
+|-------|-------|---------|
+| purpose | `44'` | BIP-44 |
+| coin_type | `189189'` | Quantus Network |
+| account | `0'` | Account group (reserved, always 0 for now) |
+| account | `0'` | Sub-account, increase linearly (0, 1, 2, …) |
+| index | `0'` | Address index, increase linearly (0, 1, 2, …) |
+
+Default path: **`m/44'/189189'/0'/0'/0'`**
+
+**Wormhole accounts** — coin type `189189189`:
+
+```
+m / 44' / 189189189' / 0' / round' / index'
+```
+
+| Level | Value | Meaning |
+|-------|-------|---------|
+| purpose | `44'` | BIP-44 |
+| coin_type | `189189189'` | Quantus Wormhole |
+| account | `0'` | Fixed |
+| round | `0'`–`N'` | Wormhole mixing round, increase linearly |
+| index | `0'`–`N'` | Proof index within the round, increase linearly |
+
+Each wormhole round derives a fresh set of addresses by incrementing the `index` for every proof in that round, then incrementing `round` for the next mixing round. This means every intermediate address is deterministically reproducible from the wallet mnemonic alone.
+
 ---
 
 ### Sending Tokens
