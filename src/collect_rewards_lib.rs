@@ -347,7 +347,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	}
 
 	// Sort by amount descending (largest first)
-	transfers_with_amounts.sort_by(|a, b| b.1.cmp(&a.1));
+	transfers_with_amounts.sort_by_key(|k| std::cmp::Reverse(k.1));
 
 	let mut selected_transfers = Vec::new();
 	let mut selected_total: u128 = 0;
