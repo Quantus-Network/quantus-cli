@@ -16,7 +16,7 @@ use crate::{
 		client::QuantusClient,
 		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
-	cli::wormhole::ZkMerkleProofRpc,
+	cli::wormhole::{parse_secret_hex as parse_secret_hex_str, ZkMerkleProofRpc},
 	subsquid::{
 		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
 	},
@@ -26,19 +26,19 @@ use crate::{
 
 type Hash256 = [u8; 32];
 
-/// Debug version of compute_merkle_positions that also returns intermediate hashes
-fn compute_merkle_positions_with_debug(
+/// Compute sorted siblings and position hints from unsorted siblings.
+///
+/// The chain returns unsorted siblings. This function sorts them and computes
+/// position hints that indicate where the current hash fits in the sorted order.
+fn compute_merkle_positions(
 	unsorted_siblings: &[[Hash256; 3]],
 	leaf_hash: Hash256,
-) -> (Vec<[Hash256; 3]>, Vec<u8>, Vec<Hash256>) {
+) -> (Vec<[Hash256; 3]>, Vec<u8>) {
 	use qp_zk_circuits_common::zk_merkle::hash_node_presorted;
 
 	let mut current_hash = leaf_hash;
 	let mut sorted_siblings = Vec::with_capacity(unsorted_siblings.len());
 	let mut positions = Vec::with_capacity(unsorted_siblings.len());
-	let mut level_hashes = Vec::with_capacity(unsorted_siblings.len() + 1);
-
-	level_hashes.push(current_hash); // Initial leaf hash
 
 	for level_siblings in unsorted_siblings.iter() {
 		// Combine current hash with the 3 siblings
@@ -69,12 +69,11 @@ fn compute_merkle_positions_with_debug(
 		};
 		sorted_siblings.push(sorted_sibs);
 
-		// Compute parent hash for next level using Poseidon
+		// Compute parent hash for next level
 		current_hash = hash_node_presorted(&all_four);
-		level_hashes.push(current_hash);
 	}
 
-	(sorted_siblings, positions, level_hashes)
+	(sorted_siblings, positions)
 }
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use qp_rusty_crystals_hdwallet::{derive_wormhole_from_mnemonic, QUANTUS_WORMHOLE_CHAIN_ID};
@@ -124,6 +123,7 @@ impl From<crate::error::QuantusError> for CollectRewardsError {
 
 /// Information about a pending transfer found via Subsquid
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct PendingTransfer {
 	/// Block height where the transfer was included
 	pub block_height: i64,
@@ -143,6 +143,7 @@ pub struct PendingTransfer {
 
 /// Result of querying pending transfers
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct QueryPendingTransfersResult {
 	/// The wormhole address that was queried (SS58)
 	pub wormhole_address: String,
@@ -153,6 +154,7 @@ pub struct QueryPendingTransfersResult {
 }
 
 /// Progress callback trait for reporting status during collect_rewards
+#[allow(dead_code)]
 pub trait ProgressCallback: Send + Sync {
 	/// Called when a step starts
 	fn on_step(&self, step: &str, details: &str);
@@ -165,6 +167,7 @@ pub trait ProgressCallback: Send + Sync {
 }
 
 /// No-op progress callback for when caller doesn't need updates
+#[allow(dead_code)]
 pub struct NoOpProgress;
 impl ProgressCallback for NoOpProgress {
 	fn on_step(&self, _step: &str, _details: &str) {}
@@ -175,6 +178,7 @@ impl ProgressCallback for NoOpProgress {
 
 /// Information about a completed withdrawal batch
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct WithdrawalBatch {
 	/// Block hash where the transaction was included
 	pub block_hash: String,
@@ -188,6 +192,7 @@ pub struct WithdrawalBatch {
 
 /// Result of the full collect_rewards operation
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CollectRewardsResult {
 	/// The wormhole address that was withdrawn from
 	pub wormhole_address: String,
@@ -335,9 +340,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	// Select transfers to cover the amount (largest first)
 	let mut sorted_transfers = unspent_transfers.clone();
 	sorted_transfers.sort_by(|a, b| {
-		let amt_a: u128 = b.amount.parse().unwrap_or(0);
-		let amt_b: u128 = a.amount.parse().unwrap_or(0);
-		amt_a.cmp(&amt_b)
+		let amt_a: u128 = a.amount.parse().unwrap_or(0);
+		let amt_b: u128 = b.amount.parse().unwrap_or(0);
+		amt_b.cmp(&amt_a) // Descending order (largest first)
 	});
 
 	let mut selected_transfers = Vec::new();
@@ -363,7 +368,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 
 	// Get block for proofs - either specific block or latest
 	let proof_block = if let Some(block_num) = config.at_block {
-		eprintln!("[collect_rewards] Using specified block number: {}", block_num);
 		// Fetch block hash for the specified block number
 		use subxt::ext::jsonrpsee::{core::client::ClientT, rpc_params};
 		let block_hash: Option<subxt::utils::H256> = quantus_client
@@ -378,7 +382,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			})?;
 		let block_hash = block_hash
 			.ok_or_else(|| CollectRewardsError::from(format!("Block {} not found", block_num)))?;
-		eprintln!("[collect_rewards] Block {} hash: 0x{}", block_num, hex::encode(block_hash.0));
 		quantus_client
 			.client()
 			.blocks()
@@ -391,7 +394,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			.get_latest_block()
 			.await
 			.map_err(|e| CollectRewardsError::from(format!("Failed to get latest block: {}", e)))?;
-		eprintln!("[collect_rewards] Using latest block hash: 0x{}", hex::encode(best_block.0));
 		quantus_client
 			.client()
 			.blocks()
@@ -400,20 +402,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
 	};
 	let proof_block_hash = proof_block.hash();
-	let proof_block_number = proof_block.header().number;
-	eprintln!(
-		"[collect_rewards] Proof block: #{} (0x{})",
-		proof_block_number,
-		hex::encode(proof_block_hash.0)
-	);
 
 	// Step 4: Generate proofs
 	progress.on_step("proofs", &format!("Generating {} proofs", selected_transfers.len()));
-
-	eprintln!(
-		"[collect_rewards] Starting proof generation for {} transfers",
-		selected_transfers.len()
-	);
 
 	let bins_dir = Path::new(&config.bins_dir);
 	let num_transfers = selected_transfers.len();
@@ -421,14 +412,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 
 	for (i, transfer) in selected_transfers.iter().enumerate() {
 		progress.on_proof_generated(i + 1, num_transfers);
-
-		eprintln!("[collect_rewards] Processing transfer {}/{}", i + 1, num_transfers);
-		eprintln!("[collect_rewards]   transfer.id: {}", transfer.id);
-		eprintln!("[collect_rewards]   transfer.leaf_index: {}", transfer.leaf_index);
-		eprintln!("[collect_rewards]   transfer.transfer_count: {}", transfer.transfer_count);
-		eprintln!("[collect_rewards]   transfer.amount: {}", transfer.amount);
-		eprintln!("[collect_rewards]   transfer.block_height: {}", transfer.block_height);
-		eprintln!("[collect_rewards]   transfer.to_hash: {}", transfer.to_hash);
 
 		let leaf_index: u64 = transfer.leaf_index.parse().map_err(|_| {
 			CollectRewardsError::from(format!("Invalid leaf_index: {}", transfer.leaf_index))
@@ -454,57 +437,15 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			))
 		})?;
 
-		eprintln!("[collect_rewards]   ZK proof received from RPC:");
-		eprintln!("[collect_rewards]     leaf_hash: 0x{}", hex::encode(&zk_proof.leaf_hash));
-		eprintln!("[collect_rewards]     root: 0x{}", hex::encode(&zk_proof.root));
-		eprintln!("[collect_rewards]     leaf_data len: {} bytes", zk_proof.leaf_data.len());
-		eprintln!("[collect_rewards]     leaf_data: 0x{}", hex::encode(&zk_proof.leaf_data));
-		eprintln!("[collect_rewards]     num siblings: {}", zk_proof.siblings.len());
-		eprintln!("[collect_rewards]     RAW siblings from RPC (before processing):");
-		for (level, sibs) in zk_proof.siblings.iter().enumerate() {
-			eprintln!(
-				"[collect_rewards]       level {} raw: [0x{}, 0x{}, 0x{}]",
-				level,
-				hex::encode(&sibs[0]),
-				hex::encode(&sibs[1]),
-				hex::encode(&sibs[2])
-			);
-		}
-
-		// Decode transfer_count and input_amount from leaf_data
-		let (leaf_to_account, transfer_count, leaf_asset_id, leaf_raw_amount) =
+		// Decode transfer data from leaf
+		let (leaf_to_account, transfer_count, _leaf_asset_id, _leaf_raw_amount) =
 			decode_full_leaf_data(&zk_proof.leaf_data)?;
 		let input_amount = decode_input_amount_from_leaf(&zk_proof.leaf_data)?;
 		let output_amount = compute_output_amount(input_amount, VOLUME_FEE_BPS);
 
-		eprintln!("[collect_rewards]   Decoded from leaf_data:");
-		eprintln!(
-			"[collect_rewards]     to_account (from leaf): 0x{}",
-			hex::encode(&leaf_to_account)
-		);
-		eprintln!("[collect_rewards]     transfer_count: {}", transfer_count);
-		eprintln!("[collect_rewards]     asset_id: {}", leaf_asset_id);
-		eprintln!("[collect_rewards]     raw_amount: {} planck", leaf_raw_amount);
-		eprintln!("[collect_rewards]     input_amount (quantized): {}", input_amount);
-		eprintln!("[collect_rewards]     output_amount (after fee): {}", output_amount);
-
-		// Compute sorted siblings and positions
-		let (sorted_siblings, positions, level_hashes) =
-			compute_merkle_positions_with_debug(&zk_proof.siblings, zk_proof.leaf_hash);
-
-		eprintln!("[collect_rewards]   Merkle proof details:");
-		eprintln!("[collect_rewards]     proof depth: {}", sorted_siblings.len());
-		eprintln!("[collect_rewards]     positions: {:?}", positions);
-		eprintln!("[collect_rewards]     level hashes (current_hash at each level):");
-		for (level, hash) in level_hashes.iter().enumerate() {
-			eprintln!("[collect_rewards]       level {}: 0x{}", level, hex::encode(hash));
-		}
-		for (level, sibs) in sorted_siblings.iter().enumerate() {
-			eprintln!("[collect_rewards]     level {} siblings:", level);
-			for (i, sib) in sibs.iter().enumerate() {
-				eprintln!("[collect_rewards]       [{}]: 0x{}", i, hex::encode(sib));
-			}
-		}
+		// Compute sorted siblings and positions from unsorted RPC data
+		let (sorted_siblings, positions) =
+			compute_merkle_positions(&zk_proof.siblings, zk_proof.leaf_hash);
 
 		// Get block header data
 		let header = proof_block.header();
@@ -514,39 +455,18 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		let digest = header.digest.encode();
 		let block_number = header.number;
 
-		eprintln!("[collect_rewards]   Block header data:");
-		eprintln!("[collect_rewards]     block_number: {}", block_number);
-		eprintln!("[collect_rewards]     parent_hash: 0x{}", hex::encode(&parent_hash));
-		eprintln!("[collect_rewards]     state_root: 0x{}", hex::encode(&state_root));
-		eprintln!("[collect_rewards]     extrinsics_root: 0x{}", hex::encode(&extrinsics_root));
-		eprintln!("[collect_rewards]     digest len: {} bytes", digest.len());
-		eprintln!("[collect_rewards]     digest: 0x{}", hex::encode(&digest));
-
-		// Check if header has zk_tree_root field
-		// The circuit expects zk_tree_root in the header preimage
-		eprintln!(
-			"[collect_rewards]     zk_tree_root (from ZK proof): 0x{}",
-			hex::encode(&zk_proof.root)
-		);
-
-		// Parse secret
+		// Parse secret and compute wormhole address
 		let secret = parse_secret_hex(&secret_hex)?;
 		let wormhole_address_bytes = wormhole_lib::compute_wormhole_address(&secret)
 			.map_err(|e| CollectRewardsError::from(e.message))?;
 
-		eprintln!("[collect_rewards]   Computed from secret:");
-		eprintln!(
-			"[collect_rewards]     wormhole_address (computed): 0x{}",
-			hex::encode(&wormhole_address_bytes)
-		);
-
-		// Verify the addresses match
+		// Verify the leaf's to_account matches our computed wormhole address
 		if leaf_to_account != wormhole_address_bytes {
-			eprintln!("[collect_rewards]   WARNING: leaf to_account does NOT match computed wormhole address!");
-			eprintln!("[collect_rewards]     leaf:     0x{}", hex::encode(&leaf_to_account));
-			eprintln!("[collect_rewards]     computed: 0x{}", hex::encode(&wormhole_address_bytes));
-		} else {
-			eprintln!("[collect_rewards]   OK: leaf to_account matches computed wormhole address");
+			return Err(CollectRewardsError::from(format!(
+				"Leaf to_account mismatch: expected 0x{}, got 0x{}",
+				hex::encode(&wormhole_address_bytes),
+				hex::encode(&leaf_to_account)
+			)));
 		}
 
 		// Build proof input
@@ -562,8 +482,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			extrinsics_root,
 			digest: digest.clone(),
 			zk_tree_root: zk_proof.root,
-			zk_merkle_siblings: sorted_siblings.clone(),
-			zk_merkle_positions: positions.clone(),
+			zk_merkle_siblings: sorted_siblings,
+			zk_merkle_positions: positions,
 			exit_account_1: destination_bytes,
 			exit_account_2: [0u8; 32],
 			output_amount_1: output_amount,
@@ -572,53 +492,11 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			asset_id: NATIVE_ASSET_ID,
 		};
 
-		eprintln!("[collect_rewards]   ProofGenerationInput:");
-		eprintln!("[collect_rewards]     secret: 0x{}", hex::encode(&input.secret));
-		eprintln!("[collect_rewards]     transfer_count: {}", input.transfer_count);
-		eprintln!(
-			"[collect_rewards]     wormhole_address: 0x{}",
-			hex::encode(&input.wormhole_address)
-		);
-		eprintln!("[collect_rewards]     input_amount: {}", input.input_amount);
-		eprintln!("[collect_rewards]     block_hash: 0x{}", hex::encode(&input.block_hash));
-		eprintln!("[collect_rewards]     block_number: {}", input.block_number);
-		eprintln!("[collect_rewards]     parent_hash: 0x{}", hex::encode(&input.parent_hash));
-		eprintln!("[collect_rewards]     state_root: 0x{}", hex::encode(&input.state_root));
-		eprintln!(
-			"[collect_rewards]     extrinsics_root: 0x{}",
-			hex::encode(&input.extrinsics_root)
-		);
-		eprintln!("[collect_rewards]     digest len: {} bytes", input.digest.len());
-		eprintln!("[collect_rewards]     zk_tree_root: 0x{}", hex::encode(&input.zk_tree_root));
-		eprintln!("[collect_rewards]     exit_account_1: 0x{}", hex::encode(&input.exit_account_1));
-		eprintln!("[collect_rewards]     output_amount_1: {}", input.output_amount_1);
-		eprintln!("[collect_rewards]     volume_fee_bps: {}", input.volume_fee_bps);
-		eprintln!("[collect_rewards]     asset_id: {}", input.asset_id);
-		eprintln!("[collect_rewards]     num siblings: {}", input.zk_merkle_siblings.len());
-		eprintln!("[collect_rewards]     num positions: {}", input.zk_merkle_positions.len());
-
 		// Generate proof
 		let prover_path = bins_dir.join("prover.bin");
 		let common_path = bins_dir.join("common.bin");
-		eprintln!("[collect_rewards]   Calling wormhole_lib::generate_proof...");
-		eprintln!("[collect_rewards]     prover.bin path: {:?}", prover_path);
-		eprintln!("[collect_rewards]     common.bin path: {:?}", common_path);
-		eprintln!("[collect_rewards]     prover.bin exists: {}", prover_path.exists());
-		eprintln!("[collect_rewards]     common.bin exists: {}", common_path.exists());
-		if prover_path.exists() {
-			if let Ok(meta) = std::fs::metadata(&prover_path) {
-				eprintln!("[collect_rewards]     prover.bin size: {} bytes", meta.len());
-			}
-		}
-		let result =
-			wormhole_lib::generate_proof(&input, &prover_path, &common_path).map_err(|e| {
-				eprintln!("[collect_rewards]   Proof generation FAILED: {}", e.message);
-				CollectRewardsError::from(e.message)
-			})?;
-		eprintln!(
-			"[collect_rewards]   Proof generated successfully, {} bytes",
-			result.proof_bytes.len()
-		);
+		let result = wormhole_lib::generate_proof(&input, &prover_path, &common_path)
+			.map_err(|e| CollectRewardsError::from(e.message))?;
 
 		proof_bytes_list.push(result.proof_bytes);
 	}
@@ -641,7 +519,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 
 		// Submit to chain
 		let (block_hash, tx_hash, transfer_events) =
-			submit_and_get_events(&quantus_client, aggregated_proof).await?;
+			submit_and_get_events(&quantus_client, aggregated_proof, bins_dir).await?;
 
 		let batch_amount: u128 = transfer_events.iter().map(|e| e.amount).sum();
 		total_withdrawn += batch_amount;
@@ -678,6 +556,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 ///
 /// # Returns
 /// The wormhole address, list of pending transfers, and total available balance.
+#[allow(dead_code)]
 pub async fn query_pending_transfers(
 	mnemonic: &str,
 	wormhole_index: usize,
@@ -735,6 +614,7 @@ pub async fn query_pending_transfers(
 /// # Arguments
 /// * `wormhole_address_bytes` - The 32-byte wormhole address
 /// * `subsquid_url` - The Subsquid GraphQL endpoint URL
+#[allow(dead_code)]
 pub async fn query_pending_transfers_for_address(
 	wormhole_address_bytes: &[u8; 32],
 	subsquid_url: &str,
@@ -792,11 +672,7 @@ fn parse_ss58_address(address: &str) -> Result<[u8; 32]> {
 
 /// Parse secret hex string to bytes
 fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32]> {
-	let bytes = hex::decode(secret_hex.trim_start_matches("0x"))
-		.map_err(|e| CollectRewardsError::from(format!("Invalid secret hex: {}", e)))?;
-	bytes
-		.try_into()
-		.map_err(|_| CollectRewardsError::from("Secret must be 32 bytes".to_string()))
+	parse_secret_hex_str(secret_hex).map_err(CollectRewardsError::from)
 }
 
 /// Decode all fields from SCALE-encoded ZkLeaf data.
@@ -900,9 +776,9 @@ fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Resul
 async fn submit_and_get_events(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
+	bins_dir: &Path,
 ) -> Result<(subxt::utils::H256, subxt::utils::H256, Vec<wormhole::events::NativeTransferred>)> {
 	// Verify locally first
-	let bins_dir = Path::new("generated-bins");
 
 	let verifier = qp_wormhole_verifier::WormholeVerifier::new_from_files(
 		&bins_dir.join("aggregated_verifier.bin"),
@@ -925,13 +801,6 @@ async fn submit_and_get_events(
 	let inputs = qp_wormhole_verifier::parse_aggregated_public_inputs(&proof).map_err(|e| {
 		CollectRewardsError::from(format!("Failed to parse public inputs: {:?}", e))
 	})?;
-
-	eprintln!("[submit] Pre-submission validation:");
-	eprintln!("[submit]   asset_id in proof: {}", inputs.asset_id);
-	eprintln!("[submit]   volume_fee_bps in proof: {}", inputs.volume_fee_bps);
-	eprintln!("[submit]   block_number in proof: {}", inputs.block_data.block_number);
-	eprintln!("[submit]   block_hash in proof: 0x{}", hex::encode(&inputs.block_data.block_hash));
-	eprintln!("[submit]   num nullifiers: {}", inputs.nullifiers.len());
 
 	// Check asset_id (must be 0 for native)
 	if inputs.asset_id != 0 {
@@ -981,7 +850,6 @@ async fn submit_and_get_events(
 					hex::encode(proof_hash)
 				)));
 			}
-			eprintln!("[submit]   Block hash verified OK");
 		},
 	}
 
@@ -1013,9 +881,6 @@ async fn submit_and_get_events(
 			)));
 		}
 	}
-	eprintln!("[submit]   All {} nullifiers verified as unspent", inputs.nullifiers.len());
-
-	eprintln!("[submit] All pre-validation checks passed!");
 
 	// Submit unsigned tx
 	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
@@ -1151,20 +1016,8 @@ async fn filter_unspent_transfers_onchain(
 
 		if is_used.is_none() {
 			unspent.push(transfer.clone());
-		} else {
-			eprintln!(
-				"[nullifier] Transfer with count {} already spent (nullifier: 0x{})",
-				transfer_count,
-				hex::encode(&nullifier)
-			);
 		}
 	}
-
-	eprintln!(
-		"[nullifier] Filtered: {} unspent out of {} total transfers",
-		unspent.len(),
-		transfers.len()
-	);
 
 	Ok(unspent)
 }
@@ -1181,8 +1034,6 @@ async fn filter_unspent_transfers_with_fallback(
 	quantus_client: &QuantusClient,
 ) -> Result<Vec<Transfer>> {
 	use std::collections::HashSet;
-
-	eprintln!("[nullifier] Filtering {} transfers for spent nullifiers", transfers.len());
 
 	if transfers.is_empty() {
 		return Ok(vec![]);
@@ -1203,12 +1054,6 @@ async fn filter_unspent_transfers_with_fallback(
 
 		let nullifier_hex = hex::encode(&nullifier);
 		let nullifier_hash = compute_address_hash(&nullifier);
-
-		eprintln!(
-			"[nullifier]   transfer_count={}, nullifier=0x{}, hash={}",
-			transfer_count, nullifier_hex, nullifier_hash
-		);
-
 		nullifier_map.insert(nullifier_hex, (nullifier_hash, transfer));
 	}
 
@@ -1218,22 +1063,11 @@ async fn filter_unspent_transfers_with_fallback(
 		.map(|(nul_hex, (nul_hash, _))| (nul_hex.clone(), nul_hash.clone()))
 		.collect();
 
-	eprintln!("[nullifier] Querying Subsquid for {} nullifiers...", nullifier_pairs.len());
-
 	// Try Subsquid first, fall back to on-chain if it fails
 	let spent_nullifiers: HashSet<String> =
 		match subsquid_client.check_nullifiers_spent(&nullifier_pairs, 8).await {
-			Ok(spent) => {
-				eprintln!("[nullifier] Subsquid returned {} spent nullifiers", spent.len());
-				for s in &spent {
-					eprintln!("[nullifier]   SPENT: 0x{}", s);
-				}
-				spent
-			},
-			Err(subsquid_err) => {
-				eprintln!("[nullifier] WARNING: Subsquid query failed: {}", subsquid_err);
-				eprintln!("[nullifier] Falling back to on-chain nullifier checking...");
-
+			Ok(spent) => spent,
+			Err(_) => {
 				// Fall back to on-chain checking
 				return filter_unspent_transfers_onchain(transfers, secret_bytes, quantus_client)
 					.await;
@@ -1246,12 +1080,6 @@ async fn filter_unspent_transfers_with_fallback(
 		.filter(|(nul_hex, _)| !spent_nullifiers.contains(nul_hex))
 		.map(|(_, (_, transfer))| transfer.clone())
 		.collect();
-
-	eprintln!(
-		"[nullifier] Result: {} unspent out of {} total transfers",
-		unspent.len(),
-		transfers.len()
-	);
 
 	Ok(unspent)
 }

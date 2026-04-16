@@ -43,6 +43,7 @@ pub struct Transfer {
 	pub leaf_index: String,
 
 	/// Transfer count from Wormhole pallet - required for nullifier computation
+	#[serde(default)]
 	pub transfer_count: String,
 }
 
