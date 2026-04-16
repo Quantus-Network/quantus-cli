@@ -239,6 +239,56 @@ Each round performs:
 
 After all rounds, the command verifies the wallet balance matches expectations (initial - fees).
 
+#### `quantus wormhole collect-rewards`
+
+Collect miner rewards from a wormhole address. Queries Subsquid for pending transfers, filters out already-spent nullifiers, generates ZK proofs, and submits withdrawal transactions.
+
+```bash
+# Collect all available rewards using a stored wallet
+quantus wormhole collect-rewards --wallet my_wallet --password ""
+
+# Collect a specific amount
+quantus wormhole collect-rewards --wallet my_wallet --amount 50.0
+
+# Use a mnemonic directly (requires --destination)
+quantus wormhole collect-rewards \
+  --mnemonic "word1 word2 ... word24" \
+  --destination <SS58-address>
+
+# Dry run to see available transfers without submitting
+quantus wormhole collect-rewards --wallet my_wallet --dry-run
+```
+
+- `--wallet`: Wallet name for HD derivation of the wormhole secret and default exit address.
+- `--mnemonic`: Alternative to `--wallet`; derive wormhole secrets from a mnemonic directly.
+- `--destination`: Destination address for withdrawn funds (required with `--mnemonic`, defaults to wallet address).
+- `--amount`: Amount in DEV to withdraw (default: withdraw all available).
+- `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
+- `--subsquid-url`: Subsquid indexer URL (default: `https://subsquid.quantus.com/blue/graphql`).
+- `--dry-run`: Show available transfers without submitting any transactions.
+- `--at-block`: Use a specific block number for proofs instead of the latest block.
+
+#### `quantus wormhole check-nullifier`
+
+Check whether nullifiers have been spent (consumed by a withdrawal). Useful for verifying if specific transfers have already been claimed.
+
+```bash
+# Check a single transfer count using a wallet
+quantus wormhole check-nullifier --wallet my_wallet --transfer-counts 0
+
+# Check a range of transfer counts
+quantus wormhole check-nullifier --wallet my_wallet --transfer-counts 0-10
+
+# Check using a secret directly
+quantus wormhole check-nullifier --secret 0x<64-hex-chars> --transfer-counts 0-5
+```
+
+- `--wallet`: Wallet name for HD derivation of the wormhole secret.
+- `--secret`: 32-byte hex secret (alternative to `--wallet`).
+- `--transfer-counts`: Single number or range (e.g., `0-10`) of transfer counts to check.
+- `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
+- `--subsquid-url`: Subsquid indexer URL (default: `https://subsquid.quantus.com/blue/graphql`).
+
 ---
 
 ### Developer Tools
