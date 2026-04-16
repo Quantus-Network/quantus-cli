@@ -20,8 +20,8 @@ use sp_core::crypto::{AccountId32, Ss58Codec};
 pub enum TransfersCommands {
 	/// Query transfers for your wallet addresses using privacy-preserving hash prefix queries
 	Query {
-		/// Subsquid indexer URL (e.g., "https://indexer.quantus.com/graphql")
-		#[arg(long)]
+		/// Subsquid indexer URL
+		#[arg(long, default_value = "https://subsquid.quantus.com/blue/graphql")]
 		subsquid_url: String,
 
 		/// Hash prefix length in hex characters (1-64).

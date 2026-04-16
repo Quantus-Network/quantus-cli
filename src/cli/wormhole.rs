@@ -835,7 +835,7 @@ pub enum WormholeCommands {
 		destination: Option<String>,
 
 		/// Subsquid indexer URL for querying transfers
-		#[arg(long)]
+		#[arg(long, default_value = "https://subsquid.quantus.com/blue/graphql")]
 		subsquid_url: String,
 
 		/// Wormhole address index for HD derivation (default: 0)
@@ -853,6 +853,10 @@ pub enum WormholeCommands {
 		/// Dry run - show available transfers without withdrawing
 		#[arg(long)]
 		dry_run: bool,
+
+		/// Specific block number to use for proofs (default: use latest block)
+		#[arg(long)]
+		at_block: Option<u32>,
 	},
 	/// Check if nullifiers have been spent (consumed by a withdrawal).
 	///
@@ -886,7 +890,7 @@ pub enum WormholeCommands {
 		transfer_counts: String,
 
 		/// Subsquid indexer URL for querying nullifiers
-		#[arg(long)]
+		#[arg(long, default_value = "https://subsquid.quantus.com/blue/graphql")]
 		subsquid_url: String,
 	},
 }
@@ -1029,6 +1033,7 @@ pub async fn handle_wormhole_command(
 			output_dir,
 			keep_files,
 			dry_run,
+			at_block,
 		} =>
 			run_collect_rewards(
 				wallet,
@@ -1043,6 +1048,7 @@ pub async fn handle_wormhole_command(
 				keep_files,
 				dry_run,
 				node_url,
+				at_block,
 			)
 			.await,
 		WormholeCommands::CheckNullifier {
@@ -3067,6 +3073,7 @@ async fn run_collect_rewards(
 	_keep_files: bool,
 	dry_run: bool,
 	node_url: &str,
+	at_block: Option<u32>,
 ) -> crate::error::Result<()> {
 	use crate::collect_rewards_lib::{collect_rewards, CollectRewardsConfig, ProgressCallback};
 	use colored::Colorize;
@@ -3158,6 +3165,7 @@ async fn run_collect_rewards(
 		bins_dir: "generated-bins".to_string(),
 		amount: amount_planck,
 		dry_run,
+		at_block,
 	};
 
 	let result = collect_rewards(config, &CliProgress)
