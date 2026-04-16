@@ -79,6 +79,56 @@ pub struct GraphQLErrorLocation {
 	pub column: i64,
 }
 
+/// A nullifier as returned by the Subsquid indexer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NullifierResult {
+	/// The nullifier bytes as hex
+	pub nullifier: String,
+
+	/// Blake3 hash of the nullifier for prefix queries
+	pub nullifier_hash: String,
+
+	/// Extrinsic hash that consumed this nullifier
+	pub extrinsic_hash: String,
+
+	/// Block height where the nullifier was consumed
+	pub block_height: i64,
+
+	/// Timestamp when the nullifier was consumed
+	pub timestamp: String,
+}
+
+/// Result from a nullifier prefix query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NullifiersByPrefixResult {
+	/// Matching nullifiers
+	pub nullifiers: Vec<NullifierResult>,
+
+	/// Total count of matches
+	pub total_count: i64,
+}
+
+/// Query parameters for nullifier prefix queries.
+#[derive(Debug, Clone, Default)]
+pub struct NullifierQueryParams {
+	/// Minimum block number (inclusive)
+	pub after_block: Option<u32>,
+}
+
+impl NullifierQueryParams {
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	#[allow(dead_code)]
+	pub fn with_after_block(mut self, block: u32) -> Self {
+		self.after_block = Some(block);
+		self
+	}
+}
+
 /// Query parameters for transfer prefix queries.
 #[derive(Debug, Clone, Default)]
 pub struct TransferQueryParams {
