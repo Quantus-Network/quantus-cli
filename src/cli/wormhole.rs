@@ -384,29 +384,29 @@ pub struct ProofOutputAssignment {
 /// * `fee_bps` - Fee in basis points
 ///
 /// # Returns
-/// A vector of output assignments, one per proof
+/// A vector of output assignments, one per proof, or an error if quantization fails
 pub fn compute_random_output_assignments(
 	input_amounts: &[u128],
 	target_accounts: &[[u8; 32]],
 	fee_bps: u32,
-) -> Vec<ProofOutputAssignment> {
+) -> Result<Vec<ProofOutputAssignment>, String> {
 	use rand::seq::SliceRandom;
 
 	let num_proofs = input_amounts.len();
 	let num_targets = target_accounts.len();
 
 	if num_proofs == 0 || num_targets == 0 {
-		return vec![];
+		return Ok(vec![]);
 	}
 
 	// Step 1: Compute output amounts per proof (after fee deduction)
-	let proof_outputs: Vec<u32> = input_amounts
-		.iter()
-		.map(|&input| {
-			let input_quantized = quantize_funding_amount(input).unwrap_or(0);
-			compute_output_amount(input_quantized, fee_bps)
-		})
-		.collect();
+	let mut proof_outputs: Vec<u32> = Vec::with_capacity(input_amounts.len());
+	for (i, &input) in input_amounts.iter().enumerate() {
+		let input_quantized = quantize_funding_amount(input).map_err(|e| {
+			format!("Failed to quantize input amount {} for proof {}: {}", input, i, e)
+		})?;
+		proof_outputs.push(compute_output_amount(input_quantized, fee_bps));
+	}
 
 	let total_output: u64 = proof_outputs.iter().map(|&x| x as u64).sum();
 
@@ -498,7 +498,7 @@ pub fn compute_random_output_assignments(
 		let _ = shortfall; // suppress unused warning
 	}
 
-	assignments
+	Ok(assignments)
 }
 
 /// Result of checking proof verification events
@@ -1817,7 +1817,8 @@ async fn generate_round_proofs(
 
 	// Compute random output assignments (each proof can have 2 outputs)
 	let output_assignments =
-		compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS);
+		compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS)
+			.map_err(|e| crate::error::QuantusError::Generic(e))?;
 
 	// Log the random partition
 	log_print!("  Random output partition:");
@@ -3793,10 +3794,10 @@ mod tests {
 	#[test]
 	fn compute_random_output_assignments_empty_inputs_or_targets() {
 		let targets = mk_accounts(3);
-		assert!(compute_random_output_assignments(&[], &targets, 0).is_empty());
+		assert!(compute_random_output_assignments(&[], &targets, 0).unwrap().is_empty());
 
 		let inputs = vec![1u128, 2u128, 3u128];
-		assert!(compute_random_output_assignments(&inputs, &[], 0).is_empty());
+		assert!(compute_random_output_assignments(&inputs, &[], 0).unwrap().is_empty());
 	}
 
 	#[test]
@@ -3808,7 +3809,8 @@ mod tests {
 		let input_amounts = vec![input, input, input, input, input];
 		let targets = mk_accounts(4);
 
-		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		let assignments =
+			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
 		assert_eq!(assignments.len(), input_amounts.len());
 
 		let proof_outputs = proof_outputs_for_inputs(&input_amounts, fee_bps);
@@ -3857,7 +3859,8 @@ mod tests {
 		let input_amounts = vec![input; num_proofs];
 		let targets = mk_accounts(num_targets);
 
-		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		let assignments =
+			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
 		assert_eq!(assignments.len(), num_proofs);
 
 		// total preserved
@@ -3898,7 +3901,8 @@ mod tests {
 		let input = find_input_for_min_output(fee_bps, 1);
 		let input_amounts = vec![input, input];
 
-		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		let assignments =
+			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
 		assert_eq!(assignments.len(), input_amounts.len());
 
 		let total_assigned: u64 = assignments

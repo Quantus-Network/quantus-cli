@@ -325,8 +325,10 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	}
 
 	// Calculate total available (only unspent)
-	let total_available: u128 =
-		unspent_transfers.iter().map(|t| t.amount.parse::<u128>().unwrap_or(0)).sum();
+	let mut total_available: u128 = 0;
+	for t in &unspent_transfers {
+		total_available += parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
+	}
 
 	// Determine amount to withdraw
 	let withdraw_amount = config.amount.unwrap_or(total_available);
@@ -337,21 +339,22 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		)));
 	}
 
-	// Select transfers to cover the amount (largest first)
-	let mut sorted_transfers = unspent_transfers.clone();
-	sorted_transfers.sort_by(|a, b| {
-		let amt_a: u128 = a.amount.parse().unwrap_or(0);
-		let amt_b: u128 = b.amount.parse().unwrap_or(0);
-		amt_b.cmp(&amt_a) // Descending order (largest first)
-	});
+	// Parse amounts for sorting (fail early if any are invalid)
+	let mut transfers_with_amounts: Vec<(Transfer, u128)> = Vec::new();
+	for t in unspent_transfers {
+		let amt = parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
+		transfers_with_amounts.push((t, amt));
+	}
+
+	// Sort by amount descending (largest first)
+	transfers_with_amounts.sort_by(|a, b| b.1.cmp(&a.1));
 
 	let mut selected_transfers = Vec::new();
 	let mut selected_total: u128 = 0;
-	for t in sorted_transfers {
+	for (t, amt) in transfers_with_amounts {
 		if selected_total >= withdraw_amount {
 			break;
 		}
-		let amt: u128 = t.amount.parse().unwrap_or(0);
 		selected_transfers.push(t);
 		selected_total += amt;
 	}
@@ -587,11 +590,12 @@ pub async fn query_pending_transfers(
 	let mut pending = Vec::new();
 
 	for t in &incoming_transfers {
-		let amount: u128 = t.amount.parse().unwrap_or(0);
-		total_available += amount;
+		let ctx = format!("transfer {}", t.id);
+		let amount = parse_transfer_amount(&t.amount, &ctx)?;
+		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
+		let transfer_count = parse_transfer_count(&t.transfer_count, &ctx)?;
 
-		let leaf_index: u64 = t.leaf_index.parse().unwrap_or(0);
-		let transfer_count: u64 = t.transfer_count.parse().unwrap_or(0);
+		total_available += amount;
 
 		pending.push(PendingTransfer {
 			block_height: t.block_height,
@@ -639,11 +643,12 @@ pub async fn query_pending_transfers_for_address(
 	let mut pending = Vec::new();
 
 	for t in &incoming_transfers {
-		let amount: u128 = t.amount.parse().unwrap_or(0);
-		total_available += amount;
+		let ctx = format!("transfer {}", t.id);
+		let amount = parse_transfer_amount(&t.amount, &ctx)?;
+		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
+		let transfer_count = parse_transfer_count(&t.transfer_count, &ctx)?;
 
-		let leaf_index: u64 = t.leaf_index.parse().unwrap_or(0);
-		let transfer_count: u64 = t.transfer_count.parse().unwrap_or(0);
+		total_available += amount;
 
 		pending.push(PendingTransfer {
 			block_height: t.block_height,
@@ -662,6 +667,36 @@ pub async fn query_pending_transfers_for_address(
 // ============================================================================
 // Internal Helper Functions
 // ============================================================================
+
+/// Parse a transfer amount string to u128
+fn parse_transfer_amount(amount_str: &str, context: &str) -> Result<u128> {
+	amount_str.parse::<u128>().map_err(|e| {
+		CollectRewardsError::from(format!(
+			"Invalid transfer amount '{}' in {}: {}",
+			amount_str, context, e
+		))
+	})
+}
+
+/// Parse a leaf index string to u64
+fn parse_leaf_index(leaf_index_str: &str, context: &str) -> Result<u64> {
+	leaf_index_str.parse::<u64>().map_err(|e| {
+		CollectRewardsError::from(format!(
+			"Invalid leaf_index '{}' in {}: {}",
+			leaf_index_str, context, e
+		))
+	})
+}
+
+/// Parse a transfer count string to u64
+fn parse_transfer_count(transfer_count_str: &str, context: &str) -> Result<u64> {
+	transfer_count_str.parse::<u64>().map_err(|e| {
+		CollectRewardsError::from(format!(
+			"Invalid transfer_count '{}' in {}: {}",
+			transfer_count_str, context, e
+		))
+	})
+}
 
 /// Parse an SS58 address to 32 bytes
 fn parse_ss58_address(address: &str) -> Result<[u8; 32]> {
@@ -998,7 +1033,8 @@ async fn filter_unspent_transfers_onchain(
 		.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?;
 
 	for transfer in transfers {
-		let transfer_count: u64 = transfer.transfer_count.parse().unwrap_or(0);
+		let ctx = format!("transfer {}", transfer.id);
+		let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
 
 		let nullifier =
 			wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
@@ -1045,7 +1081,8 @@ async fn filter_unspent_transfers_with_fallback(
 		std::collections::HashMap::new();
 
 	for transfer in transfers {
-		let transfer_count: u64 = transfer.transfer_count.parse().unwrap_or(0);
+		let ctx = format!("transfer {}", transfer.id);
+		let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
 
 		let nullifier =
 			wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
