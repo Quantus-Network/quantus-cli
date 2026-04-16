@@ -1818,7 +1818,7 @@ async fn generate_round_proofs(
 	// Compute random output assignments (each proof can have 2 outputs)
 	let output_assignments =
 		compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS)
-			.map_err(|e| crate::error::QuantusError::Generic(e))?;
+			.map_err(crate::error::QuantusError::Generic)?;
 
 	// Log the random partition
 	log_print!("  Random output partition:");
@@ -3318,7 +3318,7 @@ async fn run_check_nullifier(
 		let secret: [u8; 32] = wormhole_pair.secret.as_ref().try_into().map_err(|_| {
 			crate::error::QuantusError::Generic("Invalid secret length".to_string())
 		})?;
-		let hex = hex::encode(&secret);
+		let hex = hex::encode(secret);
 		log_print!("Derived wormhole secret from wallet '{}' (index {})", wallet, wormhole_index);
 		(secret, hex)
 	} else {

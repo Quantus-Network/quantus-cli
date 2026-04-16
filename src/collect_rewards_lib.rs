@@ -256,7 +256,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 
 	let wormhole_address = AccountId32::from(wormhole_secret.address).to_ss58check();
-	let secret_hex = hex::encode(&wormhole_secret.secret.as_ref());
+	let secret_hex = hex::encode(wormhole_secret.secret.as_ref());
 
 	// Parse destination address
 	let destination_bytes = parse_ss58_address(&config.destination_address)?;
@@ -467,8 +467,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		if leaf_to_account != wormhole_address_bytes {
 			return Err(CollectRewardsError::from(format!(
 				"Leaf to_account mismatch: expected 0x{}, got 0x{}",
-				hex::encode(&wormhole_address_bytes),
-				hex::encode(&leaf_to_account)
+				hex::encode(wormhole_address_bytes),
+				hex::encode(leaf_to_account)
 			)));
 		}
 
@@ -1089,7 +1089,7 @@ async fn filter_unspent_transfers_with_fallback(
 				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
 			})?;
 
-		let nullifier_hex = hex::encode(&nullifier);
+		let nullifier_hex = hex::encode(nullifier);
 		let nullifier_hash = compute_address_hash(&nullifier);
 		nullifier_map.insert(nullifier_hex, (nullifier_hash, transfer));
 	}
