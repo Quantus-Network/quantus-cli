@@ -41,6 +41,10 @@ pub struct Transfer {
 
 	/// Index in the ZK trie for Merkle proof generation
 	pub leaf_index: String,
+
+	/// Transfer count from Wormhole pallet - required for nullifier computation
+	#[serde(default)]
+	pub transfer_count: String,
 }
 
 /// Result from a prefix query.
@@ -74,6 +78,56 @@ pub struct GraphQLError {
 pub struct GraphQLErrorLocation {
 	pub line: i64,
 	pub column: i64,
+}
+
+/// A nullifier as returned by the Subsquid indexer.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NullifierResult {
+	/// The nullifier bytes as hex
+	pub nullifier: String,
+
+	/// Blake3 hash of the nullifier for prefix queries
+	pub nullifier_hash: String,
+
+	/// Extrinsic hash that consumed this nullifier
+	pub extrinsic_hash: String,
+
+	/// Block height where the nullifier was consumed
+	pub block_height: i64,
+
+	/// Timestamp when the nullifier was consumed
+	pub timestamp: String,
+}
+
+/// Result from a nullifier prefix query.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NullifiersByPrefixResult {
+	/// Matching nullifiers
+	pub nullifiers: Vec<NullifierResult>,
+
+	/// Total count of matches
+	pub total_count: i64,
+}
+
+/// Query parameters for nullifier prefix queries.
+#[derive(Debug, Clone, Default)]
+pub struct NullifierQueryParams {
+	/// Minimum block number (inclusive)
+	pub after_block: Option<u32>,
+}
+
+impl NullifierQueryParams {
+	pub fn new() -> Self {
+		Self::default()
+	}
+
+	#[allow(dead_code)]
+	pub fn with_after_block(mut self, block: u32) -> Self {
+		self.after_block = Some(block);
+		self
+	}
 }
 
 /// Query parameters for transfer prefix queries.
@@ -190,7 +244,8 @@ mod tests {
             "fee": "1000000",
             "fromHash": "abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234abcd1234",
             "toHash": "5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh5678efgh",
-            "leafIndex": "42"
+            "leafIndex": "42",
+            "transferCount": "100"
         }"#;
 
 		let transfer: Transfer = serde_json::from_str(json).expect("should deserialize");
@@ -205,6 +260,7 @@ mod tests {
 		assert_eq!(transfer.amount, "1000000000000");
 		assert_eq!(transfer.fee, "1000000");
 		assert_eq!(transfer.leaf_index, "42");
+		assert_eq!(transfer.transfer_count, "100");
 	}
 
 	#[test]
@@ -221,7 +277,8 @@ mod tests {
             "fee": "1000000",
             "fromHash": "abcd1234",
             "toHash": "5678efgh",
-            "leafIndex": "0"
+            "leafIndex": "0",
+            "transferCount": "1"
         }"#;
 
 		let transfer: Transfer = serde_json::from_str(json).expect("should deserialize");

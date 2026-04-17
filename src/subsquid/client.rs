@@ -4,7 +4,10 @@ use crate::error::{QuantusError, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
-use super::types::{GraphQLResponse, Transfer, TransferQueryParams, TransfersByPrefixResult};
+use super::types::{
+	GraphQLResponse, NullifierQueryParams, NullifierResult, NullifiersByPrefixResult, Transfer,
+	TransferQueryParams, TransfersByPrefixResult,
+};
 
 /// Client for querying the Subsquid indexer.
 pub struct SubsquidClient {
@@ -22,6 +25,12 @@ struct GraphQLRequest {
 struct TransfersByHashPrefixData {
 	#[serde(rename = "transfersByHashPrefix")]
 	transfers_by_hash_prefix: TransfersByPrefixResult,
+}
+
+#[derive(Deserialize)]
+struct NullifiersByPrefixData {
+	#[serde(rename = "nullifiersByPrefix")]
+	nullifiers_by_prefix: NullifiersByPrefixResult,
 }
 
 impl SubsquidClient {
@@ -75,6 +84,7 @@ impl SubsquidClient {
                         fromHash
                         toHash
                         leafIndex
+                        transferCount
                     }
                     totalCount
                 }
@@ -209,6 +219,143 @@ impl SubsquidClient {
 			.collect();
 
 		Ok(filtered)
+	}
+
+	/// Query consumed nullifiers by hash prefixes.
+	///
+	/// This method allows privacy-preserving queries by matching against
+	/// blake3 hash prefixes of nullifiers rather than the nullifiers themselves.
+	///
+	/// # Arguments
+	///
+	/// * `prefixes` - Hash prefixes to search for (hex strings)
+	/// * `params` - Additional query parameters (block range)
+	///
+	/// # Returns
+	///
+	/// A list of matching nullifiers. The caller should filter locally for exact matches.
+	pub async fn query_nullifiers_by_prefix(
+		&self,
+		prefixes: Vec<String>,
+		params: NullifierQueryParams,
+	) -> Result<Vec<NullifierResult>> {
+		if prefixes.is_empty() {
+			return Ok(vec![]);
+		}
+
+		let query = r#"
+            query NullifiersByPrefix($input: NullifiersByPrefixInput!) {
+                nullifiersByPrefix(input: $input) {
+                    nullifiers {
+                        nullifier
+                        nullifierHash
+                        extrinsicHash
+                        blockHeight
+                        timestamp
+                    }
+                    totalCount
+                }
+            }
+        "#;
+
+		let mut input = serde_json::json!({
+			"hashPrefixes": prefixes,
+		});
+
+		if let Some(block) = params.after_block {
+			input["afterBlock"] = serde_json::json!(block);
+		}
+
+		let request = GraphQLRequest {
+			query: query.to_string(),
+			variables: serde_json::json!({ "input": input }),
+		};
+
+		let response = self
+			.http_client
+			.post(&self.url)
+			.json(&request)
+			.send()
+			.await
+			.map_err(|e| QuantusError::Generic(format!("Failed to send request: {}", e)))?;
+
+		if !response.status().is_success() {
+			let status = response.status();
+			let body = response.text().await.unwrap_or_default();
+			return Err(QuantusError::Generic(format!(
+				"Subsquid request failed with status {}: {}",
+				status, body
+			)));
+		}
+
+		let graphql_response: GraphQLResponse<NullifiersByPrefixData> = response
+			.json()
+			.await
+			.map_err(|e| QuantusError::Generic(format!("Failed to parse response: {}", e)))?;
+
+		if let Some(errors) = graphql_response.errors {
+			let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
+			return Err(QuantusError::Generic(format!(
+				"GraphQL errors: {}",
+				error_messages.join("; ")
+			)));
+		}
+
+		let data = graphql_response
+			.data
+			.ok_or_else(|| QuantusError::Generic("No data in response".to_string()))?;
+
+		Ok(data.nullifiers_by_prefix.nullifiers)
+	}
+
+	/// Check if specific nullifiers have been spent.
+	///
+	/// Given a list of (nullifier_hex, nullifier_hash) pairs, returns which ones
+	/// are found in the indexer (i.e., have been spent).
+	///
+	/// # Arguments
+	///
+	/// * `nullifiers` - List of (nullifier_hex, nullifier_hash) pairs to check
+	/// * `prefix_len` - Length of hash prefix to use for queries (8 recommended)
+	///
+	/// # Returns
+	///
+	/// Set of nullifier hex strings that have been spent.
+	pub async fn check_nullifiers_spent(
+		&self,
+		nullifiers: &[(String, String)], // (nullifier_hex, nullifier_hash)
+		prefix_len: usize,
+	) -> Result<std::collections::HashSet<String>> {
+		use super::hash::get_hash_prefix;
+		use std::collections::HashSet;
+
+		if nullifiers.is_empty() {
+			return Ok(HashSet::new());
+		}
+
+		// Build map of hash -> nullifier_hex for local filtering
+		let hash_to_nullifier: std::collections::HashMap<String, String> =
+			nullifiers.iter().map(|(nul, hash)| (hash.clone(), nul.clone())).collect();
+
+		// Get unique prefixes
+		let prefixes: Vec<String> = nullifiers
+			.iter()
+			.map(|(_, hash)| get_hash_prefix(hash, prefix_len))
+			.collect::<HashSet<_>>()
+			.into_iter()
+			.collect();
+
+		// Query subsquid
+		let results =
+			self.query_nullifiers_by_prefix(prefixes, NullifierQueryParams::new()).await?;
+
+		// Filter to exact matches
+		let spent: HashSet<String> = results
+			.into_iter()
+			.filter_map(|r| hash_to_nullifier.get(&r.nullifier_hash).cloned())
+			.collect();
+
+		Ok(spent)
 	}
 }
 

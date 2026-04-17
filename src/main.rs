@@ -10,6 +10,7 @@ use colored::Colorize;
 
 mod chain;
 mod cli;
+mod collect_rewards_lib;
 mod config;
 mod error;
 mod log;

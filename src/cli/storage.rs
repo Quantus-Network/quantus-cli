@@ -362,7 +362,7 @@ pub async fn show_storage_stats(
 			log_print!("Per-pallet breakdown:");
 
 			// Sort by storage count (descending)
-			pallet_stats.sort_by(|a, b| b.1.cmp(&a.1));
+			pallet_stats.sort_by_key(|k| std::cmp::Reverse(k.1));
 
 			for (pallet_name, count) in pallet_stats {
 				log_print!(

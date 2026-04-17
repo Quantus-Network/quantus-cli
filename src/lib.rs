@@ -6,6 +6,7 @@
 
 pub mod chain;
 pub mod cli;
+pub mod collect_rewards_lib;
 pub mod config;
 pub mod error;
 pub mod log;
@@ -44,6 +45,13 @@ pub use wormhole_lib::{
 	compute_nullifier, compute_output_amount, compute_wormhole_address,
 	generate_proof as generate_wormhole_proof, quantize_amount, ProofGenerationInput,
 	ProofGenerationOutput, WormholeLibError, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
+};
+
+// Re-export collect rewards library for SDK usage
+pub use collect_rewards_lib::{
+	collect_rewards, query_pending_transfers, query_pending_transfers_for_address,
+	CollectRewardsConfig, CollectRewardsError, CollectRewardsResult, NoOpProgress, PendingTransfer,
+	ProgressCallback, QueryPendingTransfersResult, WithdrawalBatch,
 };
 
 /// Library version

@@ -384,29 +384,29 @@ pub struct ProofOutputAssignment {
 /// * `fee_bps` - Fee in basis points
 ///
 /// # Returns
-/// A vector of output assignments, one per proof
+/// A vector of output assignments, one per proof, or an error if quantization fails
 pub fn compute_random_output_assignments(
 	input_amounts: &[u128],
 	target_accounts: &[[u8; 32]],
 	fee_bps: u32,
-) -> Vec<ProofOutputAssignment> {
+) -> Result<Vec<ProofOutputAssignment>, String> {
 	use rand::seq::SliceRandom;
 
 	let num_proofs = input_amounts.len();
 	let num_targets = target_accounts.len();
 
 	if num_proofs == 0 || num_targets == 0 {
-		return vec![];
+		return Ok(vec![]);
 	}
 
 	// Step 1: Compute output amounts per proof (after fee deduction)
-	let proof_outputs: Vec<u32> = input_amounts
-		.iter()
-		.map(|&input| {
-			let input_quantized = quantize_funding_amount(input).unwrap_or(0);
-			compute_output_amount(input_quantized, fee_bps)
-		})
-		.collect();
+	let mut proof_outputs: Vec<u32> = Vec::with_capacity(input_amounts.len());
+	for (i, &input) in input_amounts.iter().enumerate() {
+		let input_quantized = quantize_funding_amount(input).map_err(|e| {
+			format!("Failed to quantize input amount {} for proof {}: {}", input, i, e)
+		})?;
+		proof_outputs.push(compute_output_amount(input_quantized, fee_bps));
+	}
 
 	let total_output: u64 = proof_outputs.iter().map(|&x| x as u64).sum();
 
@@ -498,7 +498,7 @@ pub fn compute_random_output_assignments(
 		let _ = shortfall; // suppress unused warning
 	}
 
-	assignments
+	Ok(assignments)
 }
 
 /// Result of checking proof verification events
@@ -802,6 +802,89 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "1.0")]
 		amount: f64,
 	},
+	/// Collect miner rewards from a wormhole address.
+	///
+	/// This command queries Subsquid for pending transfers to your wormhole address,
+	/// generates ZK proofs, and submits a withdrawal transaction to claim your rewards.
+	/// It mirrors the withdrawal flow used by the miner app.
+	CollectRewards {
+		/// Wallet name (used for HD derivation of wormhole secret and exit address)
+		/// Either --wallet or --mnemonic must be provided.
+		#[arg(short, long, required_unless_present = "mnemonic")]
+		wallet: Option<String>,
+
+		/// Mnemonic phrase for HD derivation (alternative to --wallet)
+		/// Use this to derive wormhole secrets without a stored wallet.
+		#[arg(short = 'm', long, required_unless_present = "wallet")]
+		mnemonic: Option<String>,
+
+		/// Password for the wallet (only used with --wallet)
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file (only used with --wallet)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Amount in DEV to withdraw (default: withdraw all available)
+		#[arg(short, long)]
+		amount: Option<f64>,
+
+		/// Destination address for withdrawn funds (required when using --mnemonic)
+		#[arg(long)]
+		destination: Option<String>,
+
+		/// Subsquid indexer URL for querying transfers
+		#[arg(long, default_value = "https://subsquid.quantus.com/blue/graphql")]
+		subsquid_url: String,
+
+		/// Wormhole address index for HD derivation (default: 0)
+		#[arg(long, default_value = "0")]
+		wormhole_index: usize,
+
+		/// Dry run - show available transfers without withdrawing
+		#[arg(long)]
+		dry_run: bool,
+
+		/// Specific block number to use for proofs (default: use latest block)
+		#[arg(long)]
+		at_block: Option<u32>,
+	},
+	/// Check if nullifiers have been spent (consumed by a withdrawal).
+	///
+	/// Given a secret (or wallet) and transfer count(s), computes the nullifier(s) and checks
+	/// if they exist in Subsquid (meaning the corresponding transfer has been withdrawn).
+	CheckNullifier {
+		/// Secret (32-byte hex string) - the wormhole secret.
+		/// Either --secret or --wallet must be provided.
+		#[arg(long, required_unless_present = "wallet")]
+		secret: Option<String>,
+
+		/// Wallet name (used for HD derivation of wormhole secret).
+		/// Either --secret or --wallet must be provided.
+		#[arg(short, long, required_unless_present = "secret")]
+		wallet: Option<String>,
+
+		/// Password for the wallet (only used with --wallet)
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file (only used with --wallet)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Wormhole address index for HD derivation (default: 0, only used with --wallet)
+		#[arg(long, default_value = "0")]
+		wormhole_index: usize,
+
+		/// Transfer count(s) to check. Can be a single number or a range (e.g., "0-10")
+		#[arg(long)]
+		transfer_counts: String,
+
+		/// Subsquid indexer URL for querying nullifiers
+		#[arg(long, default_value = "https://subsquid.quantus.com/blue/graphql")]
+		subsquid_url: String,
+	},
 }
 
 pub async fn handle_wormhole_command(
@@ -930,6 +1013,51 @@ pub async fn handle_wormhole_command(
 					.to_string(),
 			))
 		},
+		WormholeCommands::CollectRewards {
+			wallet,
+			mnemonic,
+			password,
+			password_file,
+			amount,
+			destination,
+			subsquid_url,
+			wormhole_index,
+			dry_run,
+			at_block,
+		} =>
+			run_collect_rewards(
+				wallet,
+				mnemonic,
+				password,
+				password_file,
+				amount,
+				destination,
+				subsquid_url,
+				wormhole_index,
+				dry_run,
+				node_url,
+				at_block,
+			)
+			.await,
+		WormholeCommands::CheckNullifier {
+			secret,
+			wallet,
+			password,
+			password_file,
+			wormhole_index,
+			transfer_counts,
+			subsquid_url,
+		} =>
+			run_check_nullifier(
+				secret,
+				wallet,
+				password,
+				password_file,
+				wormhole_index,
+				transfer_counts,
+				subsquid_url,
+			)
+			.await,
 	}
 }
 
@@ -1677,7 +1805,8 @@ async fn generate_round_proofs(
 
 	// Compute random output assignments (each proof can have 2 outputs)
 	let output_assignments =
-		compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS);
+		compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS)
+			.map_err(crate::error::QuantusError::Generic)?;
 
 	// Log the random partition
 	log_print!("  Random output partition:");
@@ -2911,7 +3040,156 @@ async fn run_dissolve(
 	Ok(())
 }
 
-/// Helper to aggregate proof files and write the result
+/// Collect miner rewards from a wormhole address.
+///
+/// This mirrors the withdrawal flow from the miner app:
+/// 1. Query Subsquid for pending transfers to the wormhole address
+/// 2. Filter out already-spent transfers (nullifier check)
+/// 3. Generate ZK proofs for each transfer
+/// 4. Aggregate proofs
+/// 5. Submit withdrawal transaction
+#[allow(clippy::too_many_arguments)]
+async fn run_collect_rewards(
+	wallet_name: Option<String>,
+	mnemonic_arg: Option<String>,
+	password: Option<String>,
+	password_file: Option<String>,
+	amount: Option<f64>,
+	destination: Option<String>,
+	subsquid_url: String,
+	wormhole_index: usize,
+	dry_run: bool,
+	node_url: &str,
+	at_block: Option<u32>,
+) -> crate::error::Result<()> {
+	use crate::collect_rewards_lib::{collect_rewards, CollectRewardsConfig, ProgressCallback};
+	use colored::Colorize;
+
+	log_print!("");
+	log_print!("==================================================");
+	log_print!("  Wormhole Collect Rewards");
+	log_print!("==================================================");
+	log_print!("");
+
+	// Get mnemonic and wallet address from either wallet or direct mnemonic
+	let (mnemonic, wallet_address) = if let Some(wallet_name) = wallet_name {
+		// Load from stored wallet
+		let wallet = load_multiround_wallet(&wallet_name, password, password_file)?;
+		(wallet.mnemonic, Some(wallet.wallet_address))
+	} else if let Some(mnemonic) = mnemonic_arg {
+		// Use provided mnemonic directly
+		(mnemonic, None)
+	} else {
+		return Err(crate::error::QuantusError::Generic(
+			"Either --wallet or --mnemonic must be provided".to_string(),
+		));
+	};
+
+	// Destination address - required when using mnemonic directly
+	let destination_address = if let Some(dest) = &destination {
+		dest.clone()
+	} else if let Some(addr) = wallet_address.as_ref() {
+		addr.clone()
+	} else {
+		return Err(crate::error::QuantusError::Generic(
+			"--destination is required when using --mnemonic".to_string(),
+		));
+	};
+
+	// Convert amount from DEV to planck
+	let amount_planck = amount.map(|a| (a * 1_000_000_000_000.0) as u128);
+
+	// Print initial info
+	if let Some(ref addr) = wallet_address {
+		log_print!("  Wallet:            {}", addr.bright_yellow());
+	} else {
+		log_print!("  Wallet:            {}", "(from mnemonic)".bright_yellow());
+	}
+	log_print!("  Wormhole index:    {}", wormhole_index);
+	log_print!("  Destination:       {}", destination_address.bright_green());
+	log_print!("  Subsquid URL:      {}", subsquid_url);
+	log_print!("  Node URL:          {}", node_url);
+	log_print!("");
+
+	// Create CLI progress callback
+	struct CliProgress;
+	impl ProgressCallback for CliProgress {
+		fn on_step(&self, step: &str, details: &str) {
+			use colored::Colorize;
+			match step {
+				"derive" => log_print!("{}", format!("Step 1: {}...", details).bright_yellow()),
+				"query" => log_print!("{}", format!("Step 2: {}...", details).bright_yellow()),
+				"nullifiers" => log_print!("{}", format!("Step 3: {}...", details).bright_yellow()),
+				"connect" => log_print!("{}", format!("Step 4: {}...", details).bright_yellow()),
+				"proofs" => log_print!("{}", format!("Step 5: {}...", details).bright_yellow()),
+				"submit" => log_print!("{}", format!("Step 6: {}...", details).bright_yellow()),
+				_ => log_print!("  {}: {}", step, details),
+			}
+		}
+		fn on_proof_generated(&self, index: usize, total: usize) {
+			log_print!("  [{}/{}] Proof generated", index, total);
+		}
+		fn on_batch_submitted(&self, batch_index: usize, total_batches: usize, amount: u128) {
+			use colored::Colorize;
+			log_print!(
+				"  Batch {}/{}: {} withdrawn",
+				batch_index,
+				total_batches,
+				format_balance(amount).bright_cyan()
+			);
+		}
+		fn on_error(&self, message: &str) {
+			log_error!("{}", message);
+		}
+	}
+
+	let config = CollectRewardsConfig {
+		mnemonic,
+		wormhole_index,
+		destination_address: destination_address.clone(),
+		subsquid_url,
+		node_url: node_url.to_string(),
+		bins_dir: "generated-bins".to_string(),
+		amount: amount_planck,
+		dry_run,
+		at_block,
+	};
+
+	let result = collect_rewards(config, &CliProgress)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(e.message))?;
+
+	// Show summary
+	log_print!("");
+	if result.total_withdrawn > 0 {
+		log_print!("{}", "Withdrawal complete!".bright_green().bold());
+		log_print!(
+			"  Total withdrawn: {} across {} batch(es)",
+			format_balance(result.total_withdrawn).bright_cyan(),
+			result.batches.len()
+		);
+		log_print!("  Transfers processed: {}", result.transfers_processed);
+		log_print!("  Destination: {}", destination_address.bright_green());
+
+		for (i, batch) in result.batches.iter().enumerate() {
+			log_print!(
+				"  Batch {}: {} (tx: 0x{}...)",
+				i + 1,
+				format_balance(batch.amount_withdrawn).bright_cyan(),
+				&batch.tx_hash[..16]
+			);
+		}
+	} else if dry_run {
+		log_print!("{}", "Dry run complete - no transactions submitted.".bright_blue());
+		log_print!("  Transfers available: {}", result.transfers_processed);
+	} else {
+		log_print!("{}", "No transfers to withdraw.".bright_yellow());
+	}
+
+	Ok(())
+}
+
+/// Helper to aggregate proof files and write the result (used by dissolve command)
 fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate::error::Result<()> {
 	use qp_wormhole_aggregator::aggregator::Layer0Aggregator;
 
@@ -2984,6 +3262,153 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 // - Use zkTree_getMerkleProof RPC
 // - Directly use ZkMerkleProofRpc response (siblings, positions)
 // - Use PrivateCircuitInputs with zk_tree_root, zk_merkle_siblings, zk_merkle_positions
+
+/// Check if nullifiers have been spent by querying Subsquid.
+///
+/// Given a secret (or wallet) and transfer count(s), computes the nullifier(s) and checks
+/// if they exist in the indexer (meaning the transfer was already withdrawn).
+async fn run_check_nullifier(
+	secret_hex: Option<String>,
+	wallet_name: Option<String>,
+	password: Option<String>,
+	password_file: Option<String>,
+	wormhole_index: usize,
+	transfer_counts_arg: String,
+	subsquid_url: String,
+) -> crate::error::Result<()> {
+	use crate::subsquid::{compute_address_hash, SubsquidClient};
+	use colored::Colorize;
+
+	// Get secret either directly or from wallet
+	let (secret, secret_hex_display) = if let Some(hex) = secret_hex {
+		let secret = parse_secret_hex(&hex).map_err(crate::error::QuantusError::Generic)?;
+		(secret, hex)
+	} else if let Some(wallet) = wallet_name {
+		// Load wallet and derive wormhole secret
+		let wallet_manager = WalletManager::new()?;
+		let wallet_password = password::get_wallet_password(&wallet, password, password_file)?;
+		let wallet_data = wallet_manager.load_wallet(&wallet, &wallet_password)?;
+
+		let mnemonic = wallet_data.mnemonic.ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Wallet does not contain a mnemonic. Use --secret instead.".to_string(),
+			)
+		})?;
+
+		// Derive wormhole secret using HD path for miner rewards (purpose = 1)
+		let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
+		let wormhole_pair = derive_wormhole_from_mnemonic(&mnemonic, None, &path).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e))
+		})?;
+
+		let secret: [u8; 32] = wormhole_pair.secret.as_ref().try_into().map_err(|_| {
+			crate::error::QuantusError::Generic("Invalid secret length".to_string())
+		})?;
+		let hex = hex::encode(secret);
+		log_print!("Derived wormhole secret from wallet '{}' (index {})", wallet, wormhole_index);
+		(secret, hex)
+	} else {
+		return Err(crate::error::QuantusError::Generic(
+			"Either --secret or --wallet must be provided".to_string(),
+		));
+	};
+
+	// Parse transfer counts (single number or range like "0-10")
+	let transfer_counts: Vec<u64> = if transfer_counts_arg.contains('-') {
+		let parts: Vec<&str> = transfer_counts_arg.split('-').collect();
+		if parts.len() != 2 {
+			return Err(crate::error::QuantusError::Generic(
+				"Invalid range format. Use 'start-end' (e.g., '0-10')".to_string(),
+			));
+		}
+		let start: u64 = parts[0].parse().map_err(|_| {
+			crate::error::QuantusError::Generic(format!("Invalid start number: {}", parts[0]))
+		})?;
+		let end: u64 = parts[1].parse().map_err(|_| {
+			crate::error::QuantusError::Generic(format!("Invalid end number: {}", parts[1]))
+		})?;
+		(start..=end).collect()
+	} else {
+		vec![transfer_counts_arg.parse().map_err(|_| {
+			crate::error::QuantusError::Generic(format!(
+				"Invalid transfer count: {}",
+				transfer_counts_arg
+			))
+		})?]
+	};
+
+	log_print!("{}", "Checking Nullifiers".bright_cyan());
+	log_print!("  Secret: 0x{}...", &secret_hex_display[..16.min(secret_hex_display.len())]);
+	log_print!("  Transfer counts: {:?}", transfer_counts);
+	log_print!("  Subsquid URL: {}", subsquid_url);
+	log_print!("");
+
+	// Compute nullifiers for each transfer count
+	let mut nullifiers_to_check: Vec<(String, String, u64)> = Vec::new(); // (nullifier_hex, nullifier_hash, transfer_count)
+
+	for tc in &transfer_counts {
+		let nullifier = wormhole_lib::compute_nullifier(&secret, *tc).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to compute nullifier for transfer_count {}: {}",
+				tc, e.message
+			))
+		})?;
+		let nullifier_hex = hex::encode(nullifier);
+		let nullifier_hash = compute_address_hash(&nullifier);
+		nullifiers_to_check.push((nullifier_hex, nullifier_hash, *tc));
+	}
+
+	// Query Subsquid
+	let client = SubsquidClient::new(subsquid_url)?;
+
+	// Build prefix queries (8 char prefix for privacy)
+	let prefix_len = 8;
+	let nullifier_pairs: Vec<(String, String)> = nullifiers_to_check
+		.iter()
+		.map(|(nul, hash, _)| (nul.clone(), hash.clone()))
+		.collect();
+
+	let spent_set = client.check_nullifiers_spent(&nullifier_pairs, prefix_len).await?;
+
+	// Display results
+	log_print!("{}", "Results:".bright_yellow());
+	let mut spent_count = 0;
+	let mut unspent_count = 0;
+
+	for (nullifier_hex, _nullifier_hash, tc) in &nullifiers_to_check {
+		let is_spent = spent_set.contains(nullifier_hex);
+		if is_spent {
+			log_print!(
+				"  [{}] transfer_count={}: {} (nullifier: 0x{}...)",
+				"SPENT".bright_red(),
+				tc,
+				"Already withdrawn".red(),
+				&nullifier_hex[..16]
+			);
+			spent_count += 1;
+		} else {
+			log_print!(
+				"  [{}] transfer_count={}: {} (nullifier: 0x{}...)",
+				"UNSPENT".bright_green(),
+				tc,
+				"Available for withdrawal".green(),
+				&nullifier_hex[..16]
+			);
+			unspent_count += 1;
+		}
+	}
+
+	log_print!("");
+	log_print!(
+		"Summary: {} spent, {} unspent out of {} checked",
+		spent_count,
+		unspent_count,
+		nullifiers_to_check.len()
+	);
+
+	Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -3355,10 +3780,10 @@ mod tests {
 	#[test]
 	fn compute_random_output_assignments_empty_inputs_or_targets() {
 		let targets = mk_accounts(3);
-		assert!(compute_random_output_assignments(&[], &targets, 0).is_empty());
+		assert!(compute_random_output_assignments(&[], &targets, 0).unwrap().is_empty());
 
 		let inputs = vec![1u128, 2u128, 3u128];
-		assert!(compute_random_output_assignments(&inputs, &[], 0).is_empty());
+		assert!(compute_random_output_assignments(&inputs, &[], 0).unwrap().is_empty());
 	}
 
 	#[test]
@@ -3370,7 +3795,8 @@ mod tests {
 		let input_amounts = vec![input, input, input, input, input];
 		let targets = mk_accounts(4);
 
-		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		let assignments =
+			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
 		assert_eq!(assignments.len(), input_amounts.len());
 
 		let proof_outputs = proof_outputs_for_inputs(&input_amounts, fee_bps);
@@ -3419,7 +3845,8 @@ mod tests {
 		let input_amounts = vec![input; num_proofs];
 		let targets = mk_accounts(num_targets);
 
-		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		let assignments =
+			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
 		assert_eq!(assignments.len(), num_proofs);
 
 		// total preserved
@@ -3460,7 +3887,8 @@ mod tests {
 		let input = find_input_for_min_output(fee_bps, 1);
 		let input_amounts = vec![input, input];
 
-		let assignments = compute_random_output_assignments(&input_amounts, &targets, fee_bps);
+		let assignments =
+			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
 		assert_eq!(assignments.len(), input_amounts.len());
 
 		let total_assigned: u64 = assignments
