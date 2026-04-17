@@ -842,14 +842,6 @@ pub enum WormholeCommands {
 		#[arg(long, default_value = "0")]
 		wormhole_index: usize,
 
-		/// Output directory for proof files
-		#[arg(short, long, default_value = "/tmp/wormhole_collect")]
-		output_dir: String,
-
-		/// Keep proof files after completion
-		#[arg(short, long)]
-		keep_files: bool,
-
 		/// Dry run - show available transfers without withdrawing
 		#[arg(long)]
 		dry_run: bool,
@@ -1030,8 +1022,6 @@ pub async fn handle_wormhole_command(
 			destination,
 			subsquid_url,
 			wormhole_index,
-			output_dir,
-			keep_files,
 			dry_run,
 			at_block,
 		} =>
@@ -1044,8 +1034,6 @@ pub async fn handle_wormhole_command(
 				destination,
 				subsquid_url,
 				wormhole_index,
-				output_dir,
-				keep_files,
 				dry_run,
 				node_url,
 				at_block,
@@ -3070,8 +3058,6 @@ async fn run_collect_rewards(
 	destination: Option<String>,
 	subsquid_url: String,
 	wormhole_index: usize,
-	_output_dir: String,
-	_keep_files: bool,
 	dry_run: bool,
 	node_url: &str,
 	at_block: Option<u32>,
