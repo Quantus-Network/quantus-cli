@@ -741,11 +741,6 @@ fn parse_ss58_address(address: &str) -> Result<[u8; 32]> {
 	Ok(account.into())
 }
 
-/// Parse secret hex string to bytes
-fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32]> {
-	parse_secret_hex_str(secret_hex).map_err(CollectRewardsError::from)
-}
-
 /// Decode all fields from SCALE-encoded ZkLeaf data.
 /// Returns (to_account, transfer_count, asset_id, raw_amount_u128)
 fn decode_full_leaf_data(leaf_data: &[u8]) -> Result<([u8; 32], u64, u32, u128)> {
@@ -1186,5 +1181,111 @@ mod tests {
 		let result = decode_input_amount_from_leaf(&leaf_data).unwrap();
 		// 1 QTM = 10^12 planck, quantized = 10^12 / 10^10 = 100
 		assert_eq!(result, 100);
+	}
+
+	#[test]
+	fn test_wormhole_credential_secret_address_derivation() {
+		// Test that WormholeCredential::Secret correctly derives the wormhole address
+		// using the same logic as wormhole_lib::compute_wormhole_address
+
+		// A known 32-byte secret (hex encoded)
+		let secret_hex = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+		let secret_bytes: [u8; 32] = hex::decode(secret_hex).unwrap().try_into().unwrap();
+
+		// Compute expected address using wormhole_lib
+		let expected_address_bytes = wormhole_lib::compute_wormhole_address(&secret_bytes).unwrap();
+		let expected_address = AccountId32::from(expected_address_bytes).to_ss58check();
+
+		// Now simulate what WormholeCredential::Secret does
+		let parsed_secret = parse_secret_hex_str(secret_hex).unwrap();
+		let derived_address_bytes = wormhole_lib::compute_wormhole_address(&parsed_secret).unwrap();
+		let derived_address = AccountId32::from(derived_address_bytes).to_ss58check();
+
+		assert_eq!(derived_address, expected_address);
+		assert_eq!(derived_address_bytes, expected_address_bytes);
+	}
+
+	#[test]
+	fn test_wormhole_credential_secret_with_0x_prefix() {
+		// Test that secrets with 0x prefix are handled correctly
+		let secret_hex_no_prefix =
+			"abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+		let secret_hex_with_prefix =
+			"0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789";
+
+		let parsed_no_prefix = parse_secret_hex_str(secret_hex_no_prefix).unwrap();
+		let parsed_with_prefix = parse_secret_hex_str(secret_hex_with_prefix).unwrap();
+
+		// Both should produce the same result
+		assert_eq!(parsed_no_prefix, parsed_with_prefix);
+
+		// Both should derive the same address
+		let address_no_prefix = wormhole_lib::compute_wormhole_address(&parsed_no_prefix).unwrap();
+		let address_with_prefix =
+			wormhole_lib::compute_wormhole_address(&parsed_with_prefix).unwrap();
+		assert_eq!(address_no_prefix, address_with_prefix);
+	}
+
+	#[test]
+	fn test_wormhole_credential_secret_invalid_length() {
+		// Test that invalid secret lengths are rejected
+		let too_short = "0102030405060708"; // Only 8 bytes
+		let result = parse_secret_hex_str(too_short);
+		assert!(result.is_err());
+
+		let too_long = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f2021"; // 33 bytes
+		let result = parse_secret_hex_str(too_long);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_wormhole_credential_secret_invalid_hex() {
+		// Test that invalid hex is rejected
+		let invalid_hex = "ghijklmnopqrstuvwxyz01234567890123456789012345678901234567890123";
+		let result = parse_secret_hex_str(invalid_hex);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_wormhole_credential_secret_deterministic() {
+		// Test that the same secret always produces the same address
+		let secret_hex = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+
+		let parsed1 = parse_secret_hex_str(secret_hex).unwrap();
+		let parsed2 = parse_secret_hex_str(secret_hex).unwrap();
+
+		let address1 = wormhole_lib::compute_wormhole_address(&parsed1).unwrap();
+		let address2 = wormhole_lib::compute_wormhole_address(&parsed2).unwrap();
+
+		assert_eq!(address1, address2);
+	}
+
+	#[test]
+	fn test_wormhole_credential_enum_variants() {
+		// Test that both credential variants can be constructed
+		let mnemonic_cred = WormholeCredential::Mnemonic {
+			phrase: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string(),
+			wormhole_index: 0,
+		};
+
+		let secret_cred = WormholeCredential::Secret {
+			hex: "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20".to_string(),
+		};
+
+		// Verify they are different variants
+		match mnemonic_cred {
+			WormholeCredential::Mnemonic { phrase, wormhole_index } => {
+				assert!(phrase.contains("abandon"));
+				assert_eq!(wormhole_index, 0);
+			},
+			_ => panic!("Expected Mnemonic variant"),
+		}
+
+		match secret_cred {
+			WormholeCredential::Secret { hex } => {
+				assert!(hex.starts_with("0102"));
+			},
+			_ => panic!("Expected Secret variant"),
+		}
 	}
 }
