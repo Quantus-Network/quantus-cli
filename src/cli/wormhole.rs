@@ -3938,4 +3938,57 @@ mod tests {
 			}
 		}
 	}
+
+	/// Wrapper so `WormholeCommands` can be parsed directly via clap in tests.
+	#[derive(clap::Parser, Debug)]
+	struct CollectRewardsTestCli {
+		#[command(subcommand)]
+		cmd: WormholeCommands,
+	}
+
+	fn try_parse_collect_rewards(extra_args: &[&str]) -> Result<WormholeCommands, clap::Error> {
+		use clap::Parser;
+		let mut args = vec!["test", "collect-rewards"];
+		args.extend_from_slice(extra_args);
+		CollectRewardsTestCli::try_parse_from(args).map(|cli| cli.cmd)
+	}
+
+	#[test]
+	fn collect_rewards_requires_one_credential() {
+		let err = try_parse_collect_rewards(&[]).unwrap_err();
+		let s = err.to_string();
+		assert!(
+			s.contains("--wallet") || s.contains("--mnemonic") || s.contains("--secret"),
+			"expected missing-credential error, got: {s}"
+		);
+	}
+
+	#[test]
+	fn collect_rewards_accepts_each_credential_alone() {
+		assert!(try_parse_collect_rewards(&["--wallet", "w"]).is_ok());
+		assert!(try_parse_collect_rewards(&["--mnemonic", "word ".repeat(24).trim()]).is_ok());
+		assert!(try_parse_collect_rewards(&[
+			"--secret",
+			"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+		])
+		.is_ok());
+	}
+
+	#[test]
+	fn collect_rewards_credentials_mutually_exclusive() {
+		let pairs: &[(&str, &str, &str, &str)] = &[
+			("--wallet", "w", "--mnemonic", "m"),
+			("--wallet", "w", "--secret", "s"),
+			("--mnemonic", "m", "--secret", "s"),
+		];
+		for (a, av, b, bv) in pairs {
+			let err = try_parse_collect_rewards(&[a, av, b, bv])
+				.unwrap_err()
+				.to_string();
+			assert!(
+				err.contains("cannot be used with"),
+				"expected conflict error for {a} + {b}, got: {err}"
+			);
+		}
+	}
 }
