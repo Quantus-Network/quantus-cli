@@ -227,7 +227,7 @@ pub enum WormholeCredential {
 pub fn resolve_credential(credential: &WormholeCredential) -> Result<(String, [u8; 32], [u8; 32])> {
 	match credential {
 		WormholeCredential::Mnemonic { phrase, wormhole_index } => {
-			let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
+			let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
 			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
 				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 			let address_bytes: [u8; 32] = wormhole_pair.address;
@@ -289,14 +289,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	config: CollectRewardsConfig,
 	progress: &P,
 ) -> Result<CollectRewardsResult> {
-	match &config.credential {
-		WormholeCredential::Mnemonic { .. } =>
-			progress.on_step("derive", "Deriving wormhole address from mnemonic"),
-		WormholeCredential::Secret { .. } =>
-			progress.on_step("derive", "Deriving wormhole address from secret"),
-	}
 	let (wormhole_address, wormhole_address_bytes, wormhole_secret_bytes) =
 		resolve_credential(&config.credential)?;
+	progress.on_step("derive", &format!("Derived wormhole address: {}", wormhole_address));
 
 	// Parse destination address
 	let destination_bytes = parse_ss58_address(&config.destination_address)?;
@@ -1223,6 +1218,25 @@ mod tests {
 		assert_eq!(
 			address_bytes,
 			wormhole_lib::compute_wormhole_address(&secret_bytes).unwrap()
+		);
+	}
+
+	#[test]
+	fn test_resolve_credential_mnemonic_pinned_derivation_path() {
+		// Regression guard for the HD path `m/44'/CHAIN/0'/0'/index'` (fixed in #93).
+		// If this breaks, the derivation path or the underlying HD library changed.
+		let cred = WormholeCredential::Mnemonic {
+			phrase: TEST_MNEMONIC.to_string(),
+			wormhole_index: 0,
+		};
+		let (_, address_bytes, secret_bytes) = resolve_credential(&cred).unwrap();
+		assert_eq!(
+			hex::encode(address_bytes),
+			"b8a7c11fc57b36fbad44e437ec05d91c44231974c058ded1fed66cb7baa41973",
+		);
+		assert_eq!(
+			hex::encode(secret_bytes),
+			"110684de72bc884f854accf8bc6ba724dcc1cc2f99932a4d28bdf85fc6f28ccf",
 		);
 	}
 
