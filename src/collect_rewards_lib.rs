@@ -206,13 +206,54 @@ pub struct CollectRewardsResult {
 	pub transfers_processed: usize,
 }
 
+/// Wormhole credential - either a mnemonic for HD derivation or a direct secret
+#[derive(Debug, Clone)]
+pub enum WormholeCredential {
+	/// BIP39 mnemonic with HD derivation
+	Mnemonic {
+		/// 24-word BIP39 mnemonic phrase
+		phrase: String,
+		/// Wormhole address index for HD derivation (usually 0)
+		wormhole_index: usize,
+	},
+	/// Direct wormhole secret (no HD derivation)
+	Secret {
+		/// 32-byte hex-encoded secret (with or without 0x prefix)
+		hex: String,
+	},
+}
+
+/// Resolve a `WormholeCredential` into `(ss58_address, address_bytes, secret_bytes)`.
+pub fn resolve_credential(credential: &WormholeCredential) -> Result<(String, [u8; 32], [u8; 32])> {
+	match credential {
+		WormholeCredential::Mnemonic { phrase, wormhole_index } => {
+			let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
+			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
+				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
+			let address_bytes: [u8; 32] = wormhole_pair.address;
+			let secret_bytes: [u8; 32] =
+				wormhole_pair.secret.as_ref().try_into().map_err(|_| {
+					CollectRewardsError::from(
+						"Invalid secret length from HD derivation".to_string(),
+					)
+				})?;
+			Ok((AccountId32::from(address_bytes).to_ss58check(), address_bytes, secret_bytes))
+		},
+		WormholeCredential::Secret { hex } => {
+			let secret_bytes = parse_secret_hex_str(hex)
+				.map_err(|e| CollectRewardsError::from(format!("Invalid secret: {}", e)))?;
+			let address_bytes = wormhole_lib::compute_wormhole_address(&secret_bytes)
+				.map_err(|e| CollectRewardsError::from(e.message))?;
+			Ok((AccountId32::from(address_bytes).to_ss58check(), address_bytes, secret_bytes))
+		},
+	}
+}
+
 /// Configuration for collect_rewards
 #[derive(Debug, Clone)]
 pub struct CollectRewardsConfig {
-	/// 24-word BIP39 mnemonic
-	pub mnemonic: String,
-	/// Wormhole address index (usually 0)
-	pub wormhole_index: usize,
+	/// Wormhole credential - either mnemonic or direct secret
+	pub credential: WormholeCredential,
 	/// Destination address (SS58) to receive withdrawn funds
 	pub destination_address: String,
 	/// Subsquid GraphQL endpoint URL
@@ -248,14 +289,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	config: CollectRewardsConfig,
 	progress: &P,
 ) -> Result<CollectRewardsResult> {
-	// Step 1: Derive wormhole address
-	let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, config.wormhole_index);
-	let wormhole_secret = derive_wormhole_from_mnemonic(&config.mnemonic, None, &path)
-		.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
-
-	let wormhole_address = AccountId32::from(wormhole_secret.address).to_ss58check();
-	let secret_hex = hex::encode(wormhole_secret.secret.as_ref());
-
+	let (wormhole_address, wormhole_address_bytes, wormhole_secret_bytes) =
+		resolve_credential(&config.credential)?;
 	progress.on_step("derive", &format!("Derived wormhole address: {}", wormhole_address));
 
 	// Parse destination address
@@ -265,7 +300,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	progress.on_step("query", "Querying Subsquid for pending transfers");
 
 	let subsquid_client = SubsquidClient::new(config.subsquid_url.clone())?;
-	let address_hash = compute_address_hash(&wormhole_secret.address);
+	let address_hash = compute_address_hash(&wormhole_address_bytes);
 	let prefix = get_hash_prefix(&address_hash, 8);
 
 	let params = TransferQueryParams::new().with_limit(1000);
@@ -298,15 +333,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	// Tries Subsquid first, falls back to on-chain checking if Subsquid fails
 	progress.on_step("nullifiers", "Checking for already-spent nullifiers");
 
-	let secret_bytes: [u8; 32] = wormhole_secret
-		.secret
-		.as_ref()
-		.try_into()
-		.map_err(|_| CollectRewardsError::from("Invalid secret length".to_string()))?;
-
 	let unspent_transfers = filter_unspent_transfers_with_fallback(
 		&incoming_transfers,
-		&secret_bytes,
+		&wormhole_secret_bytes,
 		&subsquid_client,
 		&quantus_client,
 	)
@@ -458,12 +487,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		let digest = header.digest.encode();
 		let block_number = header.number;
 
-		// Parse secret and compute wormhole address
-		let secret = parse_secret_hex(&secret_hex)?;
-		let wormhole_address_bytes = wormhole_lib::compute_wormhole_address(&secret)
-			.map_err(|e| CollectRewardsError::from(e.message))?;
-
-		// Verify the leaf's to_account matches our computed wormhole address
 		if leaf_to_account != wormhole_address_bytes {
 			return Err(CollectRewardsError::from(format!(
 				"Leaf to_account mismatch: expected 0x{}, got 0x{}",
@@ -472,9 +495,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			)));
 		}
 
-		// Build proof input
 		let input = wormhole_lib::ProofGenerationInput {
-			secret,
+			secret: wormhole_secret_bytes,
 			transfer_count,
 			wormhole_address: wormhole_address_bytes,
 			input_amount,
@@ -703,11 +725,6 @@ fn parse_ss58_address(address: &str) -> Result<[u8; 32]> {
 	let account = AccountId32::from_ss58check(address)
 		.map_err(|e| CollectRewardsError::from(format!("Invalid SS58 address: {:?}", e)))?;
 	Ok(account.into())
-}
-
-/// Parse secret hex string to bytes
-fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32]> {
-	parse_secret_hex_str(secret_hex).map_err(CollectRewardsError::from)
 }
 
 /// Decode all fields from SCALE-encoded ZkLeaf data.
@@ -1150,5 +1167,105 @@ mod tests {
 		let result = decode_input_amount_from_leaf(&leaf_data).unwrap();
 		// 1 QTM = 10^12 planck, quantized = 10^12 / 10^10 = 100
 		assert_eq!(result, 100);
+	}
+
+	const TEST_SECRET_HEX: &str =
+		"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+	const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
+
+	#[test]
+	fn test_resolve_credential_secret() {
+		let cred = WormholeCredential::Secret { hex: TEST_SECRET_HEX.to_string() };
+		let (address, address_bytes, secret_bytes) = resolve_credential(&cred).unwrap();
+
+		let expected_secret: [u8; 32] = hex::decode(TEST_SECRET_HEX).unwrap().try_into().unwrap();
+		let expected_address_bytes =
+			wormhole_lib::compute_wormhole_address(&expected_secret).unwrap();
+
+		assert_eq!(secret_bytes, expected_secret);
+		assert_eq!(address_bytes, expected_address_bytes);
+		assert_eq!(address, AccountId32::from(expected_address_bytes).to_ss58check());
+	}
+
+	#[test]
+	fn test_resolve_credential_secret_accepts_0x_prefix() {
+		let cred_plain = WormholeCredential::Secret { hex: TEST_SECRET_HEX.to_string() };
+		let cred_prefixed = WormholeCredential::Secret { hex: format!("0x{}", TEST_SECRET_HEX) };
+		assert_eq!(
+			resolve_credential(&cred_plain).unwrap(),
+			resolve_credential(&cred_prefixed).unwrap()
+		);
+	}
+
+	#[test]
+	fn test_resolve_credential_secret_invalid() {
+		let too_short = WormholeCredential::Secret { hex: "0102".to_string() };
+		assert!(resolve_credential(&too_short).unwrap_err().message.contains("Invalid secret"));
+
+		let bad_hex = WormholeCredential::Secret { hex: "zz".repeat(32) };
+		assert!(resolve_credential(&bad_hex).unwrap_err().message.contains("Invalid secret"));
+	}
+
+	#[test]
+	fn test_resolve_credential_mnemonic() {
+		let cred =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
+		let (address, address_bytes, secret_bytes) = resolve_credential(&cred).unwrap();
+
+		assert_ne!(secret_bytes, [0u8; 32]);
+		assert_ne!(address_bytes, [0u8; 32]);
+		assert_eq!(address, AccountId32::from(address_bytes).to_ss58check());
+		assert_eq!(address_bytes, wormhole_lib::compute_wormhole_address(&secret_bytes).unwrap());
+	}
+
+	#[test]
+	fn test_resolve_credential_mnemonic_pinned_derivation_path() {
+		// Regression guard for the HD path `m/44'/CHAIN/0'/0'/index'` (fixed in #93).
+		// If this breaks, the derivation path or the underlying HD library changed.
+		let cred =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
+		let (_, address_bytes, secret_bytes) = resolve_credential(&cred).unwrap();
+		assert_eq!(
+			hex::encode(address_bytes),
+			"b8a7c11fc57b36fbad44e437ec05d91c44231974c058ded1fed66cb7baa41973",
+		);
+		assert_eq!(
+			hex::encode(secret_bytes),
+			"110684de72bc884f854accf8bc6ba724dcc1cc2f99932a4d28bdf85fc6f28ccf",
+		);
+	}
+
+	#[test]
+	fn test_resolve_credential_mnemonic_index_changes_output() {
+		let cred_0 =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
+		let cred_1 =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 1 };
+		assert_ne!(resolve_credential(&cred_0).unwrap(), resolve_credential(&cred_1).unwrap());
+	}
+
+	#[test]
+	fn test_resolve_credential_mnemonic_invalid_phrase() {
+		let cred = WormholeCredential::Mnemonic {
+			phrase: "not a real mnemonic".to_string(),
+			wormhole_index: 0,
+		};
+		assert!(resolve_credential(&cred).unwrap_err().message.contains("HD derivation"));
+	}
+
+	#[test]
+	fn test_resolve_credential_mnemonic_and_secret_equivalence() {
+		let mnemonic_cred =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
+		let (m_address, m_address_bytes, m_secret_bytes) =
+			resolve_credential(&mnemonic_cred).unwrap();
+
+		let secret_cred = WormholeCredential::Secret { hex: hex::encode(m_secret_bytes) };
+		let (s_address, s_address_bytes, s_secret_bytes) =
+			resolve_credential(&secret_cred).unwrap();
+
+		assert_eq!(m_address, s_address);
+		assert_eq!(m_address_bytes, s_address_bytes);
+		assert_eq!(m_secret_bytes, s_secret_bytes);
 	}
 }
