@@ -270,7 +270,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		WormholeCredential::Mnemonic { phrase, wormhole_index } => {
 			progress.on_step("derive", "Deriving wormhole address from mnemonic");
 
-			let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
+			let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
 			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
 				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 
@@ -299,6 +299,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			(address, address_bytes, secret_bytes)
 		},
 	};
+
+	progress.on_step("derive", &format!("Derived wormhole address: {}", wormhole_address));
 
 	// Parse destination address
 	let destination_bytes = parse_ss58_address(&config.destination_address)?;
