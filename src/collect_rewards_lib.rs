@@ -249,14 +249,14 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	progress: &P,
 ) -> Result<CollectRewardsResult> {
 	// Step 1: Derive wormhole address
-	progress.on_step("derive", "Deriving wormhole address from mnemonic");
-
-	let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, config.wormhole_index);
+	let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, config.wormhole_index);
 	let wormhole_secret = derive_wormhole_from_mnemonic(&config.mnemonic, None, &path)
 		.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 
 	let wormhole_address = AccountId32::from(wormhole_secret.address).to_ss58check();
 	let secret_hex = hex::encode(wormhole_secret.secret.as_ref());
+
+	progress.on_step("derive", &format!("Derived wormhole address: {}", wormhole_address));
 
 	// Parse destination address
 	let destination_bytes = parse_ss58_address(&config.destination_address)?;
