@@ -3982,9 +3982,7 @@ mod tests {
 			("--mnemonic", "m", "--secret", "s"),
 		];
 		for (a, av, b, bv) in pairs {
-			let err = try_parse_collect_rewards(&[a, av, b, bv])
-				.unwrap_err()
-				.to_string();
+			let err = try_parse_collect_rewards(&[a, av, b, bv]).unwrap_err().to_string();
 			assert!(
 				err.contains("cannot be used with"),
 				"expected conflict error for {a} + {b}, got: {err}"

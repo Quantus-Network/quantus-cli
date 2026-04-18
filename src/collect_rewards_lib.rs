@@ -1190,9 +1190,11 @@ mod tests {
 	#[test]
 	fn test_resolve_credential_secret_accepts_0x_prefix() {
 		let cred_plain = WormholeCredential::Secret { hex: TEST_SECRET_HEX.to_string() };
-		let cred_prefixed =
-			WormholeCredential::Secret { hex: format!("0x{}", TEST_SECRET_HEX) };
-		assert_eq!(resolve_credential(&cred_plain).unwrap(), resolve_credential(&cred_prefixed).unwrap());
+		let cred_prefixed = WormholeCredential::Secret { hex: format!("0x{}", TEST_SECRET_HEX) };
+		assert_eq!(
+			resolve_credential(&cred_plain).unwrap(),
+			resolve_credential(&cred_prefixed).unwrap()
+		);
 	}
 
 	#[test]
@@ -1206,29 +1208,22 @@ mod tests {
 
 	#[test]
 	fn test_resolve_credential_mnemonic() {
-		let cred = WormholeCredential::Mnemonic {
-			phrase: TEST_MNEMONIC.to_string(),
-			wormhole_index: 0,
-		};
+		let cred =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
 		let (address, address_bytes, secret_bytes) = resolve_credential(&cred).unwrap();
 
 		assert_ne!(secret_bytes, [0u8; 32]);
 		assert_ne!(address_bytes, [0u8; 32]);
 		assert_eq!(address, AccountId32::from(address_bytes).to_ss58check());
-		assert_eq!(
-			address_bytes,
-			wormhole_lib::compute_wormhole_address(&secret_bytes).unwrap()
-		);
+		assert_eq!(address_bytes, wormhole_lib::compute_wormhole_address(&secret_bytes).unwrap());
 	}
 
 	#[test]
 	fn test_resolve_credential_mnemonic_pinned_derivation_path() {
 		// Regression guard for the HD path `m/44'/CHAIN/0'/0'/index'` (fixed in #93).
 		// If this breaks, the derivation path or the underlying HD library changed.
-		let cred = WormholeCredential::Mnemonic {
-			phrase: TEST_MNEMONIC.to_string(),
-			wormhole_index: 0,
-		};
+		let cred =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
 		let (_, address_bytes, secret_bytes) = resolve_credential(&cred).unwrap();
 		assert_eq!(
 			hex::encode(address_bytes),
@@ -1242,14 +1237,10 @@ mod tests {
 
 	#[test]
 	fn test_resolve_credential_mnemonic_index_changes_output() {
-		let cred_0 = WormholeCredential::Mnemonic {
-			phrase: TEST_MNEMONIC.to_string(),
-			wormhole_index: 0,
-		};
-		let cred_1 = WormholeCredential::Mnemonic {
-			phrase: TEST_MNEMONIC.to_string(),
-			wormhole_index: 1,
-		};
+		let cred_0 =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
+		let cred_1 =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 1 };
 		assert_ne!(resolve_credential(&cred_0).unwrap(), resolve_credential(&cred_1).unwrap());
 	}
 
@@ -1264,15 +1255,14 @@ mod tests {
 
 	#[test]
 	fn test_resolve_credential_mnemonic_and_secret_equivalence() {
-		let mnemonic_cred = WormholeCredential::Mnemonic {
-			phrase: TEST_MNEMONIC.to_string(),
-			wormhole_index: 0,
-		};
+		let mnemonic_cred =
+			WormholeCredential::Mnemonic { phrase: TEST_MNEMONIC.to_string(), wormhole_index: 0 };
 		let (m_address, m_address_bytes, m_secret_bytes) =
 			resolve_credential(&mnemonic_cred).unwrap();
 
 		let secret_cred = WormholeCredential::Secret { hex: hex::encode(m_secret_bytes) };
-		let (s_address, s_address_bytes, s_secret_bytes) = resolve_credential(&secret_cred).unwrap();
+		let (s_address, s_address_bytes, s_secret_bytes) =
+			resolve_credential(&secret_cred).unwrap();
 
 		assert_eq!(m_address, s_address);
 		assert_eq!(m_address_bytes, s_address_bytes);
