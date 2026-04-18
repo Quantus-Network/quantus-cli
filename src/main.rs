@@ -9,6 +9,7 @@ use clap::Parser;
 use colored::Colorize;
 
 mod chain;
+mod circuits;
 mod cli;
 mod collect_rewards_lib;
 mod config;

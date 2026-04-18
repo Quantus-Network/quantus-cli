@@ -30,7 +30,6 @@ use qp_zk_circuits_common::{
 };
 use rand::RngCore;
 use sp_core::crypto::{AccountId32, Ss58Codec};
-use std::path::Path;
 use subxt::{
 	blocks::Block,
 	ext::{
@@ -1122,18 +1121,12 @@ async fn aggregate_proofs(
 ) -> crate::error::Result<()> {
 	use qp_wormhole_aggregator::aggregator::{AggregationBackend, CircuitType, Layer0Aggregator};
 
-	use std::path::Path;
-
 	log_print!("Aggregating {} proofs...", proof_files.len());
 
 	// Load config first to validate and calculate padding needs
-	let bins_dir = Path::new("generated-bins");
-	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to load circuit bins config from {:?}: {}",
-			bins_dir, e
-		))
-	})?;
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
+	let agg_config = CircuitBinsConfig::load(&bins_dir)
+		.map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 	// Validate number of proofs before doing expensive work
 	if proof_files.len() > agg_config.num_leaf_proofs {
@@ -1148,12 +1141,8 @@ async fn aggregate_proofs(
 
 	log_print!("  Loading aggregator and generating {} dummy proofs...", num_padding_proofs);
 
-	let mut aggregator = Layer0Aggregator::new(bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to load aggregator from pre-built bins: {}",
-			e
-		))
-	})?;
+	let mut aggregator =
+		Layer0Aggregator::new(&bins_dir).map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 	log_verbose!("Aggregation config: num_leaf_proofs={}", aggregator.batch_size());
 	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
@@ -2016,11 +2005,10 @@ async fn run_multiround(
 	log_print!("==================================================");
 	log_print!("");
 
-	// Load aggregation config from generated-bins/config.json
-	let bins_dir = Path::new("generated-bins");
-	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to load aggregation config: {}", e))
-	})?;
+	// Load aggregation config
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
+	let agg_config =
+		CircuitBinsConfig::load(&bins_dir).map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 	// Validate parameters
 	validate_multiround_params(num_proofs, rounds, agg_config.num_leaf_proofs)?;
@@ -2334,13 +2322,13 @@ async fn generate_proof(
 	};
 
 	// Generate proof using wormhole_lib
-	let bins_dir = Path::new("generated-bins");
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
 	let result = wormhole_lib::generate_proof(
 		&input,
 		&bins_dir.join("prover.bin"),
 		&bins_dir.join("common.bin"),
 	)
-	.map_err(|e| crate::error::QuantusError::Generic(e.message))?;
+	.map_err(|e| crate::circuits::wrap_circuit_error(e.message))?;
 
 	// Write proof to file
 	let proof_hex = hex::encode(result.proof_bytes);
@@ -2437,18 +2425,13 @@ async fn verify_aggregated_and_get_events(
 
 	// Verify locally before submitting on-chain
 	log_verbose!("Verifying aggregated proof locally before on-chain submission...");
-	let bins_dir = Path::new("generated-bins");
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
 
 	// Log circuit binary hashes for debugging
-	let common_bytes = std::fs::read(bins_dir.join("aggregated_common.bin")).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to read aggregated_common.bin: {}", e))
-	})?;
-	let verifier_bytes = std::fs::read(bins_dir.join("aggregated_verifier.bin")).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to read aggregated_verifier.bin: {}",
-			e
-		))
-	})?;
+	let common_bytes = std::fs::read(bins_dir.join("aggregated_common.bin"))
+		.map_err(|e| crate::circuits::wrap_circuit_error(e))?;
+	let verifier_bytes = std::fs::read(bins_dir.join("aggregated_verifier.bin"))
+		.map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 	println!(
 		"[quantus-cli] Circuit binaries: common_bytes.len={}, verifier_bytes.len={}, common_hash={}, verifier_hash={}",
 		common_bytes.len(),
@@ -2461,9 +2444,7 @@ async fn verify_aggregated_and_get_events(
 		&bins_dir.join("aggregated_verifier.bin"),
 		&bins_dir.join("aggregated_common.bin"),
 	)
-	.map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to load aggregated verifier: {}", e))
-	})?;
+	.map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 	let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
 		qp_wormhole_verifier::F,
@@ -2601,7 +2582,7 @@ async fn parse_proof_file(
 
 	log_print!("Proof size: {} bytes", proof_bytes.len());
 
-	let bins_dir = Path::new("generated-bins");
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
 
 	if aggregated {
 		// Load aggregated verifier
@@ -2609,9 +2590,7 @@ async fn parse_proof_file(
 			&bins_dir.join("aggregated_verifier.bin"),
 			&bins_dir.join("aggregated_common.bin"),
 		)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-		})?;
+		.map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 		// Deserialize proof using verifier's types
 		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
@@ -2681,9 +2660,7 @@ async fn parse_proof_file(
 			&bins_dir.join("verifier.bin"),
 			&bins_dir.join("common.bin"),
 		)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-		})?;
+		.map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 		// Deserialize proof using verifier's types
 		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
@@ -2819,13 +2796,9 @@ async fn run_dissolve(
 	})?;
 
 	// Load aggregation config
-	let bins_dir = std::path::Path::new("generated-bins");
-	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to load aggregation circuit config: {}",
-			e
-		))
-	})?;
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
+	let agg_config =
+		CircuitBinsConfig::load(&bins_dir).map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 	// === Layer 0: Initial funding ===
 	log_print!("{}", "Layer 0: Initial funding".bright_yellow());
@@ -3173,12 +3146,15 @@ async fn run_collect_rewards(
 		}
 	}
 
+	// Get circuit bins directory (will error with helpful message if not found)
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
+
 	let config = CollectRewardsConfig {
 		credential,
 		destination_address: destination_address.clone(),
 		subsquid_url,
 		node_url: node_url.to_string(),
-		bins_dir: "generated-bins".to_string(),
+		bins_dir: bins_dir.to_string_lossy().to_string(),
 		amount: amount_planck,
 		dry_run,
 		at_block,
@@ -3222,14 +3198,13 @@ async fn run_collect_rewards(
 fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate::error::Result<()> {
 	use qp_wormhole_aggregator::aggregator::Layer0Aggregator;
 
-	let bins_dir = std::path::Path::new("generated-bins");
-	let mut aggregator = Layer0Aggregator::new(bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to create aggregator: {}", e))
-	})?;
+	let bins_dir = crate::circuits::get_circuit_bins_dir()?;
+	let mut aggregator =
+		Layer0Aggregator::new(&bins_dir).map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
-	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to load common data: {}", e))
-	})?;
+	let common_data = aggregator
+		.load_common_data(CircuitType::Leaf)
+		.map_err(|e| crate::circuits::wrap_circuit_error(e))?;
 
 	for proof_file in proof_files {
 		let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;

@@ -5,6 +5,7 @@
 //! the Quantus blockchain.
 
 pub mod chain;
+pub mod circuits;
 pub mod cli;
 pub mod collect_rewards_lib;
 pub mod config;
@@ -50,8 +51,15 @@ pub use wormhole_lib::{
 // Re-export collect rewards library for SDK usage
 pub use collect_rewards_lib::{
 	collect_rewards, query_pending_transfers, query_pending_transfers_for_address,
-	CollectRewardsConfig, CollectRewardsError, CollectRewardsResult, NoOpProgress, PendingTransfer,
-	ProgressCallback, QueryPendingTransfersResult, WithdrawalBatch,
+	resolve_credential, CollectRewardsConfig, CollectRewardsError, CollectRewardsResult, NoOpProgress,
+	PendingTransfer, ProgressCallback, QueryPendingTransfersResult, WithdrawalBatch,
+	WormholeCredential,
+};
+
+// Re-export circuit management for SDK usage
+pub use circuits::{
+	find_circuit_bins_dir, generate_circuits, get_circuit_bins_dir, get_default_circuit_bins_dir,
+	is_valid_circuit_dir, CIRCUIT_BINS_ENV_VAR,
 };
 
 /// Library version

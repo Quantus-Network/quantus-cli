@@ -174,6 +174,21 @@ pub enum Commands {
 	#[command(subcommand)]
 	Developer(DeveloperCommands),
 
+	/// Generate ZK circuit binaries for wormhole operations (one-time setup)
+	SetupCircuits {
+		/// Force regeneration even if circuits already exist
+		#[arg(long)]
+		force: bool,
+
+		/// Number of leaf proofs per aggregation (default: 16)
+		#[arg(long, default_value = "16")]
+		num_leaf_proofs: usize,
+
+		/// Custom output directory (default: ~/.quantus/circuit-bins/)
+		#[arg(long)]
+		output_dir: Option<String>,
+	},
+
 	/// Query events from blocks
 	Events {
 		/// Block number to query events from (full support)
@@ -405,6 +420,8 @@ pub async fn execute_command(
 			Ok(())
 		},
 		Commands::Developer(dev_cmd) => handle_developer_command(dev_cmd).await,
+		Commands::SetupCircuits { force, num_leaf_proofs, output_dir } =>
+			crate::circuits::handle_setup_circuits(force, num_leaf_proofs, output_dir),
 		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } =>
 			events::handle_events_command(
 				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
