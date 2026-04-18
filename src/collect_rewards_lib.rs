@@ -121,6 +121,30 @@ impl From<crate::error::QuantusError> for CollectRewardsError {
 	}
 }
 
+/// Wrap a circuit-related error with helpful context
+fn wrap_circuit_error<E: std::fmt::Display>(error: E) -> CollectRewardsError {
+	let error_str = error.to_string();
+
+	if crate::circuits::is_circuit_version_error(&error_str) {
+		CollectRewardsError::from(format!(
+			"Circuit binaries appear to be outdated or corrupted.\n\
+             Run 'quantus setup-circuits --force' to regenerate them.\n\
+             \n\
+             Original error: {}",
+			error_str
+		))
+	} else if error_str.contains("No such file") || error_str.contains("not found") {
+		CollectRewardsError::from(
+			"Circuit binaries not found. Run 'quantus setup-circuits' first.\n\
+             This is a one-time setup that generates ZK proving keys (~1GB).\n\
+             It may take a few minutes on first run."
+				.to_string(),
+		)
+	} else {
+		CollectRewardsError::from(format!("Circuit loading error: {}", error_str))
+	}
+}
+
 /// Information about a pending transfer found via Subsquid
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -786,9 +810,7 @@ fn decode_input_amount_from_leaf(leaf_data: &[u8]) -> Result<u32> {
 /// Aggregate proof bytes into a single aggregated proof
 fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Result<Vec<u8>> {
 	// Load config to validate
-	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
-		CollectRewardsError::from(format!("Failed to load circuit bins config: {}", e))
-	})?;
+	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(wrap_circuit_error)?;
 
 	if proof_bytes_list.len() > agg_config.num_leaf_proofs {
 		return Err(CollectRewardsError::from(format!(
@@ -798,12 +820,9 @@ fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Resul
 		)));
 	}
 
-	let mut aggregator = Layer0Aggregator::new(bins_dir)
-		.map_err(|e| CollectRewardsError::from(format!("Failed to load aggregator: {}", e)))?;
+	let mut aggregator = Layer0Aggregator::new(bins_dir).map_err(wrap_circuit_error)?;
 
-	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
-		CollectRewardsError::from(format!("Failed to load leaf circuit data: {}", e))
-	})?;
+	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(wrap_circuit_error)?;
 
 	// Add proofs
 	for proof_bytes in proof_bytes_list {
@@ -836,7 +855,7 @@ async fn submit_and_get_events(
 		&bins_dir.join("aggregated_verifier.bin"),
 		&bins_dir.join("aggregated_common.bin"),
 	)
-	.map_err(|e| CollectRewardsError::from(format!("Failed to load verifier: {}", e)))?;
+	.map_err(wrap_circuit_error)?;
 
 	let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
 		qp_wormhole_verifier::F,
