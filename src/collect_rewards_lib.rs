@@ -303,9 +303,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	let address_hash = compute_address_hash(&wormhole_address_bytes);
 	let prefix = get_hash_prefix(&address_hash, 8);
 
-	let params = TransferQueryParams::new().with_limit(1000);
+	let params = TransferQueryParams::new();
 	let transfers = subsquid_client
-		.query_transfers_by_prefix(Some(vec![prefix]), None, params)
+		.query_all_transfers_by_prefix(Some(vec![prefix]), None, params)
 		.await?;
 
 	// Filter to only transfers TO our wormhole address
@@ -599,9 +599,9 @@ pub async fn query_pending_transfers(
 	let address_hash = compute_address_hash(&wormhole_secret.address);
 	let prefix = get_hash_prefix(&address_hash, 8); // 8 hex chars for good privacy
 
-	let params = TransferQueryParams::new().with_limit(1000);
+	let params = TransferQueryParams::new();
 	let transfers = subsquid_client
-		.query_transfers_by_prefix(Some(vec![prefix]), None, params)
+		.query_all_transfers_by_prefix(Some(vec![prefix]), None, params)
 		.await?;
 
 	// Filter to only transfers TO our wormhole address
@@ -652,9 +652,9 @@ pub async fn query_pending_transfers_for_address(
 	let address_hash = compute_address_hash(wormhole_address_bytes);
 	let prefix = get_hash_prefix(&address_hash, 8);
 
-	let params = TransferQueryParams::new().with_limit(1000);
+	let params = TransferQueryParams::new();
 	let transfers = subsquid_client
-		.query_transfers_by_prefix(Some(vec![prefix]), None, params)
+		.query_all_transfers_by_prefix(Some(vec![prefix]), None, params)
 		.await?;
 
 	// Filter to only transfers TO our wormhole address
