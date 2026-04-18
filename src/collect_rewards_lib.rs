@@ -206,13 +206,28 @@ pub struct CollectRewardsResult {
 	pub transfers_processed: usize,
 }
 
+/// Wormhole credential - either a mnemonic for HD derivation or a direct secret
+#[derive(Debug, Clone)]
+pub enum WormholeCredential {
+	/// BIP39 mnemonic with HD derivation
+	Mnemonic {
+		/// 24-word BIP39 mnemonic phrase
+		phrase: String,
+		/// Wormhole address index for HD derivation (usually 0)
+		wormhole_index: usize,
+	},
+	/// Direct wormhole secret (no HD derivation)
+	Secret {
+		/// 32-byte hex-encoded secret (with or without 0x prefix)
+		hex: String,
+	},
+}
+
 /// Configuration for collect_rewards
 #[derive(Debug, Clone)]
 pub struct CollectRewardsConfig {
-	/// 24-word BIP39 mnemonic
-	pub mnemonic: String,
-	/// Wormhole address index (usually 0)
-	pub wormhole_index: usize,
+	/// Wormhole credential - either mnemonic or direct secret
+	pub credential: WormholeCredential,
 	/// Destination address (SS58) to receive withdrawn funds
 	pub destination_address: String,
 	/// Subsquid GraphQL endpoint URL
@@ -248,15 +263,42 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	config: CollectRewardsConfig,
 	progress: &P,
 ) -> Result<CollectRewardsResult> {
-	// Step 1: Derive wormhole address
-	progress.on_step("derive", "Deriving wormhole address from mnemonic");
+	// Step 1: Derive wormhole address from credential
+	// Returns: (ss58_address, raw_address_bytes, secret_bytes)
+	let (wormhole_address, wormhole_address_bytes, wormhole_secret_bytes) = match &config.credential
+	{
+		WormholeCredential::Mnemonic { phrase, wormhole_index } => {
+			progress.on_step("derive", "Deriving wormhole address from mnemonic");
 
-	let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, config.wormhole_index);
-	let wormhole_secret = derive_wormhole_from_mnemonic(&config.mnemonic, None, &path)
-		.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
+			let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
+			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
+				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 
-	let wormhole_address = AccountId32::from(wormhole_secret.address).to_ss58check();
-	let secret_hex = hex::encode(wormhole_secret.secret.as_ref());
+			let address_bytes: [u8; 32] = wormhole_pair.address;
+			let address = AccountId32::from(address_bytes).to_ss58check();
+			let secret_bytes: [u8; 32] =
+				wormhole_pair.secret.as_ref().try_into().map_err(|_| {
+					CollectRewardsError::from(
+						"Invalid secret length from HD derivation".to_string(),
+					)
+				})?;
+			(address, address_bytes, secret_bytes)
+		},
+		WormholeCredential::Secret { hex } => {
+			progress.on_step("derive", "Deriving wormhole address from secret");
+
+			// Parse the hex secret
+			let secret_bytes = parse_secret_hex_str(hex)
+				.map_err(|e| CollectRewardsError::from(format!("Invalid secret: {}", e)))?;
+
+			// Compute wormhole address from the secret
+			let address_bytes = wormhole_lib::compute_wormhole_address(&secret_bytes)
+				.map_err(|e| CollectRewardsError::from(e.message))?;
+
+			let address = AccountId32::from(address_bytes).to_ss58check();
+			(address, address_bytes, secret_bytes)
+		},
+	};
 
 	// Parse destination address
 	let destination_bytes = parse_ss58_address(&config.destination_address)?;
@@ -265,7 +307,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	progress.on_step("query", "Querying Subsquid for pending transfers");
 
 	let subsquid_client = SubsquidClient::new(config.subsquid_url.clone())?;
-	let address_hash = compute_address_hash(&wormhole_secret.address);
+	let address_hash = compute_address_hash(&wormhole_address_bytes);
 	let prefix = get_hash_prefix(&address_hash, 8);
 
 	let params = TransferQueryParams::new().with_limit(1000);
@@ -298,15 +340,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	// Tries Subsquid first, falls back to on-chain checking if Subsquid fails
 	progress.on_step("nullifiers", "Checking for already-spent nullifiers");
 
-	let secret_bytes: [u8; 32] = wormhole_secret
-		.secret
-		.as_ref()
-		.try_into()
-		.map_err(|_| CollectRewardsError::from("Invalid secret length".to_string()))?;
-
 	let unspent_transfers = filter_unspent_transfers_with_fallback(
 		&incoming_transfers,
-		&secret_bytes,
+		&wormhole_secret_bytes,
 		&subsquid_client,
 		&quantus_client,
 	)
@@ -458,25 +494,25 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		let digest = header.digest.encode();
 		let block_number = header.number;
 
-		// Parse secret and compute wormhole address
-		let secret = parse_secret_hex(&secret_hex)?;
-		let wormhole_address_bytes = wormhole_lib::compute_wormhole_address(&secret)
-			.map_err(|e| CollectRewardsError::from(e.message))?;
+		// Compute wormhole address from secret
+		let computed_wormhole_address =
+			wormhole_lib::compute_wormhole_address(&wormhole_secret_bytes)
+				.map_err(|e| CollectRewardsError::from(e.message))?;
 
 		// Verify the leaf's to_account matches our computed wormhole address
-		if leaf_to_account != wormhole_address_bytes {
+		if leaf_to_account != computed_wormhole_address {
 			return Err(CollectRewardsError::from(format!(
 				"Leaf to_account mismatch: expected 0x{}, got 0x{}",
-				hex::encode(wormhole_address_bytes),
+				hex::encode(computed_wormhole_address),
 				hex::encode(leaf_to_account)
 			)));
 		}
 
 		// Build proof input
 		let input = wormhole_lib::ProofGenerationInput {
-			secret,
+			secret: wormhole_secret_bytes,
 			transfer_count,
-			wormhole_address: wormhole_address_bytes,
+			wormhole_address: computed_wormhole_address,
 			input_amount,
 			block_hash: proof_block_hash.0,
 			block_number,
