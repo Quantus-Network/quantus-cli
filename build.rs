@@ -102,8 +102,8 @@ fn main() {
 	// `.cargo/registry/src/`). In those cases the installed binary can't see the
 	// project dir; runtime lazy-generation takes over instead.
 	let project_bins = Path::new(&manifest_dir).join("generated-bins");
-	let is_source_build = !manifest_dir.contains("target/package/")
-		&& !manifest_dir.contains(".cargo/registry/src");
+	let is_source_build =
+		!manifest_dir.contains("target/package/") && !manifest_dir.contains(".cargo/registry/src");
 	if is_source_build {
 		// Prefer a symlink to avoid copying large prover binaries on every build.
 		// If symlink creation fails (e.g. on filesystems without symlink support),

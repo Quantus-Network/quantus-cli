@@ -95,11 +95,7 @@ fn env_num_leaf_proofs() -> usize {
 
 fn generate(dir: &Path, num_leaf_proofs: usize) -> Result<()> {
 	std::fs::create_dir_all(dir).map_err(|e| {
-		QuantusError::Generic(format!(
-			"Failed to create bins directory {}: {}",
-			dir.display(),
-			e
-		))
+		QuantusError::Generic(format!("Failed to create bins directory {}: {}", dir.display(), e))
 	})?;
 
 	log_print!("");
@@ -113,9 +109,8 @@ fn generate(dir: &Path, num_leaf_proofs: usize) -> Result<()> {
 			QuantusError::Generic(format!("Failed to generate circuit binaries: {}", e))
 		})?;
 
-	std::fs::write(dir.join(VERSION_MARKER), env!("CARGO_PKG_VERSION")).map_err(|e| {
-		QuantusError::Generic(format!("Failed to write version marker: {}", e))
-	})?;
+	std::fs::write(dir.join(VERSION_MARKER), env!("CARGO_PKG_VERSION"))
+		.map_err(|e| QuantusError::Generic(format!("Failed to write version marker: {}", e)))?;
 
 	let elapsed = start.elapsed();
 	log_success!("Circuit binaries ready in {:.1}s", elapsed.as_secs_f64());
