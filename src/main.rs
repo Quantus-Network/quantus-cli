@@ -8,6 +8,7 @@
 use clap::Parser;
 use colored::Colorize;
 
+mod bins;
 mod chain;
 mod cli;
 mod collect_rewards_lib;

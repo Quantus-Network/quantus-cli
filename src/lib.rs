@@ -4,6 +4,7 @@
 //! It can be used as a dependency in other Rust projects that need to interact with
 //! the Quantus blockchain.
 
+pub mod bins;
 pub mod chain;
 pub mod cli;
 pub mod collect_rewards_lib;
