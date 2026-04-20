@@ -30,7 +30,6 @@ use qp_zk_circuits_common::{
 };
 use rand::RngCore;
 use sp_core::crypto::{AccountId32, Ss58Codec};
-use std::path::Path;
 use subxt::{
 	blocks::Block,
 	ext::{
@@ -1122,13 +1121,10 @@ async fn aggregate_proofs(
 ) -> crate::error::Result<()> {
 	use qp_wormhole_aggregator::aggregator::{AggregationBackend, CircuitType, Layer0Aggregator};
 
-	use std::path::Path;
-
 	log_print!("Aggregating {} proofs...", proof_files.len());
 
-	// Load config first to validate and calculate padding needs
-	let bins_dir = Path::new("generated-bins");
-	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Failed to load circuit bins config from {:?}: {}",
 			bins_dir, e
@@ -1148,7 +1144,7 @@ async fn aggregate_proofs(
 
 	log_print!("  Loading aggregator and generating {} dummy proofs...", num_padding_proofs);
 
-	let mut aggregator = Layer0Aggregator::new(bins_dir).map_err(|e| {
+	let mut aggregator = Layer0Aggregator::new(&bins_dir).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Failed to load aggregator from pre-built bins: {}",
 			e
@@ -2016,9 +2012,8 @@ async fn run_multiround(
 	log_print!("==================================================");
 	log_print!("");
 
-	// Load aggregation config from generated-bins/config.json
-	let bins_dir = Path::new("generated-bins");
-	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to load aggregation config: {}", e))
 	})?;
 
@@ -2333,8 +2328,7 @@ async fn generate_proof(
 		asset_id: NATIVE_ASSET_ID,
 	};
 
-	// Generate proof using wormhole_lib
-	let bins_dir = Path::new("generated-bins");
+	let bins_dir = crate::bins::ensure_bins_dir()?;
 	let result = wormhole_lib::generate_proof(
 		&input,
 		&bins_dir.join("prover.bin"),
@@ -2435,11 +2429,9 @@ async fn verify_aggregated_and_get_events(
 
 	let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
 
-	// Verify locally before submitting on-chain
 	log_verbose!("Verifying aggregated proof locally before on-chain submission...");
-	let bins_dir = Path::new("generated-bins");
+	let bins_dir = crate::bins::ensure_bins_dir()?;
 
-	// Log circuit binary hashes for debugging
 	let common_bytes = std::fs::read(bins_dir.join("aggregated_common.bin")).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to read aggregated_common.bin: {}", e))
 	})?;
@@ -2601,7 +2593,7 @@ async fn parse_proof_file(
 
 	log_print!("Proof size: {} bytes", proof_bytes.len());
 
-	let bins_dir = Path::new("generated-bins");
+	let bins_dir = crate::bins::ensure_bins_dir()?;
 
 	if aggregated {
 		// Load aggregated verifier
@@ -2818,9 +2810,8 @@ async fn run_dissolve(
 		crate::error::QuantusError::Generic(format!("Failed to create output directory: {}", e))
 	})?;
 
-	// Load aggregation config
-	let bins_dir = std::path::Path::new("generated-bins");
-	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Failed to load aggregation circuit config: {}",
 			e
@@ -3149,8 +3140,8 @@ async fn run_collect_rewards(
 			match step {
 				"derive" => log_print!("{}", format!("Step 1: {}...", details).bright_yellow()),
 				"query" => log_print!("{}", format!("Step 2: {}...", details).bright_yellow()),
-				"nullifiers" => log_print!("{}", format!("Step 3: {}...", details).bright_yellow()),
-				"connect" => log_print!("{}", format!("Step 4: {}...", details).bright_yellow()),
+				"connect" => log_print!("{}", format!("Step 3: {}...", details).bright_yellow()),
+				"nullifiers" => log_print!("{}", format!("Step 4: {}...", details).bright_yellow()),
 				"proofs" => log_print!("{}", format!("Step 5: {}...", details).bright_yellow()),
 				"submit" => log_print!("{}", format!("Step 6: {}...", details).bright_yellow()),
 				_ => log_print!("  {}: {}", step, details),
@@ -3178,7 +3169,7 @@ async fn run_collect_rewards(
 		destination_address: destination_address.clone(),
 		subsquid_url,
 		node_url: node_url.to_string(),
-		bins_dir: "generated-bins".to_string(),
+		bins_dir: crate::bins::ensure_bins_dir()?.to_string_lossy().into_owned(),
 		amount: amount_planck,
 		dry_run,
 		at_block,
@@ -3222,8 +3213,8 @@ async fn run_collect_rewards(
 fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate::error::Result<()> {
 	use qp_wormhole_aggregator::aggregator::Layer0Aggregator;
 
-	let bins_dir = std::path::Path::new("generated-bins");
-	let mut aggregator = Layer0Aggregator::new(bins_dir).map_err(|e| {
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	let mut aggregator = Layer0Aggregator::new(&bins_dir).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to create aggregator: {}", e))
 	})?;
 
