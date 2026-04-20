@@ -153,10 +153,122 @@ jobs:
       - name: Run security audit
         run: cargo audit
 
+  build-release-binaries:
+    name: 📦 Build Binary (${{ matrix.target }})
+    needs: create-tag
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            archive: tar.gz
+          - target: x86_64-apple-darwin
+            os: macos-15-intel
+            archive: tar.gz
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            archive: tar.gz
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            archive: zip
+    steps:
+      - name: Checkout code at tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.create-tag.outputs.version }}
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry and target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-release-bin-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-release-bin-${{ matrix.target }}-
+
+      - name: Install protoc
+        uses: arduino/setup-protoc@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install libclang (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update -yqq
+          sudo apt-get install -yqq --no-install-recommends libclang-dev
+
+      - name: Set LIBCLANG_PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: echo "LIBCLANG_PATH=C:/Program Files/LLVM/bin" >> "$GITHUB_ENV"
+
+      - name: Build release binary
+        shell: bash
+        run: |
+          set -eo pipefail
+          cargo build --locked --release --bin quantus --target ${{ matrix.target }}
+
+      - name: Package archive (tar.gz)
+        if: matrix.archive == 'tar.gz'
+        shell: bash
+        env:
+          NEW_VERSION: ${{ needs.create-tag.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -eo pipefail
+          STAGING="quantus-cli-${NEW_VERSION}-${TARGET}"
+          ASSET="${STAGING}.tar.gz"
+          CHECKSUM="sha256sums-${NEW_VERSION}-${TARGET}.txt"
+          mkdir -p "$STAGING"
+          cp "target/${TARGET}/release/quantus" "$STAGING/"
+          cp README.md "$STAGING/"
+          tar -czvf "$ASSET" "$STAGING"
+          shasum -a 256 "$ASSET" > "$CHECKSUM"
+          echo "ASSET=$ASSET" >> "$GITHUB_ENV"
+          echo "CHECKSUM=$CHECKSUM" >> "$GITHUB_ENV"
+
+      - name: Package archive (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        env:
+          NEW_VERSION: ${{ needs.create-tag.outputs.version }}
+          TARGET: ${{ matrix.target }}
+        run: |
+          $staging = "quantus-cli-$env:NEW_VERSION-$env:TARGET"
+          $asset = "$staging.zip"
+          $checksum = "sha256sums-$env:NEW_VERSION-$env:TARGET.txt"
+          New-Item -ItemType Directory -Path $staging | Out-Null
+          Copy-Item "target/$env:TARGET/release/quantus.exe" "$staging/"
+          Copy-Item "README.md" "$staging/"
+          Compress-Archive -Path $staging -DestinationPath $asset
+          $hash = (Get-FileHash -Algorithm SHA256 $asset).Hash.ToLower()
+          "$hash  $asset" | Out-File -FilePath $checksum -Encoding ascii
+          "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "CHECKSUM=$checksum" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Upload release assets as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-${{ matrix.target }}
+          path: |
+            ${{ env.ASSET }}
+            ${{ env.CHECKSUM }}
+          if-no-files-found: error
+          retention-days: 7
+
   create-github-release:
     name: 🚀 Create GitHub Release
-    needs: [create-tag, build-and-test, security-audit]
-    if: always() && needs.build-and-test.result == 'success' && needs.security-audit.result == 'success'
+    needs: [create-tag, build-and-test, security-audit, build-release-binaries]
+    if: always() && needs.build-and-test.result == 'success' && needs.security-audit.result == 'success' && needs.build-release-binaries.result == 'success'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -167,21 +279,36 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Create GitHub Release
+      - name: Download all release assets
+        uses: actions/download-artifact@v4
+        with:
+          path: downloaded-artifacts
+          pattern: release-assets-*
+          merge-multiple: true
+
+      - name: Create GitHub Release with assets
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NEW_VERSION: ${{ needs.create-tag.outputs.version }}
         run: |
+          set -eo pipefail
           release_notes="Automated release for quantus-cli version $NEW_VERSION."
           printf "%s" "$release_notes" > release_notes.txt
 
-          # Add draft flag if this is a draft release
+          echo "--- Release assets ---"
+          ls -la downloaded-artifacts
+
+          mapfile -t asset_args < <(find downloaded-artifacts -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.txt" \))
+          if [ "${#asset_args[@]}" -eq 0 ]; then
+            echo "::error::No release assets found to attach"
+            exit 1
+          fi
+
           if [[ "${{ needs.create-tag.outputs.is_draft }}" == "true" ]]; then
             DRAFT_FLAG="--draft"
           else
             DRAFT_FLAG=""
           fi
-
           echo "Creating release with DRAFT_FLAG: $DRAFT_FLAG"
 
           gh release create "$NEW_VERSION" \
@@ -189,12 +316,13 @@ jobs:
             --title "Quantus quantus-cli - $NEW_VERSION" \
             --notes-file release_notes.txt \
             --target main \
-            $DRAFT_FLAG
+            $DRAFT_FLAG \
+            "${asset_args[@]}"
 
   publish-to-crates:
     name: 📦 Publish to crates.io
-    needs: [create-tag, build-and-test, security-audit, create-github-release]
-    if: always() && needs.build-and-test.result == 'success' && needs.security-audit.result == 'success' && needs.create-github-release.result == 'success' && needs.create-tag.outputs.is_draft == 'false'
+    needs: [create-tag, build-and-test, security-audit, build-release-binaries, create-github-release]
+    if: always() && needs.build-and-test.result == 'success' && needs.security-audit.result == 'success' && needs.build-release-binaries.result == 'success' && needs.create-github-release.result == 'success' && needs.create-tag.outputs.is_draft == 'false'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code at tag
