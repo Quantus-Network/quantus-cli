@@ -510,8 +510,7 @@ pub fn load_keypair_from_wallet(
 mod tests {
 	use super::*;
 	use serial_test::serial;
-	use std::fs;
-	use std::process::Command;
+	use std::{fs, process::Command};
 	use tempfile::TempDir;
 
 	async fn create_test_wallet_manager() -> (WalletManager, TempDir) {

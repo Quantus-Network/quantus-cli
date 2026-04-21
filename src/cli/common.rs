@@ -85,26 +85,22 @@ fn describe_watched_tx_event(
 	target_stage: TransactionStage,
 ) -> Result<WatchDecision> {
 	match event {
-		WatchedTxEvent::Validated
-		| WatchedTxEvent::Broadcasted
-		| WatchedTxEvent::NoLongerInBestBlock => Ok(WatchDecision::Continue),
-		WatchedTxEvent::InBestBlock => {
+		WatchedTxEvent::Validated |
+		WatchedTxEvent::Broadcasted |
+		WatchedTxEvent::NoLongerInBestBlock => Ok(WatchDecision::Continue),
+		WatchedTxEvent::InBestBlock =>
 			if target_stage == TransactionStage::Finalized {
 				Ok(WatchDecision::WaitForFinalization)
 			} else {
 				Ok(WatchDecision::Success)
-			}
-		},
+			},
 		WatchedTxEvent::InFinalizedBlock => Ok(WatchDecision::Success),
-		WatchedTxEvent::Error(message) => {
-			Err(crate::error::QuantusError::NetworkError(format!("Transaction error: {message}")))
-		},
-		WatchedTxEvent::Invalid(message) => {
-			Err(crate::error::QuantusError::NetworkError(format!("Transaction invalid: {message}")))
-		},
-		WatchedTxEvent::Dropped(message) => {
-			Err(crate::error::QuantusError::NetworkError(format!("Transaction dropped: {message}")))
-		},
+		WatchedTxEvent::Error(message) =>
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction error: {message}"))),
+		WatchedTxEvent::Invalid(message) =>
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction invalid: {message}"))),
+		WatchedTxEvent::Dropped(message) =>
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction dropped: {message}"))),
 		WatchedTxEvent::StreamError(message) => Err(crate::error::QuantusError::NetworkError(
 			format!("Transaction status stream error: {message}"),
 		)),
@@ -346,11 +342,11 @@ where
 					let error_msg = format!("{e:?}");
 
 					// Check if it's a retryable error
-					let is_retryable = error_msg.contains("Priority is too low")
-						|| error_msg.contains("Transaction is outdated")
-						|| error_msg.contains("Transaction is temporarily banned")
-						|| error_msg.contains("Transaction has a bad signature")
-						|| error_msg.contains("Invalid Transaction");
+					let is_retryable = error_msg.contains("Priority is too low") ||
+						error_msg.contains("Transaction is outdated") ||
+						error_msg.contains("Transaction is temporarily banned") ||
+						error_msg.contains("Transaction has a bad signature") ||
+						error_msg.contains("Invalid Transaction");
 
 					if is_retryable && attempt < 5 {
 						log_verbose!(
@@ -590,9 +586,8 @@ async fn wait_tx_inclusion(
 								}
 								return Ok(());
 							},
-							WatchDecision::Continue | WatchDecision::WaitForFinalization => {
-								continue
-							},
+							WatchDecision::Continue | WatchDecision::WaitForFinalization =>
+								continue,
 						}
 					},
 					TxStatus::Error { message } => WatchedTxEvent::Error(message),
