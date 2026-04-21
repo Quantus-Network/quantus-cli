@@ -367,8 +367,14 @@ quantus wallet export --name my_wallet --format mnemonic
 ### Sending Tokens
 
 ```bash
-# Simple transfer
+# Simple transfer (default: submit and return once the node accepts the extrinsic)
 quantus send --from crystal_alice --to <address> --amount 10.5
+
+# Wait for inclusion in a best block
+quantus send --from crystal_alice --to <address> --amount 10.5 --wait-for-transaction
+
+# Wait for finalization (implies --wait-for-transaction)
+quantus send --from crystal_alice --to <address> --amount 10.5 --finalized-tx
 
 # With tip for priority
 quantus send --from crystal_alice --to <address> --amount 10 --tip 0.1
@@ -377,12 +383,19 @@ quantus send --from crystal_alice --to <address> --amount 10 --tip 0.1
 quantus send --from crystal_alice --to <address> --amount 10 --nonce 42
 ```
 
+Transaction status terms:
+- `submitted`: accepted by the node, but not yet known to be in a block
+- `included`: observed in a best block
+- `finalized`: observed in a finalized block
+
+`--amount` and `--tip` use exact decimal parsing based on the chain's configured decimals. Malformed values, negative values, over-precision, or values that would round to zero are rejected.
+
 ---
 
 ### Batch Transfers
 
 ```bash
-# From a JSON file
+# From a JSON file (amounts are raw smallest-unit integers)
 quantus batch send --from crystal_alice --batch-file transfers.json
 
 # Generate identical test transfers
@@ -509,7 +522,7 @@ quantus call \
 | `quantus system --runtime` | Runtime version details |
 | `quantus metadata --pallet Balances` | Explore chain metadata |
 | `quantus version` | CLI version |
-| `quantus compatibility-check` | Check CLI/node compatibility |
+| `quantus compatibility-check` | Check CLI/node spec-version and transaction-version compatibility |
 
 ---
 
@@ -820,12 +833,14 @@ The project includes a script to regenerate SubXT types and metadata when the bl
 1. **Updates metadata**: Downloads the latest chain metadata to `src/quantus_metadata.scale`
 2. **Generates types**: Creates type-safe Rust code in `src/chain/quantus_subxt.rs`
 3. **Formats code**: Automatically formats the generated code with `cargo fmt`
+4. **Prompts compatibility update**: Reminds you to update the supported runtime/transaction pair in `src/config/mod.rs`
 
 **When to use:**
 - After updating the Quantus runtime
 - When new pallets are added to the chain
 - When existing pallet APIs change
 - To ensure CLI compatibility with the latest chain version
+- Before updating the `quantus compatibility-check` allowlist
 
 **Requirements:**
 - `subxt-cli` must be installed: `cargo install subxt-cli`
@@ -849,7 +864,14 @@ Using node URL: ws://127.0.0.1:9944
 Updating metadata file at src/quantus_metadata.scale...
 Generating SubXT types to src/chain/quantus_subxt.rs...
 Formatting generated code...
+Reminder: update src/config/mod.rs with the new compatible spec/transaction version pair.
 Done!
 ```
 
-This ensures the CLI always has the latest type definitions and can interact with new chain features.
+After regeneration, re-run:
+
+```bash
+quantus compatibility-check --node-url <node>
+```
+
+The checked-in compatibility gate now requires both the runtime `spec_version` and `transaction_version` to match a supported pair.

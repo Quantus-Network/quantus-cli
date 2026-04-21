@@ -1,4 +1,5 @@
 #!/bin/bash
+set -euo pipefail
 
 # Default node URL
 NODE_URL="ws://127.0.0.1:9944"
@@ -32,6 +33,7 @@ echo "Generating SubXT types to src/chain/quantus_subxt.rs..."
 subxt codegen --url "$NODE_URL" > src/chain/quantus_subxt.rs
 
 echo "Formatting generated code..."
-cargo +nightly fmt -- src/chain/quantus_subxt.rs
+cargo fmt -- src/chain/quantus_subxt.rs
 
+echo "Reminder: update src/config/mod.rs with the new compatible spec/transaction version pair."
 echo "Done!"

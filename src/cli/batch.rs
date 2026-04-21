@@ -30,7 +30,8 @@ pub enum BatchCommands {
 		#[arg(long)]
 		tip: Option<String>,
 
-		/// Batch file with transfers (JSON format: [{"to": "address", "amount": "1000"}, ...])
+		/// Batch file with transfers (JSON format: [{"to": "address", "amount": "1000"}, ...];
+		/// amounts are raw smallest-unit integers)
 		#[arg(long)]
 		batch_file: Option<String>,
 
@@ -75,7 +76,7 @@ pub async fn handle_batch_command(
 			count,
 			to,
 			amount,
-		} =>
+		} => {
 			handle_batch_send_command(
 				from,
 				node_url,
@@ -88,9 +89,11 @@ pub async fn handle_batch_command(
 				amount,
 				execution_mode,
 			)
-			.await,
-		BatchCommands::Config { limits, info } =>
-			handle_batch_config_command(node_url, limits, info).await,
+			.await
+		},
+		BatchCommands::Config { limits, info } => {
+			handle_batch_config_command(node_url, limits, info).await
+		},
 	}
 }
 
@@ -145,36 +148,98 @@ async fn handle_batch_send_command(
 	// Load wallet
 	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
 	let from_account_id = keypair.to_account_id_ss58check();
+	let effective_tip = crate::cli::send::effective_tip_amount(tip_amount);
 
 	// Check balance
 	let balance = crate::cli::send::get_balance(&quantus_client, &from_account_id).await?;
-	let total_amount: u128 = transfers.iter().map(|(_, amount)| amount).sum();
-	let estimated_fee = 50_000_000_000u128; // Rough estimate for batch
+	let total_amount = transfers.iter().try_fold(0u128, |acc, (_, amount)| {
+		acc.checked_add(*amount).ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Batch amount total is too large to represent".to_string(),
+			)
+		})
+	})?;
+	let exact_required = total_amount.checked_add(effective_tip).ok_or_else(|| {
+		crate::error::QuantusError::Generic(
+			"Batch amount total is too large to represent".to_string(),
+		)
+	})?;
 
-	if balance < total_amount + estimated_fee {
+	if balance < exact_required {
 		let formatted_balance =
 			crate::cli::send::format_balance_with_symbol(&quantus_client, balance).await?;
-		let formatted_needed = crate::cli::send::format_balance_with_symbol(
-			&quantus_client,
-			total_amount + estimated_fee,
-		)
-		.await?;
+		let formatted_needed =
+			crate::cli::send::format_balance_with_symbol(&quantus_client, exact_required).await?;
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Insufficient balance. Have: {formatted_balance}, Need: {formatted_needed} (including estimated fees)"
+			"Insufficient balance. Have: {formatted_balance}, Need: {formatted_needed} (including tip)"
 		)));
+	}
+
+	let batch_call = crate::cli::send::build_batch_transfer_call(&transfers)?;
+	match crate::cli::send::estimate_transaction_partial_fee(
+		&quantus_client,
+		&keypair,
+		&batch_call,
+		Some(effective_tip),
+	)
+	.await
+	{
+		Ok(estimated_fee) => {
+			let estimated_total = exact_required.checked_add(estimated_fee).ok_or_else(|| {
+				crate::error::QuantusError::Generic(
+					"Batch amount total is too large to represent".to_string(),
+				)
+			})?;
+			if balance < estimated_total {
+				let formatted_balance =
+					crate::cli::send::format_balance_with_symbol(&quantus_client, balance).await?;
+				let formatted_needed =
+					crate::cli::send::format_balance_with_symbol(&quantus_client, estimated_total)
+						.await?;
+				let formatted_tip =
+					crate::cli::send::format_balance_with_symbol(&quantus_client, effective_tip)
+						.await?;
+				let formatted_fee =
+					crate::cli::send::format_balance_with_symbol(&quantus_client, estimated_fee)
+						.await?;
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Insufficient balance. Have: {formatted_balance}, Need: {formatted_needed} (tip: {formatted_tip}, estimated fee: {formatted_fee})"
+				)));
+			}
+		},
+		Err(err) => {
+			log_print!(
+				"ℹ️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
+				err
+			);
+		},
 	}
 
 	// Submit batch transaction
 	let tx_hash =
 		batch_transfer(&quantus_client, &keypair, transfers, tip_amount, execution_mode).await?;
 
+	let transaction_stage = execution_mode.transaction_stage();
 	log_print!(
-		"✅ {} Batch transaction submitted! Hash: {:?}",
+		"✅ {} Batch transaction {}. Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
+		transaction_stage.status_label(),
 		tx_hash
 	);
 
-	log_success!("🎉 {} Batch transaction confirmed!", "FINISHED".bright_green().bold());
+	if !execution_mode.should_refresh_post_submit_state() {
+		log_print!(
+			"ℹ️  The batch transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized-tx to wait before returning.",
+			transaction_stage.success_detail()
+		);
+		return Ok(());
+	}
+
+	log_success!(
+		"🎉 {} Batch transaction {}.",
+		"FINISHED".bright_green().bold(),
+		transaction_stage.success_detail()
+	);
 
 	// Show updated balance
 	let new_balance = crate::cli::send::get_balance(&quantus_client, &from_account_id).await?;

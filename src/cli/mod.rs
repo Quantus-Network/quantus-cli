@@ -309,7 +309,7 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
+		Commands::Send { from, to, amount, password, password_file, tip, nonce } => {
 			send::handle_send_command(
 				from,
 				to,
@@ -321,45 +321,60 @@ pub async fn execute_command(
 				nonce,
 				execution_mode,
 			)
-			.await,
-		Commands::Batch(batch_cmd) =>
-			batch::handle_batch_command(batch_cmd, node_url, execution_mode).await,
-		Commands::Reversible(reversible_cmd) =>
-			reversible::handle_reversible_command(reversible_cmd, node_url, execution_mode).await,
-		Commands::HighSecurity(hs_cmd) =>
-			high_security::handle_high_security_command(hs_cmd, node_url, execution_mode).await,
-		Commands::Recovery(recovery_cmd) =>
-			recovery::handle_recovery_command(recovery_cmd, node_url, execution_mode).await,
-		Commands::Multisig(multisig_cmd) =>
-			multisig::handle_multisig_command(multisig_cmd, node_url, execution_mode).await,
-		Commands::Scheduler(scheduler_cmd) =>
-			scheduler::handle_scheduler_command(scheduler_cmd, node_url, execution_mode).await,
-		Commands::Storage(storage_cmd) =>
-			storage::handle_storage_command(storage_cmd, node_url, execution_mode).await,
-		Commands::TechCollective(tech_collective_cmd) =>
+			.await
+		},
+		Commands::Batch(batch_cmd) => {
+			batch::handle_batch_command(batch_cmd, node_url, execution_mode).await
+		},
+		Commands::Reversible(reversible_cmd) => {
+			reversible::handle_reversible_command(reversible_cmd, node_url, execution_mode).await
+		},
+		Commands::HighSecurity(hs_cmd) => {
+			high_security::handle_high_security_command(hs_cmd, node_url, execution_mode).await
+		},
+		Commands::Recovery(recovery_cmd) => {
+			recovery::handle_recovery_command(recovery_cmd, node_url, execution_mode).await
+		},
+		Commands::Multisig(multisig_cmd) => {
+			multisig::handle_multisig_command(multisig_cmd, node_url, execution_mode).await
+		},
+		Commands::Scheduler(scheduler_cmd) => {
+			scheduler::handle_scheduler_command(scheduler_cmd, node_url, execution_mode).await
+		},
+		Commands::Storage(storage_cmd) => {
+			storage::handle_storage_command(storage_cmd, node_url, execution_mode).await
+		},
+		Commands::TechCollective(tech_collective_cmd) => {
 			tech_collective::handle_tech_collective_command(
 				tech_collective_cmd,
 				node_url,
 				execution_mode,
 			)
-			.await,
-		Commands::Preimage(preimage_cmd) =>
-			preimage::handle_preimage_command(preimage_cmd, node_url, execution_mode).await,
-		Commands::TechReferenda(tech_referenda_cmd) =>
+			.await
+		},
+		Commands::Preimage(preimage_cmd) => {
+			preimage::handle_preimage_command(preimage_cmd, node_url, execution_mode).await
+		},
+		Commands::TechReferenda(tech_referenda_cmd) => {
 			tech_referenda::handle_tech_referenda_command(
 				tech_referenda_cmd,
 				node_url,
 				execution_mode,
 			)
-			.await,
-		Commands::Referenda(referenda_cmd) =>
-			referenda::handle_referenda_command(referenda_cmd, node_url, execution_mode).await,
-		Commands::Treasury(treasury_cmd) =>
-			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
-		Commands::Transfers(transfers_cmd) =>
-			transfers::handle_transfers_command(transfers_cmd).await,
-		Commands::Runtime(runtime_cmd) =>
-			runtime::handle_runtime_command(runtime_cmd, node_url, execution_mode).await,
+			.await
+		},
+		Commands::Referenda(referenda_cmd) => {
+			referenda::handle_referenda_command(referenda_cmd, node_url, execution_mode).await
+		},
+		Commands::Treasury(treasury_cmd) => {
+			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await
+		},
+		Commands::Transfers(transfers_cmd) => {
+			transfers::handle_transfers_command(transfers_cmd).await
+		},
+		Commands::Runtime(runtime_cmd) => {
+			runtime::handle_runtime_command(runtime_cmd, node_url, execution_mode).await
+		},
 		Commands::Call {
 			pallet,
 			call,
@@ -370,7 +385,7 @@ pub async fn execute_command(
 			tip,
 			offline,
 			call_data_only,
-		} =>
+		} => {
 			handle_generic_call_command(
 				pallet,
 				call,
@@ -384,7 +399,8 @@ pub async fn execute_command(
 				node_url,
 				execution_mode,
 			)
-			.await,
+			.await
+		},
 		Commands::Balance { address } => {
 			let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
@@ -405,11 +421,12 @@ pub async fn execute_command(
 			Ok(())
 		},
 		Commands::Developer(dev_cmd) => handle_developer_command(dev_cmd).await,
-		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } =>
+		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } => {
 			events::handle_events_command(
 				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
 			)
-			.await,
+			.await
+		},
 		Commands::System { runtime, metadata, rpc_methods } => {
 			if runtime || metadata || rpc_methods {
 				system::handle_system_extended_command(
@@ -424,16 +441,18 @@ pub async fn execute_command(
 				system::handle_system_command(node_url).await
 			}
 		},
-		Commands::Metadata { no_docs, stats_only, pallet } =>
-			metadata::handle_metadata_command(node_url, no_docs, stats_only, pallet).await,
+		Commands::Metadata { no_docs, stats_only, pallet } => {
+			metadata::handle_metadata_command(node_url, no_docs, stats_only, pallet).await
+		},
 		Commands::Version => {
 			log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 			Ok(())
 		},
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
-		Commands::Wormhole(wormhole_cmd) =>
-			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
+		Commands::Wormhole(wormhole_cmd) => {
+			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await
+		},
 		Commands::Multisend {
 			from,
 			addresses_file,
@@ -445,7 +464,7 @@ pub async fn execute_command(
 			password_file,
 			tip,
 			yes,
-		} =>
+		} => {
 			multisend::handle_multisend_command(
 				from,
 				node_url,
@@ -460,7 +479,8 @@ pub async fn execute_command(
 				yes,
 				execution_mode,
 			)
-			.await,
+			.await
+		},
 	}
 }
 
@@ -606,11 +626,19 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 	log_print!("");
 
 	// Check compatibility
-	let is_compatible = crate::config::is_runtime_compatible(runtime_version.spec_version);
+	let is_compatible = crate::config::is_runtime_compatible(
+		runtime_version.spec_version,
+		runtime_version.transaction_version,
+	);
 
 	log_print!("🔍 Compatibility Analysis:");
 	log_print!("   • Supported Runtime Versions: {:?}", crate::config::COMPATIBLE_RUNTIME_VERSIONS);
+	log_print!(
+		"   • Supported Transaction Versions: {:?}",
+		crate::config::COMPATIBLE_TRANSACTION_VERSIONS
+	);
 	log_print!("   • Current Runtime Version: {}", runtime_version.spec_version);
+	log_print!("   • Current Transaction Version: {}", runtime_version.transaction_version);
 
 	if is_compatible {
 		log_success!("✅ COMPATIBLE - This CLI version supports the connected node");
@@ -620,7 +648,10 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 		log_error!("❌ INCOMPATIBLE - This CLI version may not work with the connected node");
 		log_print!("   • Some features may not work correctly");
 		log_print!("   • Consider updating the CLI or connecting to a compatible node");
-		log_print!("   • Supported versions: {:?}", crate::config::COMPATIBLE_RUNTIME_VERSIONS);
+		log_print!("   • Supported runtime/version pairs:");
+		for runtime in crate::config::COMPATIBLE_RUNTIMES {
+			log_print!("     - spec {} / tx {}", runtime.spec_version, runtime.transaction_version);
+		}
 	}
 
 	log_print!("");

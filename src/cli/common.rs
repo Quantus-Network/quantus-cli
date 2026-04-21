@@ -8,10 +8,111 @@ use subxt::{
 	OnlineClient,
 };
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ExecutionMode {
 	pub finalized: bool,
 	pub wait_for_transaction: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionStage {
+	Submitted,
+	Included,
+	Finalized,
+}
+
+impl ExecutionMode {
+	pub fn transaction_stage(self) -> TransactionStage {
+		if self.finalized {
+			TransactionStage::Finalized
+		} else if self.wait_for_transaction {
+			TransactionStage::Included
+		} else {
+			TransactionStage::Submitted
+		}
+	}
+
+	pub fn should_watch_transaction(self) -> bool {
+		self.transaction_stage() != TransactionStage::Submitted
+	}
+
+	pub fn should_refresh_post_submit_state(self) -> bool {
+		self.should_watch_transaction()
+	}
+}
+
+impl TransactionStage {
+	pub fn status_label(self) -> &'static str {
+		match self {
+			Self::Submitted => "submitted",
+			Self::Included => "included",
+			Self::Finalized => "finalized",
+		}
+	}
+
+	pub fn success_detail(self) -> &'static str {
+		match self {
+			Self::Submitted => "accepted by the node",
+			Self::Included => "included in a best block",
+			Self::Finalized => "finalized in a block",
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum WatchedTxEvent {
+	Validated,
+	Broadcasted,
+	NoLongerInBestBlock,
+	InBestBlock,
+	InFinalizedBlock,
+	Error(String),
+	Invalid(String),
+	Dropped(String),
+	StreamError(String),
+	StreamEnded,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum WatchDecision {
+	Continue,
+	WaitForFinalization,
+	Success,
+}
+
+fn describe_watched_tx_event(
+	event: WatchedTxEvent,
+	target_stage: TransactionStage,
+) -> Result<WatchDecision> {
+	match event {
+		WatchedTxEvent::Validated
+		| WatchedTxEvent::Broadcasted
+		| WatchedTxEvent::NoLongerInBestBlock => Ok(WatchDecision::Continue),
+		WatchedTxEvent::InBestBlock => {
+			if target_stage == TransactionStage::Finalized {
+				Ok(WatchDecision::WaitForFinalization)
+			} else {
+				Ok(WatchDecision::Success)
+			}
+		},
+		WatchedTxEvent::InFinalizedBlock => Ok(WatchDecision::Success),
+		WatchedTxEvent::Error(message) => {
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction error: {message}")))
+		},
+		WatchedTxEvent::Invalid(message) => {
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction invalid: {message}")))
+		},
+		WatchedTxEvent::Dropped(message) => {
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction dropped: {message}")))
+		},
+		WatchedTxEvent::StreamError(message) => Err(crate::error::QuantusError::NetworkError(
+			format!("Transaction status stream error: {message}"),
+		)),
+		WatchedTxEvent::StreamEnded => Err(crate::error::QuantusError::NetworkError(format!(
+			"Transaction status stream ended before the transaction was {}",
+			target_stage.status_label()
+		))),
+	}
 }
 
 /// Resolve address - if it's a wallet name, return the wallet's address
@@ -122,9 +223,9 @@ pub async fn get_incremented_nonce_with_client(
 
 /// Submit transaction with optional finalization check
 ///
-/// By default (finalized=false), waits until transaction is in the best block (fast)
-/// With finalized=true, waits until transaction is in a finalized block (slow in PoW chains)
-/// With wait_for_transaction=false, returns immediately after submission without waiting
+/// By default, returns immediately after the node accepts the transaction submission.
+/// With `wait_for_transaction=true`, waits until the transaction is in a best block.
+/// With `finalized=true`, waits until the transaction is in a finalized block.
 pub async fn submit_transaction<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
@@ -181,7 +282,7 @@ where
 			params_builder = params_builder.tip(tip_amount);
 			log_verbose!("💰 Using tip: {} to increase priority", tip_amount);
 		} else {
-			log_verbose!("💰 No tip specified, using default priority");
+			log_verbose!("💰 No tip specified");
 		}
 
 		// Try to get chain parameters from the client
@@ -219,7 +320,7 @@ where
 		crate::log_verbose!("📝 Encoded call: 0x{}", hex::encode(&encoded_call));
 		crate::log_print!("📝 Encoded call size: {} bytes", encoded_call.len());
 
-		if execution_mode.wait_for_transaction {
+		if execution_mode.should_watch_transaction() {
 			match quantus_client
 				.client()
 				.tx()
@@ -231,15 +332,11 @@ where
 
 					let tx_hash = tx_progress.extrinsic_hash();
 
-					if !execution_mode.wait_for_transaction {
-						return Ok(tx_hash);
-					}
-
 					wait_tx_inclusion(
 						&mut tx_progress,
 						quantus_client.client(),
 						&tx_hash,
-						execution_mode.finalized,
+						execution_mode.transaction_stage(),
 					)
 					.await?;
 
@@ -249,11 +346,11 @@ where
 					let error_msg = format!("{e:?}");
 
 					// Check if it's a retryable error
-					let is_retryable = error_msg.contains("Priority is too low") ||
-						error_msg.contains("Transaction is outdated") ||
-						error_msg.contains("Transaction is temporarily banned") ||
-						error_msg.contains("Transaction has a bad signature") ||
-						error_msg.contains("Invalid Transaction");
+					let is_retryable = error_msg.contains("Priority is too low")
+						|| error_msg.contains("Transaction is outdated")
+						|| error_msg.contains("Transaction is temporarily banned")
+						|| error_msg.contains("Transaction has a bad signature")
+						|| error_msg.contains("Invalid Transaction");
 
 					if is_retryable && attempt < 5 {
 						log_verbose!(
@@ -331,10 +428,8 @@ where
 	log_verbose!("🔢 Using manual nonce: {}", nonce);
 	log_verbose!("📤 Submitting transaction with manual nonce...");
 
-	crate::log_print!("submit with wait for transaction: {}", execution_mode.wait_for_transaction);
 	// Submit the transaction with manual nonce
-
-	if execution_mode.wait_for_transaction {
+	if execution_mode.should_watch_transaction() {
 		match quantus_client
 			.client()
 			.tx()
@@ -348,7 +443,7 @@ where
 					&mut tx_progress,
 					quantus_client.client(),
 					&tx_hash,
-					execution_mode.finalized,
+					execution_mode.transaction_stage(),
 				)
 				.await?;
 				Ok(tx_hash)
@@ -385,7 +480,7 @@ async fn wait_tx_inclusion(
 	tx_progress: &mut TxProgress<ChainConfig, OnlineClient<ChainConfig>>,
 	client: &OnlineClient<ChainConfig>,
 	tx_hash: &subxt::utils::H256,
-	finalized: bool,
+	target_stage: TransactionStage,
 ) -> Result<()> {
 	use indicatif::{ProgressBar, ProgressStyle};
 
@@ -400,7 +495,7 @@ async fn wait_tx_inclusion(
 				.unwrap(),
 		);
 
-		if finalized {
+		if target_stage == TransactionStage::Finalized {
 			pb.set_message("Waiting for finalized block... (0s)");
 		} else {
 			pb.set_message("Waiting for block inclusion... (0s)");
@@ -412,59 +507,107 @@ async fn wait_tx_inclusion(
 		None
 	};
 
-	while let Some(Ok(status)) = tx_progress.next().await {
+	loop {
 		let elapsed_secs = start_time.elapsed().as_secs();
-		crate::log_verbose!("   Transaction status: {:?} (elapsed: {}s)", status, elapsed_secs);
+		let next_event = match tx_progress.next().await {
+			Some(Ok(status)) => {
+				crate::log_verbose!(
+					"   Transaction status: {:?} (elapsed: {}s)",
+					status,
+					elapsed_secs
+				);
 
-		match status {
-			TxStatus::Validated =>
-				if let Some(ref pb) = spinner {
-					pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
-				},
-			TxStatus::InBestBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
-				check_execution_success(client, &block_hash, tx_hash).await?;
-				if finalized {
-					if let Some(ref pb) = spinner {
-						pb.set_message(format!(
-							"In best block, waiting for finalization... ({}s)",
-							elapsed_secs
-						));
-					}
-					continue;
-				} else {
-					if let Some(pb) = spinner {
-						pb.finish_with_message(format!(
-							"✅ Transaction included in block! ({}s)",
-							elapsed_secs
-						));
-					}
-					break;
-				};
-			},
-			TxStatus::InFinalizedBlock(tx_in_block) => {
-				let block_hash = tx_in_block.block_hash();
-				crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
-				check_execution_success(client, &block_hash, tx_hash).await?;
-				if let Some(pb) = spinner {
-					pb.finish_with_message(format!(
-						"✅ Transaction finalized! ({}s)",
-						elapsed_secs
-					));
+				match status {
+					TxStatus::Validated => {
+						if let Some(ref pb) = spinner {
+							pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
+						}
+						WatchedTxEvent::Validated
+					},
+					TxStatus::Broadcasted => WatchedTxEvent::Broadcasted,
+					TxStatus::NoLongerInBestBlock => WatchedTxEvent::NoLongerInBestBlock,
+					TxStatus::InBestBlock(tx_in_block) => {
+						let block_hash = tx_in_block.block_hash();
+						crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
+						if let Err(err) =
+							check_execution_success(client, &block_hash, tx_hash).await
+						{
+							if let Some(pb) = spinner {
+								pb.finish_with_message(format!(
+									"❌ Transaction failed in block ({}s)",
+									elapsed_secs
+								));
+							}
+							return Err(err);
+						}
+						match describe_watched_tx_event(WatchedTxEvent::InBestBlock, target_stage)?
+						{
+							WatchDecision::WaitForFinalization => {
+								if let Some(ref pb) = spinner {
+									pb.set_message(format!(
+										"In best block, waiting for finalization... ({}s)",
+										elapsed_secs
+									));
+								}
+								continue;
+							},
+							WatchDecision::Success => {
+								if let Some(pb) = spinner {
+									pb.finish_with_message(format!(
+										"✅ Transaction included in block! ({}s)",
+										elapsed_secs
+									));
+								}
+								return Ok(());
+							},
+							WatchDecision::Continue => continue,
+						}
+					},
+					TxStatus::InFinalizedBlock(tx_in_block) => {
+						let block_hash = tx_in_block.block_hash();
+						crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
+						if let Err(err) =
+							check_execution_success(client, &block_hash, tx_hash).await
+						{
+							if let Some(pb) = spinner {
+								pb.finish_with_message(format!(
+									"❌ Transaction failed in finalized block ({}s)",
+									elapsed_secs
+								));
+							}
+							return Err(err);
+						}
+						match describe_watched_tx_event(
+							WatchedTxEvent::InFinalizedBlock,
+							target_stage,
+						)? {
+							WatchDecision::Success => {
+								if let Some(pb) = spinner {
+									pb.finish_with_message(format!(
+										"✅ Transaction finalized! ({}s)",
+										elapsed_secs
+									));
+								}
+								return Ok(());
+							},
+							WatchDecision::Continue | WatchDecision::WaitForFinalization => {
+								continue
+							},
+						}
+					},
+					TxStatus::Error { message } => WatchedTxEvent::Error(message),
+					TxStatus::Invalid { message } => WatchedTxEvent::Invalid(message),
+					TxStatus::Dropped { message } => WatchedTxEvent::Dropped(message),
 				}
-				break;
 			},
-			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				crate::log_error!("   Transaction error: {} (elapsed: {}s)", message, elapsed_secs);
-				if let Some(pb) = spinner {
-					pb.finish_with_message(format!("❌ Transaction error! ({}s)", elapsed_secs));
-				}
-				break;
-			},
-			_ => {
+			Some(Err(err)) => WatchedTxEvent::StreamError(err.to_string()),
+			None => WatchedTxEvent::StreamEnded,
+		};
+
+		match describe_watched_tx_event(next_event, target_stage) {
+			Ok(WatchDecision::Continue) | Ok(WatchDecision::WaitForFinalization) => {
 				if let Some(ref pb) = spinner {
-					if finalized {
+					if target_stage == TransactionStage::Finalized {
 						pb.set_message(format!(
 							"Waiting for finalized block... ({}s)",
 							elapsed_secs
@@ -476,12 +619,17 @@ async fn wait_tx_inclusion(
 						));
 					}
 				}
-				continue;
+			},
+			Ok(WatchDecision::Success) => return Ok(()),
+			Err(err) => {
+				crate::log_error!("   {} (elapsed: {}s)", err, elapsed_secs);
+				if let Some(pb) = spinner {
+					pb.finish_with_message(format!("❌ Transaction error! ({}s)", elapsed_secs));
+				}
+				return Err(err);
 			},
 		}
 	}
-
-	Ok(())
 }
 
 fn format_dispatch_error(
@@ -603,4 +751,77 @@ async fn check_execution_success(
 	}
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn finalized_mode_implies_waiting_for_finalization() {
+		let mode = ExecutionMode { finalized: true, wait_for_transaction: false };
+
+		assert_eq!(mode.transaction_stage(), TransactionStage::Finalized);
+		assert!(mode.should_watch_transaction());
+		assert!(mode.should_refresh_post_submit_state());
+	}
+
+	#[test]
+	fn default_mode_is_submission_only() {
+		let mode = ExecutionMode::default();
+
+		assert_eq!(mode.transaction_stage(), TransactionStage::Submitted);
+		assert!(!mode.should_watch_transaction());
+		assert!(!mode.should_refresh_post_submit_state());
+	}
+
+	#[test]
+	fn watched_failures_are_terminal_errors() {
+		assert!(describe_watched_tx_event(
+			WatchedTxEvent::Error("boom".to_string()),
+			TransactionStage::Included,
+		)
+		.is_err());
+		assert!(describe_watched_tx_event(
+			WatchedTxEvent::Invalid("bad nonce".to_string()),
+			TransactionStage::Included,
+		)
+		.is_err());
+		assert!(describe_watched_tx_event(
+			WatchedTxEvent::Dropped("dropped".to_string()),
+			TransactionStage::Included,
+		)
+		.is_err());
+		assert!(describe_watched_tx_event(
+			WatchedTxEvent::StreamError("rpc failed".to_string()),
+			TransactionStage::Included,
+		)
+		.is_err());
+		assert!(
+			describe_watched_tx_event(WatchedTxEvent::StreamEnded, TransactionStage::Included,)
+				.is_err()
+		);
+	}
+
+	#[test]
+	fn inclusion_and_finalization_have_distinct_success_states() {
+		assert_eq!(
+			describe_watched_tx_event(WatchedTxEvent::InBestBlock, TransactionStage::Included)
+				.unwrap(),
+			WatchDecision::Success
+		);
+		assert_eq!(
+			describe_watched_tx_event(WatchedTxEvent::InBestBlock, TransactionStage::Finalized)
+				.unwrap(),
+			WatchDecision::WaitForFinalization
+		);
+		assert_eq!(
+			describe_watched_tx_event(
+				WatchedTxEvent::InFinalizedBlock,
+				TransactionStage::Finalized,
+			)
+			.unwrap(),
+			WatchDecision::Success
+		);
+	}
 }

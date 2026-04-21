@@ -40,12 +40,13 @@ struct Cli {
 	#[arg(long, global = true, default_value = "ws://127.0.0.1:9944")]
 	node_url: String,
 
-	/// Transaction finalization
+	/// Wait for transaction finalization before returning
+	/// Implies `--wait-for-transaction`
 	/// NOTE: waiting for finalized transaction may take a while in PoW chain
 	#[arg(long, global = true, default_value = "false")]
 	finalized_tx: bool,
 
-	/// Wait for transaction validation/inclusion before returning
+	/// Wait for transaction inclusion in a best block before returning
 	/// Default: false
 	#[arg(long, global = true, default_value = "false")]
 	wait_for_transaction: bool,
@@ -72,7 +73,7 @@ async fn main() -> Result<(), QuantusError> {
 	// Create execution mode from CLI args
 	let execution_mode = cli::common::ExecutionMode {
 		finalized: cli.finalized_tx,
-		wait_for_transaction: cli.wait_for_transaction,
+		wait_for_transaction: cli.wait_for_transaction || cli.finalized_tx,
 	};
 
 	// Execute the command with timing

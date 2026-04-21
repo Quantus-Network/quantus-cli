@@ -7,6 +7,8 @@ use crate::{
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 
+pub const DEFAULT_PRIORITY_TIP: u128 = 10_000_000_000;
+
 /// Account balance data
 pub struct AccountBalanceData {
 	pub free: u128,
@@ -122,32 +124,108 @@ pub async fn parse_amount(quantus_client: &QuantusClient, amount_str: &str) -> R
 
 /// Parse amount string with specific decimals
 pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128> {
-	let amount_part = amount_str.split_whitespace().next().unwrap_or("");
+	let amount_part = amount_str.trim();
 
 	if amount_part.is_empty() {
 		return Err(crate::error::QuantusError::Generic("Amount cannot be empty".to_string()));
 	}
 
-	let parsed_amount: f64 = amount_part.parse().map_err(|_| {
-		crate::error::QuantusError::Generic(format!(
-			"Invalid amount format: '{amount_part}'. Use formats like '10', '10.5', '0.0001'"
-		))
-	})?;
-
-	if parsed_amount < 0.0 {
+	if amount_part.starts_with('-') {
 		return Err(crate::error::QuantusError::Generic("Amount cannot be negative".to_string()));
 	}
 
-	if let Some(decimal_part) = amount_part.split('.').nth(1) {
-		if decimal_part.len() > decimals as usize {
-			return Err(crate::error::QuantusError::Generic(format!(
-				"Too many decimal places. Maximum {decimals} decimal places allowed for this chain"
-			)));
-		}
+	if amount_part.starts_with('+') {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Invalid amount format: '{amount_part}'. Use plain decimal strings like '10', '10.5', or '0.0001'"
+		)));
 	}
 
-	let multiplier = 10_f64.powi(decimals as i32);
-	let raw_amount = (parsed_amount * multiplier).round() as u128;
+	let mut parts = amount_part.split('.');
+	let whole_part = parts.next().unwrap_or_default();
+	let fractional_part = parts.next();
+	if parts.next().is_some() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Invalid amount format: '{amount_part}'. Use plain decimal strings like '10', '10.5', or '0.0001'"
+		)));
+	}
+
+	if whole_part.is_empty() && fractional_part.is_none() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Invalid amount format: '{amount_part}'. Use plain decimal strings like '10', '10.5', or '0.0001'"
+		)));
+	}
+
+	if !whole_part.is_empty() && !whole_part.chars().all(|ch| ch.is_ascii_digit()) {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Invalid amount format: '{amount_part}'. Use plain decimal strings like '10', '10.5', or '0.0001'"
+		)));
+	}
+
+	let fractional_part = fractional_part.unwrap_or_default();
+	if !fractional_part.is_empty() && !fractional_part.chars().all(|ch| ch.is_ascii_digit()) {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Invalid amount format: '{amount_part}'. Use plain decimal strings like '10', '10.5', or '0.0001'"
+		)));
+	}
+
+	if whole_part.is_empty() && fractional_part.is_empty() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Invalid amount format: '{amount_part}'. Use plain decimal strings like '10', '10.5', or '0.0001'"
+		)));
+	}
+
+	if fractional_part.len() > decimals as usize {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Too many decimal places. Maximum {decimals} decimal places allowed for this chain"
+		)));
+	}
+
+	let multiplier = 10_u128.checked_pow(decimals as u32).ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!("Unsupported chain decimals value: {decimals}"))
+	})?;
+
+	let whole_value = if whole_part.is_empty() {
+		0
+	} else {
+		whole_part.parse::<u128>().map_err(|_| {
+			crate::error::QuantusError::Generic(format!(
+				"Amount is too large to represent: '{amount_part}'"
+			))
+		})?
+	};
+
+	let whole_raw = whole_value.checked_mul(multiplier).ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!(
+			"Amount is too large to represent: '{amount_part}'"
+		))
+	})?;
+
+	let fractional_raw = if fractional_part.is_empty() {
+		0
+	} else {
+		let fractional_value = fractional_part.parse::<u128>().map_err(|_| {
+			crate::error::QuantusError::Generic(format!(
+				"Amount is too large to represent: '{amount_part}'"
+			))
+		})?;
+		let padding = decimals as usize - fractional_part.len();
+		let scale = 10_u128.checked_pow(padding as u32).ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Unsupported chain decimals value: {decimals}"
+			))
+		})?;
+		fractional_value.checked_mul(scale).ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Amount is too large to represent: '{amount_part}'"
+			))
+		})?
+	};
+
+	let raw_amount = whole_raw.checked_add(fractional_raw).ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!(
+			"Amount is too large to represent: '{amount_part}'"
+		))
+	})?;
 
 	if raw_amount == 0 {
 		return Err(crate::error::QuantusError::Generic(
@@ -166,6 +244,96 @@ pub async fn validate_and_format_amount(
 	let raw_amount = parse_amount(quantus_client, amount_str).await?;
 	let formatted = format_balance_with_symbol(quantus_client, raw_amount).await?;
 	Ok((raw_amount, formatted))
+}
+
+fn checked_add(lhs: u128, rhs: u128, context: &str) -> Result<u128> {
+	lhs.checked_add(rhs).ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!("Value overflow while computing {context}"))
+	})
+}
+
+pub fn effective_tip_amount(tip: Option<u128>) -> u128 {
+	tip.unwrap_or(DEFAULT_PRIORITY_TIP)
+}
+
+fn build_transfer_call(resolved_address: &str, amount: u128) -> Result<impl subxt::tx::Payload> {
+	let (to_account_id_sp, _) = SpAccountId32::from_ss58check_with_version(resolved_address)
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
+		})?;
+
+	let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
+	let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
+
+	Ok(quantus_subxt::api::tx().balances().transfer_allow_death(
+		subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
+		amount,
+	))
+}
+
+pub(crate) fn build_batch_transfer_call(
+	transfers: &[(String, u128)],
+) -> Result<impl subxt::tx::Payload> {
+	use quantus_subxt::api::runtime_types::{
+		pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
+	};
+
+	let mut calls = Vec::with_capacity(transfers.len());
+	for (to_address, amount) in transfers {
+		let resolved_address = crate::cli::common::resolve_address(to_address)?;
+		let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Invalid destination address {resolved_address}: {e:?}"
+			))
+		})?;
+
+		let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
+		let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
+
+		calls.push(RuntimeCall::Balances(BalancesCall::transfer_allow_death {
+			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
+			value: *amount,
+		}));
+	}
+
+	Ok(quantus_subxt::api::tx().utility().batch(calls))
+}
+
+pub async fn estimate_transaction_partial_fee<Call>(
+	quantus_client: &QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: &Call,
+	tip: Option<u128>,
+) -> Result<u128>
+where
+	Call: subxt::tx::Payload,
+{
+	let signer = from_keypair.to_subxt_signer().map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
+	})?;
+
+	use subxt::config::DefaultExtrinsicParamsBuilder;
+	let mut params_builder = DefaultExtrinsicParamsBuilder::new().mortal(256);
+	if let Some(tip_amount) = tip {
+		params_builder = params_builder.tip(tip_amount);
+	}
+
+	let mut tx_client = quantus_client.client().tx();
+	let signed_tx =
+		tx_client
+			.create_signed(call, &signer, params_builder.build())
+			.await
+			.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to prepare transaction for fee estimation: {e:?}"
+				))
+			})?;
+
+	signed_tx.partial_fee_estimate().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!(
+			"Failed to estimate transaction fee: {e:?}"
+		))
+	})
 }
 
 /// Transfer tokens with automatic nonce
@@ -201,27 +369,10 @@ pub async fn transfer_with_nonce(
 	let resolved_address = resolve_address(to_address)?;
 	log_verbose!("   Resolved to: {}", resolved_address.bright_green());
 
-	// Parse the destination address
-	let (to_account_id_sp, _) = SpAccountId32::from_ss58check_with_version(&resolved_address)
-		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
-		})?;
-
-	// Convert to subxt_core AccountId32
-	let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
-	let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
-
 	log_verbose!("✍️  Creating balance transfer extrinsic...");
 
-	// Create the transfer call using static API from quantus_subxt
-	let transfer_call = quantus_subxt::api::tx().balances().transfer_allow_death(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id.clone()),
-		amount,
-	);
-
-	// Use provided tip or default tip of 10 DEV to increase priority and avoid temporarily
-	// banned errors
-	let tip_to_use = tip.unwrap_or(10_000_000_000); // Use provided tip or default 10 DEV
+	let transfer_call = build_transfer_call(&resolved_address, amount)?;
+	let tip_to_use = effective_tip_amount(tip);
 
 	// Submit the transaction with optional manual nonce
 	let tx_hash = if let Some(manual_nonce) = nonce {
@@ -291,45 +442,14 @@ pub async fn batch_transfer(
 		);
 	}
 
-	// Prepare all transfer calls as RuntimeCall
-	let mut calls = Vec::new();
-	for (to_address, amount) in transfers {
+	for (to_address, amount) in &transfers {
 		log_verbose!("   To: {} Amount: {}", to_address.bright_green(), amount);
-
-		// Resolve the destination address
-		let resolved_address = crate::cli::common::resolve_address(&to_address)?;
-
-		// Parse the destination address
-		let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!(
-				"Invalid destination address {resolved_address}: {e:?}"
-			))
-		})?;
-
-		// Convert to subxt_core AccountId32
-		let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
-		let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
-
-		// Create the transfer call as RuntimeCall
-		use quantus_subxt::api::runtime_types::{
-			pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
-		};
-
-		let transfer_call = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
-			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
-			value: amount,
-		});
-
-		calls.push(transfer_call);
 	}
-
-	log_verbose!("✍️  Creating batch extrinsic with {} calls...", calls.len());
-
-	// Create the batch call using utility pallet
-	let batch_call = quantus_subxt::api::tx().utility().batch(calls);
+	log_verbose!("✍️  Creating batch extrinsic with {} calls...", transfers.len());
+	let batch_call = build_batch_transfer_call(&transfers)?;
 
 	// Use provided tip or default tip
-	let tip_to_use = tip.unwrap_or(10_000_000_000);
+	let tip_to_use = effective_tip_amount(tip);
 
 	// Submit the batch transaction
 	let tx_hash = crate::cli::common::submit_transaction(
@@ -390,24 +510,59 @@ pub async fn handle_send_command(
 	let formatted_balance = format_balance_with_symbol(&quantus_client, balance).await?;
 	log_verbose!("💰 Current balance: {}", formatted_balance.bright_yellow());
 
-	if balance < amount {
+	// Parse tip amount if provided
+	let tip_amount = if let Some(tip_str) = &tip {
+		Some(parse_amount(&quantus_client, tip_str).await?)
+	} else {
+		None
+	};
+	let effective_tip = effective_tip_amount(tip_amount);
+
+	let exact_required = checked_add(amount, effective_tip, "required send balance")?;
+	if balance < exact_required {
 		return Err(crate::error::QuantusError::InsufficientBalance {
 			available: balance,
-			required: amount,
+			required: exact_required,
 		});
+	}
+
+	let transfer_call = build_transfer_call(&resolved_address, amount)?;
+	match estimate_transaction_partial_fee(
+		&quantus_client,
+		&keypair,
+		&transfer_call,
+		Some(effective_tip),
+	)
+	.await
+	{
+		Ok(estimated_fee) => {
+			let estimated_total =
+				checked_add(exact_required, estimated_fee, "required send balance")?;
+			if balance < estimated_total {
+				let formatted_tip =
+					format_balance_with_symbol(&quantus_client, effective_tip).await?;
+				let formatted_fee =
+					format_balance_with_symbol(&quantus_client, estimated_fee).await?;
+				let formatted_required =
+					format_balance_with_symbol(&quantus_client, estimated_total).await?;
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Insufficient balance for amount + tip + estimated fee. Have: {formatted_balance}, Need: {formatted_required} (tip: {formatted_tip}, estimated fee: {formatted_fee})"
+				)));
+			}
+			let formatted_estimated_fee =
+				format_balance_with_symbol(&quantus_client, estimated_fee).await?;
+			log_verbose!("💸 Estimated network fee: {}", formatted_estimated_fee.bright_cyan());
+		},
+		Err(err) => {
+			log_verbose!(
+				"⚠️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
+				err
+			);
+		},
 	}
 
 	// Create and submit transaction
 	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
-
-	// Parse tip amount if provided
-	let tip_amount = if let Some(tip_str) = &tip {
-		// Get chain properties for proper decimal parsing
-		let (_, decimals) = get_chain_properties(&quantus_client).await?;
-		parse_amount_with_decimals(tip_str, decimals).ok()
-	} else {
-		None
-	};
 
 	// Submit transaction
 	let tx_hash = transfer_with_nonce(
@@ -421,8 +576,27 @@ pub async fn handle_send_command(
 	)
 	.await?;
 
-	log_print!("✅ {} Transaction submitted! Hash: {:?}", "SUCCESS".bright_green().bold(), tx_hash);
-	log_success!("🎉 {} Transaction confirmed!", "FINISHED".bright_green().bold());
+	let transaction_stage = execution_mode.transaction_stage();
+	log_print!(
+		"✅ {} Transaction {}. Hash: {:?}",
+		"SUCCESS".bright_green().bold(),
+		transaction_stage.status_label(),
+		tx_hash
+	);
+
+	if !execution_mode.should_refresh_post_submit_state() {
+		log_print!(
+			"ℹ️  The transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized-tx to wait before returning.",
+			transaction_stage.success_detail()
+		);
+		return Ok(());
+	}
+
+	log_success!(
+		"🎉 {} Transaction {}.",
+		"FINISHED".bright_green().bold(),
+		transaction_stage.success_detail()
+	);
 
 	// Show updated balance with proper formatting
 	let new_balance = get_balance(&quantus_client, &from_account_id).await?;
@@ -461,7 +635,7 @@ pub async fn load_transfers_from_file(file_path: &str) -> Result<Vec<(String, u1
 
 	let mut transfers = Vec::new();
 	for entry in entries {
-		// Parse amount as raw units (no decimals conversion here)
+		// Batch file amounts are raw smallest-unit integers.
 		let amount = entry.amount.parse::<u128>().map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Invalid amount '{}': {e:?}", entry.amount))
 		})?;
@@ -507,4 +681,42 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 	log_verbose!("📊 Recommended batch size: {} (safe: {})", recommended_limit, safe_limit);
 
 	Ok((safe_limit, recommended_limit))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::parse_amount_with_decimals;
+
+	#[test]
+	fn parses_exact_decimal_amounts() {
+		assert_eq!(parse_amount_with_decimals("0.1", 12).unwrap(), 100_000_000_000);
+		assert_eq!(parse_amount_with_decimals("0.000000000001", 12).unwrap(), 1);
+		assert_eq!(parse_amount_with_decimals("1.000000000000", 12).unwrap(), 1_000_000_000_000);
+	}
+
+	#[test]
+	fn rejects_malformed_and_invalid_amounts() {
+		assert!(parse_amount_with_decimals("", 12).is_err());
+		assert!(parse_amount_with_decimals("-1", 12).is_err());
+		assert!(parse_amount_with_decimals("abc", 12).is_err());
+		assert!(parse_amount_with_decimals("1e3", 12).is_err());
+		assert!(parse_amount_with_decimals("1.2.3", 12).is_err());
+		assert!(parse_amount_with_decimals("0", 12).is_err());
+		assert!(parse_amount_with_decimals("0.000000000000", 12).is_err());
+		assert!(parse_amount_with_decimals("0.0000000000001", 12).is_err());
+	}
+
+	#[test]
+	fn handles_u128_boundaries_exactly() {
+		assert_eq!(parse_amount_with_decimals(&u128::MAX.to_string(), 0).unwrap(), u128::MAX);
+
+		let factor = 10_u128.pow(12);
+		let whole = u128::MAX / factor;
+		let fractional = u128::MAX % factor;
+		let max_value = format!("{whole}.{:012}", fractional);
+		assert_eq!(parse_amount_with_decimals(&max_value, 12).unwrap(), u128::MAX);
+
+		let overflow = format!("{}.0", whole + 1);
+		assert!(parse_amount_with_decimals(&overflow, 12).is_err());
+	}
 }

@@ -8,7 +8,7 @@ This document explains how to use `quantus-cli` as a library in your Rust applic
 [dependencies]
 quantus-cli = { path = "." }  # For local development
 # or
-quantus-cli = "0.1.0"  # When published to crates.io
+quantus-cli = "1.3.3"  # Current published version
 ```
 
 ## Basic Usage
@@ -158,7 +158,7 @@ async fn query_balance() -> Result<(), Box<dyn std::error::Error>> {
     let storage_addr = api::storage().system().account(subxt_account_id);
     let account_info = client.client().storage().at(None).fetch_or_default(&storage_addr).await?;
     
-    println!("Balance: {} DEV", account_info.data.free);
+    println!("Balance (raw units): {}", account_info.data.free);
     
     Ok(())
 }
@@ -169,8 +169,9 @@ async fn query_balance() -> Result<(), Box<dyn std::error::Error>> {
 ```rust
 use quantus_cli::{
     chain::client::QuantusClient,
+    cli::common::ExecutionMode,
+    transfer,
     wallet::WalletManager,
-    AccountId32,
 };
 
 async fn send_transaction() -> Result<(), Box<dyn std::error::Error>> {
@@ -181,37 +182,33 @@ async fn send_transaction() -> Result<(), Box<dyn std::error::Error>> {
     let wallet_data = wallet_manager.load_wallet("my_wallet", "password")?;
     let keypair = wallet_data.keypair;
     
-    // Parse recipient address
+    // Recipient address
     let to_address = "qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2";
-    let to_account_id = AccountId32::from_ss58check(to_address)?;
-    
-    // Create transfer call
-    use quantus_cli::chain::quantus_subxt::api;
-    use subxt::tx::TxClient;
-    
-    let to_account_bytes: [u8; 32] = *to_account_id.as_ref();
-    let to_subxt_account_id = subxt::utils::AccountId32::from(to_account_bytes);
-    
-    let transfer_call = api::tx().balances().transfer(
-        to_subxt_account_id.into(),
-        1000000000000, // 1 DEV
-    );
-    
-    // Submit transaction
-    let tx_hash = client
-        .client()
-        .tx()
-        .sign_and_submit_then_watch_default(&transfer_call, &keypair)
-        .await?
-        .wait_for_finalized_success()
-        .await?
-        .extrinsic_hash();
+
+    // Submit and wait for inclusion in a best block
+    let tx_hash = transfer(
+        &client,
+        &keypair,
+        to_address,
+        1_000_000_000_000, // raw units, e.g. 1 token on a 12-decimal chain
+        None,
+        ExecutionMode {
+            wait_for_transaction: true,
+            finalized: false,
+        },
+    )
+    .await?;
     
     println!("Transaction hash: {:?}", tx_hash);
     
     Ok(())
 }
 ```
+
+`ExecutionMode` semantics:
+- `wait_for_transaction = false`: return after submission (`submitted`)
+- `wait_for_transaction = true`: return after best-block inclusion (`included`)
+- `finalized = true`: return after finalization (`finalized`); this implies waiting
 
 ### Service Architecture
 
