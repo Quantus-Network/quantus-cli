@@ -46,6 +46,23 @@ pub use crate::wormhole_lib::{
 	compute_output_amount, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
 };
 
+pub(crate) const AGGREGATED_PUBLIC_INPUTS_LEN: usize = 344;
+pub(crate) const AGGREGATED_PUBLIC_INPUTS_SEMANTIC_LEN: usize = 232;
+pub(crate) const AGGREGATED_PUBLIC_INPUTS_ZERO_TAIL_LEN: usize = 112;
+
+fn ensure_stable_aggregated_public_input_len(len: usize) -> crate::error::Result<()> {
+	if len != AGGREGATED_PUBLIC_INPUTS_LEN {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Unexpected aggregated public input length: got {}, expected stable PR #129 length {} ({} semantic + {} zero-tail).",
+			len,
+			AGGREGATED_PUBLIC_INPUTS_LEN,
+			AGGREGATED_PUBLIC_INPUTS_SEMANTIC_LEN,
+			AGGREGATED_PUBLIC_INPUTS_ZERO_TAIL_LEN
+		)));
+	}
+	Ok(())
+}
+
 // ============================================================================
 // ZK Tree Types (for 4-ary Poseidon Merkle proofs)
 // ============================================================================
@@ -712,7 +729,7 @@ pub enum WormholeCommands {
 	},
 	/// Run a multi-round wormhole test: wallet -> wormhole -> ... -> wallet
 	Multiround {
-		/// Number of proofs per round (default: 2, max: 8)
+		/// Number of proofs per round (default: 2, max: 16)
 		#[arg(short, long, default_value = "2")]
 		num_proofs: usize,
 
@@ -1184,6 +1201,7 @@ async fn aggregate_proofs(
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("  Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
+	ensure_stable_aggregated_public_input_len(aggregated_proof.public_inputs.len())?;
 
 	// Parse and display aggregated public inputs
 	let aggregated_public_inputs =
@@ -2620,6 +2638,13 @@ async fn parse_proof_file(
 
 		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
 		log_verbose!("\nPublic inputs count: {}", proof.public_inputs.len());
+		ensure_stable_aggregated_public_input_len(proof.public_inputs.len())?;
+		log_print!(
+			"Stable aggregated contract: {} semantic felts + {} zero-tail = {} total",
+			AGGREGATED_PUBLIC_INPUTS_SEMANTIC_LEN,
+			AGGREGATED_PUBLIC_INPUTS_ZERO_TAIL_LEN,
+			AGGREGATED_PUBLIC_INPUTS_LEN
+		);
 
 		// Try to parse as aggregated
 		match qp_wormhole_verifier::parse_aggregated_public_inputs(&proof) {
@@ -3242,6 +3267,7 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("    Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
+	ensure_stable_aggregated_public_input_len(proof.public_inputs.len())?;
 
 	let proof_hex = hex::encode(proof.to_bytes());
 	std::fs::write(output_file, &proof_hex).map_err(|e| {
@@ -3678,12 +3704,12 @@ mod tests {
 		// the same JSON format that the upstream CircuitBinsConfig produces.
 		// If the upstream adds/removes/renames fields, this test will catch it.
 		let json = r#"{
-			"num_leaf_proofs": 8,
+			"num_leaf_proofs": 16,
 			"num_layer0_proofs": null
 		}"#;
 
 		let config: CircuitBinsConfig = serde_json::from_str(json).unwrap();
-		assert_eq!(config.num_leaf_proofs, 8);
+		assert_eq!(config.num_leaf_proofs, 16);
 		assert_eq!(config.num_layer0_proofs, None);
 	}
 

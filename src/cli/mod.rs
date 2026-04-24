@@ -296,8 +296,203 @@ pub enum Commands {
 /// Developer subcommands
 #[derive(Subcommand, Debug)]
 pub enum DeveloperCommands {
+	/// Regenerate local wormhole circuit binaries from the qp-zk-circuits checkout
+	BuildCircuits {
+		/// Number of leaf proofs per layer-0 aggregation.
+		/// Shipping PR #129 output is fixed at 16.
+		#[arg(long, default_value_t = crate::bins::DEFAULT_NUM_LEAF_PROOFS)]
+		num_leaf_proofs: usize,
+
+		/// Number of layer-0 proofs per layer-1 aggregation.
+		/// Omit this for normal layer-0 generation.
+		#[arg(long)]
+		num_layer0_proofs: Option<usize>,
+
+		/// Path to the chain repo.
+		#[arg(long, default_value = "../chain")]
+		chain_path: String,
+
+		/// Skip cleaning chain build outputs after regenerating CLI bins.
+		#[arg(long)]
+		skip_chain: bool,
+
+		/// Skip prover binaries and only emit verifier-oriented artifacts.
+		#[arg(long)]
+		skip_prover: bool,
+	},
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
+}
+
+fn fixed_layer0_leaf_count_error(num_leaf_proofs: usize) -> crate::error::QuantusError {
+	crate::error::QuantusError::Generic(format!(
+		"PR #129 shipping layer-0 aggregation is fixed at {} leaves (got {}).",
+		crate::bins::DEFAULT_NUM_LEAF_PROOFS,
+		num_leaf_proofs
+	))
+}
+
+fn remove_existing_path(path: &std::path::Path) -> crate::error::Result<()> {
+	if let Ok(metadata) = std::fs::symlink_metadata(path) {
+		if metadata.file_type().is_symlink() || !metadata.is_dir() {
+			std::fs::remove_file(path).map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to remove {}: {}",
+					path.display(),
+					e
+				))
+			})?;
+		} else {
+			std::fs::remove_dir_all(path).map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to remove {}: {}",
+					path.display(),
+					e
+				))
+			})?;
+		}
+	}
+	Ok(())
+}
+
+fn clean_cli_generated_bins(repo_root: &std::path::Path) -> crate::error::Result<()> {
+	for relative in ["generated-bins", ".generated-bins", "target/generated-bins"] {
+		remove_existing_path(&repo_root.join(relative))?;
+	}
+	Ok(())
+}
+
+fn validate_generated_bins(
+	bins_dir: &std::path::Path,
+	skip_prover: bool,
+) -> crate::error::Result<()> {
+	for filename in crate::bins::REQUIRED_BIN_FILES {
+		if skip_prover && filename.contains("prover.bin") {
+			continue;
+		}
+		if !bins_dir.join(filename).exists() {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"Expected generated artifact missing: {}",
+				bins_dir.join(filename).display()
+			)));
+		}
+	}
+	Ok(())
+}
+
+fn clean_chain_wormhole_build_outputs(chain_path: &std::path::Path) -> crate::error::Result<usize> {
+	let mut removed = 0usize;
+	for relative in ["target/debug/build", "target/release/build"] {
+		let build_dir = chain_path.join(relative);
+		if !build_dir.exists() {
+			continue;
+		}
+		for entry in std::fs::read_dir(&build_dir).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to read {}: {}",
+				build_dir.display(),
+				e
+			))
+		})? {
+			let entry = entry.map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to read {} entry: {}",
+					build_dir.display(),
+					e
+				))
+			})?;
+			let file_name = entry.file_name();
+			let file_name = file_name.to_string_lossy();
+			if file_name.contains("wormhole") {
+				remove_existing_path(&entry.path())?;
+				removed += 1;
+			}
+		}
+	}
+	Ok(removed)
+}
+
+fn handle_build_circuits(
+	num_leaf_proofs: usize,
+	num_layer0_proofs: Option<usize>,
+	chain_path: String,
+	skip_chain: bool,
+	skip_prover: bool,
+) -> crate::error::Result<()> {
+	if num_leaf_proofs != crate::bins::DEFAULT_NUM_LEAF_PROOFS {
+		return Err(fixed_layer0_leaf_count_error(num_leaf_proofs));
+	}
+
+	let repo_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+	let bins_dir = repo_root.join("generated-bins");
+
+	log_print!(
+		"🧪 {} Regenerating wormhole circuit binaries...",
+		"DEVELOPER".bright_magenta().bold()
+	);
+	log_print!("  Output: {}", bins_dir.display());
+	log_print!(
+		"  num_leaf_proofs: {} (fixed shipping layer-0 output)",
+		crate::bins::DEFAULT_NUM_LEAF_PROOFS
+	);
+	log_print!(
+		"  num_layer0_proofs: {}",
+		num_layer0_proofs
+			.map(|value| value.to_string())
+			.unwrap_or_else(|| "disabled".to_string())
+	);
+	log_print!("  include_prover: {}", !skip_prover);
+
+	clean_cli_generated_bins(repo_root)?;
+
+	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
+		&bins_dir,
+		!skip_prover,
+		crate::bins::DEFAULT_NUM_LEAF_PROOFS,
+		num_layer0_proofs,
+	)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to generate circuit binaries: {}", e))
+	})?;
+
+	std::fs::write(bins_dir.join(crate::bins::VERSION_MARKER), env!("CARGO_PKG_VERSION")).map_err(
+		|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to write version marker to {}: {}",
+				bins_dir.join(crate::bins::VERSION_MARKER).display(),
+				e
+			))
+		},
+	)?;
+
+	validate_generated_bins(&bins_dir, skip_prover)?;
+	log_success!("Generated circuit bins at {}", bins_dir.display());
+
+	if skip_prover {
+		log_print!(
+			"  Warning: prover binaries were skipped, so this output is not suitable for local aggregation or multiround tests."
+		);
+	}
+
+	if !skip_chain {
+		let chain_path = std::path::PathBuf::from(&chain_path);
+		let chain_path =
+			if chain_path.is_absolute() { chain_path } else { repo_root.join(chain_path) };
+		if !chain_path.join("Cargo.toml").exists() {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"Chain path does not look like a repo root: {}",
+				chain_path.display()
+			)));
+		}
+		let removed = clean_chain_wormhole_build_outputs(&chain_path)?;
+		log_print!(
+			"  Chain sync: cleared {} stale wormhole build outputs under {} so the next chain build regenerates verifier artifacts from local qp-zk-circuits sources.",
+			removed,
+			chain_path.display()
+		);
+	}
+
+	Ok(())
 }
 
 /// Execute a CLI command
@@ -517,6 +712,19 @@ async fn handle_generic_call_command(
 /// Handle developer subcommands
 pub async fn handle_developer_command(command: DeveloperCommands) -> crate::error::Result<()> {
 	match command {
+		DeveloperCommands::BuildCircuits {
+			num_leaf_proofs,
+			num_layer0_proofs,
+			chain_path,
+			skip_chain,
+			skip_prover,
+		} => handle_build_circuits(
+			num_leaf_proofs,
+			num_layer0_proofs,
+			chain_path,
+			skip_chain,
+			skip_prover,
+		),
 		DeveloperCommands::CreateTestWallets => {
 			use crate::wallet::WalletManager;
 
