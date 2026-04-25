@@ -38,6 +38,16 @@ fn print_bin_hash(dir: &Path, filename: &str) {
 	}
 }
 
+fn remove_existing_path(path: &Path) {
+	if let Ok(metadata) = std::fs::symlink_metadata(path) {
+		if metadata.file_type().is_symlink() || !metadata.is_dir() {
+			std::fs::remove_file(path).expect("Failed to remove existing file/symlink");
+		} else {
+			std::fs::remove_dir_all(path).expect("Failed to remove existing directory");
+		}
+	}
+}
+
 fn main() {
 	// Allow skipping circuit generation for CI jobs that don't need it
 	if env::var("SKIP_CIRCUIT_BUILD").is_ok() {
@@ -55,6 +65,11 @@ fn main() {
 	let num_leaf_proofs: usize = env::var("QP_NUM_LEAF_PROOFS")
 		.map(|v| v.parse().expect("QP_NUM_LEAF_PROOFS must be a valid usize"))
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS);
+	if num_leaf_proofs != DEFAULT_NUM_LEAF_PROOFS {
+		panic!(
+			"PR #129 shipping layer-0 aggregation is fixed at 16 leaves. Set QP_NUM_LEAF_PROOFS=16 or unset it."
+		);
+	}
 
 	// Don't emit any rerun-if-changed directives - this forces the build script
 	// to run on every build. Circuit generation is fast enough in release mode.
@@ -66,13 +81,14 @@ fn main() {
 
 	let start = Instant::now();
 
+	remove_existing_path(&build_output_dir);
 	std::fs::create_dir_all(&build_output_dir)
 		.expect("Failed to create generated-bins directory in OUT_DIR");
 
 	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
 		&build_output_dir,
 		true,
-		num_leaf_proofs,
+		DEFAULT_NUM_LEAF_PROOFS,
 		None,
 	)
 	.expect("Failed to generate circuit binaries");
@@ -88,13 +104,9 @@ fn main() {
 	);
 
 	// Print hashes of generated binaries
-	print_bin_hash(&build_output_dir, "common.bin");
-	print_bin_hash(&build_output_dir, "verifier.bin");
-	print_bin_hash(&build_output_dir, "prover.bin");
-	print_bin_hash(&build_output_dir, "dummy_proof.bin");
-	print_bin_hash(&build_output_dir, "aggregated_common.bin");
-	print_bin_hash(&build_output_dir, "aggregated_verifier.bin");
-	print_bin_hash(&build_output_dir, "aggregated_prover.bin");
+	for filename in REQUIRED_BIN_FILES {
+		print_bin_hash(&build_output_dir, filename);
+	}
 
 	// Copy bins to project root for runtime access, but only during local source
 	// builds — never during `cargo publish` verification (manifest_dir is inside
@@ -111,16 +123,7 @@ fn main() {
 		#[cfg(unix)]
 		{
 			use std::os::unix::fs::symlink;
-			// Remove any existing dir/file/symlink at destination.
-			if let Ok(meta) = std::fs::symlink_metadata(&project_bins) {
-				if meta.is_dir() {
-					std::fs::remove_dir_all(&project_bins)
-						.expect("Failed to remove existing generated-bins directory");
-				} else {
-					std::fs::remove_file(&project_bins)
-						.expect("Failed to remove existing generated-bins file/symlink");
-				}
-			}
+			remove_existing_path(&project_bins);
 			if let Err(e) = symlink(&build_output_dir, &project_bins) {
 				println!(
 					"cargo:warning=[quantus-cli] Failed to symlink generated-bins ({}). Falling back to copy...",
@@ -132,6 +135,7 @@ fn main() {
 			}
 		}
 
+		remove_existing_path(&project_bins);
 		std::fs::create_dir_all(&project_bins).expect("Failed to create generated-bins directory");
 		let entries = std::fs::read_dir(&build_output_dir)
 			.expect("Failed to read generated-bins directory in OUT_DIR");

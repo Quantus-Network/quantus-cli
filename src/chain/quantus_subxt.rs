@@ -6,7 +6,7 @@ pub mod api {
 	mod root_mod {
 		pub use super::*;
 	}
-	pub static PALLETS: [&str; 20usize] = [
+	pub static PALLETS: [&str; 21usize] = [
 		"System",
 		"Timestamp",
 		"Balances",
@@ -27,8 +27,9 @@ pub mod api {
 		"AssetsHolder",
 		"Multisig",
 		"Wormhole",
+		"ZkTree",
 	];
-	pub static RUNTIME_APIS: [&str; 11usize] = [
+	pub static RUNTIME_APIS: [&str; 12usize] = [
 		"Core",
 		"Metadata",
 		"BlockBuilder",
@@ -36,6 +37,7 @@ pub mod api {
 		"OffchainWorkerApi",
 		"SessionKeys",
 		"QPoWApi",
+		"ZkTreeApi",
 		"AccountNonceApi",
 		"TransactionPaymentApi",
 		"TransactionPaymentCallApi",
@@ -88,6 +90,9 @@ pub mod api {
 			}
 			pub fn q_po_w_api(&self) -> q_po_w_api::QPoWApi {
 				q_po_w_api::QPoWApi
+			}
+			pub fn zk_tree_api(&self) -> zk_tree_api::ZkTreeApi {
+				zk_tree_api::ZkTreeApi
 			}
 			pub fn account_nonce_api(&self) -> account_nonce_api::AccountNonceApi {
 				account_nonce_api::AccountNonceApi
@@ -142,10 +147,9 @@ pub mod api {
 						"execute_block",
 						types::ExecuteBlock { block },
 						[
-							81u8, 130u8, 143u8, 72u8, 156u8, 15u8, 28u8, 87u8, 117u8, 10u8, 192u8,
-							249u8, 117u8, 214u8, 184u8, 13u8, 148u8, 224u8, 167u8, 170u8, 101u8,
-							194u8, 229u8, 140u8, 199u8, 115u8, 73u8, 99u8, 183u8, 205u8, 98u8,
-							33u8,
+							180u8, 202u8, 143u8, 166u8, 125u8, 9u8, 195u8, 179u8, 198u8, 129u8,
+							73u8, 45u8, 225u8, 244u8, 234u8, 234u8, 177u8, 61u8, 241u8, 26u8, 75u8,
+							53u8, 218u8, 66u8, 56u8, 46u8, 81u8, 29u8, 120u8, 51u8, 249u8, 42u8,
 						],
 					)
 				}
@@ -162,9 +166,9 @@ pub mod api {
 						"initialize_block",
 						types::InitializeBlock { header },
 						[
-							112u8, 139u8, 92u8, 30u8, 37u8, 99u8, 47u8, 83u8, 221u8, 31u8, 204u8,
-							129u8, 102u8, 92u8, 144u8, 80u8, 3u8, 98u8, 157u8, 5u8, 20u8, 31u8,
-							110u8, 105u8, 86u8, 91u8, 173u8, 19u8, 140u8, 246u8, 60u8, 223u8,
+							147u8, 82u8, 214u8, 164u8, 66u8, 79u8, 193u8, 216u8, 89u8, 29u8, 83u8,
+							182u8, 99u8, 81u8, 244u8, 247u8, 88u8, 158u8, 251u8, 224u8, 6u8, 76u8,
+							247u8, 87u8, 83u8, 98u8, 177u8, 188u8, 190u8, 219u8, 179u8, 107u8,
 						],
 					)
 				}
@@ -409,9 +413,9 @@ pub mod api {
 						"finalize_block",
 						types::FinalizeBlock {},
 						[
-							135u8, 81u8, 28u8, 123u8, 19u8, 171u8, 129u8, 82u8, 85u8, 96u8, 238u8,
-							155u8, 211u8, 153u8, 243u8, 31u8, 189u8, 82u8, 91u8, 225u8, 78u8, 48u8,
-							241u8, 236u8, 143u8, 65u8, 91u8, 167u8, 114u8, 146u8, 31u8, 197u8,
+							183u8, 30u8, 223u8, 196u8, 0u8, 182u8, 94u8, 4u8, 106u8, 92u8, 190u8,
+							77u8, 139u8, 95u8, 162u8, 171u8, 99u8, 168u8, 70u8, 165u8, 175u8,
+							228u8, 97u8, 27u8, 25u8, 141u8, 244u8, 217u8, 5u8, 95u8, 49u8, 12u8,
 						],
 					)
 				}
@@ -449,10 +453,10 @@ pub mod api {
 						"check_inherents",
 						types::CheckInherents { block, data },
 						[
-							44u8, 230u8, 134u8, 154u8, 73u8, 173u8, 160u8, 231u8, 223u8, 148u8,
-							247u8, 104u8, 214u8, 168u8, 43u8, 202u8, 204u8, 14u8, 148u8, 154u8,
-							9u8, 103u8, 239u8, 45u8, 186u8, 21u8, 97u8, 136u8, 200u8, 108u8, 205u8,
-							167u8,
+							137u8, 14u8, 89u8, 87u8, 225u8, 80u8, 136u8, 255u8, 242u8, 41u8, 90u8,
+							91u8, 140u8, 192u8, 112u8, 230u8, 46u8, 19u8, 149u8, 104u8, 153u8,
+							122u8, 92u8, 215u8, 161u8, 88u8, 142u8, 248u8, 156u8, 159u8, 203u8,
+							132u8,
 						],
 					)
 				}
@@ -633,10 +637,9 @@ pub mod api {
 						"offchain_worker",
 						types::OffchainWorker { header },
 						[
-							131u8, 199u8, 206u8, 86u8, 209u8, 109u8, 229u8, 152u8, 235u8, 155u8,
-							35u8, 252u8, 70u8, 180u8, 47u8, 173u8, 84u8, 182u8, 176u8, 164u8,
-							107u8, 88u8, 249u8, 181u8, 85u8, 174u8, 240u8, 226u8, 254u8, 189u8,
-							167u8, 155u8,
+							143u8, 60u8, 69u8, 66u8, 143u8, 216u8, 150u8, 58u8, 130u8, 32u8, 160u8,
+							205u8, 92u8, 9u8, 114u8, 94u8, 74u8, 160u8, 105u8, 199u8, 246u8, 174u8,
+							187u8, 111u8, 225u8, 121u8, 82u8, 29u8, 225u8, 115u8, 119u8, 94u8,
 						],
 					)
 				}
@@ -1174,6 +1177,175 @@ pub mod api {
 				pub struct VerifyAndGetAchievedDifficulty {
 					pub block_hash: verify_and_get_achieved_difficulty::BlockHash,
 					pub nonce: verify_and_get_achieved_difficulty::Nonce,
+				}
+			}
+		}
+		pub mod zk_tree_api {
+			use super::{root_mod, runtime_types};
+			#[doc = " Runtime API for the ZK Tree pallet."]
+			#[doc = ""]
+			#[doc = " Provides methods to query the ZK Merkle tree state and generate proofs."]
+			pub struct ZkTreeApi;
+			impl ZkTreeApi {
+				#[doc = " Get the current root hash of the ZK tree."]
+				pub fn get_root(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetRoot,
+					types::get_root::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_root",
+						types::GetRoot {},
+						[
+							198u8, 156u8, 112u8, 8u8, 86u8, 226u8, 81u8, 137u8, 207u8, 161u8,
+							181u8, 99u8, 42u8, 221u8, 134u8, 50u8, 205u8, 191u8, 124u8, 165u8,
+							174u8, 99u8, 193u8, 28u8, 46u8, 125u8, 2u8, 117u8, 173u8, 187u8, 243u8,
+							73u8,
+						],
+					)
+				}
+				#[doc = " Get the current number of leaves in the tree."]
+				pub fn get_leaf_count(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetLeafCount,
+					types::get_leaf_count::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_leaf_count",
+						types::GetLeafCount {},
+						[
+							1u8, 246u8, 191u8, 192u8, 156u8, 247u8, 209u8, 87u8, 187u8, 48u8, 98u8,
+							144u8, 34u8, 200u8, 186u8, 202u8, 176u8, 64u8, 93u8, 165u8, 103u8,
+							231u8, 77u8, 57u8, 52u8, 14u8, 213u8, 197u8, 118u8, 137u8, 64u8, 193u8,
+						],
+					)
+				}
+				#[doc = " Get the current depth of the tree."]
+				pub fn get_depth(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetDepth,
+					types::get_depth::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_depth",
+						types::GetDepth {},
+						[
+							251u8, 48u8, 136u8, 161u8, 26u8, 3u8, 205u8, 80u8, 135u8, 48u8, 176u8,
+							105u8, 254u8, 86u8, 79u8, 57u8, 70u8, 227u8, 26u8, 48u8, 228u8, 203u8,
+							109u8, 59u8, 3u8, 204u8, 30u8, 40u8, 113u8, 62u8, 123u8, 47u8,
+						],
+					)
+				}
+				#[doc = " Get a Merkle proof for a leaf at the given index."]
+				#[doc = ""]
+				#[doc = " Returns `None` if the leaf index is out of bounds."]
+				pub fn get_merkle_proof(
+					&self,
+					leaf_index: types::get_merkle_proof::LeafIndex,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetMerkleProof,
+					types::get_merkle_proof::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_merkle_proof",
+						types::GetMerkleProof { leaf_index },
+						[
+							74u8, 206u8, 166u8, 44u8, 235u8, 100u8, 174u8, 217u8, 16u8, 167u8,
+							180u8, 174u8, 192u8, 121u8, 153u8, 163u8, 204u8, 104u8, 52u8, 198u8,
+							44u8, 180u8, 144u8, 37u8, 216u8, 58u8, 175u8, 36u8, 50u8, 214u8, 66u8,
+							131u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod get_root {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = [::core::primitive::u8; 32usize];
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetRoot {}
+				pub mod get_leaf_count {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetLeafCount {}
+				pub mod get_depth {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u8;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetDepth {}
+				pub mod get_merkle_proof {
+					use super::runtime_types;
+					pub type LeafIndex = ::core::primitive::u64;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::core::option::Option<runtime_types::pallet_zk_tree::ZkMerkleProofRpc>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetMerkleProof {
+					pub leaf_index: get_merkle_proof::LeafIndex,
 				}
 			}
 		}
@@ -1885,6 +2057,9 @@ pub mod api {
 		pub fn wormhole(&self) -> wormhole::storage::StorageApi {
 			wormhole::storage::StorageApi
 		}
+		pub fn zk_tree(&self) -> zk_tree::storage::StorageApi {
+			zk_tree::storage::StorageApi
+		}
 	}
 	pub struct TransactionApi;
 	impl TransactionApi {
@@ -1952,9 +2127,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				95u8, 161u8, 29u8, 63u8, 6u8, 191u8, 169u8, 252u8, 9u8, 18u8, 126u8, 99u8, 29u8,
-				6u8, 27u8, 29u8, 251u8, 189u8, 252u8, 166u8, 35u8, 141u8, 155u8, 35u8, 238u8, 85u8,
-				244u8, 246u8, 49u8, 113u8, 167u8, 219u8,
+				38u8, 70u8, 211u8, 247u8, 9u8, 225u8, 49u8, 109u8, 7u8, 110u8, 190u8, 92u8, 4u8,
+				103u8, 25u8, 232u8, 138u8, 5u8, 214u8, 230u8, 238u8, 225u8, 70u8, 126u8, 86u8,
+				133u8, 218u8, 42u8, 55u8, 63u8, 23u8, 207u8,
 			]
 	}
 	pub mod system {
@@ -2695,6 +2870,10 @@ pub mod api {
 					use super::runtime_types;
 					pub type Digest = runtime_types::sp_runtime::generic::digest::Digest;
 				}
+				pub mod zk_tree_root {
+					use super::runtime_types;
+					pub type ZkTreeRoot = ::subxt::ext::subxt_core::utils::H256;
+				}
 				pub mod events {
 					use super::runtime_types;
 					pub type Events = ::subxt::ext::subxt_core::alloc::vec::Vec<
@@ -3032,6 +3211,31 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = " ZK tree root for the current block."]
+				#[doc = ""]
+				#[doc = " Set by pallet-zk-tree during block finalization. This is included in the"]
+				#[doc = " block header as a dedicated field (not in digest) to ensure a fixed offset"]
+				#[doc = " for ZK circuit verification."]
+				pub fn zk_tree_root(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::zk_tree_root::ZkTreeRoot,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"System",
+						"ZkTreeRoot",
+						(),
+						[
+							20u8, 224u8, 59u8, 4u8, 237u8, 141u8, 176u8, 61u8, 156u8, 45u8, 84u8,
+							60u8, 215u8, 14u8, 69u8, 234u8, 53u8, 157u8, 52u8, 242u8, 67u8, 227u8,
+							117u8, 93u8, 77u8, 5u8, 210u8, 55u8, 12u8, 170u8, 57u8, 161u8,
+						],
+					)
+				}
 				#[doc = " Events deposited for the current block."]
 				#[doc = ""]
 				#[doc = " NOTE: The item is unbound and should therefore never be read on chain."]
@@ -3053,10 +3257,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							114u8, 203u8, 75u8, 252u8, 183u8, 122u8, 99u8, 127u8, 226u8, 41u8,
-							125u8, 202u8, 177u8, 177u8, 136u8, 66u8, 221u8, 204u8, 240u8, 189u8,
-							146u8, 54u8, 190u8, 211u8, 240u8, 69u8, 233u8, 62u8, 78u8, 177u8, 97u8,
-							8u8,
+							255u8, 7u8, 244u8, 240u8, 243u8, 214u8, 236u8, 98u8, 179u8, 226u8,
+							108u8, 68u8, 165u8, 184u8, 135u8, 230u8, 2u8, 88u8, 24u8, 37u8, 187u8,
+							250u8, 198u8, 136u8, 211u8, 84u8, 158u8, 201u8, 156u8, 204u8, 143u8,
+							208u8,
 						],
 					)
 				}
@@ -20104,12 +20308,15 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A native token transfer was recorded."]
+			#[doc = ""]
+			#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+			#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 			pub struct NativeTransferred {
 				pub from: native_transferred::From,
 				pub to: native_transferred::To,
 				pub amount: native_transferred::Amount,
 				pub transfer_count: native_transferred::TransferCount,
-				/// Index of this transfer in the ZK trie (for Merkle proof lookup)
 				pub leaf_index: native_transferred::LeafIndex,
 			}
 			pub mod native_transferred {
@@ -20131,13 +20338,16 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A non-native asset transfer was recorded."]
+			#[doc = ""]
+			#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+			#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 			pub struct AssetTransferred {
 				pub asset_id: asset_transferred::AssetId,
 				pub from: asset_transferred::From,
 				pub to: asset_transferred::To,
 				pub amount: asset_transferred::Amount,
 				pub transfer_count: asset_transferred::TransferCount,
-				/// Index of this transfer in the ZK trie (for Merkle proof lookup)
 				pub leaf_index: asset_transferred::LeafIndex,
 			}
 			pub mod asset_transferred {
@@ -20183,12 +20393,6 @@ pub mod api {
 					use super::runtime_types;
 					pub type UsedNullifiers = ::core::primitive::bool;
 					pub type Param0 = [::core::primitive::u8; 32usize];
-				}
-				pub mod transfer_proof {
-					use super::runtime_types;
-					pub type TransferProof = [::core::primitive::u8; 32usize];
-					pub type Param0 =
-						(::subxt::ext::subxt_core::utils::AccountId32, ::core::primitive::u64);
 				}
 				pub mod transfer_count {
 					use super::runtime_types;
@@ -20249,68 +20453,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
-				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
-				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
-				#[doc = ""]
-				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
-				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
-				#[doc = " providing full 256-bit security."]
-				pub fn transfer_proof_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::transfer_proof::TransferProof,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Wormhole",
-						"TransferProof",
-						(),
-						[
-							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
-							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
-							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
-							55u8,
-						],
-					)
-				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
-				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
-				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
-				#[doc = ""]
-				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
-				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
-				#[doc = " providing full 256-bit security."]
-				pub fn transfer_proof(
-					&self,
-					_0: types::transfer_proof::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::transfer_proof::TransferProof,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Wormhole",
-						"TransferProof",
-						(),
-						[
-							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
-							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
-							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
-							55u8,
-						],
-					)
-				}
-				#[doc = " Transfer count for all wormhole transfers"]
+				#[doc = " Transfer count per recipient - used to generate unique leaf indices in the ZK trie."]
 				pub fn transfer_count_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -20332,7 +20475,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Transfer count for all wormhole transfers"]
+				#[doc = " Transfer count per recipient - used to generate unique leaf indices in the ZK trie."]
 				pub fn transfer_count(
 					&self,
 					_0: types::transfer_count::Param0,
@@ -20455,6 +20598,252 @@ pub mod api {
 							65u8, 93u8, 120u8, 165u8, 204u8, 81u8, 159u8, 163u8, 93u8, 135u8,
 							114u8, 121u8, 147u8, 35u8, 215u8, 213u8, 4u8, 223u8, 83u8, 37u8, 225u8,
 							200u8, 189u8, 156u8, 140u8, 36u8, 58u8, 46u8, 42u8, 232u8, 155u8, 0u8,
+						],
+					)
+				}
+			}
+		}
+	}
+	pub mod zk_tree {
+		use super::{root_mod, runtime_types};
+		#[doc = "The `Error` enum of this pallet."]
+		pub type Error = runtime_types::pallet_zk_tree::pallet::Error;
+		#[doc = "The `Event` enum of this pallet"]
+		pub type Event = runtime_types::pallet_zk_tree::pallet::Event;
+		pub mod events {
+			use super::runtime_types;
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A new leaf was inserted into the tree."]
+			pub struct LeafInserted {
+				pub index: leaf_inserted::Index,
+				pub leaf_hash: leaf_inserted::LeafHash,
+				pub new_root: leaf_inserted::NewRoot,
+			}
+			pub mod leaf_inserted {
+				use super::runtime_types;
+				pub type Index = ::core::primitive::u64;
+				pub type LeafHash = [::core::primitive::u8; 32usize];
+				pub type NewRoot = [::core::primitive::u8; 32usize];
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for LeafInserted {
+				const PALLET: &'static str = "ZkTree";
+				const EVENT: &'static str = "LeafInserted";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Tree depth increased."]
+			pub struct TreeGrew {
+				pub new_depth: tree_grew::NewDepth,
+			}
+			pub mod tree_grew {
+				use super::runtime_types;
+				pub type NewDepth = ::core::primitive::u8;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for TreeGrew {
+				const PALLET: &'static str = "ZkTree";
+				const EVENT: &'static str = "TreeGrew";
+			}
+		}
+		pub mod storage {
+			use super::runtime_types;
+			pub mod types {
+				use super::runtime_types;
+				pub mod leaves {
+					use super::runtime_types;
+					pub type Leaves = runtime_types::pallet_zk_tree::ZkLeaf<
+						::subxt::ext::subxt_core::utils::AccountId32,
+						::core::primitive::u32,
+						::core::primitive::u128,
+					>;
+					pub type Param0 = ::core::primitive::u64;
+				}
+				pub mod nodes {
+					use super::runtime_types;
+					pub type Nodes = [::core::primitive::u8; 32usize];
+					pub type Param0 = (::core::primitive::u8, ::core::primitive::u64);
+				}
+				pub mod leaf_count {
+					use super::runtime_types;
+					pub type LeafCount = ::core::primitive::u64;
+				}
+				pub mod depth {
+					use super::runtime_types;
+					pub type Depth = ::core::primitive::u8;
+				}
+				pub mod root {
+					use super::runtime_types;
+					pub type Root = [::core::primitive::u8; 32usize];
+				}
+			}
+			pub struct StorageApi;
+			impl StorageApi {
+				#[doc = " Leaf data stored by index."]
+				pub fn leaves_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::leaves::Leaves,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Leaves",
+						(),
+						[
+							179u8, 219u8, 161u8, 103u8, 54u8, 178u8, 204u8, 221u8, 15u8, 0u8,
+							103u8, 111u8, 19u8, 89u8, 167u8, 0u8, 200u8, 35u8, 149u8, 127u8, 230u8,
+							183u8, 152u8, 151u8, 88u8, 171u8, 223u8, 134u8, 58u8, 122u8, 119u8,
+							53u8,
+						],
+					)
+				}
+				#[doc = " Leaf data stored by index."]
+				pub fn leaves(
+					&self,
+					_0: types::leaves::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::leaves::Param0,
+					>,
+					types::leaves::Leaves,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Leaves",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							179u8, 219u8, 161u8, 103u8, 54u8, 178u8, 204u8, 221u8, 15u8, 0u8,
+							103u8, 111u8, 19u8, 89u8, 167u8, 0u8, 200u8, 35u8, 149u8, 127u8, 230u8,
+							183u8, 152u8, 151u8, 88u8, 171u8, 223u8, 134u8, 58u8, 122u8, 119u8,
+							53u8,
+						],
+					)
+				}
+				#[doc = " Internal tree nodes: (level, index) -> hash."]
+				#[doc = " Level 0 is unused (leaves are hashed on-demand)."]
+				#[doc = " Level 1+ contains internal node hashes."]
+				pub fn nodes_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::nodes::Nodes,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Nodes",
+						(),
+						[
+							109u8, 135u8, 134u8, 82u8, 149u8, 113u8, 22u8, 231u8, 196u8, 37u8,
+							27u8, 29u8, 86u8, 223u8, 101u8, 97u8, 89u8, 147u8, 86u8, 202u8, 170u8,
+							24u8, 164u8, 137u8, 71u8, 46u8, 91u8, 69u8, 35u8, 251u8, 152u8, 144u8,
+						],
+					)
+				}
+				#[doc = " Internal tree nodes: (level, index) -> hash."]
+				#[doc = " Level 0 is unused (leaves are hashed on-demand)."]
+				#[doc = " Level 1+ contains internal node hashes."]
+				pub fn nodes(
+					&self,
+					_0: types::nodes::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::nodes::Param0,
+					>,
+					types::nodes::Nodes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Nodes",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							109u8, 135u8, 134u8, 82u8, 149u8, 113u8, 22u8, 231u8, 196u8, 37u8,
+							27u8, 29u8, 86u8, 223u8, 101u8, 97u8, 89u8, 147u8, 86u8, 202u8, 170u8,
+							24u8, 164u8, 137u8, 71u8, 46u8, 91u8, 69u8, 35u8, 251u8, 152u8, 144u8,
+						],
+					)
+				}
+				#[doc = " Number of leaves in the tree."]
+				pub fn leaf_count(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::leaf_count::LeafCount,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"LeafCount",
+						(),
+						[
+							67u8, 168u8, 48u8, 81u8, 223u8, 41u8, 216u8, 165u8, 89u8, 116u8, 103u8,
+							23u8, 83u8, 40u8, 238u8, 124u8, 63u8, 8u8, 247u8, 246u8, 11u8, 63u8,
+							181u8, 30u8, 51u8, 181u8, 232u8, 236u8, 184u8, 121u8, 66u8, 250u8,
+						],
+					)
+				}
+				#[doc = " Current depth of the tree (0 = empty, 1 = up to 4 leaves, etc.)."]
+				pub fn depth(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::depth::Depth,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Depth",
+						(),
+						[
+							15u8, 235u8, 244u8, 51u8, 6u8, 56u8, 103u8, 34u8, 29u8, 165u8, 154u8,
+							31u8, 166u8, 174u8, 83u8, 59u8, 232u8, 175u8, 227u8, 168u8, 185u8,
+							29u8, 71u8, 211u8, 162u8, 69u8, 81u8, 108u8, 247u8, 107u8, 215u8, 52u8,
+						],
+					)
+				}
+				#[doc = " Current root hash of the tree."]
+				pub fn root(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::root::Root,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Root",
+						(),
+						[
+							240u8, 224u8, 214u8, 191u8, 99u8, 19u8, 153u8, 102u8, 246u8, 99u8,
+							194u8, 80u8, 179u8, 162u8, 75u8, 8u8, 74u8, 143u8, 162u8, 61u8, 251u8,
+							71u8, 235u8, 88u8, 14u8, 197u8, 34u8, 40u8, 136u8, 119u8, 201u8, 35u8,
 						],
 					)
 				}
@@ -25701,6 +26090,9 @@ pub mod api {
 					#[codec(index = 5)]
 					#[doc = "Attempt to use a non-named function on a named task."]
 					Named,
+					#[codec(index = 6)]
+					#[doc = "Periodic scheduling is not supported."]
+					PeriodicNotSupported,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26374,19 +26766,29 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
+					#[doc = "A native token transfer was recorded."]
+					#[doc = ""]
+					#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+					#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 					NativeTransferred {
 						from: ::subxt::ext::subxt_core::utils::AccountId32,
 						to: ::subxt::ext::subxt_core::utils::AccountId32,
 						amount: ::core::primitive::u128,
 						transfer_count: ::core::primitive::u64,
+						leaf_index: ::core::primitive::u64,
 					},
 					#[codec(index = 1)]
+					#[doc = "A non-native asset transfer was recorded."]
+					#[doc = ""]
+					#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+					#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 					AssetTransferred {
 						asset_id: ::core::primitive::u32,
 						from: ::subxt::ext::subxt_core::utils::AccountId32,
 						to: ::subxt::ext::subxt_core::utils::AccountId32,
 						amount: ::core::primitive::u128,
 						transfer_count: ::core::primitive::u64,
+						leaf_index: ::core::primitive::u64,
 					},
 					#[codec(index = 2)]
 					ProofVerified {
@@ -26396,6 +26798,86 @@ pub mod api {
 						>,
 					},
 				}
+			}
+		}
+		pub mod pallet_zk_tree {
+			use super::runtime_types;
+			pub mod pallet {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "The `Error` enum of this pallet."]
+				pub enum Error {
+					#[codec(index = 0)]
+					#[doc = "Leaf index out of bounds."]
+					LeafIndexOutOfBounds,
+					#[codec(index = 1)]
+					#[doc = "Leaf not found."]
+					LeafNotFound,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "The `Event` enum of this pallet"]
+				pub enum Event {
+					#[codec(index = 0)]
+					#[doc = "A new leaf was inserted into the tree."]
+					LeafInserted {
+						index: ::core::primitive::u64,
+						leaf_hash: [::core::primitive::u8; 32usize],
+						new_root: [::core::primitive::u8; 32usize],
+					},
+					#[codec(index = 1)]
+					#[doc = "Tree depth increased."]
+					TreeGrew { new_depth: ::core::primitive::u8 },
+				}
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct ZkLeaf<_0, _1, _2> {
+				pub to: _0,
+				pub transfer_count: ::core::primitive::u64,
+				pub asset_id: _1,
+				pub amount: _2,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct ZkMerkleProofRpc {
+				pub leaf_index: ::core::primitive::u64,
+				pub leaf_data: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+				pub leaf_hash: [::core::primitive::u8; 32usize],
+				pub siblings: ::subxt::ext::subxt_core::alloc::vec::Vec<
+					[[::core::primitive::u8; 32usize]; 3usize],
+				>,
+				pub root: [::core::primitive::u8; 32usize],
+				pub depth: ::core::primitive::u8,
 			}
 		}
 		pub mod primitive_types {
@@ -26460,6 +26942,7 @@ pub mod api {
 				pub number: _0,
 				pub state_root: ::subxt::ext::subxt_core::utils::H256,
 				pub extrinsics_root: ::subxt::ext::subxt_core::utils::H256,
+				pub zk_tree_root: ::subxt::ext::subxt_core::utils::H256,
 				pub digest: runtime_types::sp_runtime::generic::digest::Digest,
 			}
 		}
@@ -26645,6 +27128,8 @@ pub mod api {
 				Multisig(runtime_types::pallet_multisig::pallet::Error),
 				#[codec(index = 20)]
 				Wormhole(runtime_types::pallet_wormhole::pallet::Error),
+				#[codec(index = 21)]
+				ZkTree(runtime_types::pallet_zk_tree::pallet::Error),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26692,6 +27177,8 @@ pub mod api {
 				Multisig(runtime_types::pallet_multisig::pallet::Event),
 				#[codec(index = 20)]
 				Wormhole(runtime_types::pallet_wormhole::pallet::Event),
+				#[codec(index = 21)]
+				ZkTree(runtime_types::pallet_zk_tree::pallet::Event),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,

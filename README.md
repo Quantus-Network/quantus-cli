@@ -224,6 +224,7 @@ quantus wormhole multiround \
 ```
 
 - `--num-proofs`: Number of proofs per round (1 to `num_leaf_proofs` from circuit config, default: 2).
+  The shipping layer-0 circuit capacity is fixed at 16 proofs.
 - `--rounds`: Number of rounds (default: 2). In intermediate rounds, exit accounts are the next round's wormhole addresses; in the final round, funds exit back to the wallet.
 - `--amount`: Total amount in planck to randomly partition across proofs (default: 100 DEV).
 - `--wallet`: Wallet name for funding (round 1) and final exit.
@@ -295,11 +296,19 @@ quantus wormhole check-nullifier --secret 0x<64-hex-chars> --transfer-counts 0-5
 
 #### `quantus developer build-circuits`
 
-Build ZK circuit binaries from the `qp-zk-circuits` repository, then copy them to the CLI and chain directories. This is required whenever the circuit logic changes.
+Build ZK circuit binaries from the local `qp-zk-circuits` checkout. This is required whenever the circuit logic changes.
 
 ```bash
 quantus developer build-circuits \
-  --num-leaf-proofs 2 \
+  --num-leaf-proofs 16 \
+  --chain-path ../chain
+```
+
+Add `--num-layer0-proofs` only when you also want layer-1 artifacts:
+
+```bash
+quantus developer build-circuits \
+  --num-leaf-proofs 16 \
   --num-layer0-proofs 2 \
   --chain-path ../chain
 ```
@@ -308,24 +317,23 @@ Add `--skip-prover` when you only need verifier artifacts:
 
 ```bash
 quantus developer build-circuits \
-  --num-leaf-proofs 2 \
-  --num-layer0-proofs 2 \
+  --num-leaf-proofs 16 \
   --chain-path ../chain \
   --skip-prover
 ```
 
-- `--num-leaf-proofs`: Number of leaf proofs per layer-0 aggregation.
-- `--num-layer0-proofs`: Number of inner proofs per layer-1 aggregation.
+- `--num-leaf-proofs`: Compatibility flag retained for the builder API. Production PR #129 output is fixed at `16`, so other values are rejected.
+- `--num-layer0-proofs`: Number of layer-0 proofs per layer-1 aggregation. Omit this for normal layer-0 generation.
 - `--chain-path`: Path to the chain repo (default: `../chain`).
-- `--skip-chain`: Skip copying binaries to the chain directory.
+- `--skip-chain`: Skip clearing stale wormhole build outputs in the chain repo.
 - `--skip-prover`: Skip generating prover binaries.
 
 **What it does (3 steps):**
 1. Clears stale artifacts from the CLI's `generated-bins/` directory.
-2. Calls the `qp-wormhole-circuit-builder` library directly to regenerate binary files in `generated-bins/` (`verifier.bin`, `common.bin`, `aggregated_verifier.bin`, `aggregated_common.bin`, `config.json`, plus prover binaries unless `--skip-prover` is set).
-3. Copies chain-relevant binaries (`aggregated_common.bin`, `aggregated_verifier.bin`, `config.json`) to `chain/pallets/wormhole/` and touches the pallet source.
+2. Calls the `qp-wormhole-circuit-builder` library directly to regenerate binary files in `generated-bins/` using the fixed shipping layer-0 output (`common.bin`, `verifier.bin`, `prover.bin`, `dummy_proof.bin`, `inner_*`, `outer_*`, `aggregated_common.bin`, `aggregated_verifier.bin`, `aggregated_prover.bin`, `aggregated_targets.bin`, and `config.json`, plus optional layer-1 files when requested).
+3. Clears stale wormhole build outputs in the chain repo so the next chain build regenerates verifier artifacts from the same local `qp-zk-circuits` source.
 
-After running, rebuild the chain (`cargo build --release` in the chain directory) so `include_bytes!()` picks up the new binaries.
+After running, rebuild the chain so `include_bytes!()` picks up freshly regenerated verifier binaries from the same local dependency source.
 
 #### `quantus developer create-test-wallets`
 

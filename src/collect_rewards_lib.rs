@@ -820,6 +820,13 @@ fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Resul
 	let aggregated_proof = aggregator
 		.aggregate()
 		.map_err(|e| CollectRewardsError::from(format!("Aggregation failed: {}", e)))?;
+	if aggregated_proof.public_inputs.len() != crate::cli::wormhole::AGGREGATED_PUBLIC_INPUTS_LEN {
+		return Err(CollectRewardsError::from(format!(
+			"Unexpected aggregated public input length: got {}, expected {}",
+			aggregated_proof.public_inputs.len(),
+			crate::cli::wormhole::AGGREGATED_PUBLIC_INPUTS_LEN
+		)));
+	}
 
 	Ok(aggregated_proof.to_bytes())
 }
@@ -844,6 +851,13 @@ async fn submit_and_get_events(
 		{ qp_wormhole_verifier::D },
 	>::from_bytes(proof_bytes.clone(), &verifier.circuit_data.common)
 	.map_err(|e| CollectRewardsError::from(format!("Failed to deserialize proof: {}", e)))?;
+	if proof.public_inputs.len() != crate::cli::wormhole::AGGREGATED_PUBLIC_INPUTS_LEN {
+		return Err(CollectRewardsError::from(format!(
+			"Unexpected aggregated public input length: got {}, expected {}",
+			proof.public_inputs.len(),
+			crate::cli::wormhole::AGGREGATED_PUBLIC_INPUTS_LEN
+		)));
+	}
 
 	verifier
 		.verify(proof.clone())

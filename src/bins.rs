@@ -24,17 +24,6 @@ include!("bins_consts.rs");
 pub const BINS_DIR_ENV: &str = "QUANTUS_BINS_DIR";
 
 /// Files that must be present for all wormhole operations to succeed.
-const REQUIRED_FILES: &[&str] = &[
-	"prover.bin",
-	"verifier.bin",
-	"common.bin",
-	"aggregated_prover.bin",
-	"aggregated_verifier.bin",
-	"aggregated_common.bin",
-	"dummy_proof.bin",
-	"config.json",
-];
-
 /// Resolve the path where circuit binaries should live.
 ///
 /// This never generates anything; see [`ensure_bins_dir`] for the full
@@ -71,13 +60,13 @@ pub fn ensure_bins_dir() -> Result<PathBuf> {
 		return Ok(dir);
 	}
 
-	let num_leaf_proofs = env_num_leaf_proofs();
+	let num_leaf_proofs = env_num_leaf_proofs()?;
 	generate(&dir, num_leaf_proofs)?;
 	Ok(dir)
 }
 
 fn is_ready(dir: &Path) -> bool {
-	if !REQUIRED_FILES.iter().all(|f| dir.join(f).exists()) {
+	if !REQUIRED_BIN_FILES.iter().all(|f| dir.join(f).exists()) {
 		return false;
 	}
 	match std::fs::read_to_string(dir.join(VERSION_MARKER)) {
@@ -86,14 +75,44 @@ fn is_ready(dir: &Path) -> bool {
 	}
 }
 
-fn env_num_leaf_proofs() -> usize {
-	std::env::var("QP_NUM_LEAF_PROOFS")
+fn env_num_leaf_proofs() -> Result<usize> {
+	let num_leaf_proofs = std::env::var("QP_NUM_LEAF_PROOFS")
 		.ok()
 		.and_then(|v| v.parse().ok())
-		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS)
+		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS);
+	if num_leaf_proofs != DEFAULT_NUM_LEAF_PROOFS {
+		return Err(QuantusError::Generic(
+			"PR #129 shipping layer-0 aggregation is fixed at 16 leaves. Set QP_NUM_LEAF_PROOFS=16 or unset it.".to_string(),
+		));
+	}
+	Ok(num_leaf_proofs)
+}
+
+fn remove_existing_path(path: &Path) -> Result<()> {
+	if let Ok(metadata) = std::fs::symlink_metadata(path) {
+		if metadata.file_type().is_symlink() || !metadata.is_dir() {
+			std::fs::remove_file(path).map_err(|e| {
+				QuantusError::Generic(format!(
+					"Failed to remove existing bins file {}: {}",
+					path.display(),
+					e
+				))
+			})?;
+		} else {
+			std::fs::remove_dir_all(path).map_err(|e| {
+				QuantusError::Generic(format!(
+					"Failed to remove existing bins directory {}: {}",
+					path.display(),
+					e
+				))
+			})?;
+		}
+	}
+	Ok(())
 }
 
 fn generate(dir: &Path, num_leaf_proofs: usize) -> Result<()> {
+	remove_existing_path(dir)?;
 	std::fs::create_dir_all(dir).map_err(|e| {
 		QuantusError::Generic(format!("Failed to create bins directory {}: {}", dir.display(), e))
 	})?;
@@ -104,10 +123,13 @@ fn generate(dir: &Path, num_leaf_proofs: usize) -> Result<()> {
 	log_print!("   num_leaf_proofs: {}", num_leaf_proofs);
 
 	let start = std::time::Instant::now();
-	qp_wormhole_circuit_builder::generate_all_circuit_binaries(dir, true, num_leaf_proofs, None)
-		.map_err(|e| {
-			QuantusError::Generic(format!("Failed to generate circuit binaries: {}", e))
-		})?;
+	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
+		dir,
+		true,
+		DEFAULT_NUM_LEAF_PROOFS,
+		None,
+	)
+	.map_err(|e| QuantusError::Generic(format!("Failed to generate circuit binaries: {}", e)))?;
 
 	std::fs::write(dir.join(VERSION_MARKER), env!("CARGO_PKG_VERSION"))
 		.map_err(|e| QuantusError::Generic(format!("Failed to write version marker: {}", e)))?;

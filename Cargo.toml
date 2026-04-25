@@ -99,6 +99,15 @@ qp-wormhole-circuit-builder = { version = "2.0.1" }
 tempfile = "3.8.1"
 qp-poseidon-core = "1.4.0"
 
+[patch.crates-io]
+qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "compact-2x8-aggr" }
+qp-wormhole-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "compact-2x8-aggr" }
+qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "compact-2x8-aggr" }
+qp-wormhole-inputs = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "compact-2x8-aggr" }
+qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "compact-2x8-aggr" }
+qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "compact-2x8-aggr" }
+qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits", branch = "compact-2x8-aggr" }
+
 # Optimize build scripts and their dependencies in dev mode.
 # This is critical for circuit generation which is CPU-intensive.
 # Without this, circuit generation takes ~10 minutes instead of ~30 seconds.
