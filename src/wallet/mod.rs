@@ -17,8 +17,6 @@ use qp_rusty_crystals_hdwallet::{
 use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
 
-use sp_runtime::traits::IdentifyAccount;
-
 /// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'
 pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0'/0'";
 
@@ -111,6 +109,9 @@ impl WalletManager {
 	pub async fn create_developer_wallet(&self, name: &str) -> Result<WalletInfo> {
 		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
+		if keystore.load_wallet(name)?.is_some() {
+			return Err(WalletError::AlreadyExists.into());
+		}
 
 		// Generate the appropriate test keypair
 		let resonance_pair = match name {
@@ -121,15 +122,6 @@ impl WalletManager {
 		};
 
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
-
-		// Format addresses with SS58 version 189 (Quantus format)
-		use sp_core::{crypto::Ss58Codec, Pair};
-		let resonance_addr = resonance_pair
-			.public()
-			.into_account()
-			.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
-		println!("🔑 Resonance pair: {:?}", resonance_addr);
-		println!("🔑 Quantum keypair: {:?}", quantum_keypair.to_account_id_ss58check());
 
 		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
@@ -365,7 +357,7 @@ impl WalletManager {
 	pub async fn create_wallet_from_seed(
 		&self,
 		name: &str,
-		seed_hex: &str,
+		seed: &str,
 		password: Option<&str>,
 	) -> Result<WalletInfo> {
 		// Check if wallet already exists
@@ -375,31 +367,22 @@ impl WalletManager {
 		}
 
 		// Validate seed hex format (should be 64 hex characters for 32 bytes)
-		if seed_hex.len() != 64 {
+		if seed.len() != 64 {
 			return Err(WalletError::InvalidMnemonic.into()); // Reusing error type
 		}
 
 		// Convert hex to bytes
-		let seed_bytes = hex::decode(seed_hex).map_err(|_| WalletError::InvalidMnemonic)?;
+		let seed_bytes = hex::decode(seed).map_err(|_| WalletError::InvalidMnemonic)?;
 		if seed_bytes.len() != 32 {
 			return Err(WalletError::InvalidMnemonic.into());
 		}
 
 		// Create DilithiumPair from seed
-		let seed_array: [u8; 32] =
+		let seed_bytes_32: [u8; 32] =
 			seed_bytes.try_into().map_err(|_| WalletError::InvalidMnemonic)?;
 
-		println!("Debug: seed_array length: {}", seed_array.len());
-		println!("Debug: seed_hex: {}", seed_hex);
-		println!("Debug: calling DilithiumPair::from_seed");
-
-		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_array)
-			.map_err(|e| {
-				println!("Debug: DilithiumPair::from_seed failed with error: {:?}", e);
-				WalletError::InvalidMnemonic
-			})?;
-
-		println!("Debug: DilithiumPair created successfully");
+		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_bytes_32)
+			.map_err(|_| WalletError::InvalidMnemonic)?;
 
 		// Convert to QuantumKeyPair
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
@@ -574,6 +557,23 @@ mod tests {
 			crate::error::QuantusError::Wallet(WalletError::AlreadyExists) => {},
 			_ => panic!("Expected AlreadyExists error"),
 		}
+	}
+
+	#[tokio::test]
+	async fn test_developer_wallet_duplicate_rejected() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+
+		let wallet_info = wallet_manager
+			.create_developer_wallet("crystal_alice")
+			.await
+			.expect("Failed to create developer wallet");
+		assert_eq!(wallet_info.name, "crystal_alice");
+
+		let result = wallet_manager.create_developer_wallet("crystal_alice").await;
+		assert!(matches!(
+			result,
+			Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))
+		));
 	}
 
 	#[tokio::test]
@@ -837,6 +837,28 @@ mod tests {
 			crate::error::QuantusError::Wallet(WalletError::AlreadyExists) => {},
 			_ => panic!("Expected AlreadyExists error"),
 		}
+	}
+
+	#[tokio::test]
+	async fn test_wallet_creation_from_seed() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let seed = "0101010101010101010101010101010101010101010101010101010101010101";
+
+		let wallet_info = wallet_manager
+			.create_wallet_from_seed("seed-based-wallet", seed, Some("probe-password"))
+			.await
+			.expect("Failed to create seed wallet");
+
+		assert_eq!(wallet_info.name, "seed-based-wallet");
+		assert!(wallet_info.address.starts_with("qz"));
+		assert_eq!(wallet_info.derivation_path, "m/");
+
+		let wallet_data = wallet_manager
+			.load_wallet("seed-based-wallet", "probe-password")
+			.expect("Failed to load seed wallet");
+		assert!(wallet_data.mnemonic.is_none());
+		assert_eq!(wallet_data.derivation_path, "m/");
+		assert_eq!(wallet_data.metadata.get("from_seed").map(String::as_str), Some("true"));
 	}
 
 	#[tokio::test]
