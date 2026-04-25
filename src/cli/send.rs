@@ -7,8 +7,6 @@ use crate::{
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 
-pub const DEFAULT_PRIORITY_TIP: u128 = 10_000_000_000;
-
 /// Account balance data
 pub struct AccountBalanceData {
 	pub free: u128,
@@ -134,13 +132,8 @@ pub fn parse_amount_with_decimals(amount_str: &str, decimals: u8) -> Result<u128
 		return Err(crate::error::QuantusError::Generic("Amount cannot be negative".to_string()));
 	}
 
-	if amount_part.starts_with('+') {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Invalid amount format: '{amount_part}'. Use plain decimal strings like '10', '10.5', or '0.0001'"
-		)));
-	}
-
-	let mut parts = amount_part.split('.');
+	let normalized_amount_part = amount_part.strip_prefix('+').unwrap_or(amount_part);
+	let mut parts = normalized_amount_part.split('.');
 	let whole_part = parts.next().unwrap_or_default();
 	let fractional_part = parts.next();
 	if parts.next().is_some() {
@@ -253,7 +246,11 @@ fn checked_add(lhs: u128, rhs: u128, context: &str) -> Result<u128> {
 }
 
 pub fn effective_tip_amount(tip: Option<u128>) -> u128 {
-	tip.unwrap_or(DEFAULT_PRIORITY_TIP)
+	tip.unwrap_or_default()
+}
+
+pub(crate) fn positive_tip_amount(tip: Option<u128>) -> Option<u128> {
+	tip.filter(|tip_amount| *tip_amount > 0)
 }
 
 fn build_transfer_call(resolved_address: &str, amount: u128) -> Result<impl subxt::tx::Payload> {
@@ -372,7 +369,7 @@ pub async fn transfer_with_nonce(
 	log_verbose!("✍️  Creating balance transfer extrinsic...");
 
 	let transfer_call = build_transfer_call(&resolved_address, amount)?;
-	let tip_to_use = effective_tip_amount(tip);
+	let submit_tip = positive_tip_amount(tip);
 
 	// Submit the transaction with optional manual nonce
 	let tx_hash = if let Some(manual_nonce) = nonce {
@@ -381,7 +378,7 @@ pub async fn transfer_with_nonce(
 			quantus_client,
 			from_keypair,
 			transfer_call,
-			Some(tip_to_use),
+			submit_tip,
 			manual_nonce,
 			execution_mode,
 		)
@@ -391,7 +388,7 @@ pub async fn transfer_with_nonce(
 			quantus_client,
 			from_keypair,
 			transfer_call,
-			Some(tip_to_use),
+			submit_tip,
 			execution_mode,
 		)
 		.await?
@@ -402,15 +399,12 @@ pub async fn transfer_with_nonce(
 	Ok(tx_hash)
 }
 
-/// Batch transfer tokens to multiple recipients in a single transaction
-pub async fn batch_transfer(
+pub(crate) async fn validate_batch_transfer_request(
 	quantus_client: &QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
-	transfers: Vec<(String, u128)>, // (to_address, amount) pairs
-	tip: Option<u128>,
-	execution_mode: crate::cli::common::ExecutionMode,
-) -> Result<subxt::utils::H256> {
-	log_verbose!("🚀 Creating batch transfer transaction with {} transfers...", transfers.len());
+	transfers: &[(String, u128)],
+) -> Result<()> {
+	log_verbose!("🚀 Preparing batch transfer transaction with {} transfers...", transfers.len());
 	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
 
 	if transfers.is_empty() {
@@ -419,7 +413,6 @@ pub async fn batch_transfer(
 		));
 	}
 
-	// Get dynamic limits from chain
 	let (safe_limit, recommended_limit) =
 		get_batch_limits(quantus_client).await.unwrap_or((500, 1000));
 
@@ -432,7 +425,6 @@ pub async fn batch_transfer(
 		)));
 	}
 
-	// Warn about large batches
 	if transfers.len() as u32 > safe_limit {
 		log_verbose!(
 			"⚠️  Large batch ({} transfers) - approaching chain limits (safe: {}, max: {})",
@@ -442,21 +434,31 @@ pub async fn batch_transfer(
 		);
 	}
 
-	for (to_address, amount) in &transfers {
+	for (to_address, amount) in transfers {
 		log_verbose!("   To: {} Amount: {}", to_address.bright_green(), amount);
 	}
-	log_verbose!("✍️  Creating batch extrinsic with {} calls...", transfers.len());
-	let batch_call = build_batch_transfer_call(&transfers)?;
 
-	// Use provided tip or default tip
-	let tip_to_use = effective_tip_amount(tip);
+	Ok(())
+}
 
-	// Submit the batch transaction
+pub(crate) async fn submit_prebuilt_batch_transfer_call<Call>(
+	quantus_client: &QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	transfers: &[(String, u128)],
+	batch_call: Call,
+	tip: Option<u128>,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<subxt::utils::H256>
+where
+	Call: subxt::tx::Payload,
+{
+	log_verbose!("📤 Submitting batch extrinsic with {} calls...", transfers.len());
+
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
 		from_keypair,
 		batch_call,
-		Some(tip_to_use),
+		positive_tip_amount(tip),
 		execution_mode,
 	)
 	.await?;
@@ -464,6 +466,28 @@ pub async fn batch_transfer(
 	log_verbose!("📋 Batch transaction submitted: {:?}", tx_hash);
 
 	Ok(tx_hash)
+}
+
+/// Batch transfer tokens to multiple recipients in a single transaction
+pub async fn batch_transfer(
+	quantus_client: &QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	transfers: Vec<(String, u128)>, // (to_address, amount) pairs
+	tip: Option<u128>,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<subxt::utils::H256> {
+	validate_batch_transfer_request(quantus_client, from_keypair, &transfers).await?;
+	log_verbose!("✍️  Creating batch extrinsic with {} calls...", transfers.len());
+	let batch_call = build_batch_transfer_call(&transfers)?;
+	submit_prebuilt_batch_transfer_call(
+		quantus_client,
+		from_keypair,
+		&transfers,
+		batch_call,
+		tip,
+		execution_mode,
+	)
+	.await
 }
 
 // (Removed custom `AccountData` struct – we now use the runtime-generated type)
@@ -517,6 +541,7 @@ pub async fn handle_send_command(
 		None
 	};
 	let effective_tip = effective_tip_amount(tip_amount);
+	let submit_tip = positive_tip_amount(tip_amount);
 
 	let exact_required = checked_add(amount, effective_tip, "required send balance")?;
 	if balance < exact_required {
@@ -527,38 +552,44 @@ pub async fn handle_send_command(
 	}
 
 	let transfer_call = build_transfer_call(&resolved_address, amount)?;
-	match estimate_transaction_partial_fee(
-		&quantus_client,
-		&keypair,
-		&transfer_call,
-		Some(effective_tip),
-	)
-	.await
+	match estimate_transaction_partial_fee(&quantus_client, &keypair, &transfer_call, submit_tip)
+		.await
 	{
 		Ok(estimated_fee) => {
 			let estimated_total =
 				checked_add(exact_required, estimated_fee, "required send balance")?;
 			if balance < estimated_total {
-				let formatted_tip =
-					format_balance_with_symbol(&quantus_client, effective_tip).await?;
 				let formatted_fee =
 					format_balance_with_symbol(&quantus_client, estimated_fee).await?;
 				let formatted_required =
 					format_balance_with_symbol(&quantus_client, estimated_total).await?;
+				if let Some(tip_amount) = submit_tip {
+					let formatted_tip =
+						format_balance_with_symbol(&quantus_client, tip_amount).await?;
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Insufficient balance for amount + tip + estimated fee. Have: {formatted_balance}, Need: {formatted_required} (tip: {formatted_tip}, estimated fee: {formatted_fee})"
+					)));
+				}
 				return Err(crate::error::QuantusError::Generic(format!(
-					"Insufficient balance for amount + tip + estimated fee. Have: {formatted_balance}, Need: {formatted_required} (tip: {formatted_tip}, estimated fee: {formatted_fee})"
+					"Insufficient balance for amount + estimated fee. Have: {formatted_balance}, Need: {formatted_required} (estimated fee: {formatted_fee})"
 				)));
 			}
 			let formatted_estimated_fee =
 				format_balance_with_symbol(&quantus_client, estimated_fee).await?;
 			log_verbose!("💸 Estimated network fee: {}", formatted_estimated_fee.bright_cyan());
 		},
-		Err(err) => {
-			log_verbose!(
-				"⚠️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
-				err
-			);
-		},
+		Err(err) =>
+			if submit_tip.is_some() {
+				log_verbose!(
+					"⚠️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
+					err
+				);
+			} else {
+				log_verbose!(
+					"⚠️  Fee estimation unavailable; proceeding with exact amount check only: {}",
+					err
+				);
+			},
 	}
 
 	// Create and submit transaction
@@ -584,7 +615,7 @@ pub async fn handle_send_command(
 		tx_hash
 	);
 
-	if !execution_mode.should_refresh_post_submit_state() {
+	if !execution_mode.should_watch_transaction() {
 		log_print!(
 			"ℹ️  The transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized-tx to wait before returning.",
 			transaction_stage.success_detail()
@@ -685,13 +716,19 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 
 #[cfg(test)]
 mod tests {
-	use super::parse_amount_with_decimals;
+	use super::{effective_tip_amount, parse_amount_with_decimals};
 
 	#[test]
 	fn parses_exact_decimal_amounts() {
 		assert_eq!(parse_amount_with_decimals("0.1", 12).unwrap(), 100_000_000_000);
 		assert_eq!(parse_amount_with_decimals("0.000000000001", 12).unwrap(), 1);
 		assert_eq!(parse_amount_with_decimals("1.000000000000", 12).unwrap(), 1_000_000_000_000);
+	}
+
+	#[test]
+	fn accepts_single_leading_plus_for_positive_amounts() {
+		assert_eq!(parse_amount_with_decimals("+1.0", 12).unwrap(), 1_000_000_000_000);
+		assert_eq!(parse_amount_with_decimals("+0.000000000001", 12).unwrap(), 1);
 	}
 
 	#[test]
@@ -707,6 +744,13 @@ mod tests {
 	}
 
 	#[test]
+	fn rejects_invalid_plus_prefixed_amounts() {
+		assert!(parse_amount_with_decimals("+", 12).is_err());
+		assert!(parse_amount_with_decimals("++1", 12).is_err());
+		assert!(parse_amount_with_decimals("+0", 12).is_err());
+	}
+
+	#[test]
 	fn handles_u128_boundaries_exactly() {
 		assert_eq!(parse_amount_with_decimals(&u128::MAX.to_string(), 0).unwrap(), u128::MAX);
 
@@ -718,5 +762,15 @@ mod tests {
 
 		let overflow = format!("{}.0", whole + 1);
 		assert!(parse_amount_with_decimals(&overflow, 12).is_err());
+	}
+
+	#[test]
+	fn default_tip_amount_is_zero() {
+		assert_eq!(effective_tip_amount(None), 0);
+	}
+
+	#[test]
+	fn provided_tip_amount_is_preserved() {
+		assert_eq!(effective_tip_amount(Some(42)), 42);
 	}
 }

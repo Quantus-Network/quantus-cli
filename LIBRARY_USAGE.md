@@ -8,7 +8,7 @@ This document explains how to use `quantus-cli` as a library in your Rust applic
 [dependencies]
 quantus-cli = { path = "." }  # For local development
 # or
-quantus-cli = "1.3.3"  # Current published version
+quantus-cli = "1.3.3"  # Replace with the latest published version on crates.io
 ```
 
 ## Basic Usage
@@ -204,6 +204,8 @@ async fn send_transaction() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 ```
+
+Passing `None` for the tip means no tip is attached. Use `Some(raw_tip)` only when you explicitly want one.
 
 `ExecutionMode` semantics:
 - `wait_for_transaction = false`: return after submission (`submitted`)

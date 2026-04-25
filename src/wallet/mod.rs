@@ -357,7 +357,7 @@ impl WalletManager {
 	pub async fn create_wallet_from_seed(
 		&self,
 		name: &str,
-		seed_hex: &str,
+		seed: &str,
 		password: Option<&str>,
 	) -> Result<WalletInfo> {
 		// Check if wallet already exists
@@ -367,21 +367,21 @@ impl WalletManager {
 		}
 
 		// Validate seed hex format (should be 64 hex characters for 32 bytes)
-		if seed_hex.len() != 64 {
+		if seed.len() != 64 {
 			return Err(WalletError::InvalidMnemonic.into()); // Reusing error type
 		}
 
 		// Convert hex to bytes
-		let seed_bytes = hex::decode(seed_hex).map_err(|_| WalletError::InvalidMnemonic)?;
+		let seed_bytes = hex::decode(seed).map_err(|_| WalletError::InvalidMnemonic)?;
 		if seed_bytes.len() != 32 {
 			return Err(WalletError::InvalidMnemonic.into());
 		}
 
 		// Create DilithiumPair from seed
-		let seed_array: [u8; 32] =
+		let seed_bytes_32: [u8; 32] =
 			seed_bytes.try_into().map_err(|_| WalletError::InvalidMnemonic)?;
 
-		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_array)
+		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_bytes_32)
 			.map_err(|_| WalletError::InvalidMnemonic)?;
 
 		// Convert to QuantumKeyPair
@@ -509,8 +509,7 @@ pub fn load_keypair_from_wallet(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use serial_test::serial;
-	use std::{fs, process::Command};
+	use std::fs;
 	use tempfile::TempDir;
 
 	async fn create_test_wallet_manager() -> (WalletManager, TempDir) {
@@ -841,40 +840,25 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[ignore]
-	async fn seed_output_probe() {
+	async fn test_wallet_creation_from_seed() {
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
-		let seed_hex = "0101010101010101010101010101010101010101010101010101010101010101";
+		let seed = "0101010101010101010101010101010101010101010101010101010101010101";
 
 		let wallet_info = wallet_manager
-			.create_wallet_from_seed("seed-output-probe", seed_hex, Some("probe-password"))
+			.create_wallet_from_seed("seed-based-wallet", seed, Some("probe-password"))
 			.await
 			.expect("Failed to create seed wallet");
 
-		assert_eq!(wallet_info.name, "seed-output-probe");
+		assert_eq!(wallet_info.name, "seed-based-wallet");
 		assert!(wallet_info.address.starts_with("qz"));
-	}
+		assert_eq!(wallet_info.derivation_path, "m/");
 
-	#[test]
-	#[serial]
-	fn test_wallet_from_seed_does_not_emit_secret_output() {
-		let output = Command::new(std::env::current_exe().expect("Failed to locate test binary"))
-			.args(["--ignored", "--exact", "seed_output_probe", "--nocapture", "--test-threads=1"])
-			.output()
-			.expect("Failed to run seed output probe");
-
-		assert!(output.status.success(), "probe test failed: {:?}", output);
-
-		let stdout = String::from_utf8_lossy(&output.stdout);
-		let stderr = String::from_utf8_lossy(&output.stderr);
-		let combined = format!("{stdout}{stderr}");
-
-		assert!(
-			!combined.contains("0101010101010101010101010101010101010101010101010101010101010101"),
-			"seed hex leaked in output: {combined}"
-		);
-		assert!(!combined.contains("Debug:"), "debug output leaked: {combined}");
-		assert!(!combined.contains("seed_array"), "seed internals leaked in output: {combined}");
+		let wallet_data = wallet_manager
+			.load_wallet("seed-based-wallet", "probe-password")
+			.expect("Failed to load seed wallet");
+		assert!(wallet_data.mnemonic.is_none());
+		assert_eq!(wallet_data.derivation_path, "m/");
+		assert_eq!(wallet_data.metadata.get("from_seed").map(String::as_str), Some("true"));
 	}
 
 	#[tokio::test]

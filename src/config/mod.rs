@@ -8,12 +8,6 @@ pub struct CompatibleRuntime {
 	pub transaction_version: u32,
 }
 
-/// List of runtime spec versions that this CLI is compatible with.
-pub const COMPATIBLE_RUNTIME_VERSIONS: &[u32] = &[127];
-
-/// List of transaction versions that this CLI is compatible with.
-pub const COMPATIBLE_TRANSACTION_VERSIONS: &[u32] = &[2];
-
 /// Supported runtime / transaction version pairs for the checked-in metadata snapshot.
 pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] =
 	&[CompatibleRuntime { spec_version: 127, transaction_version: 2 }];

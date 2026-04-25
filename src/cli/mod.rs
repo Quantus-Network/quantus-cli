@@ -612,11 +612,10 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 	);
 
 	log_print!("🔍 Compatibility Analysis:");
-	log_print!("   • Supported Runtime Versions: {:?}", crate::config::COMPATIBLE_RUNTIME_VERSIONS);
-	log_print!(
-		"   • Supported Transaction Versions: {:?}",
-		crate::config::COMPATIBLE_TRANSACTION_VERSIONS
-	);
+	log_print!("   • Supported runtime/transaction pairs:");
+	for runtime in crate::config::COMPATIBLE_RUNTIMES {
+		log_print!("     - spec {} / tx {}", runtime.spec_version, runtime.transaction_version);
+	}
 	log_print!("   • Current Runtime Version: {}", runtime_version.spec_version);
 	log_print!("   • Current Transaction Version: {}", runtime_version.transaction_version);
 
@@ -628,10 +627,6 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 		log_error!("❌ INCOMPATIBLE - This CLI version may not work with the connected node");
 		log_print!("   • Some features may not work correctly");
 		log_print!("   • Consider updating the CLI or connecting to a compatible node");
-		log_print!("   • Supported runtime/version pairs:");
-		for runtime in crate::config::COMPATIBLE_RUNTIMES {
-			log_print!("     - spec {} / tx {}", runtime.spec_version, runtime.transaction_version);
-		}
 	}
 
 	log_print!("");

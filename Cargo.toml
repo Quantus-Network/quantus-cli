@@ -97,7 +97,6 @@ qp-wormhole-circuit-builder = { version = "2.0.1" }
 
 [dev-dependencies]
 tempfile = "3.8.1"
-serial_test = "3.1"
 qp-poseidon-core = "1.4.0"
 
 # Optimize build scripts and their dependencies in dev mode.

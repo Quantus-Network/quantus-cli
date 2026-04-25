@@ -376,7 +376,7 @@ quantus send --from crystal_alice --to <address> --amount 10.5 --wait-for-transa
 # Wait for finalization (implies --wait-for-transaction)
 quantus send --from crystal_alice --to <address> --amount 10.5 --finalized-tx
 
-# With tip for priority
+# Optional advanced: add a tip to prioritize the transaction
 quantus send --from crystal_alice --to <address> --amount 10 --tip 0.1
 
 # With manual nonce
@@ -388,7 +388,7 @@ Transaction status terms:
 - `included`: observed in a best block
 - `finalized`: observed in a finalized block
 
-`--amount` and `--tip` use exact decimal parsing based on the chain's configured decimals. Malformed values, negative values, over-precision, or values that would round to zero are rejected.
+`--amount` and `--tip` use exact decimal parsing based on the chain's configured decimals. Malformed values, negative values, over-precision, or values that would round to zero are rejected. `--tip` is optional and omitted by default.
 
 ---
 

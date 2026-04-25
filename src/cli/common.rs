@@ -35,10 +35,6 @@ impl ExecutionMode {
 	pub fn should_watch_transaction(self) -> bool {
 		self.transaction_stage() != TransactionStage::Submitted
 	}
-
-	pub fn should_refresh_post_submit_state(self) -> bool {
-		self.should_watch_transaction()
-	}
 }
 
 impl TransactionStage {
@@ -109,6 +105,13 @@ fn describe_watched_tx_event(
 			target_stage.status_label()
 		))),
 	}
+}
+
+fn should_check_execution_success(
+	block_hash: &subxt::utils::H256,
+	already_checked_for: Option<&subxt::utils::H256>,
+) -> bool {
+	already_checked_for != Some(block_hash)
 }
 
 /// Resolve address - if it's a wallet name, return the wallet's address
@@ -481,6 +484,7 @@ async fn wait_tx_inclusion(
 	use indicatif::{ProgressBar, ProgressStyle};
 
 	let start_time = std::time::Instant::now();
+	let mut execution_success_checked_for = None;
 
 	let spinner = if !crate::log::is_verbose() {
 		let pb = ProgressBar::new_spinner();
@@ -521,20 +525,29 @@ async fn wait_tx_inclusion(
 						WatchedTxEvent::Validated
 					},
 					TxStatus::Broadcasted => WatchedTxEvent::Broadcasted,
-					TxStatus::NoLongerInBestBlock => WatchedTxEvent::NoLongerInBestBlock,
+					TxStatus::NoLongerInBestBlock => {
+						execution_success_checked_for = None;
+						WatchedTxEvent::NoLongerInBestBlock
+					},
 					TxStatus::InBestBlock(tx_in_block) => {
 						let block_hash = tx_in_block.block_hash();
 						crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
-						if let Err(err) =
-							check_execution_success(client, &block_hash, tx_hash).await
-						{
-							if let Some(pb) = spinner {
-								pb.finish_with_message(format!(
-									"❌ Transaction failed in block ({}s)",
-									elapsed_secs
-								));
+						if should_check_execution_success(
+							&block_hash,
+							execution_success_checked_for.as_ref(),
+						) {
+							if let Err(err) =
+								check_execution_success(client, &block_hash, tx_hash).await
+							{
+								if let Some(pb) = spinner {
+									pb.finish_with_message(format!(
+										"❌ Transaction failed in block ({}s)",
+										elapsed_secs
+									));
+								}
+								return Err(err);
 							}
-							return Err(err);
+							execution_success_checked_for = Some(block_hash);
 						}
 						match describe_watched_tx_event(WatchedTxEvent::InBestBlock, target_stage)?
 						{
@@ -562,16 +575,22 @@ async fn wait_tx_inclusion(
 					TxStatus::InFinalizedBlock(tx_in_block) => {
 						let block_hash = tx_in_block.block_hash();
 						crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
-						if let Err(err) =
-							check_execution_success(client, &block_hash, tx_hash).await
-						{
-							if let Some(pb) = spinner {
-								pb.finish_with_message(format!(
-									"❌ Transaction failed in finalized block ({}s)",
-									elapsed_secs
-								));
+						if should_check_execution_success(
+							&block_hash,
+							execution_success_checked_for.as_ref(),
+						) {
+							if let Err(err) =
+								check_execution_success(client, &block_hash, tx_hash).await
+							{
+								if let Some(pb) = spinner {
+									pb.finish_with_message(format!(
+										"❌ Transaction failed in finalized block ({}s)",
+										elapsed_secs
+									));
+								}
+								return Err(err);
 							}
-							return Err(err);
+							execution_success_checked_for = Some(block_hash);
 						}
 						match describe_watched_tx_event(
 							WatchedTxEvent::InFinalizedBlock,
@@ -758,7 +777,6 @@ mod tests {
 
 		assert_eq!(mode.transaction_stage(), TransactionStage::Finalized);
 		assert!(mode.should_watch_transaction());
-		assert!(mode.should_refresh_post_submit_state());
 	}
 
 	#[test]
@@ -767,7 +785,6 @@ mod tests {
 
 		assert_eq!(mode.transaction_stage(), TransactionStage::Submitted);
 		assert!(!mode.should_watch_transaction());
-		assert!(!mode.should_refresh_post_submit_state());
 	}
 
 	#[test]
@@ -818,5 +835,15 @@ mod tests {
 			.unwrap(),
 			WatchDecision::Success
 		);
+	}
+
+	#[test]
+	fn execution_success_check_is_skipped_for_same_block() {
+		let best_block_hash = subxt::utils::H256::from([7u8; 32]);
+		let finalized_block_hash = subxt::utils::H256::from([8u8; 32]);
+
+		assert!(should_check_execution_success(&best_block_hash, None));
+		assert!(!should_check_execution_success(&best_block_hash, Some(&best_block_hash),));
+		assert!(should_check_execution_success(&finalized_block_hash, Some(&best_block_hash),));
 	}
 }
