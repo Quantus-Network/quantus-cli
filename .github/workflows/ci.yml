@@ -19,9 +19,16 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# Principle of least privilege: all jobs only read the repo (checkout + cargo).
+# Per-job override is unnecessary because no job pushes, creates releases or PRs.
+permissions:
+  contents: read
+
 env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+  CARGO_NET_TIMEOUT: 60
 
 jobs:
   fast-checks:
@@ -29,8 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install required components
-        run: rustup component add rustfmt --toolchain nightly
+      - uses: ./.github/actions/ubuntu
       - name: Install taplo
         run: cargo install taplo-cli --locked
       - name: Run format checks
@@ -42,33 +48,21 @@ jobs:
     name: 🛠️ Build & Test Matrix
     needs: fast-checks
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os:
           - ubuntu-latest
           - macos-latest
-        rust:
-          - stable
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust ${{ matrix.rust }}
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-      - name: Install dependencies (Ubuntu)
+      - name: Setup Ubuntu
         if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo rm -f /etc/apt/sources.list.d/azure-cli.list
-          sudo apt-get update -yqq
-          sudo apt-get install -yqq --no-install-recommends \
-            libclang-dev \
-            protobuf-compiler
-      - name: Install dependencies (macOS)
+        uses: ./.github/actions/ubuntu
+      - name: Setup macOS
         if: matrix.os == 'macos-latest'
-        run: |
-          brew install protobuf
+        uses: ./.github/actions/macos
       - name: Build (all targets)
         run: cargo build --locked
       - name: Build (library only)
@@ -80,20 +74,10 @@ jobs:
     name: 🤖 Analysis (Clippy & Doc)
     needs: fast-checks
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rust-src
-      - name: Install dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo rm -f /etc/apt/sources.list.d/azure-cli.list
-          sudo apt-get update -yqq
-          sudo apt-get install -yqq --no-install-recommends \
-            libclang-dev \
-            protobuf-compiler
+      - uses: ./.github/actions/ubuntu
       - name: Run clippy (all targets)
         run: SKIP_CIRCUIT_BUILD=1 cargo clippy --all-targets --locked -- -D warnings
       - name: Run clippy (library only)
@@ -107,6 +91,7 @@ jobs:
     name: 🔒 Security Audit
     needs: fast-checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install cargo-audit
@@ -118,21 +103,12 @@ jobs:
     name: 📚 Examples
     needs: fast-checks
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: Install dependencies
-        run: |
-          sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-          sudo rm -f /etc/apt/sources.list.d/azure-cli.list
-          sudo apt-get update -yqq
-          sudo apt-get install -yqq --no-install-recommends \
-            libclang-dev \
-            protobuf-compiler
+      - uses: ./.github/actions/ubuntu
       - name: Build examples
-        run: |
-          cargo build --examples --locked
+        run: cargo build --examples --locked
       - name: Check example compilation
         run: |
           for example in examples/*.rs; do
