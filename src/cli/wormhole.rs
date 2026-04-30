@@ -1107,15 +1107,24 @@ fn show_wormhole_address(secret_hex: String) -> crate::error::Result<()> {
 	Ok(())
 }
 
-async fn at_best_block(
+/// Fetch the latest (best) block as a fully materialised subxt `Block`.
+///
+/// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
+/// of the SDK surface. Network/decoding failures are wrapped in
+/// [`crate::error::QuantusError::NetworkError`].
+pub async fn at_best_block(
 	quantus_client: &QuantusClient,
-) -> anyhow::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
+) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
 	let best_block = quantus_client.get_latest_block().await?;
-	let block = quantus_client.client().blocks().at(best_block).await?;
+	let block = quantus_client.client().blocks().at(best_block).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!(
+			"Failed to fetch best block {best_block:?}: {e:?}"
+		))
+	})?;
 	Ok(block)
 }
 
-async fn aggregate_proofs(
+pub async fn aggregate_proofs(
 	proof_files: Vec<String>,
 	output_file: String,
 ) -> crate::error::Result<()> {
@@ -1242,18 +1251,30 @@ async fn aggregate_proofs(
 	Ok(())
 }
 
-#[derive(Debug, Clone, Copy)]
-enum IncludedAt {
+/// Where in the chain a submitted extrinsic has been observed.
+///
+/// `Best` means it landed in the current best block (not yet finalised);
+/// `Finalized` means it's in a block past the finality gadget. Returned by
+/// [`submit_unsigned_verify_aggregated_proof`] alongside the block + tx hash.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IncludedAt {
 	Best,
 	Finalized,
 }
 
 impl IncludedAt {
-	fn label(self) -> &'static str {
+	/// Short human-readable label. Equivalent to [`std::fmt::Display`] output.
+	pub fn label(self) -> &'static str {
 		match self {
 			IncludedAt::Best => "best block",
 			IncludedAt::Finalized => "finalized block",
 		}
+	}
+}
+
+impl std::fmt::Display for IncludedAt {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(self.label())
 	}
 }
 
@@ -1270,7 +1291,7 @@ fn read_hex_proof_file_to_bytes(proof_file: &str) -> crate::error::Result<Vec<u8
 
 /// Submit unsigned verify_aggregated_proof(proof_bytes) and return (included_at, block_hash,
 /// tx_hash).
-async fn submit_unsigned_verify_aggregated_proof(
+pub async fn submit_unsigned_verify_aggregated_proof(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
 ) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
@@ -1437,22 +1458,31 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 // Multi-round wormhole flow implementation
 // ============================================================================
 
-/// Information about a transfer needed for proof generation
+/// Information about a transfer needed for proof generation.
+///
+/// Returned by [`parse_transfer_events`] for every confirmed deposit; carries
+/// the on-chain identifiers (`block_hash`, `transfer_count`, `leaf_index`)
+/// plus the amount and the source/destination accounts. SDK consumers feed
+/// these into [`crate::wormhole_lib::generate_proof`] to build the ZK proof.
+//
+// `block_hash` and `wormhole_address` are read by SDK consumers (e.g.
+// `stress-test`, downstream wormhole clients) but not by the CLI binary
+// itself; rustc only sees the bin target's usage and would otherwise warn.
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
-struct TransferInfo {
+pub struct TransferInfo {
 	/// Block hash where the transfer was included
-	block_hash: subxt::utils::H256,
+	pub block_hash: subxt::utils::H256,
 	/// Transfer count for this specific transfer
-	transfer_count: u64,
+	pub transfer_count: u64,
 	/// Amount transferred
-	amount: u128,
+	pub amount: u128,
 	/// The wormhole address (destination of transfer)
-	wormhole_address: SubxtAccountId,
+	pub wormhole_address: SubxtAccountId,
 	/// The funding account (source of transfer)
-	funding_account: SubxtAccountId,
+	pub funding_account: SubxtAccountId,
 	/// Index of this transfer in the ZK trie (for Merkle proof lookup)
-	leaf_index: u64,
+	pub leaf_index: u64,
 }
 
 /// Derive a wormhole secret using HD derivation
@@ -1493,7 +1523,7 @@ async fn get_minting_account(
 
 /// Parse transfer info from NativeTransferred events in a block and updates block hash for all
 /// transfers
-fn parse_transfer_events(
+pub fn parse_transfer_events(
 	events: &[wormhole::events::NativeTransferred],
 	expected_addresses: &[SubxtAccountId],
 	block_hash: subxt::utils::H256,
@@ -2380,9 +2410,17 @@ fn decode_input_amount_from_leaf(leaf_data: &[u8]) -> crate::error::Result<u32> 
 }
 
 /// Decode all fields from SCALE-encoded ZkLeaf data.
-/// Returns (to_account, transfer_count, asset_id, raw_amount_u128)
+///
+/// `ZkLeaf` is the on-chain leaf payload sitting in the ZK trie (`AccountId32`,
+/// `u64`, `u32`, `u128`). Returned tuple is `(to_account, transfer_count,
+/// asset_id, raw_amount_u128)` — the raw amount is in planck (12 decimals);
+/// use [`crate::wormhole_lib::quantize_amount`] before feeding into a circuit.
+//
+// SDK helper: the CLI binary uses `decode_input_amount_from_leaf` for its own
+// flow; this fuller decoder is exported for downstream consumers (the bin
+// target itself doesn't reference it, hence `allow(dead_code)`).
 #[allow(dead_code)]
-fn decode_full_leaf_data(leaf_data: &[u8]) -> crate::error::Result<([u8; 32], u64, u32, u128)> {
+pub fn decode_full_leaf_data(leaf_data: &[u8]) -> crate::error::Result<([u8; 32], u64, u32, u128)> {
 	// ZkLeaf is: (AccountId32, u64, u32, u128)
 	// AccountId32 = 32 bytes
 	// u64 = 8 bytes (transfer_count)
@@ -2417,7 +2455,7 @@ fn decode_full_leaf_data(leaf_data: &[u8]) -> crate::error::Result<([u8; 32], u6
 }
 
 /// Verify an aggregated proof and return the block hash, extrinsic hash, and transfer events
-async fn verify_aggregated_and_get_events(
+pub async fn verify_aggregated_and_get_events(
 	proof_file: &str,
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<(
@@ -2441,8 +2479,8 @@ async fn verify_aggregated_and_get_events(
 			e
 		))
 	})?;
-	println!(
-		"[quantus-cli] Circuit binaries: common_bytes.len={}, verifier_bytes.len={}, common_hash={}, verifier_hash={}",
+	log_verbose!(
+		"Circuit binaries: common_bytes.len={}, verifier_bytes.len={}, common_hash={}, verifier_hash={}",
 		common_bytes.len(),
 		verifier_bytes.len(),
 		hex::encode(blake3::hash(&common_bytes).as_bytes()),
