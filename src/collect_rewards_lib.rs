@@ -16,7 +16,9 @@ use crate::{
 		client::QuantusClient,
 		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
-	cli::wormhole::{parse_secret_hex as parse_secret_hex_str, ZkMerkleProofRpc},
+	cli::wormhole::{
+		compute_merkle_positions, parse_secret_hex as parse_secret_hex_str, ZkMerkleProofRpc,
+	},
 	subsquid::{
 		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
 	},
@@ -24,57 +26,6 @@ use crate::{
 	wormhole_lib::{compute_output_amount, NATIVE_ASSET_ID, VOLUME_FEE_BPS},
 };
 
-type Hash256 = [u8; 32];
-
-/// Compute sorted siblings and position hints from unsorted siblings.
-///
-/// The chain returns unsorted siblings. This function sorts them and computes
-/// position hints that indicate where the current hash fits in the sorted order.
-fn compute_merkle_positions(
-	unsorted_siblings: &[[Hash256; 3]],
-	leaf_hash: Hash256,
-) -> (Vec<[Hash256; 3]>, Vec<u8>) {
-	use qp_zk_circuits_common::zk_merkle::hash_node_presorted;
-
-	let mut current_hash = leaf_hash;
-	let mut sorted_siblings = Vec::with_capacity(unsorted_siblings.len());
-	let mut positions = Vec::with_capacity(unsorted_siblings.len());
-
-	for level_siblings in unsorted_siblings.iter() {
-		// Combine current hash with the 3 siblings
-		let mut all_four: [Hash256; 4] =
-			[current_hash, level_siblings[0], level_siblings[1], level_siblings[2]];
-
-		// Sort to get the order used by hash_node
-		all_four.sort();
-
-		// Find position of current_hash in sorted order
-		let pos = all_four
-			.iter()
-			.position(|h| *h == current_hash)
-			.expect("current hash must be in the array") as u8;
-		positions.push(pos);
-
-		// Extract the 3 siblings in sorted order (excluding current_hash)
-		let sorted_sibs: [Hash256; 3] = {
-			let mut sibs = [[0u8; 32]; 3];
-			let mut sib_idx = 0;
-			for (i, h) in all_four.iter().enumerate() {
-				if i as u8 != pos {
-					sibs[sib_idx] = *h;
-					sib_idx += 1;
-				}
-			}
-			sibs
-		};
-		sorted_siblings.push(sorted_sibs);
-
-		// Compute parent hash for next level
-		current_hash = hash_node_presorted(&all_four);
-	}
-
-	(sorted_siblings, positions)
-}
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use qp_rusty_crystals_hdwallet::{derive_wormhole_from_mnemonic, QUANTUS_WORMHOLE_CHAIN_ID};
 use qp_wormhole_aggregator::{
