@@ -356,7 +356,7 @@ where
 				format_balance_with_symbol(quantus_client, estimated_fee).await?;
 			log_verbose!("💸 Estimated network fee: {}", formatted_estimated_fee.bright_cyan());
 		},
-		Err(err) => {
+		Err(err) =>
 			if submit_tip.is_some() {
 				log_verbose!(
 					"⚠️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
@@ -367,8 +367,7 @@ where
 					"⚠️  Fee estimation unavailable; proceeding with exact amount check only: {}",
 					err
 				);
-			}
-		},
+			},
 	}
 
 	Ok(())
