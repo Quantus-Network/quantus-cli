@@ -73,7 +73,7 @@ async fn main() -> Result<(), QuantusError> {
 	// Create execution mode from CLI args
 	let execution_mode = cli::common::ExecutionMode {
 		finalized: cli.finalized_tx,
-		wait_for_transaction: cli.wait_for_transaction || cli.finalized_tx,
+		wait_for_transaction: cli.wait_for_transaction,
 	};
 
 	// Execute the command with timing

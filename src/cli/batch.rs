@@ -2,8 +2,8 @@
 use crate::{
 	chain::client::QuantusClient,
 	cli::send::{
-		build_batch_transfer_call, get_batch_limits, load_transfers_from_file,
-		submit_prebuilt_batch_transfer_call, validate_and_format_amount,
+		build_batch_transfer_call, checked_add, ensure_balance_covers_call, get_batch_limits,
+		load_transfers_from_file, submit_prebuilt_batch_transfer_call, validate_and_format_amount,
 		validate_batch_transfer_request,
 	},
 	error::Result,
@@ -11,12 +11,6 @@ use crate::{
 };
 use clap::Subcommand;
 use colored::Colorize;
-
-const BATCH_AMOUNT_TOTAL_TOO_LARGE: &str = "Batch amount total is too large to represent";
-
-fn batch_amount_overflow_error() -> crate::error::QuantusError {
-	crate::error::QuantusError::Generic(BATCH_AMOUNT_TOTAL_TOO_LARGE.to_string())
-}
 
 #[derive(Subcommand, Debug)]
 pub enum BatchCommands {
@@ -84,7 +78,7 @@ pub async fn handle_batch_command(
 			count,
 			to,
 			amount,
-		} =>
+		} => {
 			handle_batch_send_command(
 				from,
 				node_url,
@@ -97,9 +91,11 @@ pub async fn handle_batch_command(
 				amount,
 				execution_mode,
 			)
-			.await,
-		BatchCommands::Config { limits, info } =>
-			handle_batch_config_command(node_url, limits, info).await,
+			.await
+		},
+		BatchCommands::Config { limits, info } => {
+			handle_batch_config_command(node_url, limits, info).await
+		},
 	}
 }
 
@@ -161,73 +157,23 @@ async fn handle_batch_send_command(
 
 	// Check balance
 	let balance = crate::cli::send::get_balance(&quantus_client, &from_account_id).await?;
-	let total_amount = transfers.iter().try_fold(0u128, |acc, (_, amount)| {
-		acc.checked_add(*amount).ok_or_else(batch_amount_overflow_error)
-	})?;
-	let exact_required = total_amount
-		.checked_add(effective_tip)
-		.ok_or_else(batch_amount_overflow_error)?;
-
-	if balance < exact_required {
-		let formatted_balance =
-			crate::cli::send::format_balance_with_symbol(&quantus_client, balance).await?;
-		let formatted_needed =
-			crate::cli::send::format_balance_with_symbol(&quantus_client, exact_required).await?;
-		let detail = if submit_tip.is_some() { " (including tip)" } else { "" };
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Insufficient balance. Have: {formatted_balance}, Need: {formatted_needed}{detail}"
-		)));
-	}
+	let total_amount = transfers
+		.iter()
+		.try_fold(0u128, |acc, (_, amount)| checked_add(acc, *amount, "batch transfer total"))?;
+	let exact_required = checked_add(total_amount, effective_tip, "required batch balance")?;
 
 	log_verbose!("✍️  Creating batch extrinsic with {} calls...", transfers.len());
 	let batch_call = build_batch_transfer_call(&transfers)?;
-	match crate::cli::send::estimate_transaction_partial_fee(
+	ensure_balance_covers_call(
 		&quantus_client,
 		&keypair,
 		&batch_call,
+		balance,
+		exact_required,
 		submit_tip,
+		"batch",
 	)
-	.await
-	{
-		Ok(estimated_fee) => {
-			let estimated_total = exact_required
-				.checked_add(estimated_fee)
-				.ok_or_else(batch_amount_overflow_error)?;
-			if balance < estimated_total {
-				let formatted_balance =
-					crate::cli::send::format_balance_with_symbol(&quantus_client, balance).await?;
-				let formatted_needed =
-					crate::cli::send::format_balance_with_symbol(&quantus_client, estimated_total)
-						.await?;
-				let formatted_fee =
-					crate::cli::send::format_balance_with_symbol(&quantus_client, estimated_fee)
-						.await?;
-				if let Some(tip_amount) = submit_tip {
-					let formatted_tip =
-						crate::cli::send::format_balance_with_symbol(&quantus_client, tip_amount)
-							.await?;
-					return Err(crate::error::QuantusError::Generic(format!(
-						"Insufficient balance. Have: {formatted_balance}, Need: {formatted_needed} (tip: {formatted_tip}, estimated fee: {formatted_fee})"
-					)));
-				}
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Insufficient balance. Have: {formatted_balance}, Need: {formatted_needed} (estimated fee: {formatted_fee})"
-				)));
-			}
-		},
-		Err(err) =>
-			if submit_tip.is_some() {
-				log_print!(
-					"ℹ️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
-					err
-				);
-			} else {
-				log_print!(
-					"ℹ️  Fee estimation unavailable; proceeding with exact amount check only: {}",
-					err
-				);
-			},
-	}
+	.await?;
 
 	// Submit batch transaction
 	let tx_hash = submit_prebuilt_batch_transfer_call(

@@ -1,5 +1,7 @@
 use crate::{
-	chain::quantus_subxt, cli::common::resolve_address, log_error, log_print, log_success,
+	chain::quantus_subxt,
+	cli::common::{resolve_address_with_subxt_account_id, resolve_to_subxt_account_id},
+	log_error, log_print, log_success,
 };
 use clap::Subcommand;
 // no colored output needed here
@@ -180,12 +182,7 @@ pub async fn handle_recovery_command(
 			let rescuer_addr = rescuer_key.to_account_id_ss58check();
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
-			let lost_resolved = resolve_address(&lost)?;
-			let lost_id_sp = SpAccountId32::from_ss58check(&lost_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid lost address: {e:?}"))
-			})?;
-			let lost_id_bytes: [u8; 32] = *lost_id_sp.as_ref();
-			let lost_id = subxt::ext::subxt_core::utils::AccountId32::from(lost_id_bytes);
+			let lost_id = resolve_to_subxt_account_id(&lost)?;
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.initiate_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
@@ -209,18 +206,8 @@ pub async fn handle_recovery_command(
 		RecoveryCommands::Vouch { friend, lost, rescuer, password, password_file } => {
 			let friend_key =
 				crate::wallet::load_keypair_from_wallet(&friend, password, password_file)?;
-			let lost_resolved = resolve_address(&lost)?;
-			let rescuer_resolved = resolve_address(&rescuer)?;
-			let lost_sp = SpAccountId32::from_ss58check(&lost_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid lost address: {e:?}"))
-			})?;
-			let lost_bytes: [u8; 32] = *lost_sp.as_ref();
-			let lost_id = subxt::ext::subxt_core::utils::AccountId32::from(lost_bytes);
-			let rescuer_sp = SpAccountId32::from_ss58check(&rescuer_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid rescuer address: {e:?}"))
-			})?;
-			let rescuer_bytes: [u8; 32] = *rescuer_sp.as_ref();
-			let rescuer_id = subxt::ext::subxt_core::utils::AccountId32::from(rescuer_bytes);
+			let lost_id = resolve_to_subxt_account_id(&lost)?;
+			let rescuer_id = resolve_to_subxt_account_id(&rescuer)?;
 			let call = quantus_subxt::api::tx().recovery().vouch_recovery(
 				subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id),
 				subxt::ext::subxt_core::utils::MultiAddress::Id(rescuer_id),
@@ -244,12 +231,7 @@ pub async fn handle_recovery_command(
 		RecoveryCommands::Claim { rescuer, lost, password, password_file } => {
 			let rescuer_key =
 				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
-			let lost_resolved = resolve_address(&lost)?;
-			let lost_sp = SpAccountId32::from_ss58check(&lost_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid lost address: {e:?}"))
-			})?;
-			let lost_bytes: [u8; 32] = *lost_sp.as_ref();
-			let lost_id = subxt::ext::subxt_core::utils::AccountId32::from(lost_bytes);
+			let lost_id = resolve_to_subxt_account_id(&lost)?;
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.claim_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
@@ -286,32 +268,14 @@ pub async fn handle_recovery_command(
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 
-			let lost_resolved = resolve_address(&lost)?;
-			let dest_resolved = resolve_address(&dest)?;
+			let (lost_resolved, lost_id) = resolve_address_with_subxt_account_id(&lost)?;
+			let (dest_resolved, dest_id) = resolve_address_with_subxt_account_id(&dest)?;
 			log_print!("🆘 Lost input: {} -> {}", lost, lost_resolved);
 			log_print!("🎯 Dest input: {} -> {}", dest, dest_resolved);
 			log_print!("🛟 keep_alive: {}", keep_alive);
 
-			let lost_sp = SpAccountId32::from_ss58check(&lost_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid lost address: {e:?}"))
-			})?;
-			let dest_sp = SpAccountId32::from_ss58check(&dest_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid dest address: {e:?}"))
-			})?;
-
-			let lost_id_bytes: [u8; 32] = *lost_sp.as_ref();
-			let dest_id_bytes: [u8; 32] = *dest_sp.as_ref();
-			let lost_id = subxt::ext::subxt_core::utils::AccountId32::from(lost_id_bytes);
-			let dest_id = subxt::ext::subxt_core::utils::AccountId32::from(dest_id_bytes);
-
 			// Check proxy mapping for rescuer
-			let rescuer_sp = SpAccountId32::from_ss58check(&rescuer_addr).map_err(|e| {
-				crate::error::QuantusError::Generic(format!(
-					"Invalid rescuer address from wallet: {e:?}"
-				))
-			})?;
-			let rescuer_id_bytes: [u8; 32] = *rescuer_sp.as_ref();
-			let rescuer_id = subxt::ext::subxt_core::utils::AccountId32::from(rescuer_id_bytes);
+			let rescuer_id = resolve_to_subxt_account_id(&rescuer_addr)?;
 			let proxy_storage = quantus_subxt::api::storage().recovery().proxy(rescuer_id);
 			let latest = quantus_client.get_latest_block().await?;
 			let proxy_result =
@@ -404,24 +368,12 @@ pub async fn handle_recovery_command(
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 
-			let lost_resolved = resolve_address(&lost)?;
-			let dest_resolved = resolve_address(&dest)?;
+			let (lost_resolved, lost_id) = resolve_address_with_subxt_account_id(&lost)?;
+			let (dest_resolved, dest_id) = resolve_address_with_subxt_account_id(&dest)?;
 			log_print!("🆘 Lost input: {} -> {}", lost, lost_resolved);
 			log_print!("🎯 Dest input: {} -> {}", dest, dest_resolved);
 			log_print!("💵 amount_quan: {} (QUAN_DECIMALS={})", amount_quan, QUAN_DECIMALS);
 			log_print!("🛟 keep_alive: {}", keep_alive);
-
-			let lost_sp = SpAccountId32::from_ss58check(&lost_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid lost address: {e:?}"))
-			})?;
-			let dest_sp = SpAccountId32::from_ss58check(&dest_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid dest address: {e:?}"))
-			})?;
-
-			let lost_id_bytes: [u8; 32] = *lost_sp.as_ref();
-			let dest_id_bytes: [u8; 32] = *dest_sp.as_ref();
-			let lost_id = subxt::ext::subxt_core::utils::AccountId32::from(lost_id_bytes);
-			let dest_id = subxt::ext::subxt_core::utils::AccountId32::from(dest_id_bytes);
 
 			let amount_plancks = amount_quan.saturating_mul(QUAN_DECIMALS);
 			log_print!("💵 amount_plancks: {}", amount_plancks);
@@ -499,12 +451,7 @@ pub async fn handle_recovery_command(
 
 		RecoveryCommands::Close { lost, rescuer, password, password_file } => {
 			let lost_key = crate::wallet::load_keypair_from_wallet(&lost, password, password_file)?;
-			let rescuer_resolved = resolve_address(&rescuer)?;
-			let rescuer_sp = SpAccountId32::from_ss58check(&rescuer_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid rescuer address: {e:?}"))
-			})?;
-			let rescuer_bytes: [u8; 32] = *rescuer_sp.as_ref();
-			let rescuer_id = subxt::ext::subxt_core::utils::AccountId32::from(rescuer_bytes);
+			let rescuer_id = resolve_to_subxt_account_id(&rescuer)?;
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.close_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(rescuer_id));
@@ -529,12 +476,7 @@ pub async fn handle_recovery_command(
 		RecoveryCommands::CancelProxy { rescuer, lost, password, password_file } => {
 			let rescuer_key =
 				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
-			let lost_resolved = resolve_address(&lost)?;
-			let lost_sp = SpAccountId32::from_ss58check(&lost_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid lost address: {e:?}"))
-			})?;
-			let lost_bytes: [u8; 32] = *lost_sp.as_ref();
-			let lost_id = subxt::ext::subxt_core::utils::AccountId32::from(lost_bytes);
+			let lost_id = resolve_to_subxt_account_id(&lost)?;
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.cancel_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
@@ -556,18 +498,8 @@ pub async fn handle_recovery_command(
 		},
 
 		RecoveryCommands::Active { lost, rescuer } => {
-			let lost_resolved = resolve_address(&lost)?;
-			let rescuer_resolved = resolve_address(&rescuer)?;
-			let lost_sp = SpAccountId32::from_ss58check(&lost_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid lost address: {e:?}"))
-			})?;
-			let lost_bytes: [u8; 32] = *lost_sp.as_ref();
-			let lost_id = subxt::ext::subxt_core::utils::AccountId32::from(lost_bytes);
-			let rescuer_sp = SpAccountId32::from_ss58check(&rescuer_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid rescuer address: {e:?}"))
-			})?;
-			let rescuer_bytes: [u8; 32] = *rescuer_sp.as_ref();
-			let rescuer_id = subxt::ext::subxt_core::utils::AccountId32::from(rescuer_bytes);
+			let lost_id = resolve_to_subxt_account_id(&lost)?;
+			let rescuer_id = resolve_to_subxt_account_id(&rescuer)?;
 			let storage_addr =
 				quantus_subxt::api::storage().recovery().active_recoveries(lost_id, rescuer_id);
 			let latest = quantus_client.get_latest_block().await?;
@@ -595,12 +527,7 @@ pub async fn handle_recovery_command(
 		},
 
 		RecoveryCommands::ProxyOf { rescuer } => {
-			let rescuer_resolved = resolve_address(&rescuer)?;
-			let rescuer_sp = SpAccountId32::from_ss58check(&rescuer_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid rescuer address: {e:?}"))
-			})?;
-			let rescuer_bytes: [u8; 32] = *rescuer_sp.as_ref();
-			let rescuer_id = subxt::ext::subxt_core::utils::AccountId32::from(rescuer_bytes);
+			let rescuer_id = resolve_to_subxt_account_id(&rescuer)?;
 			let storage_addr = quantus_subxt::api::storage().recovery().proxy(rescuer_id);
 			let latest = quantus_client.get_latest_block().await?;
 			let value = quantus_client
@@ -620,12 +547,7 @@ pub async fn handle_recovery_command(
 		},
 
 		RecoveryCommands::Config { account } => {
-			let account_resolved = resolve_address(&account)?;
-			let account_sp = SpAccountId32::from_ss58check(&account_resolved).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Invalid account address: {e:?}"))
-			})?;
-			let account_bytes: [u8; 32] = *account_sp.as_ref();
-			let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+			let account_id = resolve_to_subxt_account_id(&account)?;
 			let storage_addr = quantus_subxt::api::storage().recovery().recoverable(account_id);
 			let latest = quantus_client.get_latest_block().await?;
 			let value = quantus_client

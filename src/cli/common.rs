@@ -8,6 +8,8 @@ use subxt::{
 	OnlineClient,
 };
 
+pub type SubxtAccountId32 = subxt::ext::subxt_core::utils::AccountId32;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ExecutionMode {
 	pub finalized: bool,
@@ -81,22 +83,26 @@ fn describe_watched_tx_event(
 	target_stage: TransactionStage,
 ) -> Result<WatchDecision> {
 	match event {
-		WatchedTxEvent::Validated |
-		WatchedTxEvent::Broadcasted |
-		WatchedTxEvent::NoLongerInBestBlock => Ok(WatchDecision::Continue),
-		WatchedTxEvent::InBestBlock =>
+		WatchedTxEvent::Validated
+		| WatchedTxEvent::Broadcasted
+		| WatchedTxEvent::NoLongerInBestBlock => Ok(WatchDecision::Continue),
+		WatchedTxEvent::InBestBlock => {
 			if target_stage == TransactionStage::Finalized {
 				Ok(WatchDecision::WaitForFinalization)
 			} else {
 				Ok(WatchDecision::Success)
-			},
+			}
+		},
 		WatchedTxEvent::InFinalizedBlock => Ok(WatchDecision::Success),
-		WatchedTxEvent::Error(message) =>
-			Err(crate::error::QuantusError::NetworkError(format!("Transaction error: {message}"))),
-		WatchedTxEvent::Invalid(message) =>
-			Err(crate::error::QuantusError::NetworkError(format!("Transaction invalid: {message}"))),
-		WatchedTxEvent::Dropped(message) =>
-			Err(crate::error::QuantusError::NetworkError(format!("Transaction dropped: {message}"))),
+		WatchedTxEvent::Error(message) => {
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction error: {message}")))
+		},
+		WatchedTxEvent::Invalid(message) => {
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction invalid: {message}")))
+		},
+		WatchedTxEvent::Dropped(message) => {
+			Err(crate::error::QuantusError::NetworkError(format!("Transaction dropped: {message}")))
+		},
 		WatchedTxEvent::StreamError(message) => Err(crate::error::QuantusError::NetworkError(
 			format!("Transaction status stream error: {message}"),
 		)),
@@ -112,6 +118,127 @@ fn should_check_execution_success(
 	already_checked_for: Option<&subxt::utils::H256>,
 ) -> bool {
 	already_checked_for != Some(block_hash)
+}
+
+type TxWatchFlow = std::ops::ControlFlow<Result<()>, ()>;
+
+fn update_waiting_spinner(
+	spinner: Option<&indicatif::ProgressBar>,
+	target_stage: TransactionStage,
+	elapsed_secs: u64,
+) {
+	if let Some(pb) = spinner {
+		if target_stage == TransactionStage::Finalized {
+			pb.set_message(format!("Waiting for finalized block... ({}s)", elapsed_secs));
+		} else {
+			pb.set_message(format!("Waiting for block inclusion... ({}s)", elapsed_secs));
+		}
+	}
+}
+
+fn finish_failed_execution(
+	spinner: Option<&indicatif::ProgressBar>,
+	message: &str,
+	elapsed_secs: u64,
+) {
+	if let Some(pb) = spinner {
+		pb.finish_with_message(format!("{message} ({}s)", elapsed_secs));
+	}
+}
+
+async fn ensure_execution_success_for_block(
+	client: &OnlineClient<ChainConfig>,
+	block_hash: &subxt::utils::H256,
+	tx_hash: &subxt::utils::H256,
+	execution_success_checked_for: &mut Option<subxt::utils::H256>,
+) -> Result<()> {
+	if should_check_execution_success(block_hash, execution_success_checked_for.as_ref()) {
+		check_execution_success(client, block_hash, tx_hash).await?;
+		*execution_success_checked_for = Some(*block_hash);
+	}
+	Ok(())
+}
+
+async fn handle_in_best_block(
+	client: &OnlineClient<ChainConfig>,
+	tx_hash: &subxt::utils::H256,
+	block_hash: subxt::utils::H256,
+	target_stage: TransactionStage,
+	execution_success_checked_for: &mut Option<subxt::utils::H256>,
+	spinner: Option<&indicatif::ProgressBar>,
+	elapsed_secs: u64,
+) -> TxWatchFlow {
+	crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
+	if let Err(err) = ensure_execution_success_for_block(
+		client,
+		&block_hash,
+		tx_hash,
+		execution_success_checked_for,
+	)
+	.await
+	{
+		finish_failed_execution(spinner, "❌ Transaction failed in block", elapsed_secs);
+		return std::ops::ControlFlow::Break(Err(err));
+	}
+
+	match describe_watched_tx_event(WatchedTxEvent::InBestBlock, target_stage) {
+		Ok(WatchDecision::WaitForFinalization) => {
+			if let Some(pb) = spinner {
+				pb.set_message(format!(
+					"In best block, waiting for finalization... ({}s)",
+					elapsed_secs
+				));
+			}
+			std::ops::ControlFlow::Continue(())
+		},
+		Ok(WatchDecision::Success) => {
+			if let Some(pb) = spinner {
+				pb.finish_with_message(format!(
+					"✅ Transaction included in block! ({}s)",
+					elapsed_secs
+				));
+			}
+			std::ops::ControlFlow::Break(Ok(()))
+		},
+		Ok(WatchDecision::Continue) => std::ops::ControlFlow::Continue(()),
+		Err(err) => std::ops::ControlFlow::Break(Err(err)),
+	}
+}
+
+async fn handle_in_finalized_block(
+	client: &OnlineClient<ChainConfig>,
+	tx_hash: &subxt::utils::H256,
+	block_hash: subxt::utils::H256,
+	target_stage: TransactionStage,
+	execution_success_checked_for: &mut Option<subxt::utils::H256>,
+	spinner: Option<&indicatif::ProgressBar>,
+	elapsed_secs: u64,
+) -> TxWatchFlow {
+	crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
+	if let Err(err) = ensure_execution_success_for_block(
+		client,
+		&block_hash,
+		tx_hash,
+		execution_success_checked_for,
+	)
+	.await
+	{
+		finish_failed_execution(spinner, "❌ Transaction failed in finalized block", elapsed_secs);
+		return std::ops::ControlFlow::Break(Err(err));
+	}
+
+	match describe_watched_tx_event(WatchedTxEvent::InFinalizedBlock, target_stage) {
+		Ok(WatchDecision::Success) => {
+			if let Some(pb) = spinner {
+				pb.finish_with_message(format!("✅ Transaction finalized! ({}s)", elapsed_secs));
+			}
+			std::ops::ControlFlow::Break(Ok(()))
+		},
+		Ok(WatchDecision::Continue) | Ok(WatchDecision::WaitForFinalization) => {
+			std::ops::ControlFlow::Continue(())
+		},
+		Err(err) => std::ops::ControlFlow::Break(Err(err)),
+	}
 }
 
 /// Resolve address - if it's a wallet name, return the wallet's address
@@ -138,6 +265,27 @@ pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
 	Err(crate::error::QuantusError::Generic(format!(
 		"Invalid destination: '{address_or_wallet_name}' is neither a valid SS58 address nor a known wallet name"
 	)))
+}
+
+/// Resolve a wallet name or SS58 address and convert it into the AccountId32 type used by SubXT.
+pub fn resolve_to_subxt_account_id(address_or_wallet_name: &str) -> Result<SubxtAccountId32> {
+	let (_, account_id) = resolve_address_with_subxt_account_id(address_or_wallet_name)?;
+	Ok(account_id)
+}
+
+/// Resolve a wallet name or SS58 address and return both the SS58 string and SubXT account id.
+pub fn resolve_address_with_subxt_account_id(
+	address_or_wallet_name: &str,
+) -> Result<(String, SubxtAccountId32)> {
+	let resolved_address = resolve_address(address_or_wallet_name)?;
+	let (account_id_sp, _) =
+		AccountId32::from_ss58check_with_version(&resolved_address).map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Invalid destination address {resolved_address}: {e:?}"
+			))
+		})?;
+	let account_id_bytes: [u8; 32] = *account_id_sp.as_ref();
+	Ok((resolved_address, SubxtAccountId32::from(account_id_bytes)))
 }
 
 /// Get fresh nonce for account from the latest block using existing QuantusClient
@@ -345,11 +493,11 @@ where
 					let error_msg = format!("{e:?}");
 
 					// Check if it's a retryable error
-					let is_retryable = error_msg.contains("Priority is too low") ||
-						error_msg.contains("Transaction is outdated") ||
-						error_msg.contains("Transaction is temporarily banned") ||
-						error_msg.contains("Transaction has a bad signature") ||
-						error_msg.contains("Invalid Transaction");
+					let is_retryable = error_msg.contains("Priority is too low")
+						|| error_msg.contains("Transaction is outdated")
+						|| error_msg.contains("Transaction is temporarily banned")
+						|| error_msg.contains("Transaction has a bad signature")
+						|| error_msg.contains("Invalid Transaction");
 
 					if is_retryable && attempt < 5 {
 						log_verbose!(
@@ -531,82 +679,36 @@ async fn wait_tx_inclusion(
 					},
 					TxStatus::InBestBlock(tx_in_block) => {
 						let block_hash = tx_in_block.block_hash();
-						crate::log_verbose!("   Transaction included in block: {:?}", block_hash);
-						if should_check_execution_success(
-							&block_hash,
-							execution_success_checked_for.as_ref(),
-						) {
-							if let Err(err) =
-								check_execution_success(client, &block_hash, tx_hash).await
-							{
-								if let Some(pb) = spinner {
-									pb.finish_with_message(format!(
-										"❌ Transaction failed in block ({}s)",
-										elapsed_secs
-									));
-								}
-								return Err(err);
-							}
-							execution_success_checked_for = Some(block_hash);
-						}
-						match describe_watched_tx_event(WatchedTxEvent::InBestBlock, target_stage)?
+						match handle_in_best_block(
+							client,
+							tx_hash,
+							block_hash,
+							target_stage,
+							&mut execution_success_checked_for,
+							spinner.as_ref(),
+							elapsed_secs,
+						)
+						.await
 						{
-							WatchDecision::WaitForFinalization => {
-								if let Some(ref pb) = spinner {
-									pb.set_message(format!(
-										"In best block, waiting for finalization... ({}s)",
-										elapsed_secs
-									));
-								}
-								continue;
-							},
-							WatchDecision::Success => {
-								if let Some(pb) = spinner {
-									pb.finish_with_message(format!(
-										"✅ Transaction included in block! ({}s)",
-										elapsed_secs
-									));
-								}
-								return Ok(());
-							},
-							WatchDecision::Continue => continue,
+							std::ops::ControlFlow::Continue(()) => continue,
+							std::ops::ControlFlow::Break(result) => return result,
 						}
 					},
 					TxStatus::InFinalizedBlock(tx_in_block) => {
 						let block_hash = tx_in_block.block_hash();
-						crate::log_verbose!("   Transaction finalized in block: {:?}", block_hash);
-						if should_check_execution_success(
-							&block_hash,
-							execution_success_checked_for.as_ref(),
-						) {
-							if let Err(err) =
-								check_execution_success(client, &block_hash, tx_hash).await
-							{
-								if let Some(pb) = spinner {
-									pb.finish_with_message(format!(
-										"❌ Transaction failed in finalized block ({}s)",
-										elapsed_secs
-									));
-								}
-								return Err(err);
-							}
-							execution_success_checked_for = Some(block_hash);
-						}
-						match describe_watched_tx_event(
-							WatchedTxEvent::InFinalizedBlock,
+						match handle_in_finalized_block(
+							client,
+							tx_hash,
+							block_hash,
 							target_stage,
-						)? {
-							WatchDecision::Success => {
-								if let Some(pb) = spinner {
-									pb.finish_with_message(format!(
-										"✅ Transaction finalized! ({}s)",
-										elapsed_secs
-									));
-								}
-								return Ok(());
-							},
-							WatchDecision::Continue | WatchDecision::WaitForFinalization =>
-								continue,
+							&mut execution_success_checked_for,
+							spinner.as_ref(),
+							elapsed_secs,
+						)
+						.await
+						{
+							std::ops::ControlFlow::Continue(()) => continue,
+							std::ops::ControlFlow::Break(result) => return result,
 						}
 					},
 					TxStatus::Error { message } => WatchedTxEvent::Error(message),
@@ -620,19 +722,7 @@ async fn wait_tx_inclusion(
 
 		match describe_watched_tx_event(next_event, target_stage) {
 			Ok(WatchDecision::Continue) | Ok(WatchDecision::WaitForFinalization) => {
-				if let Some(ref pb) = spinner {
-					if target_stage == TransactionStage::Finalized {
-						pb.set_message(format!(
-							"Waiting for finalized block... ({}s)",
-							elapsed_secs
-						));
-					} else {
-						pb.set_message(format!(
-							"Waiting for block inclusion... ({}s)",
-							elapsed_secs
-						));
-					}
-				}
+				update_waiting_spinner(spinner.as_ref(), target_stage, elapsed_secs);
 			},
 			Ok(WatchDecision::Success) => return Ok(()),
 			Err(err) => {

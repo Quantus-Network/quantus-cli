@@ -1,11 +1,12 @@
 use crate::{
 	chain::{client::QuantusClient, quantus_subxt},
-	cli::common::resolve_address,
+	cli::common::{
+		resolve_address_with_subxt_account_id, resolve_to_subxt_account_id, SubxtAccountId32,
+	},
 	error::Result,
 	log_info, log_print, log_success, log_verbose,
 };
 use colored::Colorize;
-use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 
 /// Account balance data
 pub struct AccountBalanceData {
@@ -23,17 +24,7 @@ pub async fn get_account_data(
 
 	log_verbose!("💰 Querying balance for account: {}", account_address.bright_green());
 
-	// Decode the SS58 address into `AccountId32` (sp-core) first …
-	let (account_id_sp, _) =
-		SpAccountId32::from_ss58check_with_version(account_address).map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Invalid account address '{account_address}': {e:?}"
-			))
-		})?;
-
-	// … then convert into the `subxt` representation expected by the generated API.
-	let bytes: [u8; 32] = *account_id_sp.as_ref();
-	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(bytes);
+	let account_id = resolve_to_subxt_account_id(account_address)?;
 
 	// Build the storage key for `System::Account` and fetch (or default-init) it.
 	let storage_addr = api::storage().system().account(account_id);
@@ -239,7 +230,7 @@ pub async fn validate_and_format_amount(
 	Ok((raw_amount, formatted))
 }
 
-fn checked_add(lhs: u128, rhs: u128, context: &str) -> Result<u128> {
+pub(crate) fn checked_add(lhs: u128, rhs: u128, context: &str) -> Result<u128> {
 	lhs.checked_add(rhs).ok_or_else(|| {
 		crate::error::QuantusError::Generic(format!("Value overflow while computing {context}"))
 	})
@@ -253,19 +244,14 @@ pub(crate) fn positive_tip_amount(tip: Option<u128>) -> Option<u128> {
 	tip.filter(|tip_amount| *tip_amount > 0)
 }
 
-fn build_transfer_call(resolved_address: &str, amount: u128) -> Result<impl subxt::tx::Payload> {
-	let (to_account_id_sp, _) = SpAccountId32::from_ss58check_with_version(resolved_address)
-		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Invalid destination address: {e:?}"))
-		})?;
-
-	let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
-	let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
-
-	Ok(quantus_subxt::api::tx().balances().transfer_allow_death(
+fn build_transfer_call_for_account_id(
+	to_account_id: SubxtAccountId32,
+	amount: u128,
+) -> impl subxt::tx::Payload {
+	quantus_subxt::api::tx().balances().transfer_allow_death(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
 		amount,
-	))
+	)
 }
 
 pub(crate) fn build_batch_transfer_call(
@@ -277,15 +263,7 @@ pub(crate) fn build_batch_transfer_call(
 
 	let mut calls = Vec::with_capacity(transfers.len());
 	for (to_address, amount) in transfers {
-		let resolved_address = crate::cli::common::resolve_address(to_address)?;
-		let to_account_id_sp = SpAccountId32::from_ss58check(&resolved_address).map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!(
-				"Invalid destination address {resolved_address}: {e:?}"
-			))
-		})?;
-
-		let to_account_id_bytes: [u8; 32] = *to_account_id_sp.as_ref();
-		let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_account_id_bytes);
+		let to_account_id = resolve_to_subxt_account_id(to_address)?;
 
 		calls.push(RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
@@ -333,7 +311,106 @@ where
 	})
 }
 
-/// Transfer tokens with automatic nonce
+pub(crate) async fn ensure_balance_covers_call<Call>(
+	quantus_client: &QuantusClient,
+	keypair: &crate::wallet::QuantumKeyPair,
+	call: &Call,
+	balance: u128,
+	exact_required: u128,
+	submit_tip: Option<u128>,
+	label: &str,
+) -> Result<()>
+where
+	Call: subxt::tx::Payload,
+{
+	if balance < exact_required {
+		return Err(crate::error::QuantusError::InsufficientBalance {
+			available: balance,
+			required: exact_required,
+		});
+	}
+
+	match estimate_transaction_partial_fee(quantus_client, keypair, call, submit_tip).await {
+		Ok(estimated_fee) => {
+			let estimated_total =
+				checked_add(exact_required, estimated_fee, "required balance including fee")?;
+			if balance < estimated_total {
+				let formatted_balance = format_balance_with_symbol(quantus_client, balance).await?;
+				let formatted_needed =
+					format_balance_with_symbol(quantus_client, estimated_total).await?;
+				let formatted_fee =
+					format_balance_with_symbol(quantus_client, estimated_fee).await?;
+				if let Some(tip_amount) = submit_tip {
+					let formatted_tip =
+						format_balance_with_symbol(quantus_client, tip_amount).await?;
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Insufficient balance for {label}. Have: {formatted_balance}, Need: {formatted_needed} (tip: {formatted_tip}, estimated fee: {formatted_fee})"
+					)));
+				}
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Insufficient balance for {label}. Have: {formatted_balance}, Need: {formatted_needed} (estimated fee: {formatted_fee})"
+				)));
+			}
+
+			let formatted_estimated_fee =
+				format_balance_with_symbol(quantus_client, estimated_fee).await?;
+			log_verbose!("💸 Estimated network fee: {}", formatted_estimated_fee.bright_cyan());
+		},
+		Err(err) => {
+			if submit_tip.is_some() {
+				log_verbose!(
+					"⚠️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
+					err
+				);
+			} else {
+				log_verbose!(
+					"⚠️  Fee estimation unavailable; proceeding with exact amount check only: {}",
+					err
+				);
+			}
+		},
+	}
+
+	Ok(())
+}
+
+async fn submit_transfer_call<Call>(
+	quantus_client: &QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	transfer_call: Call,
+	submit_tip: Option<u128>,
+	nonce: Option<u32>,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<subxt::utils::H256>
+where
+	Call: subxt::tx::Payload,
+{
+	if let Some(manual_nonce) = nonce {
+		log_verbose!("🔢 Using manual nonce: {}", manual_nonce);
+		crate::cli::common::submit_transaction_with_nonce(
+			quantus_client,
+			from_keypair,
+			transfer_call,
+			submit_tip,
+			manual_nonce,
+			execution_mode,
+		)
+		.await
+	} else {
+		crate::cli::common::submit_transaction(
+			quantus_client,
+			from_keypair,
+			transfer_call,
+			submit_tip,
+			execution_mode,
+		)
+		.await
+	}
+}
+
+/// Transfer tokens with automatic nonce.
+///
+/// Pass `Some(0)` or `None` to omit a tip.
 #[allow(dead_code)] // Used by external libraries via lib.rs export
 pub async fn transfer(
 	quantus_client: &QuantusClient,
@@ -347,7 +424,9 @@ pub async fn transfer(
 		.await
 }
 
-/// Transfer tokens with manual nonce override
+/// Transfer tokens with manual nonce override.
+///
+/// Pass `Some(0)` or `None` to omit a tip.
 pub async fn transfer_with_nonce(
 	quantus_client: &QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
@@ -363,36 +442,24 @@ pub async fn transfer_with_nonce(
 	log_verbose!("   Amount: {}", amount);
 
 	// Resolve the destination address (could be wallet name or SS58 address)
-	let resolved_address = resolve_address(to_address)?;
+	let (resolved_address, to_account_id) = resolve_address_with_subxt_account_id(to_address)?;
 	log_verbose!("   Resolved to: {}", resolved_address.bright_green());
 
 	log_verbose!("✍️  Creating balance transfer extrinsic...");
 
-	let transfer_call = build_transfer_call(&resolved_address, amount)?;
+	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount);
 	let submit_tip = positive_tip_amount(tip);
 
 	// Submit the transaction with optional manual nonce
-	let tx_hash = if let Some(manual_nonce) = nonce {
-		log_verbose!("🔢 Using manual nonce: {}", manual_nonce);
-		crate::cli::common::submit_transaction_with_nonce(
-			quantus_client,
-			from_keypair,
-			transfer_call,
-			submit_tip,
-			manual_nonce,
-			execution_mode,
-		)
-		.await?
-	} else {
-		crate::cli::common::submit_transaction(
-			quantus_client,
-			from_keypair,
-			transfer_call,
-			submit_tip,
-			execution_mode,
-		)
-		.await?
-	};
+	let tx_hash = submit_transfer_call(
+		quantus_client,
+		from_keypair,
+		transfer_call,
+		submit_tip,
+		nonce,
+		execution_mode,
+	)
+	.await?;
 
 	log_verbose!("📋 Transaction submitted: {:?}", tx_hash);
 
@@ -435,6 +502,7 @@ pub(crate) async fn validate_batch_transfer_request(
 	}
 
 	for (to_address, amount) in transfers {
+		resolve_to_subxt_account_id(to_address)?;
 		log_verbose!("   To: {} Amount: {}", to_address.bright_green(), amount);
 	}
 
@@ -512,7 +580,7 @@ pub async fn handle_send_command(
 		validate_and_format_amount(&quantus_client, amount_str).await?;
 
 	// Resolve the destination address (could be wallet name or SS58 address)
-	let resolved_address = resolve_address(&to_address)?;
+	let (resolved_address, to_account_id) = resolve_address_with_subxt_account_id(&to_address)?;
 
 	log_info!("🚀 Initiating transfer of {} to {}", formatted_amount, resolved_address);
 	log_verbose!(
@@ -542,66 +610,28 @@ pub async fn handle_send_command(
 	};
 	let effective_tip = effective_tip_amount(tip_amount);
 	let submit_tip = positive_tip_amount(tip_amount);
-
 	let exact_required = checked_add(amount, effective_tip, "required send balance")?;
-	if balance < exact_required {
-		return Err(crate::error::QuantusError::InsufficientBalance {
-			available: balance,
-			required: exact_required,
-		});
-	}
-
-	let transfer_call = build_transfer_call(&resolved_address, amount)?;
-	match estimate_transaction_partial_fee(&quantus_client, &keypair, &transfer_call, submit_tip)
-		.await
-	{
-		Ok(estimated_fee) => {
-			let estimated_total =
-				checked_add(exact_required, estimated_fee, "required send balance")?;
-			if balance < estimated_total {
-				let formatted_fee =
-					format_balance_with_symbol(&quantus_client, estimated_fee).await?;
-				let formatted_required =
-					format_balance_with_symbol(&quantus_client, estimated_total).await?;
-				if let Some(tip_amount) = submit_tip {
-					let formatted_tip =
-						format_balance_with_symbol(&quantus_client, tip_amount).await?;
-					return Err(crate::error::QuantusError::Generic(format!(
-						"Insufficient balance for amount + tip + estimated fee. Have: {formatted_balance}, Need: {formatted_required} (tip: {formatted_tip}, estimated fee: {formatted_fee})"
-					)));
-				}
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Insufficient balance for amount + estimated fee. Have: {formatted_balance}, Need: {formatted_required} (estimated fee: {formatted_fee})"
-				)));
-			}
-			let formatted_estimated_fee =
-				format_balance_with_symbol(&quantus_client, estimated_fee).await?;
-			log_verbose!("💸 Estimated network fee: {}", formatted_estimated_fee.bright_cyan());
-		},
-		Err(err) =>
-			if submit_tip.is_some() {
-				log_verbose!(
-					"⚠️  Fee estimation unavailable; proceeding with exact amount+tip check only: {}",
-					err
-				);
-			} else {
-				log_verbose!(
-					"⚠️  Fee estimation unavailable; proceeding with exact amount check only: {}",
-					err
-				);
-			},
-	}
+	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount);
+	ensure_balance_covers_call(
+		&quantus_client,
+		&keypair,
+		&transfer_call,
+		balance,
+		exact_required,
+		submit_tip,
+		"send",
+	)
+	.await?;
 
 	// Create and submit transaction
 	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
 
 	// Submit transaction
-	let tx_hash = transfer_with_nonce(
+	let tx_hash = submit_transfer_call(
 		&quantus_client,
 		&keypair,
-		&resolved_address,
-		amount,
-		tip_amount,
+		transfer_call,
+		submit_tip,
 		nonce,
 		execution_mode,
 	)
