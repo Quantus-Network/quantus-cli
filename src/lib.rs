@@ -48,6 +48,22 @@ pub use wormhole_lib::{
 	ProofGenerationOutput, WormholeLibError, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
 };
 
+// Re-export wormhole on-chain helpers for SDK usage.
+// These are the on-chain side of the wormhole flow (proof aggregation, unsigned
+// `verify_aggregated_proof` submission, transfer-event parsing, leaf decoding)
+// that complement the off-chain proof-generation functions in `wormhole_lib`.
+//
+// `NativeTransferred` is the subxt-generated event type required by
+// `parse_transfer_events`; we re-export it so SDK callers don't have to reach
+// into `chain::quantus_subxt::api::wormhole::events::*`.
+pub use chain::quantus_subxt::api::wormhole::events::NativeTransferred;
+pub use cli::wormhole::{
+	aggregate_proofs, at_best_block, compute_merkle_positions, decode_full_leaf_data,
+	get_zk_merkle_proof, parse_transfer_events, read_proof_file,
+	submit_unsigned_verify_aggregated_proof, verify_aggregated_and_get_events, write_proof_file,
+	IncludedAt, TransferInfo,
+};
+
 // Re-export collect rewards library for SDK usage
 pub use collect_rewards_lib::{
 	collect_rewards, query_pending_transfers, query_pending_transfers_for_address,
