@@ -17,11 +17,15 @@ runs:
         if [ "$OK" -ne 1 ]; then echo "::error::brew install protobuf llvm failed after 3 attempts"; exit 1; fi
         curl https://sh.rustup.rs -sSf | sh -s -- -y
         brew uninstall cmake
-        brew install openssl cmake 2>&1 | sed '/already installed and up-to-date/d'; exit "${PIPESTATUS[0]:-$?}"
-        # Unconditionally install the toolchain pinned in rust-toolchain.toml
-        # (rustup >=1.28 no longer auto-installs the active toolchain, and
-        # `rustup update` only refreshes already-installed toolchains).
-        # This installs the channel + every component/target listed in the file.
+        set +e
+        brew install openssl cmake 2>&1 | sed '/already installed and up-to-date/d'
+        brew_status=${PIPESTATUS[0]}
+        set -e
+        
+        if [ "$brew_status" -ne 0 ]; then
+          exit "$brew_status"
+        fi
+        
         rustup toolchain install
         rustup target add wasm32-unknown-unknown
         rustup component add rustfmt --toolchain nightly
