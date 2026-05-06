@@ -3,12 +3,19 @@ name: Create Release Tag & Publish
 env:
   CARGO_INCREMENTAL: 0
   CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+  CARGO_NET_TIMEOUT: 60
 
 on:
   pull_request:
     types: [closed]
     branches:
       - main
+
+# Default to read-only; jobs that need to push tags or create releases
+# override this with explicit `contents: write` (see create-tag, create-github-release).
+permissions:
+  contents: read
 
 jobs:
   create-tag:
@@ -62,8 +69,7 @@ jobs:
         with:
           ref: ${{ needs.create-tag.outputs.version }}
 
-      - name: Install required components
-        run: rustup component add rustfmt --toolchain nightly
+      - uses: ./.github/actions/ubuntu
 
       - name: Install taplo
         run: cargo install taplo-cli --locked
@@ -77,6 +83,7 @@ jobs:
     name: 🛠️ Build & Test Release
     needs: [create-tag, format-checks]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: true
       matrix:
@@ -89,32 +96,22 @@ jobs:
         with:
           ref: ${{ needs.create-tag.outputs.version }}
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rust-src
+      - name: Setup Ubuntu
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/ubuntu
+
+      - name: Setup macOS
+        if: matrix.os == 'macos-latest'
+        uses: ./.github/actions/macos
 
       - name: Cache cargo registry
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
           key: ${{ runner.os }}-release-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install dependencies (Ubuntu)
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update -yqq
-          sudo apt-get install -yqq --no-install-recommends \
-            libclang-dev \
-            protobuf-compiler
-
-      - name: Install dependencies (macOS)
-        if: matrix.os == 'macos-latest'
-        run: |
-          brew install protobuf
 
       - name: Build release (all targets)
         run: cargo build --locked --release
@@ -126,13 +123,13 @@ jobs:
         run: cargo test --locked --release
 
       - name: Run clippy
-        run: cargo clippy --all-targets --locked -- -D warnings
+        run: SKIP_CIRCUIT_BUILD=1 cargo clippy --all-targets --locked -- -D warnings
 
       - name: Generate documentation
-        run: cargo doc --locked --no-deps
+        run: SKIP_CIRCUIT_BUILD=1 cargo doc --locked --no-deps
 
       - name: Check documentation
-        run: cargo doc --locked --no-deps --document-private-items
+        run: SKIP_CIRCUIT_BUILD=1 cargo doc --locked --no-deps --document-private-items
 
       - name: Build examples
         run: cargo build --examples --locked --release
@@ -141,6 +138,7 @@ jobs:
     name: 🔒 Security Audit
     needs: [create-tag, format-checks]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - name: Checkout code at tag
         uses: actions/checkout@v4
@@ -157,6 +155,7 @@ jobs:
     name: 📦 Build Binary (${{ matrix.target }})
     needs: create-tag
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -179,10 +178,29 @@ jobs:
         with:
           ref: ${{ needs.create-tag.outputs.version }}
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
+      # On Linux/macOS the composite actions install the toolchain pinned in
+      # rust-toolchain.toml plus required system dependencies. On Windows we
+      # provision the toolchain explicitly via rustup below.
+      - name: Setup Ubuntu
+        if: matrix.os == 'ubuntu-latest'
+        uses: ./.github/actions/ubuntu
+
+      - name: Setup macOS
+        if: startsWith(matrix.os, 'macos')
+        uses: ./.github/actions/macos
+
+      - name: Install Rust (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          # rust-toolchain.toml pins the channel; rustup will install it on first invocation.
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add ${{ matrix.target }}
+
+      - name: Add target (Linux/macOS)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: rustup target add ${{ matrix.target }}
 
       - name: Cache cargo registry and target
         uses: actions/cache@v4
@@ -195,16 +213,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-release-bin-${{ matrix.target }}-
 
-      - name: Install protoc
+      - name: Install protoc (Windows)
+        if: runner.os == 'Windows'
         uses: arduino/setup-protoc@v3
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Install libclang (Ubuntu)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update -yqq
-          sudo apt-get install -yqq --no-install-recommends libclang-dev
 
       - name: Set LIBCLANG_PATH (Windows)
         if: runner.os == 'Windows'
@@ -330,15 +343,10 @@ jobs:
         with:
           ref: ${{ needs.create-tag.outputs.version }}
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -yqq
-          sudo apt-get install -yqq --no-install-recommends \
-            libclang-dev \
-            protobuf-compiler
+      # `cargo publish` needs the toolchain pinned in rust-toolchain.toml to be
+      # actually installed on the runner; the composite action handles that
+      # (rustup >=1.28 no longer auto-installs the active toolchain).
+      - uses: ./.github/actions/ubuntu
 
       - name: Publish to crates.io
         run: |
