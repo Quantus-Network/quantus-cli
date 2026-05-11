@@ -96,10 +96,10 @@ pub async fn handle_high_security_command(
 			if let Some(high_security_data) = value {
 				log_success!("✅ High Security: ENABLED");
 
-				// Convert interceptor to Quantus SS58 format
-				let interceptor_ss58 = high_security_data.interceptor.to_quantus_ss58();
+				// Convert guardian to Quantus SS58 format
+				let guardian_ss58 = high_security_data.guardian.to_quantus_ss58();
 
-				log_print!("🛡️  Guardian/Interceptor: {}", interceptor_ss58.bright_green());
+				log_print!("🛡️  Guardian: {}", guardian_ss58.bright_green());
 
 				// Format delay display
 				match high_security_data.delay {
@@ -197,37 +197,12 @@ pub async fn handle_high_security_command(
 			// Convert guardian to Quantus SS58 format
 			let guardian_ss58 = guardian_account.to_quantus_ss58();
 
-			// Query storage for entrusted accounts
-			let storage_addr = quantus_subxt::api::storage()
-				.reversible_transfers()
-				.interceptor_index(guardian_account);
-			let latest = quantus_client.get_latest_block().await?;
-			let value = quantus_client
-				.client()
-				.storage()
-				.at(latest)
-				.fetch(&storage_addr)
-				.await
-				.map_err(|e| {
-					crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
-				})?;
-
 			log_print!("🛡️  Guardian: {}", guardian_ss58.bright_cyan());
 
-			if let Some(entrusted_accounts) = value {
-				if entrusted_accounts.0.is_empty() {
-					log_print!("📋 No entrusted accounts found.");
-				} else {
-					log_success!("✅ Found {} entrusted account(s):", entrusted_accounts.0.len());
-
-					for (index, account_id) in entrusted_accounts.0.iter().enumerate() {
-						let account_ss58 = account_id.to_quantus_ss58();
-						log_print!("  {}. {}", index + 1, account_ss58.bright_green());
-					}
-				}
-			} else {
-				log_print!("📋 No entrusted accounts found.");
-			}
+			// Note: The guardian_index/interceptor_index storage has been removed from the chain.
+			// This functionality is no longer available.
+			log_print!("⚠️  This feature is no longer supported by the chain.");
+			log_print!("💡 The guardian index storage has been removed from the runtime.");
 
 			Ok(())
 		},

@@ -6,7 +6,7 @@ pub mod api {
 	mod root_mod {
 		pub use super::*;
 	}
-	pub static PALLETS: [&str; 20usize] = [
+	pub static PALLETS: [&str; 21usize] = [
 		"System",
 		"Timestamp",
 		"Balances",
@@ -27,8 +27,9 @@ pub mod api {
 		"AssetsHolder",
 		"Multisig",
 		"Wormhole",
+		"ZkTree",
 	];
-	pub static RUNTIME_APIS: [&str; 11usize] = [
+	pub static RUNTIME_APIS: [&str; 12usize] = [
 		"Core",
 		"Metadata",
 		"BlockBuilder",
@@ -36,6 +37,7 @@ pub mod api {
 		"OffchainWorkerApi",
 		"SessionKeys",
 		"QPoWApi",
+		"ZkTreeApi",
 		"AccountNonceApi",
 		"TransactionPaymentApi",
 		"TransactionPaymentCallApi",
@@ -88,6 +90,9 @@ pub mod api {
 			}
 			pub fn q_po_w_api(&self) -> q_po_w_api::QPoWApi {
 				q_po_w_api::QPoWApi
+			}
+			pub fn zk_tree_api(&self) -> zk_tree_api::ZkTreeApi {
+				zk_tree_api::ZkTreeApi
 			}
 			pub fn account_nonce_api(&self) -> account_nonce_api::AccountNonceApi {
 				account_nonce_api::AccountNonceApi
@@ -142,10 +147,9 @@ pub mod api {
 						"execute_block",
 						types::ExecuteBlock { block },
 						[
-							81u8, 130u8, 143u8, 72u8, 156u8, 15u8, 28u8, 87u8, 117u8, 10u8, 192u8,
-							249u8, 117u8, 214u8, 184u8, 13u8, 148u8, 224u8, 167u8, 170u8, 101u8,
-							194u8, 229u8, 140u8, 199u8, 115u8, 73u8, 99u8, 183u8, 205u8, 98u8,
-							33u8,
+							180u8, 202u8, 143u8, 166u8, 125u8, 9u8, 195u8, 179u8, 198u8, 129u8,
+							73u8, 45u8, 225u8, 244u8, 234u8, 234u8, 177u8, 61u8, 241u8, 26u8, 75u8,
+							53u8, 218u8, 66u8, 56u8, 46u8, 81u8, 29u8, 120u8, 51u8, 249u8, 42u8,
 						],
 					)
 				}
@@ -162,9 +166,9 @@ pub mod api {
 						"initialize_block",
 						types::InitializeBlock { header },
 						[
-							112u8, 139u8, 92u8, 30u8, 37u8, 99u8, 47u8, 83u8, 221u8, 31u8, 204u8,
-							129u8, 102u8, 92u8, 144u8, 80u8, 3u8, 98u8, 157u8, 5u8, 20u8, 31u8,
-							110u8, 105u8, 86u8, 91u8, 173u8, 19u8, 140u8, 246u8, 60u8, 223u8,
+							147u8, 82u8, 214u8, 164u8, 66u8, 79u8, 193u8, 216u8, 89u8, 29u8, 83u8,
+							182u8, 99u8, 81u8, 244u8, 247u8, 88u8, 158u8, 251u8, 224u8, 6u8, 76u8,
+							247u8, 87u8, 83u8, 98u8, 177u8, 188u8, 190u8, 219u8, 179u8, 107u8,
 						],
 					)
 				}
@@ -409,9 +413,9 @@ pub mod api {
 						"finalize_block",
 						types::FinalizeBlock {},
 						[
-							135u8, 81u8, 28u8, 123u8, 19u8, 171u8, 129u8, 82u8, 85u8, 96u8, 238u8,
-							155u8, 211u8, 153u8, 243u8, 31u8, 189u8, 82u8, 91u8, 225u8, 78u8, 48u8,
-							241u8, 236u8, 143u8, 65u8, 91u8, 167u8, 114u8, 146u8, 31u8, 197u8,
+							183u8, 30u8, 223u8, 196u8, 0u8, 182u8, 94u8, 4u8, 106u8, 92u8, 190u8,
+							77u8, 139u8, 95u8, 162u8, 171u8, 99u8, 168u8, 70u8, 165u8, 175u8,
+							228u8, 97u8, 27u8, 25u8, 141u8, 244u8, 217u8, 5u8, 95u8, 49u8, 12u8,
 						],
 					)
 				}
@@ -449,10 +453,10 @@ pub mod api {
 						"check_inherents",
 						types::CheckInherents { block, data },
 						[
-							44u8, 230u8, 134u8, 154u8, 73u8, 173u8, 160u8, 231u8, 223u8, 148u8,
-							247u8, 104u8, 214u8, 168u8, 43u8, 202u8, 204u8, 14u8, 148u8, 154u8,
-							9u8, 103u8, 239u8, 45u8, 186u8, 21u8, 97u8, 136u8, 200u8, 108u8, 205u8,
-							167u8,
+							137u8, 14u8, 89u8, 87u8, 225u8, 80u8, 136u8, 255u8, 242u8, 41u8, 90u8,
+							91u8, 140u8, 192u8, 112u8, 230u8, 46u8, 19u8, 149u8, 104u8, 153u8,
+							122u8, 92u8, 215u8, 161u8, 88u8, 142u8, 248u8, 156u8, 159u8, 203u8,
+							132u8,
 						],
 					)
 				}
@@ -633,10 +637,9 @@ pub mod api {
 						"offchain_worker",
 						types::OffchainWorker { header },
 						[
-							131u8, 199u8, 206u8, 86u8, 209u8, 109u8, 229u8, 152u8, 235u8, 155u8,
-							35u8, 252u8, 70u8, 180u8, 47u8, 173u8, 84u8, 182u8, 176u8, 164u8,
-							107u8, 88u8, 249u8, 181u8, 85u8, 174u8, 240u8, 226u8, 254u8, 189u8,
-							167u8, 155u8,
+							143u8, 60u8, 69u8, 66u8, 143u8, 216u8, 150u8, 58u8, 130u8, 32u8, 160u8,
+							205u8, 92u8, 9u8, 114u8, 94u8, 74u8, 160u8, 105u8, 199u8, 246u8, 174u8,
+							187u8, 111u8, 225u8, 121u8, 82u8, 29u8, 225u8, 115u8, 119u8, 94u8,
 						],
 					)
 				}
@@ -1177,6 +1180,175 @@ pub mod api {
 				}
 			}
 		}
+		pub mod zk_tree_api {
+			use super::{root_mod, runtime_types};
+			#[doc = " Runtime API for the ZK Tree pallet."]
+			#[doc = ""]
+			#[doc = " Provides methods to query the ZK Merkle tree state and generate proofs."]
+			pub struct ZkTreeApi;
+			impl ZkTreeApi {
+				#[doc = " Get the current root hash of the ZK tree."]
+				pub fn get_root(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetRoot,
+					types::get_root::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_root",
+						types::GetRoot {},
+						[
+							198u8, 156u8, 112u8, 8u8, 86u8, 226u8, 81u8, 137u8, 207u8, 161u8,
+							181u8, 99u8, 42u8, 221u8, 134u8, 50u8, 205u8, 191u8, 124u8, 165u8,
+							174u8, 99u8, 193u8, 28u8, 46u8, 125u8, 2u8, 117u8, 173u8, 187u8, 243u8,
+							73u8,
+						],
+					)
+				}
+				#[doc = " Get the current number of leaves in the tree."]
+				pub fn get_leaf_count(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetLeafCount,
+					types::get_leaf_count::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_leaf_count",
+						types::GetLeafCount {},
+						[
+							1u8, 246u8, 191u8, 192u8, 156u8, 247u8, 209u8, 87u8, 187u8, 48u8, 98u8,
+							144u8, 34u8, 200u8, 186u8, 202u8, 176u8, 64u8, 93u8, 165u8, 103u8,
+							231u8, 77u8, 57u8, 52u8, 14u8, 213u8, 197u8, 118u8, 137u8, 64u8, 193u8,
+						],
+					)
+				}
+				#[doc = " Get the current depth of the tree."]
+				pub fn get_depth(
+					&self,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetDepth,
+					types::get_depth::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_depth",
+						types::GetDepth {},
+						[
+							251u8, 48u8, 136u8, 161u8, 26u8, 3u8, 205u8, 80u8, 135u8, 48u8, 176u8,
+							105u8, 254u8, 86u8, 79u8, 57u8, 70u8, 227u8, 26u8, 48u8, 228u8, 203u8,
+							109u8, 59u8, 3u8, 204u8, 30u8, 40u8, 113u8, 62u8, 123u8, 47u8,
+						],
+					)
+				}
+				#[doc = " Get a Merkle proof for a leaf at the given index."]
+				#[doc = ""]
+				#[doc = " Returns `None` if the leaf index is out of bounds."]
+				pub fn get_merkle_proof(
+					&self,
+					leaf_index: types::get_merkle_proof::LeafIndex,
+				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
+					types::GetMerkleProof,
+					types::get_merkle_proof::output::Output,
+				> {
+					::subxt::ext::subxt_core::runtime_api::payload::StaticPayload::new_static(
+						"ZkTreeApi",
+						"get_merkle_proof",
+						types::GetMerkleProof { leaf_index },
+						[
+							74u8, 206u8, 166u8, 44u8, 235u8, 100u8, 174u8, 217u8, 16u8, 167u8,
+							180u8, 174u8, 192u8, 121u8, 153u8, 163u8, 204u8, 104u8, 52u8, 198u8,
+							44u8, 180u8, 144u8, 37u8, 216u8, 58u8, 175u8, 36u8, 50u8, 214u8, 66u8,
+							131u8,
+						],
+					)
+				}
+			}
+			pub mod types {
+				use super::runtime_types;
+				pub mod get_root {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = [::core::primitive::u8; 32usize];
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetRoot {}
+				pub mod get_leaf_count {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u64;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetLeafCount {}
+				pub mod get_depth {
+					use super::runtime_types;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output = ::core::primitive::u8;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetDepth {}
+				pub mod get_merkle_proof {
+					use super::runtime_types;
+					pub type LeafIndex = ::core::primitive::u64;
+					pub mod output {
+						use super::runtime_types;
+						pub type Output =
+							::core::option::Option<runtime_types::pallet_zk_tree::ZkMerkleProofRpc>;
+					}
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub struct GetMerkleProof {
+					pub leaf_index: get_merkle_proof::LeafIndex,
+				}
+			}
+		}
 		pub mod account_nonce_api {
 			use super::{root_mod, runtime_types};
 			#[doc = " The API to query account nonce."]
@@ -1431,10 +1603,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							251u8, 117u8, 187u8, 14u8, 196u8, 176u8, 208u8, 219u8, 61u8, 234u8,
-							23u8, 241u8, 174u8, 156u8, 167u8, 160u8, 89u8, 42u8, 178u8, 155u8,
-							190u8, 179u8, 124u8, 114u8, 251u8, 186u8, 67u8, 205u8, 239u8, 51u8,
-							177u8, 90u8,
+							90u8, 202u8, 9u8, 88u8, 111u8, 175u8, 220u8, 96u8, 150u8, 13u8, 71u8,
+							123u8, 120u8, 157u8, 193u8, 172u8, 169u8, 180u8, 196u8, 6u8, 184u8,
+							18u8, 24u8, 97u8, 141u8, 50u8, 253u8, 167u8, 244u8, 99u8, 102u8, 235u8,
 						],
 					)
 				}
@@ -1452,10 +1623,10 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							213u8, 155u8, 136u8, 5u8, 157u8, 246u8, 224u8, 16u8, 227u8, 103u8,
-							222u8, 116u8, 172u8, 213u8, 203u8, 43u8, 153u8, 98u8, 75u8, 158u8,
-							131u8, 22u8, 186u8, 186u8, 116u8, 25u8, 242u8, 159u8, 130u8, 122u8,
-							152u8, 125u8,
+							248u8, 32u8, 253u8, 238u8, 202u8, 178u8, 245u8, 211u8, 219u8, 2u8,
+							220u8, 116u8, 141u8, 73u8, 22u8, 47u8, 212u8, 17u8, 197u8, 149u8,
+							250u8, 160u8, 205u8, 101u8, 50u8, 121u8, 214u8, 31u8, 8u8, 161u8, 32u8,
+							91u8,
 						],
 					)
 				}
@@ -1885,6 +2056,9 @@ pub mod api {
 		pub fn wormhole(&self) -> wormhole::storage::StorageApi {
 			wormhole::storage::StorageApi
 		}
+		pub fn zk_tree(&self) -> zk_tree::storage::StorageApi {
+			zk_tree::storage::StorageApi
+		}
 	}
 	pub struct TransactionApi;
 	impl TransactionApi {
@@ -1952,9 +2126,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				95u8, 161u8, 29u8, 63u8, 6u8, 191u8, 169u8, 252u8, 9u8, 18u8, 126u8, 99u8, 29u8,
-				6u8, 27u8, 29u8, 251u8, 189u8, 252u8, 166u8, 35u8, 141u8, 155u8, 35u8, 238u8, 85u8,
-				244u8, 246u8, 49u8, 113u8, 167u8, 219u8,
+				255u8, 61u8, 191u8, 19u8, 68u8, 62u8, 55u8, 220u8, 177u8, 8u8, 226u8, 67u8, 247u8,
+				83u8, 181u8, 58u8, 216u8, 185u8, 27u8, 97u8, 75u8, 221u8, 175u8, 233u8, 13u8,
+				247u8, 43u8, 141u8, 205u8, 39u8, 225u8, 157u8,
 			]
 	}
 	pub mod system {
@@ -2695,6 +2869,10 @@ pub mod api {
 					use super::runtime_types;
 					pub type Digest = runtime_types::sp_runtime::generic::digest::Digest;
 				}
+				pub mod zk_tree_root {
+					use super::runtime_types;
+					pub type ZkTreeRoot = ::subxt::ext::subxt_core::utils::H256;
+				}
 				pub mod events {
 					use super::runtime_types;
 					pub type Events = ::subxt::ext::subxt_core::alloc::vec::Vec<
@@ -3032,6 +3210,31 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = " ZK tree root for the current block."]
+				#[doc = ""]
+				#[doc = " Set by pallet-zk-tree during block finalization. This is included in the"]
+				#[doc = " block header as a dedicated field (not in digest) to ensure a fixed offset"]
+				#[doc = " for ZK circuit verification."]
+				pub fn zk_tree_root(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::zk_tree_root::ZkTreeRoot,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"System",
+						"ZkTreeRoot",
+						(),
+						[
+							20u8, 224u8, 59u8, 4u8, 237u8, 141u8, 176u8, 61u8, 156u8, 45u8, 84u8,
+							60u8, 215u8, 14u8, 69u8, 234u8, 53u8, 157u8, 52u8, 242u8, 67u8, 227u8,
+							117u8, 93u8, 77u8, 5u8, 210u8, 55u8, 12u8, 170u8, 57u8, 161u8,
+						],
+					)
+				}
 				#[doc = " Events deposited for the current block."]
 				#[doc = ""]
 				#[doc = " NOTE: The item is unbound and should therefore never be read on chain."]
@@ -3053,10 +3256,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							114u8, 203u8, 75u8, 252u8, 183u8, 122u8, 99u8, 127u8, 226u8, 41u8,
-							125u8, 202u8, 177u8, 177u8, 136u8, 66u8, 221u8, 204u8, 240u8, 189u8,
-							146u8, 54u8, 190u8, 211u8, 240u8, 69u8, 233u8, 62u8, 78u8, 177u8, 97u8,
-							8u8,
+							79u8, 108u8, 22u8, 139u8, 89u8, 135u8, 213u8, 82u8, 213u8, 83u8, 64u8,
+							94u8, 29u8, 221u8, 126u8, 130u8, 81u8, 75u8, 93u8, 129u8, 131u8, 82u8,
+							61u8, 187u8, 4u8, 106u8, 46u8, 54u8, 179u8, 195u8, 20u8, 71u8,
 						],
 					)
 				}
@@ -5558,14 +5760,34 @@ pub mod api {
 						],
 					)
 				}
-				pub fn difficulty_adjust_percent_clamp(
+				#[doc = " Maximum percentage increase in difficulty per block (e.g., 3% = 3/100)"]
+				#[doc = " Used when blocks are faster than target (difficulty needs to increase)"]
+				pub fn difficulty_increase_clamp(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
 					runtime_types::sp_arithmetic::fixed_point::FixedU128,
 				> {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"QPoW",
-						"DifficultyAdjustPercentClamp",
+						"DifficultyIncreaseClamp",
+						[
+							62u8, 145u8, 102u8, 227u8, 159u8, 92u8, 27u8, 54u8, 159u8, 228u8,
+							193u8, 99u8, 75u8, 196u8, 26u8, 250u8, 229u8, 230u8, 88u8, 109u8,
+							246u8, 100u8, 152u8, 158u8, 14u8, 25u8, 224u8, 173u8, 224u8, 41u8,
+							105u8, 231u8,
+						],
+					)
+				}
+				#[doc = " Maximum percentage decrease in difficulty per block (e.g., 10% = 10/100)"]
+				#[doc = " Used when blocks are slower than target (difficulty needs to decrease)"]
+				pub fn difficulty_decrease_clamp(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					runtime_types::sp_arithmetic::fixed_point::FixedU128,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"QPoW",
+						"DifficultyDecreaseClamp",
 						[
 							62u8, 145u8, 102u8, 227u8, 159u8, 92u8, 27u8, 54u8, 159u8, 228u8,
 							193u8, 99u8, 75u8, 196u8, 26u8, 250u8, 229u8, 230u8, 88u8, 109u8,
@@ -6506,6 +6728,10 @@ pub mod api {
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
+				#[doc = ""]
+				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
+				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
+				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
 				pub struct SetRetry {
 					pub task: set_retry::Task,
 					pub retries: set_retry::Retries,
@@ -6552,6 +6778,10 @@ pub mod api {
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
+				#[doc = ""]
+				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
+				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
+				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
 				pub struct SetRetryNamed {
 					pub id: set_retry_named::Id,
 					pub retries: set_retry_named::Retries,
@@ -6640,9 +6870,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							209u8, 44u8, 38u8, 115u8, 192u8, 245u8, 230u8, 98u8, 4u8, 221u8, 48u8,
-							218u8, 180u8, 45u8, 205u8, 242u8, 98u8, 60u8, 73u8, 209u8, 152u8,
-							217u8, 39u8, 90u8, 46u8, 7u8, 50u8, 50u8, 214u8, 210u8, 178u8, 180u8,
+							111u8, 246u8, 131u8, 153u8, 188u8, 35u8, 82u8, 23u8, 214u8, 245u8,
+							97u8, 204u8, 130u8, 160u8, 102u8, 24u8, 208u8, 65u8, 222u8, 33u8, 61u8,
+							120u8, 183u8, 187u8, 133u8, 232u8, 75u8, 78u8, 207u8, 123u8, 219u8,
+							114u8,
 						],
 					)
 				}
@@ -6681,9 +6912,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							168u8, 23u8, 39u8, 121u8, 55u8, 131u8, 250u8, 35u8, 37u8, 194u8, 185u8,
-							120u8, 150u8, 83u8, 251u8, 46u8, 33u8, 65u8, 144u8, 38u8, 77u8, 195u8,
-							178u8, 91u8, 237u8, 254u8, 91u8, 211u8, 168u8, 181u8, 160u8, 137u8,
+							226u8, 121u8, 55u8, 244u8, 180u8, 161u8, 195u8, 247u8, 4u8, 191u8,
+							152u8, 109u8, 162u8, 105u8, 232u8, 241u8, 102u8, 3u8, 254u8, 58u8,
+							224u8, 63u8, 127u8, 155u8, 66u8, 214u8, 20u8, 84u8, 200u8, 83u8, 252u8,
+							190u8,
 						],
 					)
 				}
@@ -6719,9 +6951,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							72u8, 139u8, 81u8, 86u8, 46u8, 244u8, 58u8, 159u8, 117u8, 243u8, 134u8,
-							98u8, 80u8, 240u8, 110u8, 81u8, 213u8, 76u8, 158u8, 96u8, 72u8, 193u8,
-							249u8, 80u8, 251u8, 116u8, 166u8, 73u8, 81u8, 215u8, 75u8, 220u8,
+							223u8, 138u8, 95u8, 57u8, 29u8, 157u8, 241u8, 124u8, 62u8, 169u8,
+							220u8, 166u8, 67u8, 105u8, 102u8, 78u8, 138u8, 29u8, 181u8, 87u8,
+							236u8, 124u8, 237u8, 245u8, 85u8, 132u8, 168u8, 95u8, 130u8, 64u8, 9u8,
+							200u8,
 						],
 					)
 				}
@@ -6743,9 +6976,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							79u8, 224u8, 38u8, 251u8, 249u8, 207u8, 215u8, 115u8, 81u8, 65u8, 63u8,
-							214u8, 84u8, 8u8, 50u8, 37u8, 55u8, 55u8, 61u8, 128u8, 25u8, 111u8,
-							143u8, 130u8, 144u8, 164u8, 26u8, 145u8, 105u8, 180u8, 88u8, 94u8,
+							15u8, 107u8, 235u8, 231u8, 115u8, 180u8, 199u8, 243u8, 222u8, 191u8,
+							192u8, 130u8, 107u8, 253u8, 77u8, 228u8, 151u8, 60u8, 176u8, 69u8,
+							140u8, 120u8, 110u8, 242u8, 63u8, 35u8, 46u8, 210u8, 21u8, 83u8, 8u8,
+							123u8,
 						],
 					)
 				}
@@ -6760,6 +6994,10 @@ pub mod api {
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
+				#[doc = ""]
+				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
+				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
+				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
 				pub fn set_retry(
 					&self,
 					task: types::set_retry::Task,
@@ -6788,6 +7026,10 @@ pub mod api {
 				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 				#[doc = "original `total_retries`."]
+				#[doc = ""]
+				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
+				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
+				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
 				pub fn set_retry_named(
 					&self,
 					id: types::set_retry_named::Id,
@@ -7740,9 +7982,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							241u8, 24u8, 68u8, 209u8, 219u8, 28u8, 161u8, 192u8, 127u8, 101u8,
-							153u8, 143u8, 78u8, 9u8, 24u8, 122u8, 110u8, 250u8, 63u8, 159u8, 174u8,
-							88u8, 85u8, 23u8, 195u8, 141u8, 225u8, 43u8, 138u8, 241u8, 44u8, 111u8,
+							168u8, 153u8, 140u8, 127u8, 49u8, 58u8, 84u8, 232u8, 97u8, 32u8, 62u8,
+							214u8, 148u8, 56u8, 117u8, 185u8, 158u8, 13u8, 116u8, 44u8, 227u8,
+							64u8, 247u8, 216u8, 184u8, 41u8, 4u8, 163u8, 162u8, 77u8, 134u8, 234u8,
 						],
 					)
 				}
@@ -7772,9 +8014,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							165u8, 80u8, 171u8, 13u8, 254u8, 5u8, 209u8, 126u8, 47u8, 137u8, 90u8,
-							96u8, 227u8, 196u8, 159u8, 55u8, 118u8, 49u8, 178u8, 50u8, 178u8, 34u8,
-							131u8, 3u8, 41u8, 245u8, 119u8, 197u8, 221u8, 20u8, 174u8, 102u8,
+							221u8, 169u8, 48u8, 6u8, 24u8, 30u8, 152u8, 227u8, 141u8, 56u8, 160u8,
+							66u8, 148u8, 225u8, 88u8, 225u8, 102u8, 31u8, 140u8, 98u8, 159u8,
+							240u8, 185u8, 45u8, 110u8, 180u8, 70u8, 228u8, 109u8, 205u8, 73u8,
+							42u8,
 						],
 					)
 				}
@@ -7800,9 +8043,10 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							96u8, 62u8, 146u8, 237u8, 252u8, 60u8, 1u8, 202u8, 235u8, 81u8, 106u8,
-							115u8, 226u8, 96u8, 214u8, 188u8, 216u8, 173u8, 83u8, 15u8, 78u8, 97u8,
-							158u8, 66u8, 225u8, 63u8, 117u8, 196u8, 242u8, 185u8, 28u8, 145u8,
+							61u8, 221u8, 247u8, 197u8, 198u8, 93u8, 227u8, 27u8, 130u8, 66u8,
+							147u8, 239u8, 234u8, 219u8, 242u8, 109u8, 220u8, 4u8, 251u8, 147u8,
+							86u8, 37u8, 232u8, 40u8, 208u8, 222u8, 123u8, 72u8, 1u8, 48u8, 39u8,
+							252u8,
 						],
 					)
 				}
@@ -7825,10 +8069,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							47u8, 109u8, 230u8, 121u8, 146u8, 49u8, 97u8, 31u8, 138u8, 224u8,
-							206u8, 114u8, 57u8, 169u8, 75u8, 158u8, 2u8, 183u8, 138u8, 243u8,
-							116u8, 32u8, 225u8, 61u8, 124u8, 106u8, 167u8, 238u8, 236u8, 20u8,
-							202u8, 50u8,
+							211u8, 86u8, 167u8, 189u8, 24u8, 103u8, 83u8, 11u8, 102u8, 251u8,
+							156u8, 78u8, 99u8, 174u8, 1u8, 90u8, 37u8, 195u8, 61u8, 102u8, 77u8,
+							216u8, 136u8, 168u8, 76u8, 234u8, 228u8, 234u8, 98u8, 146u8, 246u8,
+							3u8,
 						],
 					)
 				}
@@ -7854,10 +8098,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							59u8, 222u8, 239u8, 78u8, 48u8, 183u8, 141u8, 107u8, 147u8, 104u8,
-							49u8, 128u8, 119u8, 239u8, 68u8, 174u8, 68u8, 200u8, 166u8, 210u8,
-							70u8, 69u8, 239u8, 174u8, 193u8, 143u8, 14u8, 45u8, 194u8, 153u8,
-							198u8, 118u8,
+							146u8, 12u8, 37u8, 67u8, 116u8, 89u8, 65u8, 39u8, 146u8, 69u8, 186u8,
+							21u8, 192u8, 211u8, 148u8, 137u8, 201u8, 3u8, 195u8, 90u8, 80u8, 57u8,
+							116u8, 148u8, 29u8, 225u8, 149u8, 117u8, 185u8, 193u8, 159u8, 219u8,
 						],
 					)
 				}
@@ -7880,9 +8123,9 @@ pub mod api {
 							weight,
 						},
 						[
-							86u8, 251u8, 42u8, 213u8, 7u8, 59u8, 69u8, 56u8, 170u8, 21u8, 184u8,
-							32u8, 192u8, 34u8, 250u8, 122u8, 236u8, 31u8, 174u8, 104u8, 80u8,
-							255u8, 209u8, 64u8, 251u8, 39u8, 162u8, 198u8, 163u8, 61u8, 73u8, 91u8,
+							108u8, 240u8, 32u8, 97u8, 18u8, 61u8, 34u8, 62u8, 149u8, 244u8, 16u8,
+							87u8, 60u8, 116u8, 221u8, 156u8, 68u8, 51u8, 60u8, 233u8, 15u8, 160u8,
+							180u8, 31u8, 197u8, 161u8, 165u8, 93u8, 238u8, 184u8, 50u8, 36u8,
 						],
 					)
 				}
@@ -7922,9 +8165,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							63u8, 128u8, 67u8, 20u8, 83u8, 111u8, 204u8, 20u8, 153u8, 162u8, 212u8,
-							42u8, 117u8, 96u8, 212u8, 248u8, 70u8, 189u8, 85u8, 158u8, 136u8,
-							110u8, 142u8, 61u8, 39u8, 54u8, 195u8, 118u8, 241u8, 6u8, 55u8, 130u8,
+							160u8, 250u8, 232u8, 179u8, 142u8, 199u8, 97u8, 214u8, 128u8, 114u8,
+							165u8, 161u8, 57u8, 210u8, 171u8, 46u8, 89u8, 202u8, 250u8, 19u8, 45u8,
+							144u8, 223u8, 4u8, 145u8, 157u8, 184u8, 228u8, 250u8, 221u8, 6u8, 5u8,
 						],
 					)
 				}
@@ -7947,9 +8190,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							167u8, 171u8, 21u8, 97u8, 73u8, 57u8, 83u8, 87u8, 141u8, 218u8, 49u8,
-							79u8, 243u8, 165u8, 230u8, 26u8, 227u8, 116u8, 81u8, 203u8, 246u8,
-							196u8, 209u8, 183u8, 16u8, 236u8, 9u8, 87u8, 169u8, 76u8, 73u8, 46u8,
+							138u8, 211u8, 58u8, 120u8, 90u8, 178u8, 167u8, 166u8, 163u8, 135u8,
+							34u8, 41u8, 124u8, 179u8, 160u8, 200u8, 137u8, 21u8, 36u8, 100u8,
+							126u8, 66u8, 89u8, 124u8, 51u8, 155u8, 197u8, 173u8, 126u8, 1u8, 10u8,
+							66u8,
 						],
 					)
 				}
@@ -9393,19 +9637,38 @@ pub mod api {
 				#[doc = "Enable high-security for the calling account with a specified"]
 				#[doc = "reversibility delay."]
 				#[doc = ""]
-				#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
-				#[doc = "different accounts."]
-				#[doc = ""]
 				#[doc = "Once an account is set as high security it can only make reversible"]
 				#[doc = "transfers. It is not allowed any other calls."]
 				#[doc = ""]
-				#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
-				#[doc = "security account."]
-				#[doc = "- interceptor: The account that can intercept transctions from the"]
-				#[doc = "high security account."]
+				#[doc = "# Warning: Permanent and Irreversible"]
+				#[doc = ""]
+				#[doc = "**Enabling high security mode is a one-way operation that cannot be undone.**"]
+				#[doc = ""]
+				#[doc = "Once this function is called successfully, the account is permanently restricted"]
+				#[doc = "to only the following operations:"]
+				#[doc = "- [`schedule_transfer`](Self::schedule_transfer) - Schedule delayed native token"]
+				#[doc = "  transfers"]
+				#[doc = "- [`schedule_asset_transfer`](Self::schedule_asset_transfer) - Schedule delayed asset"]
+				#[doc = "  transfers"]
+				#[doc = "- [`cancel`](Self::cancel) - Cancel pending transfers"]
+				#[doc = "- [`recover_funds`](Self::recover_funds) - Guardian-initiated emergency fund recovery"]
+				#[doc = ""]
+				#[doc = "There is no mechanism to disable high security mode or restore normal account"]
+				#[doc = "functionality. This design is intentional to provide maximum security guarantees:"]
+				#[doc = "an attacker who gains access to the account cannot simply disable the protections."]
+				#[doc = ""]
+				#[doc = "Users who no longer wish to use high-security features can simply transfer their"]
+				#[doc = "funds to a different account using [`schedule_transfer`](Self::schedule_transfer)"]
+				#[doc = "or [`schedule_asset_transfer`](Self::schedule_asset_transfer)."]
+				#[doc = ""]
+				#[doc = "# Parameters"]
+				#[doc = ""]
+				#[doc = "- `delay`: The reversibility time for any transfer made by the high-security account."]
+				#[doc = "- `guardian`: The guardian account that can cancel pending transfers and recover funds"]
+				#[doc = "  from this high-security account."]
 				pub struct SetHighSecurity {
 					pub delay: set_high_security::Delay,
-					pub interceptor: set_high_security::Interceptor,
+					pub guardian: set_high_security::Guardian,
 				}
 				pub mod set_high_security {
 					use super::runtime_types;
@@ -9413,7 +9676,7 @@ pub mod api {
 						::core::primitive::u32,
 						::core::primitive::u64,
 					>;
-					pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
+					pub type Guardian = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetHighSecurity {
 					const PALLET: &'static str = "ReversibleTransfers";
@@ -9455,9 +9718,22 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Called by the Scheduler to finalize the scheduled task/call"]
+				#[doc = "Executes a previously scheduled transfer after the delay period has elapsed."]
 				#[doc = ""]
-				#[doc = "- `tx_id`: The unique id of the transaction to finalize and dispatch."]
+				#[doc = "This extrinsic is called automatically by the Scheduler pallet when the"]
+				#[doc = "delay period expires. It must be signed by this pallet's account (not a user)."]
+				#[doc = "The pallet account is set as the origin when scheduling via"]
+				#[doc = "[`do_schedule_transfer_inner`](Self::do_schedule_transfer_inner)."]
+				#[doc = ""]
+				#[doc = "# Parameters"]
+				#[doc = ""]
+				#[doc = "- `tx_id`: The unique identifier of the pending transfer to execute."]
+				#[doc = ""]
+				#[doc = "# Errors"]
+				#[doc = ""]
+				#[doc = "- [`InvalidSchedulerOrigin`](Error::InvalidSchedulerOrigin): Called by an account other"]
+				#[doc = "  than this pallet's account."]
+				#[doc = "- [`PendingTxNotFound`](Error::PendingTxNotFound): No pending transfer with this ID."]
 				pub struct ExecuteTransfer {
 					pub tx_id: execute_transfer::TxId,
 				}
@@ -9612,12 +9888,16 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Allows the guardian (interceptor) to recover all funds from a high security"]
-				#[doc = "account by transferring the entire balance to themselves."]
+				#[doc = "Allows the guardian to recover all funds from a high-security account"]
+				#[doc = "by transferring the entire balance to themselves."]
 				#[doc = ""]
-				#[doc = "This is an emergency function for when the high security account may be compromised."]
+				#[doc = "This is an emergency function for when the high-security account may be compromised."]
 				#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
 				#[doc = "the remaining free balance to the guardian."]
+				#[doc = ""]
+				#[doc = "If releasing held funds fails for any transfer, that transfer is skipped (metadata"]
+				#[doc = "preserved for manual retry via `cancel`) and a `TransferRecoveryFailed` event is"]
+				#[doc = "emitted. Other transfers continue to be processed."]
 				pub struct RecoverFunds {
 					pub account: recover_funds::Account,
 				}
@@ -9635,30 +9915,49 @@ pub mod api {
 				#[doc = "Enable high-security for the calling account with a specified"]
 				#[doc = "reversibility delay."]
 				#[doc = ""]
-				#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
-				#[doc = "different accounts."]
-				#[doc = ""]
 				#[doc = "Once an account is set as high security it can only make reversible"]
 				#[doc = "transfers. It is not allowed any other calls."]
 				#[doc = ""]
-				#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
-				#[doc = "security account."]
-				#[doc = "- interceptor: The account that can intercept transctions from the"]
-				#[doc = "high security account."]
+				#[doc = "# Warning: Permanent and Irreversible"]
+				#[doc = ""]
+				#[doc = "**Enabling high security mode is a one-way operation that cannot be undone.**"]
+				#[doc = ""]
+				#[doc = "Once this function is called successfully, the account is permanently restricted"]
+				#[doc = "to only the following operations:"]
+				#[doc = "- [`schedule_transfer`](Self::schedule_transfer) - Schedule delayed native token"]
+				#[doc = "  transfers"]
+				#[doc = "- [`schedule_asset_transfer`](Self::schedule_asset_transfer) - Schedule delayed asset"]
+				#[doc = "  transfers"]
+				#[doc = "- [`cancel`](Self::cancel) - Cancel pending transfers"]
+				#[doc = "- [`recover_funds`](Self::recover_funds) - Guardian-initiated emergency fund recovery"]
+				#[doc = ""]
+				#[doc = "There is no mechanism to disable high security mode or restore normal account"]
+				#[doc = "functionality. This design is intentional to provide maximum security guarantees:"]
+				#[doc = "an attacker who gains access to the account cannot simply disable the protections."]
+				#[doc = ""]
+				#[doc = "Users who no longer wish to use high-security features can simply transfer their"]
+				#[doc = "funds to a different account using [`schedule_transfer`](Self::schedule_transfer)"]
+				#[doc = "or [`schedule_asset_transfer`](Self::schedule_asset_transfer)."]
+				#[doc = ""]
+				#[doc = "# Parameters"]
+				#[doc = ""]
+				#[doc = "- `delay`: The reversibility time for any transfer made by the high-security account."]
+				#[doc = "- `guardian`: The guardian account that can cancel pending transfers and recover funds"]
+				#[doc = "  from this high-security account."]
 				pub fn set_high_security(
 					&self,
 					delay: types::set_high_security::Delay,
-					interceptor: types::set_high_security::Interceptor,
+					guardian: types::set_high_security::Guardian,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetHighSecurity>
 				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"ReversibleTransfers",
 						"set_high_security",
-						types::SetHighSecurity { delay, interceptor },
+						types::SetHighSecurity { delay, guardian },
 						[
-							202u8, 17u8, 43u8, 37u8, 215u8, 198u8, 42u8, 183u8, 53u8, 124u8, 140u8,
-							34u8, 112u8, 230u8, 55u8, 168u8, 242u8, 249u8, 91u8, 185u8, 244u8,
-							81u8, 40u8, 231u8, 121u8, 155u8, 202u8, 76u8, 137u8, 7u8, 225u8, 184u8,
+							103u8, 202u8, 28u8, 11u8, 249u8, 80u8, 142u8, 200u8, 55u8, 4u8, 141u8,
+							72u8, 94u8, 199u8, 229u8, 102u8, 246u8, 113u8, 190u8, 84u8, 95u8,
+							193u8, 96u8, 171u8, 144u8, 120u8, 235u8, 208u8, 65u8, 183u8, 4u8, 44u8,
 						],
 					)
 				}
@@ -9681,9 +9980,22 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Called by the Scheduler to finalize the scheduled task/call"]
+				#[doc = "Executes a previously scheduled transfer after the delay period has elapsed."]
 				#[doc = ""]
-				#[doc = "- `tx_id`: The unique id of the transaction to finalize and dispatch."]
+				#[doc = "This extrinsic is called automatically by the Scheduler pallet when the"]
+				#[doc = "delay period expires. It must be signed by this pallet's account (not a user)."]
+				#[doc = "The pallet account is set as the origin when scheduling via"]
+				#[doc = "[`do_schedule_transfer_inner`](Self::do_schedule_transfer_inner)."]
+				#[doc = ""]
+				#[doc = "# Parameters"]
+				#[doc = ""]
+				#[doc = "- `tx_id`: The unique identifier of the pending transfer to execute."]
+				#[doc = ""]
+				#[doc = "# Errors"]
+				#[doc = ""]
+				#[doc = "- [`InvalidSchedulerOrigin`](Error::InvalidSchedulerOrigin): Called by an account other"]
+				#[doc = "  than this pallet's account."]
+				#[doc = "- [`PendingTxNotFound`](Error::PendingTxNotFound): No pending transfer with this ID."]
 				pub fn execute_transfer(
 					&self,
 					tx_id: types::execute_transfer::TxId,
@@ -9788,12 +10100,16 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = "Allows the guardian (interceptor) to recover all funds from a high security"]
-				#[doc = "account by transferring the entire balance to themselves."]
+				#[doc = "Allows the guardian to recover all funds from a high-security account"]
+				#[doc = "by transferring the entire balance to themselves."]
 				#[doc = ""]
-				#[doc = "This is an emergency function for when the high security account may be compromised."]
+				#[doc = "This is an emergency function for when the high-security account may be compromised."]
 				#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
 				#[doc = "the remaining free balance to the guardian."]
+				#[doc = ""]
+				#[doc = "If releasing held funds fails for any transfer, that transfer is skipped (metadata"]
+				#[doc = "preserved for manual retry via `cancel`) and a `TransferRecoveryFailed` event is"]
+				#[doc = "emitted. Other transfers continue to be processed."]
 				pub fn recover_funds(
 					&self,
 					account: types::recover_funds::Account,
@@ -9824,16 +10140,15 @@ pub mod api {
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			#[doc = "A user has enabled their high-security settings."]
-			#[doc = "[who, interceptor, recoverer, delay]"]
 			pub struct HighSecuritySet {
 				pub who: high_security_set::Who,
-				pub interceptor: high_security_set::Interceptor,
+				pub guardian: high_security_set::Guardian,
 				pub delay: high_security_set::Delay,
 			}
 			pub mod high_security_set {
 				use super::runtime_types;
 				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Guardian = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Delay = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 					::core::primitive::u32,
 					::core::primitive::u64,
@@ -9850,12 +10165,11 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A transaction has been intercepted and scheduled for delayed execution."]
-			#[doc = "[from, to, interceptor, amount, tx_id, execute_at_moment]"]
+			#[doc = "A transaction has been scheduled for delayed execution."]
 			pub struct TransactionScheduled {
 				pub from: transaction_scheduled::From,
 				pub to: transaction_scheduled::To,
-				pub interceptor: transaction_scheduled::Interceptor,
+				pub guardian: transaction_scheduled::Guardian,
 				pub asset_id: transaction_scheduled::AssetId,
 				pub amount: transaction_scheduled::Amount,
 				pub tx_id: transaction_scheduled::TxId,
@@ -9865,7 +10179,7 @@ pub mod api {
 				use super::runtime_types;
 				pub type From = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type To = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Interceptor = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Guardian = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type AssetId = ::core::option::Option<::core::primitive::u32>;
 				pub type Amount = ::core::primitive::u128;
 				pub type TxId = ::subxt::ext::subxt_core::utils::H256;
@@ -9885,7 +10199,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A scheduled transaction has been successfully cancelled by the owner."]
+			#[doc = "A scheduled transaction has been successfully cancelled."]
 			pub struct TransactionCancelled {
 				pub who: transaction_cancelled::Who,
 				pub tx_id: transaction_cancelled::TxId,
@@ -9932,7 +10246,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Funds were recovered from a high security account by its guardian."]
+			#[doc = "All funds were recovered from a high-security account by its guardian."]
 			pub struct FundsRecovered {
 				pub account: funds_recovered::Account,
 				pub guardian: funds_recovered::Guardian,
@@ -9945,6 +10259,26 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for FundsRecovered {
 				const PALLET: &'static str = "ReversibleTransfers";
 				const EVENT: &'static str = "FundsRecovered";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Failed to release held funds during recovery. The transfer metadata is preserved"]
+			#[doc = "for manual retry via `cancel`."]
+			pub struct TransferRecoveryFailed {
+				pub tx_id: transfer_recovery_failed::TxId,
+			}
+			pub mod transfer_recovery_failed {
+				use super::runtime_types;
+				pub type TxId = ::subxt::ext::subxt_core::utils::H256;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for TransferRecoveryFailed {
+				const PALLET: &'static str = "ReversibleTransfers";
+				const EVENT: &'static str = "TransferRecoveryFailed";
 			}
 		}
 		pub mod storage {
@@ -9969,10 +10303,7 @@ pub mod api {
 						runtime_types::pallet_reversible_transfers::PendingTransfer<
 							::subxt::ext::subxt_core::utils::AccountId32,
 							::core::primitive::u128,
-							runtime_types::frame_support::traits::preimages::Bounded<
-								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::sp_runtime::traits::BlakeTwo256,
-							>,
+							::core::primitive::u32,
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::H256;
 				}
@@ -9984,17 +10315,17 @@ pub mod api {
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
-				pub mod interceptor_index {
+				pub mod guardian_index {
 					use super::runtime_types;
-					pub type InterceptorIndex =
+					pub type GuardianIndex =
 						runtime_types::bounded_collections::bounded_vec::BoundedVec<
 							::subxt::ext::subxt_core::utils::AccountId32,
 						>;
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
 				}
-				pub mod global_nonce {
+				pub mod next_transaction_id {
 					use super::runtime_types;
-					pub type GlobalNonce = ::core::primitive::u64;
+					pub type NextTransactionId = ::core::primitive::u64;
 				}
 			}
 			pub struct StorageApi;
@@ -10015,10 +10346,10 @@ pub mod api {
 						"HighSecurityAccounts",
 						(),
 						[
-							11u8, 143u8, 95u8, 23u8, 55u8, 163u8, 22u8, 238u8, 88u8, 24u8, 50u8,
-							162u8, 72u8, 98u8, 32u8, 219u8, 231u8, 199u8, 118u8, 150u8, 84u8,
-							126u8, 225u8, 88u8, 129u8, 200u8, 236u8, 214u8, 187u8, 8u8, 252u8,
-							120u8,
+							110u8, 63u8, 150u8, 254u8, 213u8, 163u8, 141u8, 156u8, 66u8, 201u8,
+							162u8, 30u8, 141u8, 204u8, 209u8, 159u8, 120u8, 240u8, 230u8, 239u8,
+							228u8, 129u8, 130u8, 181u8, 6u8, 193u8, 157u8, 239u8, 131u8, 35u8,
+							29u8, 79u8,
 						],
 					)
 				}
@@ -10041,10 +10372,10 @@ pub mod api {
 						"HighSecurityAccounts",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							11u8, 143u8, 95u8, 23u8, 55u8, 163u8, 22u8, 238u8, 88u8, 24u8, 50u8,
-							162u8, 72u8, 98u8, 32u8, 219u8, 231u8, 199u8, 118u8, 150u8, 84u8,
-							126u8, 225u8, 88u8, 129u8, 200u8, 236u8, 214u8, 187u8, 8u8, 252u8,
-							120u8,
+							110u8, 63u8, 150u8, 254u8, 213u8, 163u8, 141u8, 156u8, 66u8, 201u8,
+							162u8, 30u8, 141u8, 204u8, 209u8, 159u8, 120u8, 240u8, 230u8, 239u8,
+							228u8, 129u8, 130u8, 181u8, 6u8, 193u8, 157u8, 239u8, 131u8, 35u8,
+							29u8, 79u8,
 						],
 					)
 				}
@@ -10064,9 +10395,10 @@ pub mod api {
 						"PendingTransfers",
 						(),
 						[
-							226u8, 148u8, 100u8, 60u8, 9u8, 160u8, 164u8, 177u8, 53u8, 236u8, 65u8,
-							38u8, 207u8, 31u8, 170u8, 79u8, 15u8, 237u8, 127u8, 189u8, 203u8,
-							147u8, 4u8, 146u8, 13u8, 87u8, 158u8, 163u8, 159u8, 87u8, 98u8, 211u8,
+							138u8, 155u8, 227u8, 133u8, 16u8, 122u8, 128u8, 60u8, 245u8, 159u8,
+							244u8, 82u8, 244u8, 113u8, 189u8, 149u8, 179u8, 30u8, 48u8, 31u8,
+							174u8, 124u8, 28u8, 33u8, 190u8, 217u8, 193u8, 129u8, 39u8, 122u8,
+							141u8, 188u8,
 						],
 					)
 				}
@@ -10089,9 +10421,10 @@ pub mod api {
 						"PendingTransfers",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							226u8, 148u8, 100u8, 60u8, 9u8, 160u8, 164u8, 177u8, 53u8, 236u8, 65u8,
-							38u8, 207u8, 31u8, 170u8, 79u8, 15u8, 237u8, 127u8, 189u8, 203u8,
-							147u8, 4u8, 146u8, 13u8, 87u8, 158u8, 163u8, 159u8, 87u8, 98u8, 211u8,
+							138u8, 155u8, 227u8, 133u8, 16u8, 122u8, 128u8, 60u8, 245u8, 159u8,
+							244u8, 82u8, 244u8, 113u8, 189u8, 149u8, 179u8, 30u8, 48u8, 31u8,
+							174u8, 124u8, 28u8, 33u8, 190u8, 217u8, 193u8, 129u8, 39u8, 122u8,
+							141u8, 188u8,
 						],
 					)
 				}
@@ -10140,75 +10473,78 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Maps interceptor accounts to the list of accounts they can intercept for."]
-				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an"]
-				#[doc = " interceptor."]
-				pub fn interceptor_index_iter(
+				#[doc = " Maps guardian accounts to the list of accounts they protect."]
+				#[doc = " This allows the UI to efficiently query all accounts for which a given account is a"]
+				#[doc = " guardian."]
+				pub fn guardian_index_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					(),
-					types::interceptor_index::InterceptorIndex,
+					types::guardian_index::GuardianIndex,
 					(),
 					::subxt::ext::subxt_core::utils::Yes,
 					::subxt::ext::subxt_core::utils::Yes,
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"ReversibleTransfers",
-						"InterceptorIndex",
+						"GuardianIndex",
 						(),
 						[
-							7u8, 184u8, 75u8, 107u8, 42u8, 84u8, 188u8, 86u8, 2u8, 227u8, 4u8,
-							136u8, 109u8, 69u8, 64u8, 123u8, 253u8, 28u8, 174u8, 121u8, 183u8,
-							154u8, 135u8, 91u8, 125u8, 0u8, 58u8, 132u8, 164u8, 236u8, 182u8,
-							133u8,
+							112u8, 32u8, 227u8, 175u8, 221u8, 116u8, 83u8, 105u8, 108u8, 132u8,
+							254u8, 61u8, 178u8, 251u8, 179u8, 127u8, 14u8, 12u8, 144u8, 204u8,
+							38u8, 98u8, 154u8, 10u8, 202u8, 254u8, 230u8, 126u8, 149u8, 161u8,
+							13u8, 110u8,
 						],
 					)
 				}
-				#[doc = " Maps interceptor accounts to the list of accounts they can intercept for."]
-				#[doc = " This allows the UI to efficiently query all accounts for which a given account is an"]
-				#[doc = " interceptor."]
-				pub fn interceptor_index(
+				#[doc = " Maps guardian accounts to the list of accounts they protect."]
+				#[doc = " This allows the UI to efficiently query all accounts for which a given account is a"]
+				#[doc = " guardian."]
+				pub fn guardian_index(
 					&self,
-					_0: types::interceptor_index::Param0,
+					_0: types::guardian_index::Param0,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::interceptor_index::Param0,
+						types::guardian_index::Param0,
 					>,
-					types::interceptor_index::InterceptorIndex,
+					types::guardian_index::GuardianIndex,
 					::subxt::ext::subxt_core::utils::Yes,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"ReversibleTransfers",
-						"InterceptorIndex",
+						"GuardianIndex",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							7u8, 184u8, 75u8, 107u8, 42u8, 84u8, 188u8, 86u8, 2u8, 227u8, 4u8,
-							136u8, 109u8, 69u8, 64u8, 123u8, 253u8, 28u8, 174u8, 121u8, 183u8,
-							154u8, 135u8, 91u8, 125u8, 0u8, 58u8, 132u8, 164u8, 236u8, 182u8,
-							133u8,
+							112u8, 32u8, 227u8, 175u8, 221u8, 116u8, 83u8, 105u8, 108u8, 132u8,
+							254u8, 61u8, 178u8, 251u8, 179u8, 127u8, 14u8, 12u8, 144u8, 204u8,
+							38u8, 98u8, 154u8, 10u8, 202u8, 254u8, 230u8, 126u8, 149u8, 161u8,
+							13u8, 110u8,
 						],
 					)
 				}
-				#[doc = " Global nonce for generating unique transaction IDs."]
-				pub fn global_nonce(
+				#[doc = " Monotonically increasing counter used to generate unique transaction IDs."]
+				#[doc = " Each scheduled transfer increments this value to ensure no two transfers"]
+				#[doc = " produce the same `tx_id`, even if they have identical parameters."]
+				pub fn next_transaction_id(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
 					(),
-					types::global_nonce::GlobalNonce,
+					types::next_transaction_id::NextTransactionId,
 					::subxt::ext::subxt_core::utils::Yes,
 					::subxt::ext::subxt_core::utils::Yes,
 					(),
 				> {
 					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
 						"ReversibleTransfers",
-						"GlobalNonce",
+						"NextTransactionId",
 						(),
 						[
-							119u8, 119u8, 84u8, 141u8, 83u8, 67u8, 42u8, 83u8, 51u8, 196u8, 185u8,
-							39u8, 227u8, 125u8, 142u8, 154u8, 107u8, 62u8, 127u8, 13u8, 54u8,
-							114u8, 201u8, 6u8, 100u8, 28u8, 202u8, 152u8, 246u8, 202u8, 9u8, 29u8,
+							42u8, 56u8, 195u8, 140u8, 101u8, 56u8, 175u8, 152u8, 210u8, 167u8,
+							61u8, 134u8, 152u8, 191u8, 216u8, 58u8, 73u8, 109u8, 130u8, 125u8,
+							189u8, 186u8, 142u8, 68u8, 222u8, 141u8, 16u8, 250u8, 85u8, 8u8, 196u8,
+							188u8,
 						],
 					)
 				}
@@ -10218,15 +10554,15 @@ pub mod api {
 			use super::runtime_types;
 			pub struct ConstantsApi;
 			impl ConstantsApi {
-				#[doc = " Maximum number of accounts an interceptor can intercept for. Used for BoundedVec."]
-				pub fn max_interceptor_accounts(
+				#[doc = " Maximum number of accounts a single guardian can protect. Used for BoundedVec."]
+				pub fn max_guardian_accounts(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
 					::core::primitive::u32,
 				> {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"ReversibleTransfers",
-						"MaxInterceptorAccounts",
+						"MaxGuardianAccounts",
 						[
 							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
 							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
@@ -13353,6 +13689,11 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				#[doc = "Set the treasury account. Root only. Zero address is rejected (funds would be locked)."]
+				#[doc = ""]
+				#[doc = "**Important**: This only changes where *future* mining rewards are sent. Any balance"]
+				#[doc = "that has already accumulated in the current treasury account is NOT automatically"]
+				#[doc = "migrated to the new account. If you need to move existing funds, perform a separate"]
+				#[doc = "balance transfer (e.g., via governance proposal) after updating the account."]
 				pub struct SetTreasuryAccount {
 					pub account: set_treasury_account::Account,
 				}
@@ -13391,6 +13732,11 @@ pub mod api {
 			pub struct TransactionApi;
 			impl TransactionApi {
 				#[doc = "Set the treasury account. Root only. Zero address is rejected (funds would be locked)."]
+				#[doc = ""]
+				#[doc = "**Important**: This only changes where *future* mining rewards are sent. Any balance"]
+				#[doc = "that has already accumulated in the current treasury account is NOT automatically"]
+				#[doc = "migrated to the new account. If you need to move existing funds, perform a separate"]
+				#[doc = "balance transfer (e.g., via governance proposal) after updating the account."]
 				pub fn set_treasury_account(
 					&self,
 					account: types::set_treasury_account::Account,
@@ -13438,11 +13784,19 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The treasury account was updated."]
+			#[doc = ""]
+			#[doc = "Note: This only redirects where future mining rewards are sent. Any balance"]
+			#[doc = "accumulated in the old account remains there and is NOT automatically migrated."]
+			#[doc = "Use a separate balance transfer if funds need to be moved."]
 			pub struct TreasuryAccountUpdated {
+				pub old_account: treasury_account_updated::OldAccount,
 				pub new_account: treasury_account_updated::NewAccount,
 			}
 			pub mod treasury_account_updated {
 				use super::runtime_types;
+				pub type OldAccount =
+					::core::option::Option<::subxt::ext::subxt_core::utils::AccountId32>;
 				pub type NewAccount = ::subxt::ext::subxt_core::utils::AccountId32;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for TreasuryAccountUpdated {
@@ -13456,6 +13810,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The treasury portion (share of mining rewards) was updated."]
 			pub struct TreasuryPortionUpdated {
 				pub new_portion: treasury_portion_updated::NewPortion,
 			}
@@ -13939,10 +14294,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							145u8, 166u8, 24u8, 188u8, 62u8, 129u8, 16u8, 49u8, 10u8, 139u8, 33u8,
-							24u8, 183u8, 248u8, 92u8, 239u8, 141u8, 11u8, 109u8, 166u8, 232u8,
-							206u8, 123u8, 228u8, 213u8, 173u8, 87u8, 199u8, 92u8, 239u8, 240u8,
-							30u8,
+							71u8, 178u8, 63u8, 91u8, 78u8, 140u8, 29u8, 153u8, 6u8, 45u8, 75u8,
+							246u8, 87u8, 173u8, 86u8, 162u8, 22u8, 132u8, 34u8, 59u8, 39u8, 235u8,
+							150u8, 74u8, 227u8, 47u8, 217u8, 153u8, 37u8, 164u8, 173u8, 239u8,
 						],
 					)
 				}
@@ -18866,7 +19220,6 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Economic costs:"]
 				#[doc = "- MultisigFee: burned immediately (spam prevention)"]
-				#[doc = "- MultisigDeposit: reserved until dissolution, then returned to creator (storage bond)"]
 				pub struct CreateMultisig {
 					pub signers: create_multisig::Signers,
 					pub threshold: create_multisig::Threshold,
@@ -18919,8 +19272,9 @@ pub mod api {
 				pub mod propose {
 					use super::runtime_types;
 					pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type Call =
-						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+					pub type Call = runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						::core::primitive::u8,
+					>;
 					pub type Expiry = ::core::primitive::u32;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Propose {
@@ -19081,6 +19435,10 @@ pub mod api {
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to execute"]
+				#[doc = ""]
+				#[doc = "Note: The weight charged includes both multisig bookkeeping and MaxInnerCallWeight."]
+				#[doc = "Actual weight is refunded based on the inner call's post-dispatch info."]
+				#[doc = "The inner call's weight is validated against MaxInnerCallWeight at propose time."]
 				pub struct Execute {
 					pub multisig_address: execute::MultisigAddress,
 					pub proposal_id: execute::ProposalId,
@@ -19093,41 +19451,6 @@ pub mod api {
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Execute {
 					const PALLET: &'static str = "Multisig";
 					const CALL: &'static str = "execute";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Approve dissolving a multisig account"]
-				#[doc = ""]
-				#[doc = "Signers call this to approve dissolving the multisig."]
-				#[doc = "When threshold is reached, the multisig is automatically dissolved."]
-				#[doc = ""]
-				#[doc = "Requirements:"]
-				#[doc = "- Caller must be a signer"]
-				#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up"]
-				#[doc = "- Multisig account balance must be zero"]
-				#[doc = ""]
-				#[doc = "When threshold is reached:"]
-				#[doc = "- Deposit is returned to creator"]
-				#[doc = "- Multisig storage is removed"]
-				pub struct ApproveDissolve {
-					pub multisig_address: approve_dissolve::MultisigAddress,
-				}
-				pub mod approve_dissolve {
-					use super::runtime_types;
-					pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ApproveDissolve {
-					const PALLET: &'static str = "Multisig";
-					const CALL: &'static str = "approve_dissolve";
 				}
 			}
 			pub struct TransactionApi;
@@ -19146,7 +19469,6 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Economic costs:"]
 				#[doc = "- MultisigFee: burned immediately (spam prevention)"]
-				#[doc = "- MultisigDeposit: reserved until dissolution, then returned to creator (storage bond)"]
 				pub fn create_multisig(
 					&self,
 					signers: types::create_multisig::Signers,
@@ -19193,10 +19515,10 @@ pub mod api {
 						"propose",
 						types::Propose { multisig_address, call, expiry },
 						[
-							131u8, 107u8, 67u8, 245u8, 123u8, 74u8, 248u8, 60u8, 181u8, 88u8,
-							135u8, 198u8, 188u8, 160u8, 34u8, 137u8, 7u8, 126u8, 45u8, 169u8,
-							212u8, 30u8, 251u8, 147u8, 167u8, 166u8, 76u8, 70u8, 155u8, 222u8,
-							70u8, 143u8,
+							211u8, 229u8, 94u8, 85u8, 157u8, 195u8, 92u8, 25u8, 121u8, 135u8,
+							222u8, 58u8, 218u8, 102u8, 12u8, 218u8, 179u8, 96u8, 47u8, 148u8,
+							236u8, 151u8, 95u8, 187u8, 170u8, 222u8, 148u8, 77u8, 136u8, 240u8,
+							119u8, 67u8,
 						],
 					)
 				}
@@ -19314,6 +19636,10 @@ pub mod api {
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to execute"]
+				#[doc = ""]
+				#[doc = "Note: The weight charged includes both multisig bookkeeping and MaxInnerCallWeight."]
+				#[doc = "Actual weight is refunded based on the inner call's post-dispatch info."]
+				#[doc = "The inner call's weight is validated against MaxInnerCallWeight at propose time."]
 				pub fn execute(
 					&self,
 					multisig_address: types::execute::MultisigAddress,
@@ -19327,36 +19653,6 @@ pub mod api {
 							209u8, 110u8, 225u8, 231u8, 188u8, 230u8, 192u8, 42u8, 43u8, 233u8,
 							158u8, 149u8, 58u8, 203u8, 142u8, 44u8, 40u8, 27u8, 211u8, 194u8, 26u8,
 							7u8, 7u8, 254u8, 29u8, 245u8, 230u8, 195u8, 82u8, 108u8, 1u8, 27u8,
-						],
-					)
-				}
-				#[doc = "Approve dissolving a multisig account"]
-				#[doc = ""]
-				#[doc = "Signers call this to approve dissolving the multisig."]
-				#[doc = "When threshold is reached, the multisig is automatically dissolved."]
-				#[doc = ""]
-				#[doc = "Requirements:"]
-				#[doc = "- Caller must be a signer"]
-				#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up"]
-				#[doc = "- Multisig account balance must be zero"]
-				#[doc = ""]
-				#[doc = "When threshold is reached:"]
-				#[doc = "- Deposit is returned to creator"]
-				#[doc = "- Multisig storage is removed"]
-				pub fn approve_dissolve(
-					&self,
-					multisig_address: types::approve_dissolve::MultisigAddress,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ApproveDissolve>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Multisig",
-						"approve_dissolve",
-						types::ApproveDissolve { multisig_address },
-						[
-							156u8, 98u8, 164u8, 184u8, 61u8, 224u8, 117u8, 109u8, 44u8, 173u8,
-							59u8, 188u8, 164u8, 233u8, 191u8, 223u8, 240u8, 203u8, 164u8, 113u8,
-							184u8, 187u8, 41u8, 154u8, 87u8, 135u8, 229u8, 56u8, 35u8, 196u8,
-							136u8, 241u8,
 						],
 					)
 				}
@@ -19426,23 +19722,23 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A proposal has been approved by a signer"]
-			pub struct ProposalApproved {
-				pub multisig_address: proposal_approved::MultisigAddress,
-				pub approver: proposal_approved::Approver,
-				pub proposal_id: proposal_approved::ProposalId,
-				pub approvals_count: proposal_approved::ApprovalsCount,
+			#[doc = "A signer has approved a proposal (does not imply threshold reached)"]
+			pub struct SignerApproved {
+				pub multisig_address: signer_approved::MultisigAddress,
+				pub approver: signer_approved::Approver,
+				pub proposal_id: signer_approved::ProposalId,
+				pub approvals_count: signer_approved::ApprovalsCount,
 			}
-			pub mod proposal_approved {
+			pub mod signer_approved {
 				use super::runtime_types;
 				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type Approver = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type ProposalId = ::core::primitive::u32;
 				pub type ApprovalsCount = ::core::primitive::u32;
 			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ProposalApproved {
+			impl ::subxt::ext::subxt_core::events::StaticEvent for SignerApproved {
 				const PALLET: &'static str = "Multisig";
-				const EVENT: &'static str = "ProposalApproved";
+				const EVENT: &'static str = "SignerApproved";
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -19561,7 +19857,6 @@ pub mod api {
 				pub claimer: deposits_claimed::Claimer,
 				pub total_returned: deposits_claimed::TotalReturned,
 				pub proposals_removed: deposits_claimed::ProposalsRemoved,
-				pub multisig_removed: deposits_claimed::MultisigRemoved,
 			}
 			pub mod deposits_claimed {
 				use super::runtime_types;
@@ -19569,59 +19864,10 @@ pub mod api {
 				pub type Claimer = ::subxt::ext::subxt_core::utils::AccountId32;
 				pub type TotalReturned = ::core::primitive::u128;
 				pub type ProposalsRemoved = ::core::primitive::u32;
-				pub type MultisigRemoved = ::core::primitive::bool;
 			}
 			impl ::subxt::ext::subxt_core::events::StaticEvent for DepositsClaimed {
 				const PALLET: &'static str = "Multisig";
 				const EVENT: &'static str = "DepositsClaimed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A signer approved dissolving the multisig"]
-			pub struct DissolveApproved {
-				pub multisig_address: dissolve_approved::MultisigAddress,
-				pub approver: dissolve_approved::Approver,
-				pub approvals_count: dissolve_approved::ApprovalsCount,
-			}
-			pub mod dissolve_approved {
-				use super::runtime_types;
-				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Approver = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type ApprovalsCount = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for DissolveApproved {
-				const PALLET: &'static str = "Multisig";
-				const EVENT: &'static str = "DissolveApproved";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A multisig account was dissolved (threshold reached)"]
-			pub struct MultisigDissolved {
-				pub multisig_address: multisig_dissolved::MultisigAddress,
-				pub deposit_returned: multisig_dissolved::DepositReturned,
-				pub approvers: multisig_dissolved::Approvers,
-			}
-			pub mod multisig_dissolved {
-				use super::runtime_types;
-				pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type DepositReturned = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Approvers = ::subxt::ext::subxt_core::alloc::vec::Vec<
-					::subxt::ext::subxt_core::utils::AccountId32,
-				>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for MultisigDissolved {
-				const PALLET: &'static str = "Multisig";
-				const EVENT: &'static str = "MultisigDissolved";
 			}
 		}
 		pub mod storage {
@@ -19635,7 +19881,6 @@ pub mod api {
 						runtime_types::bounded_collections::bounded_vec::BoundedVec<
 							::subxt::ext::subxt_core::utils::AccountId32,
 						>,
-						::core::primitive::u128,
 						runtime_types::bounded_collections::bounded_btree_map::BoundedBTreeMap<
 							::subxt::ext::subxt_core::utils::AccountId32,
 							::core::primitive::u32,
@@ -19659,14 +19904,6 @@ pub mod api {
 					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
 					pub type Param1 = ::core::primitive::u32;
 				}
-				pub mod dissolve_approvals {
-					use super::runtime_types;
-					pub type DissolveApprovals =
-						runtime_types::bounded_collections::bounded_vec::BoundedVec<
-							::subxt::ext::subxt_core::utils::AccountId32,
-						>;
-					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
 			}
 			pub struct StorageApi;
 			impl StorageApi {
@@ -19685,9 +19922,9 @@ pub mod api {
 						"Multisigs",
 						(),
 						[
-							81u8, 182u8, 236u8, 127u8, 98u8, 244u8, 6u8, 51u8, 209u8, 6u8, 214u8,
-							144u8, 49u8, 117u8, 203u8, 39u8, 180u8, 247u8, 172u8, 228u8, 72u8,
-							25u8, 171u8, 55u8, 41u8, 236u8, 14u8, 135u8, 22u8, 6u8, 241u8, 230u8,
+							33u8, 147u8, 123u8, 194u8, 230u8, 220u8, 119u8, 150u8, 95u8, 161u8,
+							244u8, 30u8, 177u8, 39u8, 20u8, 73u8, 112u8, 15u8, 42u8, 237u8, 117u8,
+							250u8, 200u8, 2u8, 0u8, 145u8, 91u8, 219u8, 8u8, 137u8, 107u8, 54u8,
 						],
 					)
 				}
@@ -19709,9 +19946,9 @@ pub mod api {
 						"Multisigs",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							81u8, 182u8, 236u8, 127u8, 98u8, 244u8, 6u8, 51u8, 209u8, 6u8, 214u8,
-							144u8, 49u8, 117u8, 203u8, 39u8, 180u8, 247u8, 172u8, 228u8, 72u8,
-							25u8, 171u8, 55u8, 41u8, 236u8, 14u8, 135u8, 22u8, 6u8, 241u8, 230u8,
+							33u8, 147u8, 123u8, 194u8, 230u8, 220u8, 119u8, 150u8, 95u8, 161u8,
+							244u8, 30u8, 177u8, 39u8, 20u8, 73u8, 112u8, 15u8, 42u8, 237u8, 117u8,
+							250u8, 200u8, 2u8, 0u8, 145u8, 91u8, 219u8, 8u8, 137u8, 107u8, 54u8,
 						],
 					)
 				}
@@ -19730,10 +19967,9 @@ pub mod api {
 						"Proposals",
 						(),
 						[
-							102u8, 10u8, 240u8, 43u8, 229u8, 237u8, 64u8, 243u8, 64u8, 7u8, 59u8,
-							83u8, 229u8, 106u8, 209u8, 184u8, 240u8, 116u8, 205u8, 176u8, 4u8,
-							247u8, 234u8, 87u8, 177u8, 197u8, 117u8, 38u8, 83u8, 216u8, 218u8,
-							67u8,
+							23u8, 150u8, 115u8, 215u8, 96u8, 175u8, 20u8, 135u8, 85u8, 106u8, 93u8,
+							135u8, 139u8, 72u8, 178u8, 43u8, 130u8, 76u8, 85u8, 75u8, 74u8, 69u8,
+							74u8, 232u8, 36u8, 30u8, 239u8, 26u8, 233u8, 249u8, 142u8, 163u8,
 						],
 					)
 				}
@@ -19755,10 +19991,9 @@ pub mod api {
 						"Proposals",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							102u8, 10u8, 240u8, 43u8, 229u8, 237u8, 64u8, 243u8, 64u8, 7u8, 59u8,
-							83u8, 229u8, 106u8, 209u8, 184u8, 240u8, 116u8, 205u8, 176u8, 4u8,
-							247u8, 234u8, 87u8, 177u8, 197u8, 117u8, 38u8, 83u8, 216u8, 218u8,
-							67u8,
+							23u8, 150u8, 115u8, 215u8, 96u8, 175u8, 20u8, 135u8, 85u8, 106u8, 93u8,
+							135u8, 139u8, 72u8, 178u8, 43u8, 130u8, 76u8, 85u8, 75u8, 74u8, 69u8,
+							74u8, 232u8, 36u8, 30u8, 239u8, 26u8, 233u8, 249u8, 142u8, 163u8,
 						],
 					)
 				}
@@ -19789,57 +20024,9 @@ pub mod api {
 							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
 						),
 						[
-							102u8, 10u8, 240u8, 43u8, 229u8, 237u8, 64u8, 243u8, 64u8, 7u8, 59u8,
-							83u8, 229u8, 106u8, 209u8, 184u8, 240u8, 116u8, 205u8, 176u8, 4u8,
-							247u8, 234u8, 87u8, 177u8, 197u8, 117u8, 38u8, 83u8, 216u8, 218u8,
-							67u8,
-						],
-					)
-				}
-				#[doc = " Dissolve approvals: tracks which signers approved dissolving the multisig"]
-				#[doc = " Maps multisig_address -> Vec<approver_accounts>"]
-				pub fn dissolve_approvals_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::dissolve_approvals::DissolveApprovals,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Multisig",
-						"DissolveApprovals",
-						(),
-						[
-							204u8, 17u8, 210u8, 54u8, 125u8, 128u8, 75u8, 21u8, 158u8, 13u8, 205u8,
-							89u8, 98u8, 73u8, 141u8, 159u8, 53u8, 129u8, 19u8, 195u8, 2u8, 178u8,
-							26u8, 137u8, 206u8, 7u8, 108u8, 196u8, 195u8, 4u8, 54u8, 111u8,
-						],
-					)
-				}
-				#[doc = " Dissolve approvals: tracks which signers approved dissolving the multisig"]
-				#[doc = " Maps multisig_address -> Vec<approver_accounts>"]
-				pub fn dissolve_approvals(
-					&self,
-					_0: types::dissolve_approvals::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::dissolve_approvals::Param0,
-					>,
-					types::dissolve_approvals::DissolveApprovals,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Multisig",
-						"DissolveApprovals",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							204u8, 17u8, 210u8, 54u8, 125u8, 128u8, 75u8, 21u8, 158u8, 13u8, 205u8,
-							89u8, 98u8, 73u8, 141u8, 159u8, 53u8, 129u8, 19u8, 195u8, 2u8, 178u8,
-							26u8, 137u8, 206u8, 7u8, 108u8, 196u8, 195u8, 4u8, 54u8, 111u8,
+							23u8, 150u8, 115u8, 215u8, 96u8, 175u8, 20u8, 135u8, 85u8, 106u8, 93u8,
+							135u8, 139u8, 72u8, 178u8, 43u8, 130u8, 76u8, 85u8, 75u8, 74u8, 69u8,
+							74u8, 232u8, 36u8, 30u8, 239u8, 26u8, 233u8, 249u8, 142u8, 163u8,
 						],
 					)
 				}
@@ -19866,8 +20053,9 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Maximum total number of proposals in storage per multisig (Active + Executed +"]
-				#[doc = " Cancelled) This prevents unbounded storage growth and incentivizes cleanup"]
+				#[doc = " Maximum number of proposals in storage per multisig."]
+				#[doc = " Only Active and Approved proposals are stored; executed and cancelled"]
+				#[doc = " proposals are removed immediately. This limit prevents unbounded storage growth."]
 				pub fn max_total_proposals_in_storage(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
@@ -19901,7 +20089,8 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Fee charged for creating a multisig (non-refundable, burned)"]
+				#[doc = " Fee charged for creating a multisig (non-refundable, burned)."]
+				#[doc = " This prevents spam creation of multisig accounts."]
 				pub fn multisig_fee(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
@@ -19910,23 +20099,6 @@ pub mod api {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"Multisig",
 						"MultisigFee",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " Deposit reserved for creating a multisig (returned when dissolved)."]
-				#[doc = " Keeps the state clean by incentivizing removal of unused multisigs."]
-				pub fn multisig_deposit(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Multisig",
-						"MultisigDeposit",
 						[
 							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
 							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
@@ -20023,6 +20195,30 @@ pub mod api {
 						],
 					)
 				}
+				#[doc = " Maximum weight allowed for inner calls executed through the multisig."]
+				#[doc = ""]
+				#[doc = " This bound ensures that the `execute` extrinsic can safely reserve weight"]
+				#[doc = " for the inner call at pre-dispatch time. Proposals with calls exceeding"]
+				#[doc = " this weight limit are rejected at propose time."]
+				#[doc = ""]
+				#[doc = " The execute extrinsic's weight annotation is: bookkeeping + MaxInnerCallWeight."]
+				#[doc = " This guarantees the block weight is never exceeded by arbitrary inner calls."]
+				pub fn max_inner_call_weight(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					runtime_types::sp_weights::weight_v2::Weight,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"Multisig",
+						"MaxInnerCallWeight",
+						[
+							149u8, 252u8, 129u8, 80u8, 169u8, 36u8, 79u8, 127u8, 240u8, 156u8,
+							56u8, 202u8, 219u8, 86u8, 5u8, 65u8, 245u8, 148u8, 138u8, 243u8, 210u8,
+							128u8, 234u8, 216u8, 240u8, 219u8, 123u8, 235u8, 21u8, 158u8, 237u8,
+							112u8,
+						],
+					)
+				}
 			}
 		}
 	}
@@ -20104,12 +20300,15 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A native token transfer was recorded."]
+			#[doc = ""]
+			#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+			#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 			pub struct NativeTransferred {
 				pub from: native_transferred::From,
 				pub to: native_transferred::To,
 				pub amount: native_transferred::Amount,
 				pub transfer_count: native_transferred::TransferCount,
-				/// Index of this transfer in the ZK trie (for Merkle proof lookup)
 				pub leaf_index: native_transferred::LeafIndex,
 			}
 			pub mod native_transferred {
@@ -20131,13 +20330,16 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A non-native asset transfer was recorded."]
+			#[doc = ""]
+			#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+			#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 			pub struct AssetTransferred {
 				pub asset_id: asset_transferred::AssetId,
 				pub from: asset_transferred::From,
 				pub to: asset_transferred::To,
 				pub amount: asset_transferred::Amount,
 				pub transfer_count: asset_transferred::TransferCount,
-				/// Index of this transfer in the ZK trie (for Merkle proof lookup)
 				pub leaf_index: asset_transferred::LeafIndex,
 			}
 			pub mod asset_transferred {
@@ -20183,12 +20385,6 @@ pub mod api {
 					use super::runtime_types;
 					pub type UsedNullifiers = ::core::primitive::bool;
 					pub type Param0 = [::core::primitive::u8; 32usize];
-				}
-				pub mod transfer_proof {
-					use super::runtime_types;
-					pub type TransferProof = [::core::primitive::u8; 32usize];
-					pub type Param0 =
-						(::subxt::ext::subxt_core::utils::AccountId32, ::core::primitive::u64);
 				}
 				pub mod transfer_count {
 					use super::runtime_types;
@@ -20249,68 +20445,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
-				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
-				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
-				#[doc = ""]
-				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
-				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
-				#[doc = " providing full 256-bit security."]
-				pub fn transfer_proof_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::transfer_proof::TransferProof,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Wormhole",
-						"TransferProof",
-						(),
-						[
-							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
-							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
-							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
-							55u8,
-						],
-					)
-				}
-				#[doc = " Transfer proofs for wormhole transfers (both native and assets)."]
-				#[doc = ""]
-				#[doc = " Storage key: Twox128(\"Wormhole\") || Twox128(\"TransferProof\") || Blake2_256(to,"]
-				#[doc = " transfer_count) Storage value: leaf_inputs_hash (Poseidon2 hash of full transfer data)"]
-				#[doc = ""]
-				#[doc = " The key uses only (to, transfer_count) since transfer_count is atomic per recipient."]
-				#[doc = " The ZK circuit verifies that the leaf_inputs_hash in the value section matches"]
-				#[doc = " the Poseidon2 hash of all transfer details (asset_id, count, from, to, amount),"]
-				#[doc = " providing full 256-bit security."]
-				pub fn transfer_proof(
-					&self,
-					_0: types::transfer_proof::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::transfer_proof::TransferProof,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Wormhole",
-						"TransferProof",
-						(),
-						[
-							68u8, 118u8, 236u8, 167u8, 234u8, 90u8, 185u8, 84u8, 179u8, 175u8,
-							199u8, 180u8, 115u8, 225u8, 146u8, 36u8, 107u8, 176u8, 147u8, 154u8,
-							35u8, 40u8, 9u8, 62u8, 253u8, 6u8, 37u8, 253u8, 83u8, 206u8, 187u8,
-							55u8,
-						],
-					)
-				}
-				#[doc = " Transfer count for all wormhole transfers"]
+				#[doc = " Transfer count per recipient - used to generate unique leaf indices in the ZK trie."]
 				pub fn transfer_count_iter(
 					&self,
 				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
@@ -20332,7 +20467,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Transfer count for all wormhole transfers"]
+				#[doc = " Transfer count per recipient - used to generate unique leaf indices in the ZK trie."]
 				pub fn transfer_count(
 					&self,
 					_0: types::transfer_count::Param0,
@@ -20455,6 +20590,252 @@ pub mod api {
 							65u8, 93u8, 120u8, 165u8, 204u8, 81u8, 159u8, 163u8, 93u8, 135u8,
 							114u8, 121u8, 147u8, 35u8, 215u8, 213u8, 4u8, 223u8, 83u8, 37u8, 225u8,
 							200u8, 189u8, 156u8, 140u8, 36u8, 58u8, 46u8, 42u8, 232u8, 155u8, 0u8,
+						],
+					)
+				}
+			}
+		}
+	}
+	pub mod zk_tree {
+		use super::{root_mod, runtime_types};
+		#[doc = "The `Error` enum of this pallet."]
+		pub type Error = runtime_types::pallet_zk_tree::pallet::Error;
+		#[doc = "The `Event` enum of this pallet"]
+		pub type Event = runtime_types::pallet_zk_tree::pallet::Event;
+		pub mod events {
+			use super::runtime_types;
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "A new leaf was inserted into the tree."]
+			pub struct LeafInserted {
+				pub index: leaf_inserted::Index,
+				pub leaf_hash: leaf_inserted::LeafHash,
+				pub new_root: leaf_inserted::NewRoot,
+			}
+			pub mod leaf_inserted {
+				use super::runtime_types;
+				pub type Index = ::core::primitive::u64;
+				pub type LeafHash = [::core::primitive::u8; 32usize];
+				pub type NewRoot = [::core::primitive::u8; 32usize];
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for LeafInserted {
+				const PALLET: &'static str = "ZkTree";
+				const EVENT: &'static str = "LeafInserted";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Tree depth increased."]
+			pub struct TreeGrew {
+				pub new_depth: tree_grew::NewDepth,
+			}
+			pub mod tree_grew {
+				use super::runtime_types;
+				pub type NewDepth = ::core::primitive::u8;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for TreeGrew {
+				const PALLET: &'static str = "ZkTree";
+				const EVENT: &'static str = "TreeGrew";
+			}
+		}
+		pub mod storage {
+			use super::runtime_types;
+			pub mod types {
+				use super::runtime_types;
+				pub mod leaves {
+					use super::runtime_types;
+					pub type Leaves = runtime_types::pallet_zk_tree::ZkLeaf<
+						::subxt::ext::subxt_core::utils::AccountId32,
+						::core::primitive::u32,
+						::core::primitive::u128,
+					>;
+					pub type Param0 = ::core::primitive::u64;
+				}
+				pub mod nodes {
+					use super::runtime_types;
+					pub type Nodes = [::core::primitive::u8; 32usize];
+					pub type Param0 = (::core::primitive::u8, ::core::primitive::u64);
+				}
+				pub mod leaf_count {
+					use super::runtime_types;
+					pub type LeafCount = ::core::primitive::u64;
+				}
+				pub mod depth {
+					use super::runtime_types;
+					pub type Depth = ::core::primitive::u8;
+				}
+				pub mod root {
+					use super::runtime_types;
+					pub type Root = [::core::primitive::u8; 32usize];
+				}
+			}
+			pub struct StorageApi;
+			impl StorageApi {
+				#[doc = " Leaf data stored by index."]
+				pub fn leaves_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::leaves::Leaves,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Leaves",
+						(),
+						[
+							179u8, 219u8, 161u8, 103u8, 54u8, 178u8, 204u8, 221u8, 15u8, 0u8,
+							103u8, 111u8, 19u8, 89u8, 167u8, 0u8, 200u8, 35u8, 149u8, 127u8, 230u8,
+							183u8, 152u8, 151u8, 88u8, 171u8, 223u8, 134u8, 58u8, 122u8, 119u8,
+							53u8,
+						],
+					)
+				}
+				#[doc = " Leaf data stored by index."]
+				pub fn leaves(
+					&self,
+					_0: types::leaves::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::leaves::Param0,
+					>,
+					types::leaves::Leaves,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Leaves",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							179u8, 219u8, 161u8, 103u8, 54u8, 178u8, 204u8, 221u8, 15u8, 0u8,
+							103u8, 111u8, 19u8, 89u8, 167u8, 0u8, 200u8, 35u8, 149u8, 127u8, 230u8,
+							183u8, 152u8, 151u8, 88u8, 171u8, 223u8, 134u8, 58u8, 122u8, 119u8,
+							53u8,
+						],
+					)
+				}
+				#[doc = " Internal tree nodes: (level, index) -> hash."]
+				#[doc = " Level 0 is unused (leaves are hashed on-demand)."]
+				#[doc = " Level 1+ contains internal node hashes."]
+				pub fn nodes_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::nodes::Nodes,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Nodes",
+						(),
+						[
+							109u8, 135u8, 134u8, 82u8, 149u8, 113u8, 22u8, 231u8, 196u8, 37u8,
+							27u8, 29u8, 86u8, 223u8, 101u8, 97u8, 89u8, 147u8, 86u8, 202u8, 170u8,
+							24u8, 164u8, 137u8, 71u8, 46u8, 91u8, 69u8, 35u8, 251u8, 152u8, 144u8,
+						],
+					)
+				}
+				#[doc = " Internal tree nodes: (level, index) -> hash."]
+				#[doc = " Level 0 is unused (leaves are hashed on-demand)."]
+				#[doc = " Level 1+ contains internal node hashes."]
+				pub fn nodes(
+					&self,
+					_0: types::nodes::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::nodes::Param0,
+					>,
+					types::nodes::Nodes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Nodes",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							109u8, 135u8, 134u8, 82u8, 149u8, 113u8, 22u8, 231u8, 196u8, 37u8,
+							27u8, 29u8, 86u8, 223u8, 101u8, 97u8, 89u8, 147u8, 86u8, 202u8, 170u8,
+							24u8, 164u8, 137u8, 71u8, 46u8, 91u8, 69u8, 35u8, 251u8, 152u8, 144u8,
+						],
+					)
+				}
+				#[doc = " Number of leaves in the tree."]
+				pub fn leaf_count(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::leaf_count::LeafCount,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"LeafCount",
+						(),
+						[
+							67u8, 168u8, 48u8, 81u8, 223u8, 41u8, 216u8, 165u8, 89u8, 116u8, 103u8,
+							23u8, 83u8, 40u8, 238u8, 124u8, 63u8, 8u8, 247u8, 246u8, 11u8, 63u8,
+							181u8, 30u8, 51u8, 181u8, 232u8, 236u8, 184u8, 121u8, 66u8, 250u8,
+						],
+					)
+				}
+				#[doc = " Current depth of the tree (0 = empty, 1 = up to 4 leaves, etc.)."]
+				pub fn depth(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::depth::Depth,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Depth",
+						(),
+						[
+							15u8, 235u8, 244u8, 51u8, 6u8, 56u8, 103u8, 34u8, 29u8, 165u8, 154u8,
+							31u8, 166u8, 174u8, 83u8, 59u8, 232u8, 175u8, 227u8, 168u8, 185u8,
+							29u8, 71u8, 211u8, 162u8, 69u8, 81u8, 108u8, 247u8, 107u8, 215u8, 52u8,
+						],
+					)
+				}
+				#[doc = " Current root hash of the tree."]
+				pub fn root(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::root::Root,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"ZkTree",
+						"Root",
+						(),
+						[
+							240u8, 224u8, 214u8, 191u8, 99u8, 19u8, 153u8, 102u8, 246u8, 99u8,
+							194u8, 80u8, 179u8, 162u8, 75u8, 8u8, 74u8, 143u8, 162u8, 61u8, 251u8,
+							71u8, 235u8, 88u8, 14u8, 197u8, 34u8, 40u8, 136u8, 119u8, 201u8, 35u8,
 						],
 					)
 				}
@@ -23495,7 +23876,6 @@ pub mod api {
 					#[doc = ""]
 					#[doc = "Economic costs:"]
 					#[doc = "- MultisigFee: burned immediately (spam prevention)"]
-					#[doc = "- MultisigDeposit: reserved until dissolution, then returned to creator (storage bond)"]
 					create_multisig {
 						signers: ::subxt::ext::subxt_core::alloc::vec::Vec<
 							::subxt::ext::subxt_core::utils::AccountId32,
@@ -23522,7 +23902,9 @@ pub mod api {
 					#[doc = "Refunded to actual cost on success based on whether HS path was taken."]
 					propose {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						call: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+						call: runtime_types::bounded_collections::bounded_vec::BoundedVec<
+							::core::primitive::u8,
+						>,
 						expiry: ::core::primitive::u32,
 					},
 					#[codec(index = 2)]
@@ -23580,7 +23962,7 @@ pub mod api {
 					claim_deposits {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
-					#[codec(index = 7)]
+					#[codec(index = 6)]
 					#[doc = "Execute an approved proposal"]
 					#[doc = ""]
 					#[doc = "Can be called by any signer of the multisig once the proposal has reached"]
@@ -23594,26 +23976,13 @@ pub mod api {
 					#[doc = "Parameters:"]
 					#[doc = "- `multisig_address`: The multisig account"]
 					#[doc = "- `proposal_id`: ID (nonce) of the proposal to execute"]
+					#[doc = ""]
+					#[doc = "Note: The weight charged includes both multisig bookkeeping and MaxInnerCallWeight."]
+					#[doc = "Actual weight is refunded based on the inner call's post-dispatch info."]
+					#[doc = "The inner call's weight is validated against MaxInnerCallWeight at propose time."]
 					execute {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposal_id: ::core::primitive::u32,
-					},
-					#[codec(index = 6)]
-					#[doc = "Approve dissolving a multisig account"]
-					#[doc = ""]
-					#[doc = "Signers call this to approve dissolving the multisig."]
-					#[doc = "When threshold is reached, the multisig is automatically dissolved."]
-					#[doc = ""]
-					#[doc = "Requirements:"]
-					#[doc = "- Caller must be a signer"]
-					#[doc = "- No proposals exist (active, executed, or cancelled) - must be fully cleaned up"]
-					#[doc = "- Multisig account balance must be zero"]
-					#[doc = ""]
-					#[doc = "When threshold is reached:"]
-					#[doc = "- Deposit is returned to creator"]
-					#[doc = "- Multisig storage is removed"]
-					approve_dissolve {
-						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 				}
 				#[derive(
@@ -23631,6 +24000,7 @@ pub mod api {
 				pub enum Error {
 					#[codec(index = 0)]
 					#[doc = "Not enough signers provided"]
+					#[doc = "Multisig requires at least 2 unique signers"]
 					NotEnoughSigners,
 					#[codec(index = 1)]
 					#[doc = "Threshold must be greater than zero"]
@@ -23642,74 +24012,68 @@ pub mod api {
 					#[doc = "Too many signers"]
 					TooManySigners,
 					#[codec(index = 4)]
-					#[doc = "Duplicate signer in list"]
-					DuplicateSigner,
-					#[codec(index = 5)]
 					#[doc = "Multisig already exists"]
 					MultisigAlreadyExists,
-					#[codec(index = 6)]
+					#[codec(index = 5)]
 					#[doc = "Multisig not found"]
 					MultisigNotFound,
-					#[codec(index = 7)]
+					#[codec(index = 6)]
 					#[doc = "Caller is not a signer of this multisig"]
 					NotASigner,
-					#[codec(index = 8)]
+					#[codec(index = 7)]
 					#[doc = "Proposal not found"]
 					ProposalNotFound,
-					#[codec(index = 9)]
+					#[codec(index = 8)]
 					#[doc = "Caller is not the proposer"]
 					NotProposer,
-					#[codec(index = 10)]
+					#[codec(index = 9)]
 					#[doc = "Already approved by this signer"]
 					AlreadyApproved,
-					#[codec(index = 11)]
+					#[codec(index = 10)]
 					#[doc = "Not enough approvals to execute"]
 					NotEnoughApprovals,
-					#[codec(index = 12)]
+					#[codec(index = 11)]
 					#[doc = "Proposal expiry is in the past"]
 					ExpiryInPast,
-					#[codec(index = 13)]
+					#[codec(index = 12)]
 					#[doc = "Proposal expiry is too far in the future (exceeds MaxExpiryDuration)"]
 					ExpiryTooFar,
-					#[codec(index = 14)]
+					#[codec(index = 13)]
 					#[doc = "Proposal has expired"]
 					ProposalExpired,
-					#[codec(index = 15)]
-					#[doc = "Call data too large"]
-					CallTooLarge,
-					#[codec(index = 16)]
+					#[codec(index = 14)]
 					#[doc = "Failed to decode call data"]
 					InvalidCall,
-					#[codec(index = 17)]
+					#[codec(index = 15)]
 					#[doc = "Too many total proposals in storage for this multisig (cleanup required)"]
 					TooManyProposalsInStorage,
-					#[codec(index = 18)]
+					#[codec(index = 16)]
 					#[doc = "This signer has too many proposals in storage (filibuster protection)"]
 					TooManyProposalsPerSigner,
-					#[codec(index = 19)]
+					#[codec(index = 17)]
 					#[doc = "Insufficient balance for deposit"]
 					InsufficientBalance,
-					#[codec(index = 20)]
+					#[codec(index = 18)]
 					#[doc = "Proposal has active deposit"]
 					ProposalHasDeposit,
-					#[codec(index = 21)]
+					#[codec(index = 19)]
 					#[doc = "Proposal has not expired yet"]
 					ProposalNotExpired,
-					#[codec(index = 22)]
-					#[doc = "Proposal is not active (already executed or cancelled)"]
+					#[codec(index = 20)]
+					#[doc = "Proposal is not in a cancellable state (must be Active or Approved)"]
 					ProposalNotActive,
-					#[codec(index = 23)]
+					#[codec(index = 21)]
 					#[doc = "Proposal has not been approved yet (threshold not reached)"]
 					ProposalNotApproved,
-					#[codec(index = 24)]
-					#[doc = "Cannot dissolve multisig with existing proposals (clear them first)"]
-					ProposalsExist,
-					#[codec(index = 25)]
-					#[doc = "Multisig account must have zero balance before dissolution"]
-					MultisigAccountNotZero,
-					#[codec(index = 26)]
+					#[codec(index = 22)]
 					#[doc = "Call is not allowed for high-security multisig"]
 					CallNotAllowedForHighSecurityMultisig,
+					#[codec(index = 23)]
+					#[doc = "Proposal nonce exhausted (u32::MAX reached)"]
+					ProposalNonceExhausted,
+					#[codec(index = 24)]
+					#[doc = "Call weight exceeds MaxInnerCallWeight limit"]
+					CallWeightExceedsLimit,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -23744,8 +24108,8 @@ pub mod api {
 						proposal_id: ::core::primitive::u32,
 					},
 					#[codec(index = 2)]
-					#[doc = "A proposal has been approved by a signer"]
-					ProposalApproved {
+					#[doc = "A signer has approved a proposal (does not imply threshold reached)"]
+					SignerApproved {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						approver: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposal_id: ::core::primitive::u32,
@@ -23794,23 +24158,6 @@ pub mod api {
 						claimer: ::subxt::ext::subxt_core::utils::AccountId32,
 						total_returned: ::core::primitive::u128,
 						proposals_removed: ::core::primitive::u32,
-						multisig_removed: ::core::primitive::bool,
-					},
-					#[codec(index = 8)]
-					#[doc = "A signer approved dissolving the multisig"]
-					DissolveApproved {
-						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						approver: ::subxt::ext::subxt_core::utils::AccountId32,
-						approvals_count: ::core::primitive::u32,
-					},
-					#[codec(index = 9)]
-					#[doc = "A multisig account was dissolved (threshold reached)"]
-					MultisigDissolved {
-						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
-						deposit_returned: ::subxt::ext::subxt_core::utils::AccountId32,
-						approvers: ::subxt::ext::subxt_core::alloc::vec::Vec<
-							::subxt::ext::subxt_core::utils::AccountId32,
-						>,
 					},
 				}
 			}
@@ -23821,14 +24168,12 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct MultisigData<_0, _1, _2, _3> {
+			pub struct MultisigData<_0, _1, _2> {
 				pub creator: _0,
 				pub signers: _1,
 				pub threshold: ::core::primitive::u32,
 				pub proposal_nonce: ::core::primitive::u32,
-				pub deposit: _2,
-				pub active_proposals: ::core::primitive::u32,
-				pub proposals_per_signer: _3,
+				pub proposals_per_signer: _2,
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -23840,6 +24185,7 @@ pub mod api {
 			pub struct ProposalData<_0, _1, _2, _3, _4> {
 				pub proposer: _0,
 				pub call: _3,
+				pub call_weight: runtime_types::sp_weights::weight_v2::Weight,
 				pub expiry: _2,
 				pub approvals: _4,
 				pub deposit: _1,
@@ -23857,10 +24203,6 @@ pub mod api {
 				Active,
 				#[codec(index = 1)]
 				Approved,
-				#[codec(index = 2)]
-				Executed,
-				#[codec(index = 3)]
-				Cancelled,
 			}
 		}
 		pub mod pallet_preimage {
@@ -25284,22 +25626,41 @@ pub mod api {
 					#[doc = "Enable high-security for the calling account with a specified"]
 					#[doc = "reversibility delay."]
 					#[doc = ""]
-					#[doc = "Recoverer and interceptor (aka guardian) could be the same account or"]
-					#[doc = "different accounts."]
-					#[doc = ""]
 					#[doc = "Once an account is set as high security it can only make reversible"]
 					#[doc = "transfers. It is not allowed any other calls."]
 					#[doc = ""]
-					#[doc = "- `delay`: The reversibility time for any transfer made by the high"]
-					#[doc = "security account."]
-					#[doc = "- interceptor: The account that can intercept transctions from the"]
-					#[doc = "high security account."]
+					#[doc = "# Warning: Permanent and Irreversible"]
+					#[doc = ""]
+					#[doc = "**Enabling high security mode is a one-way operation that cannot be undone.**"]
+					#[doc = ""]
+					#[doc = "Once this function is called successfully, the account is permanently restricted"]
+					#[doc = "to only the following operations:"]
+					#[doc = "- [`schedule_transfer`](Self::schedule_transfer) - Schedule delayed native token"]
+					#[doc = "  transfers"]
+					#[doc = "- [`schedule_asset_transfer`](Self::schedule_asset_transfer) - Schedule delayed asset"]
+					#[doc = "  transfers"]
+					#[doc = "- [`cancel`](Self::cancel) - Cancel pending transfers"]
+					#[doc = "- [`recover_funds`](Self::recover_funds) - Guardian-initiated emergency fund recovery"]
+					#[doc = ""]
+					#[doc = "There is no mechanism to disable high security mode or restore normal account"]
+					#[doc = "functionality. This design is intentional to provide maximum security guarantees:"]
+					#[doc = "an attacker who gains access to the account cannot simply disable the protections."]
+					#[doc = ""]
+					#[doc = "Users who no longer wish to use high-security features can simply transfer their"]
+					#[doc = "funds to a different account using [`schedule_transfer`](Self::schedule_transfer)"]
+					#[doc = "or [`schedule_asset_transfer`](Self::schedule_asset_transfer)."]
+					#[doc = ""]
+					#[doc = "# Parameters"]
+					#[doc = ""]
+					#[doc = "- `delay`: The reversibility time for any transfer made by the high-security account."]
+					#[doc = "- `guardian`: The guardian account that can cancel pending transfers and recover funds"]
+					#[doc = "  from this high-security account."]
 					set_high_security {
 						delay: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
 						>,
-						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
+						guardian: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 1)]
 					#[doc = "Cancel a pending reversible transaction scheduled by the caller."]
@@ -25307,9 +25668,22 @@ pub mod api {
 					#[doc = "- `tx_id`: The unique identifier of the transaction to cancel."]
 					cancel { tx_id: ::subxt::ext::subxt_core::utils::H256 },
 					#[codec(index = 2)]
-					#[doc = "Called by the Scheduler to finalize the scheduled task/call"]
+					#[doc = "Executes a previously scheduled transfer after the delay period has elapsed."]
 					#[doc = ""]
-					#[doc = "- `tx_id`: The unique id of the transaction to finalize and dispatch."]
+					#[doc = "This extrinsic is called automatically by the Scheduler pallet when the"]
+					#[doc = "delay period expires. It must be signed by this pallet's account (not a user)."]
+					#[doc = "The pallet account is set as the origin when scheduling via"]
+					#[doc = "[`do_schedule_transfer_inner`](Self::do_schedule_transfer_inner)."]
+					#[doc = ""]
+					#[doc = "# Parameters"]
+					#[doc = ""]
+					#[doc = "- `tx_id`: The unique identifier of the pending transfer to execute."]
+					#[doc = ""]
+					#[doc = "# Errors"]
+					#[doc = ""]
+					#[doc = "- [`InvalidSchedulerOrigin`](Error::InvalidSchedulerOrigin): Called by an account other"]
+					#[doc = "  than this pallet's account."]
+					#[doc = "- [`PendingTxNotFound`](Error::PendingTxNotFound): No pending transfer with this ID."]
 					execute_transfer { tx_id: ::subxt::ext::subxt_core::utils::H256 },
 					#[codec(index = 3)]
 					#[doc = "Schedule a transaction for delayed execution."]
@@ -25364,12 +25738,16 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 7)]
-					#[doc = "Allows the guardian (interceptor) to recover all funds from a high security"]
-					#[doc = "account by transferring the entire balance to themselves."]
+					#[doc = "Allows the guardian to recover all funds from a high-security account"]
+					#[doc = "by transferring the entire balance to themselves."]
 					#[doc = ""]
-					#[doc = "This is an emergency function for when the high security account may be compromised."]
+					#[doc = "This is an emergency function for when the high-security account may be compromised."]
 					#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
 					#[doc = "the remaining free balance to the guardian."]
+					#[doc = ""]
+					#[doc = "If releasing held funds fails for any transfer, that transfer is skipped (metadata"]
+					#[doc = "preserved for manual retry via `cancel`) and a `TransferRecoveryFailed` event is"]
+					#[doc = "emitted. Other transfers continue to be processed."]
 					recover_funds { account: ::subxt::ext::subxt_core::utils::AccountId32 },
 				}
 				#[derive(
@@ -25392,8 +25770,8 @@ pub mod api {
 					#[doc = "The account attempting the action is not marked as high security."]
 					AccountNotHighSecurity,
 					#[codec(index = 2)]
-					#[doc = "Interceptor can not be the account itself, because it is redundant."]
-					InterceptorCannotBeSelf,
+					#[doc = "Guardian cannot be the account itself, because it is redundant."]
+					GuardianCannotBeSelf,
 					#[codec(index = 3)]
 					#[doc = "Recoverer cannot be the account itself, because it is redundant."]
 					RecovererCannotBeSelf,
@@ -25432,8 +25810,8 @@ pub mod api {
 					#[doc = "deterrence)"]
 					AccountAlreadyReversibleCannotScheduleOneTime,
 					#[codec(index = 15)]
-					#[doc = "The interceptor has reached the maximum number of accounts they can intercept for."]
-					TooManyInterceptorAccounts,
+					#[doc = "The guardian has reached the maximum number of accounts they can protect."]
+					TooManyGuardianAccounts,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -25450,22 +25828,20 @@ pub mod api {
 				pub enum Event {
 					#[codec(index = 0)]
 					#[doc = "A user has enabled their high-security settings."]
-					#[doc = "[who, interceptor, recoverer, delay]"]
 					HighSecuritySet {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
+						guardian: ::subxt::ext::subxt_core::utils::AccountId32,
 						delay: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
 							::core::primitive::u32,
 							::core::primitive::u64,
 						>,
 					},
 					#[codec(index = 1)]
-					#[doc = "A transaction has been intercepted and scheduled for delayed execution."]
-					#[doc = "[from, to, interceptor, amount, tx_id, execute_at_moment]"]
+					#[doc = "A transaction has been scheduled for delayed execution."]
 					TransactionScheduled {
 						from: ::subxt::ext::subxt_core::utils::AccountId32,
 						to: ::subxt::ext::subxt_core::utils::AccountId32,
-						interceptor: ::subxt::ext::subxt_core::utils::AccountId32,
+						guardian: ::subxt::ext::subxt_core::utils::AccountId32,
 						asset_id: ::core::option::Option<::core::primitive::u32>,
 						amount: ::core::primitive::u128,
 						tx_id: ::subxt::ext::subxt_core::utils::H256,
@@ -25475,7 +25851,7 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 2)]
-					#[doc = "A scheduled transaction has been successfully cancelled by the owner."]
+					#[doc = "A scheduled transaction has been successfully cancelled."]
 					TransactionCancelled {
 						who: ::subxt::ext::subxt_core::utils::AccountId32,
 						tx_id: ::subxt::ext::subxt_core::utils::H256,
@@ -25492,11 +25868,15 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 4)]
-					#[doc = "Funds were recovered from a high security account by its guardian."]
+					#[doc = "All funds were recovered from a high-security account by its guardian."]
 					FundsRecovered {
 						account: ::subxt::ext::subxt_core::utils::AccountId32,
 						guardian: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
+					#[codec(index = 5)]
+					#[doc = "Failed to release held funds during recovery. The transfer metadata is preserved"]
+					#[doc = "for manual retry via `cancel`."]
+					TransferRecoveryFailed { tx_id: ::subxt::ext::subxt_core::utils::H256 },
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -25522,7 +25902,7 @@ pub mod api {
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub struct HighSecurityAccountData<_0, _1> {
-				pub interceptor: _0,
+				pub guardian: _0,
 				pub delay: _1,
 			}
 			#[derive(
@@ -25535,8 +25915,8 @@ pub mod api {
 			pub struct PendingTransfer<_0, _1, _2> {
 				pub from: _0,
 				pub to: _0,
-				pub interceptor: _0,
-				pub call: _2,
+				pub guardian: _0,
+				pub asset_id: ::core::option::Option<_2>,
 				pub amount: _1,
 			}
 		}
@@ -25621,6 +26001,10 @@ pub mod api {
 					#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 					#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 					#[doc = "original `total_retries`."]
+					#[doc = ""]
+					#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
+					#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
+					#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
 					set_retry {
 						task: (
 							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
@@ -25647,6 +26031,10 @@ pub mod api {
 					#[doc = "clones of the original task. Their retry configuration will be derived from the"]
 					#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
 					#[doc = "original `total_retries`."]
+					#[doc = ""]
+					#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
+					#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
+					#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
 					set_retry_named {
 						id: [::core::primitive::u8; 32usize],
 						retries: ::core::primitive::u8,
@@ -25701,6 +26089,15 @@ pub mod api {
 					#[codec(index = 5)]
 					#[doc = "Attempt to use a non-named function on a named task."]
 					Named,
+					#[codec(index = 6)]
+					#[doc = "Periodic scheduling is not supported."]
+					PeriodicNotSupported,
+					#[codec(index = 7)]
+					#[doc = "Retry period type does not match task scheduling type."]
+					#[doc = ""]
+					#[doc = "Block-scheduled tasks require a block-number retry period,"]
+					#[doc = "and timestamp-scheduled tasks require a timestamp retry period."]
+					RetryPeriodMismatch,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26007,6 +26404,11 @@ pub mod api {
 				pub enum Call {
 					#[codec(index = 0)]
 					#[doc = "Set the treasury account. Root only. Zero address is rejected (funds would be locked)."]
+					#[doc = ""]
+					#[doc = "**Important**: This only changes where *future* mining rewards are sent. Any balance"]
+					#[doc = "that has already accumulated in the current treasury account is NOT automatically"]
+					#[doc = "migrated to the new account. If you need to move existing funds, perform a separate"]
+					#[doc = "balance transfer (e.g., via governance proposal) after updating the account."]
 					set_treasury_account { account: ::subxt::ext::subxt_core::utils::AccountId32 },
 					#[codec(index = 1)]
 					#[doc = "Set the treasury portion (Permill, 0–100%). Root only."]
@@ -26047,10 +26449,18 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
+					#[doc = "The treasury account was updated."]
+					#[doc = ""]
+					#[doc = "Note: This only redirects where future mining rewards are sent. Any balance"]
+					#[doc = "accumulated in the old account remains there and is NOT automatically migrated."]
+					#[doc = "Use a separate balance transfer if funds need to be moved."]
 					TreasuryAccountUpdated {
+						old_account:
+							::core::option::Option<::subxt::ext::subxt_core::utils::AccountId32>,
 						new_account: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
 					#[codec(index = 1)]
+					#[doc = "The treasury portion (share of mining rewards) was updated."]
 					TreasuryPortionUpdated {
 						new_portion: runtime_types::sp_arithmetic::per_things::Permill,
 					},
@@ -26374,19 +26784,29 @@ pub mod api {
 				#[doc = "The `Event` enum of this pallet"]
 				pub enum Event {
 					#[codec(index = 0)]
+					#[doc = "A native token transfer was recorded."]
+					#[doc = ""]
+					#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+					#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 					NativeTransferred {
 						from: ::subxt::ext::subxt_core::utils::AccountId32,
 						to: ::subxt::ext::subxt_core::utils::AccountId32,
 						amount: ::core::primitive::u128,
 						transfer_count: ::core::primitive::u64,
+						leaf_index: ::core::primitive::u64,
 					},
 					#[codec(index = 1)]
+					#[doc = "A non-native asset transfer was recorded."]
+					#[doc = ""]
+					#[doc = "The `leaf_index` can be used to fetch Merkle proofs via the"]
+					#[doc = "`zkTrie_getMerkleProof` RPC for ZK circuit verification."]
 					AssetTransferred {
 						asset_id: ::core::primitive::u32,
 						from: ::subxt::ext::subxt_core::utils::AccountId32,
 						to: ::subxt::ext::subxt_core::utils::AccountId32,
 						amount: ::core::primitive::u128,
 						transfer_count: ::core::primitive::u64,
+						leaf_index: ::core::primitive::u64,
 					},
 					#[codec(index = 2)]
 					ProofVerified {
@@ -26396,6 +26816,86 @@ pub mod api {
 						>,
 					},
 				}
+			}
+		}
+		pub mod pallet_zk_tree {
+			use super::runtime_types;
+			pub mod pallet {
+				use super::runtime_types;
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "The `Error` enum of this pallet."]
+				pub enum Error {
+					#[codec(index = 0)]
+					#[doc = "Leaf index out of bounds."]
+					LeafIndexOutOfBounds,
+					#[codec(index = 1)]
+					#[doc = "Leaf not found."]
+					LeafNotFound,
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "The `Event` enum of this pallet"]
+				pub enum Event {
+					#[codec(index = 0)]
+					#[doc = "A new leaf was inserted into the tree."]
+					LeafInserted {
+						index: ::core::primitive::u64,
+						leaf_hash: [::core::primitive::u8; 32usize],
+						new_root: [::core::primitive::u8; 32usize],
+					},
+					#[codec(index = 1)]
+					#[doc = "Tree depth increased."]
+					TreeGrew { new_depth: ::core::primitive::u8 },
+				}
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct ZkLeaf<_0, _1, _2> {
+				pub to: _0,
+				pub transfer_count: ::core::primitive::u64,
+				pub asset_id: _1,
+				pub amount: _2,
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			pub struct ZkMerkleProofRpc {
+				pub leaf_index: ::core::primitive::u64,
+				pub leaf_data: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+				pub leaf_hash: [::core::primitive::u8; 32usize],
+				pub siblings: ::subxt::ext::subxt_core::alloc::vec::Vec<
+					[[::core::primitive::u8; 32usize]; 3usize],
+				>,
+				pub root: [::core::primitive::u8; 32usize],
+				pub depth: ::core::primitive::u8,
 			}
 		}
 		pub mod primitive_types {
@@ -26460,6 +26960,7 @@ pub mod api {
 				pub number: _0,
 				pub state_root: ::subxt::ext::subxt_core::utils::H256,
 				pub extrinsics_root: ::subxt::ext::subxt_core::utils::H256,
+				pub zk_tree_root: ::subxt::ext::subxt_core::utils::H256,
 				pub digest: runtime_types::sp_runtime::generic::digest::Digest,
 			}
 		}
@@ -26645,6 +27146,8 @@ pub mod api {
 				Multisig(runtime_types::pallet_multisig::pallet::Error),
 				#[codec(index = 20)]
 				Wormhole(runtime_types::pallet_wormhole::pallet::Error),
+				#[codec(index = 21)]
+				ZkTree(runtime_types::pallet_zk_tree::pallet::Error),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26692,6 +27195,8 @@ pub mod api {
 				Multisig(runtime_types::pallet_multisig::pallet::Event),
 				#[codec(index = 20)]
 				Wormhole(runtime_types::pallet_wormhole::pallet::Event),
+				#[codec(index = 21)]
+				ZkTree(runtime_types::pallet_zk_tree::pallet::Event),
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,

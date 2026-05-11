@@ -32,10 +32,6 @@ pub struct MultisigInfo {
 	pub signers: Vec<String>,
 	/// Next proposal ID
 	pub proposal_nonce: u32,
-	/// Locked deposit amount (returned to creator on dissolve)
-	pub deposit: u128,
-	/// Number of active proposals
-	pub active_proposals: u32,
 }
 
 /// Proposal status
@@ -45,8 +41,6 @@ pub enum ProposalStatus {
 	Active,
 	/// Threshold reached; any signer can call execute to dispatch
 	Approved,
-	Executed,
-	Cancelled,
 }
 
 /// Proposal information
@@ -587,8 +581,11 @@ pub async fn propose_transfer(
 	Compact(amount).encode_to(&mut call_data);
 
 	// Build propose transaction
-	let propose_tx =
-		quantus_subxt::api::tx().multisig().propose(multisig_address, call_data, expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_address,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
@@ -617,8 +614,11 @@ pub async fn propose_custom(
 	expiry: u32,
 ) -> crate::error::Result<subxt::utils::H256> {
 	// Build propose transaction
-	let propose_tx =
-		quantus_subxt::api::tx().multisig().propose(multisig_address, call_data, expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_address,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
@@ -740,8 +740,6 @@ pub async fn get_multisig_info(
 			threshold: data.threshold,
 			signers,
 			proposal_nonce: data.proposal_nonce,
-			deposit: data.deposit,
-			active_proposals: data.active_proposals,
 		}))
 	} else {
 		Ok(None)
@@ -790,10 +788,6 @@ pub async fn get_proposal_info(
 				ProposalStatus::Active,
 			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
 				ProposalStatus::Approved,
-			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
-				ProposalStatus::Executed,
-			quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
-				ProposalStatus::Cancelled,
 		};
 
 		Ok(Some(ProposalInfo {
@@ -864,10 +858,6 @@ pub async fn list_proposals(
 						ProposalStatus::Active,
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
 						ProposalStatus::Approved,
-					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
-						ProposalStatus::Executed,
-					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
-						ProposalStatus::Cancelled,
 				};
 
 				proposals.push(ProposalInfo {
@@ -884,37 +874,6 @@ pub async fn list_proposals(
 	}
 
 	Ok(proposals)
-}
-
-/// Approve dissolving a multisig
-///
-/// Requires threshold approvals. When threshold is reached, multisig is dissolved.
-/// Requirements:
-/// - No proposals exist (active, executed, or cancelled)
-/// - Multisig account balance must be zero
-/// - Deposit is returned to creator
-///
-/// # Returns
-/// Transaction hash
-#[allow(dead_code)]
-pub async fn approve_dissolve_multisig(
-	quantus_client: &crate::chain::client::QuantusClient,
-	caller_keypair: &crate::wallet::QuantumKeyPair,
-	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
-) -> crate::error::Result<subxt::utils::H256> {
-	let approve_tx = quantus_subxt::api::tx().multisig().approve_dissolve(multisig_address);
-
-	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
-	let tx_hash = crate::cli::common::submit_transaction(
-		quantus_client,
-		caller_keypair,
-		approve_tx,
-		None,
-		execution_mode,
-	)
-	.await?;
-
-	Ok(tx_hash)
 }
 
 // ============================================================================
@@ -1585,10 +1544,11 @@ async fn handle_propose(
 	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
-	let propose_tx =
-		quantus_subxt::api::tx()
-			.multisig()
-			.propose(multisig_address.clone(), call_data, expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_address.clone(),
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
@@ -1653,10 +1613,11 @@ async fn handle_propose_with_call_data(
 	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
-	let propose_tx =
-		quantus_subxt::api::tx()
-			.multisig()
-			.propose(multisig_account_id, call_data, expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_account_id,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
@@ -2048,73 +2009,18 @@ async fn handle_claim_deposits(
 
 /// Approve dissolving a multisig
 async fn handle_dissolve(
-	multisig_address: String,
-	from: String,
-	password: Option<String>,
-	password_file: Option<String>,
-	node_url: &str,
-	execution_mode: ExecutionMode,
+	_multisig_address: String,
+	_from: String,
+	_password: Option<String>,
+	_password_file: Option<String>,
+	_node_url: &str,
+	_execution_mode: ExecutionMode,
 ) -> crate::error::Result<()> {
-	log_print!("🗑️  {} Approving multisig dissolution...", "MULTISIG".bright_magenta().bold());
-
-	// Resolve multisig address
-	let multisig_ss58 = crate::cli::common::resolve_address(&multisig_address)?;
-	let (multisig_id, _) =
-		SpAccountId32::from_ss58check_with_version(&multisig_ss58).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid multisig address: {:?}", e))
-		})?;
-	let multisig_bytes: [u8; 32] = *multisig_id.as_ref();
-	let multisig_address_id = subxt::ext::subxt_core::utils::AccountId32::from(multisig_bytes);
-
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
-
-	// Connect to chain
-	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
-
-	// Get threshold for info message
-	let latest_block_hash = quantus_client.get_latest_block().await?;
-	let storage_at = quantus_client.client().storage().at(latest_block_hash);
-	let multisig_query =
-		quantus_subxt::api::storage().multisig().multisigs(multisig_address_id.clone());
-	let multisig_info = storage_at.fetch(&multisig_query).await?;
-
-	// Build transaction
-	let approve_tx = quantus_subxt::api::tx()
-		.multisig()
-		.approve_dissolve(multisig_address_id.clone());
-
-	// Always wait for transaction confirmation - runtime validates all conditions
-	let dissolve_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
-
-	// Submit transaction and wait for on-chain confirmation
-	crate::cli::common::submit_transaction(
-		&quantus_client,
-		&keypair,
-		approve_tx,
-		None,
-		dissolve_execution_mode,
-	)
-	.await?;
-
-	log_success!("✅ Dissolution approval confirmed on-chain");
-
-	if let Some(info) = multisig_info {
-		// Convert creator to SS58
-		let creator_bytes: &[u8; 32] = info.creator.as_ref();
-		let creator_sp = SpAccountId32::from(*creator_bytes);
-		let creator_ss58 = creator_sp.to_ss58check();
-
-		log_print!("   Requires {} total approvals to dissolve", info.threshold);
-		log_print!("");
-		log_print!("💡 {} When threshold is reached:", "INFO".bright_blue().bold());
-		log_print!("   - Multisig will be dissolved automatically");
-		log_print!("   - Deposit ({}) will be RETURNED to creator", format_balance(info.deposit));
-		log_print!("   - Creator: {}", creator_ss58.bright_cyan());
-		log_print!("   - Storage will be removed");
-	}
-
-	Ok(())
+	log_error!("❌ The dissolve functionality has been removed from the chain.");
+	log_print!("💡 Multisig dissolution is no longer supported by the runtime.");
+	Err(crate::error::QuantusError::Generic(
+		"The approve_dissolve functionality has been removed from the chain".to_string(),
+	))
 }
 
 /// Query multisig information (or specific proposal if proposal_id provided)
@@ -2204,118 +2110,61 @@ async fn handle_info(
 				log_print!("     {}. {}", i + 1, signer_sp.to_ss58check().bright_cyan());
 			}
 			log_print!("   Proposal Nonce: {}", data.proposal_nonce);
-			log_print!(
-				"   Deposit: {} (returned to creator on dissolve)",
-				format_balance(data.deposit)
-			);
-			log_print!(
-				"   Active Proposals: {}",
-				data.active_proposals.to_string().bright_yellow()
-			);
 
-			// Show active proposals summary if any exist
-			if data.active_proposals > 0 {
-				log_print!("");
-				log_print!("📝 {} Active Proposals:", "PROPOSALS".bright_magenta().bold());
-				let proposals_query = quantus_subxt::api::storage()
-					.multisig()
-					.proposals_iter1(multisig_address.clone());
-				let mut proposals_stream = storage_at.iter(proposals_query).await?;
-				while let Some(Ok(kv)) = proposals_stream.next().await {
-					let proposal = kv.value;
-					// Extract proposal ID from key_bytes (last 4 bytes = u32 LE)
-					let proposal_id = if kv.key_bytes.len() >= 4 {
-						let id_bytes = &kv.key_bytes[kv.key_bytes.len() - 4..];
-						u32::from_le_bytes([id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]])
-					} else {
-						0
-					};
-					let status = match proposal.status {
-						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
-							"Active".bright_green(),
-						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
-							"Approved (ready to execute)".bright_yellow(),
-						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
-							"Executed".bright_blue(),
-						quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
-							"Cancelled".bright_red(),
-					};
-					// Decode call name from the call field
-					let call_name = if proposal.call.0.len() >= 2 {
-						let pallet_idx = proposal.call.0[0];
-						let call_idx = proposal.call.0[1];
-						let metadata = quantus_client.client().metadata();
-						if let Some(pallet) = metadata.pallet_by_index(pallet_idx) {
-							if let Some(variant) = pallet.call_variant_by_index(call_idx) {
-								format!("{}::{}", pallet.name(), variant.name)
-							} else {
-								format!("{}::call[{}]", pallet.name(), call_idx)
-							}
+			// Show proposals summary
+			log_print!("");
+			log_print!("📝 {} Proposals:", "PROPOSALS".bright_magenta().bold());
+			let proposals_query = quantus_subxt::api::storage()
+				.multisig()
+				.proposals_iter1(multisig_address.clone());
+			let mut proposals_stream = storage_at.iter(proposals_query).await?;
+			let mut proposal_count = 0u32;
+			while let Some(Ok(kv)) = proposals_stream.next().await {
+				proposal_count += 1;
+				let proposal = kv.value;
+				// Extract proposal ID from key_bytes (last 4 bytes = u32 LE)
+				let proposal_id = if kv.key_bytes.len() >= 4 {
+					let id_bytes = &kv.key_bytes[kv.key_bytes.len() - 4..];
+					u32::from_le_bytes([id_bytes[0], id_bytes[1], id_bytes[2], id_bytes[3]])
+				} else {
+					0
+				};
+				let status = match proposal.status {
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Active =>
+						"Active".bright_green(),
+					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
+						"Approved (ready to execute)".bright_yellow(),
+				};
+				// Decode call name from the call field
+				let call_name = if proposal.call.0.len() >= 2 {
+					let pallet_idx = proposal.call.0[0];
+					let call_idx = proposal.call.0[1];
+					let metadata = quantus_client.client().metadata();
+					if let Some(pallet) = metadata.pallet_by_index(pallet_idx) {
+						if let Some(variant) = pallet.call_variant_by_index(call_idx) {
+							format!("{}::{}", pallet.name(), variant.name)
 						} else {
-							format!("pallet[{}]::call[{}]", pallet_idx, call_idx)
+							format!("{}::call[{}]", pallet.name(), call_idx)
 						}
 					} else {
-						format!("({}B encoded)", proposal.call.0.len())
-					};
-					let proposer_bytes: &[u8; 32] = proposal.proposer.as_ref();
-					let proposer_sp = SpAccountId32::from(*proposer_bytes);
-					log_print!(
-						"   #{}: {} | {} | Approvals: {} | Proposer: {}",
-						proposal_id,
-						call_name.bright_white(),
-						status,
-						proposal.approvals.0.len(),
-						proposer_sp.to_ss58check().dimmed()
-					);
-				}
-			}
-
-			// Check for dissolution progress
-			let dissolve_query = quantus_subxt::api::storage()
-				.multisig()
-				.dissolve_approvals(multisig_address.clone());
-			if let Some(dissolve_approvals) = storage_at.fetch(&dissolve_query).await? {
-				log_print!("");
-				log_print!("🗑️  {} Dissolution in progress:", "DISSOLVE".bright_red().bold());
-				log_print!(
-					"   Progress: {}/{}",
-					dissolve_approvals.0.len().to_string().bright_yellow(),
-					data.threshold.to_string().bright_yellow()
-				);
-				log_print!("   Approvals:");
-				for (i, approver) in dissolve_approvals.0.iter().enumerate() {
-					let approver_bytes: &[u8; 32] = approver.as_ref();
-					let approver_sp = SpAccountId32::from(*approver_bytes);
-					log_print!("     {}. {}", i + 1, approver_sp.to_ss58check().bright_cyan());
-				}
-
-				// Show pending approvals
-				let pending_signers: Vec<_> =
-					data.signers.0.iter().filter(|s| !dissolve_approvals.0.contains(s)).collect();
-
-				if !pending_signers.is_empty() {
-					log_print!("   Pending:");
-					for (i, signer) in pending_signers.iter().enumerate() {
-						let signer_bytes: &[u8; 32] = signer.as_ref();
-						let signer_sp = SpAccountId32::from(*signer_bytes);
-						log_print!("     {}. {}", i + 1, signer_sp.to_ss58check().dimmed());
+						format!("pallet[{}]::call[{}]", pallet_idx, call_idx)
 					}
-				}
-
-				log_print!("");
-				log_print!("   ⚠️  {} When threshold is reached:", "WARNING".bright_red().bold());
-				log_print!("      - Multisig will be dissolved IMMEDIATELY");
+				} else {
+					format!("({}B encoded)", proposal.call.0.len())
+				};
+				let proposer_bytes: &[u8; 32] = proposal.proposer.as_ref();
+				let proposer_sp = SpAccountId32::from(*proposer_bytes);
 				log_print!(
-					"      - Deposit will be RETURNED to creator: {}",
-					creator_ss58.bright_cyan()
+					"   #{}: {} | {} | Approvals: {} | Proposer: {}",
+					proposal_id,
+					call_name.bright_white(),
+					status,
+					proposal.approvals.0.len(),
+					proposer_sp.to_ss58check().dimmed()
 				);
-			} else {
-				log_print!("");
-				log_print!(
-					"   💡 {} Deposit ({}) will be returned to creator on dissolve",
-					"INFO".bright_blue().bold(),
-					format_balance(data.deposit)
-				);
+			}
+			if proposal_count == 0 {
+				log_print!("   No active proposals");
 			}
 		},
 		None => {
@@ -2646,10 +2495,6 @@ async fn handle_proposal_info(
 						"Active".bright_green(),
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved =>
 						"Approved (ready to execute)".bright_yellow(),
-					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed =>
-						"Executed".bright_blue(),
-					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled =>
-						"Cancelled".bright_red(),
 				}
 			);
 			log_print!("   Approvals ({}):", data.approvals.0.len().to_string().bright_yellow());
@@ -2730,8 +2575,6 @@ async fn handle_list_proposals(
 	let mut count = 0;
 	let mut active_count = 0;
 	let mut approved_count = 0;
-	let mut executed_count = 0;
-	let mut cancelled_count = 0;
 
 	while let Some(result) = proposals.next().await {
 		match result {
@@ -2746,14 +2589,6 @@ async fn handle_list_proposals(
 					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Approved => {
 						approved_count += 1;
 						"Approved (ready to execute)".bright_yellow()
-					},
-					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Executed => {
-						executed_count += 1;
-						"Executed".bright_blue()
-					},
-					quantus_subxt::api::runtime_types::pallet_multisig::ProposalStatus::Cancelled => {
-						cancelled_count += 1;
-						"Cancelled".bright_red()
 					},
 				};
 
@@ -2809,8 +2644,6 @@ async fn handle_list_proposals(
 		log_print!("   Total: {}", count.to_string().bright_yellow());
 		log_print!("   Active: {}", active_count.to_string().bright_green());
 		log_print!("   Approved: {}", approved_count.to_string().bright_yellow());
-		log_print!("   Executed: {}", executed_count.to_string().bright_blue());
-		log_print!("   Cancelled: {}", cancelled_count.to_string().bright_red());
 	}
 
 	log_print!("");
@@ -2999,13 +2832,13 @@ async fn handle_high_security_status(
 			log_success!("✅ High-Security: {}", "ENABLED".bright_green().bold());
 			log_print!("");
 
-			// Convert interceptor to SS58
-			let interceptor_bytes: &[u8; 32] = data.interceptor.as_ref();
-			let interceptor_sp = SpAccountId32::from(*interceptor_bytes);
-			let interceptor_ss58 = interceptor_sp
+			// Convert guardian to SS58
+			let guardian_bytes: &[u8; 32] = data.guardian.as_ref();
+			let guardian_sp = SpAccountId32::from(*guardian_bytes);
+			let guardian_ss58 = guardian_sp
 				.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 
-			log_print!("🛡️  Guardian/Interceptor: {}", interceptor_ss58.bright_green().bold());
+			log_print!("🛡️  Guardian: {}", guardian_ss58.bright_green().bold());
 
 			// Format delay display
 			match data.delay {
@@ -3197,10 +3030,11 @@ async fn handle_high_security_set(
 	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 	// Build propose transaction
-	let propose_tx =
-		quantus_subxt::api::tx()
-			.multisig()
-			.propose(multisig_account_id, call_data, expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_account_id,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };

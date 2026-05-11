@@ -195,89 +195,12 @@ async fn fetch_high_security_status(
 		return Ok(None);
 	};
 
-	let interceptor_ss58 = data.interceptor.to_quantus_ss58();
+	let guardian_ss58 = data.guardian.to_quantus_ss58();
 	let delay_str = match data.delay {
 		BlockNumberOrTimestamp::BlockNumber(blocks) => format!("{} blocks", blocks),
 		BlockNumberOrTimestamp::Timestamp(ms) => format!("{} seconds", ms / 1000),
 	};
-	Ok(Some((interceptor_ss58, delay_str)))
-}
-
-/// Fetch list of accounts for which this account is guardian (interceptor_index).
-/// Returns an empty vec when the storage entry is absent (`None`), and an error on failure.
-async fn fetch_guardian_for_list(
-	quantus_client: &crate::chain::client::QuantusClient,
-	account_ss58: &str,
-) -> crate::error::Result<Vec<String>> {
-	let account_id_sp = SpAccountId32::from_ss58check(account_ss58)
-		.map_err(|e| QuantusError::Generic(format!("Invalid SS58 for interceptor_index: {e:?}")))?;
-	let account_bytes: [u8; 32] = *account_id_sp.as_ref();
-	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
-
-	let storage_addr = quantus_subxt::api::storage()
-		.reversible_transfers()
-		.interceptor_index(account_id);
-	let latest = quantus_client.get_latest_block().await?;
-	let value = quantus_client
-		.client()
-		.storage()
-		.at(latest)
-		.fetch(&storage_addr)
-		.await
-		.map_err(|e| QuantusError::NetworkError(format!("Fetch interceptor_index: {e:?}")))?;
-
-	let list = value
-		.map(|bounded| bounded.0.iter().map(|a| a.to_quantus_ss58()).collect())
-		.unwrap_or_default();
-	Ok(list)
-}
-
-/// For each entrusted account (SS58), count pending reversible transfers by sender. Returns (total,
-/// per-account list).
-async fn fetch_pending_transfers_for_guardian(
-	quantus_client: &crate::chain::client::QuantusClient,
-	entrusted_ss58: &[String],
-) -> crate::error::Result<(u32, Vec<(String, u32)>)> {
-	let latest = quantus_client.get_latest_block().await?;
-	let storage = quantus_client.client().storage().at(latest);
-	let pending_iter =
-		quantus_subxt::api::storage().reversible_transfers().pending_transfers_iter();
-
-	let entrusted_ids: Vec<[u8; 32]> = entrusted_ss58
-		.iter()
-		.map(|s| {
-			let id = SpAccountId32::from_ss58check(s).map_err(|e| {
-				QuantusError::Generic(format!("Invalid SS58 for pending lookup: {e:?}"))
-			})?;
-			Ok::<_, crate::error::QuantusError>(*id.as_ref())
-		})
-		.collect::<Result<Vec<_>, _>>()?;
-
-	let mut counts: std::collections::HashMap<[u8; 32], u32> =
-		entrusted_ids.iter().map(|id| (*id, 0u32)).collect();
-
-	let mut iter = storage
-		.iter(pending_iter)
-		.await
-		.map_err(|e| QuantusError::NetworkError(format!("Pending transfers iter: {e:?}")))?;
-
-	while let Some(result) = iter.next().await {
-		if let Ok(entry) = result {
-			let from_bytes: [u8; 32] = *entry.value.from.as_ref();
-			if let Some(c) = counts.get_mut(&from_bytes) {
-				*c += 1;
-			}
-		}
-	}
-
-	let mut total = 0u32;
-	let mut per_account = Vec::with_capacity(entrusted_ss58.len());
-	for (ss58, id) in entrusted_ss58.iter().zip(entrusted_ids.iter()) {
-		let count = *counts.get(id).unwrap_or(&0);
-		total += count;
-		per_account.push((ss58.clone(), count));
-	}
-	Ok((total, per_account))
+	Ok(Some((guardian_ss58, delay_str)))
 }
 
 /// Handle wallet commands
@@ -416,15 +339,12 @@ pub async fn handle_wallet_command(
 								)
 								.await
 								{
-									Ok(Some((interceptor_ss58, delay_str))) => {
+									Ok(Some((guardian_ss58, delay_str))) => {
 										log_print!(
 											"\n🛡️  High Security: {}",
 											"ENABLED".bright_green().bold()
 										);
-										log_print!(
-											"   Guardian/Interceptor: {}",
-											interceptor_ss58.bright_cyan()
-										);
+										log_print!("   Guardian: {}", guardian_ss58.bright_cyan());
 										log_print!("   Delay: {}", delay_str.bright_yellow());
 									},
 									Ok(None) => {
@@ -440,50 +360,9 @@ pub async fn handle_wallet_command(
 									},
 								}
 
-								// Guardian for: accounts that have this wallet as their interceptor
-								if let Ok(entrusted) =
-									fetch_guardian_for_list(&quantus_client, &wallet_info.address)
-										.await
-								{
-									if entrusted.is_empty() {
-										log_print!("🛡️  Guardian for: {}", "none".dimmed());
-									} else {
-										log_print!(
-											"\n🛡️  Guardian for: {} account(s)",
-											entrusted.len().to_string().bright_green()
-										);
-										for (i, addr) in entrusted.iter().enumerate() {
-											log_print!("   {}. {}", i + 1, addr.bright_cyan());
-										}
-										// Pending reversible transfers that this guardian can
-										// intercept
-										if let Ok((total, per_account)) =
-											fetch_pending_transfers_for_guardian(
-												&quantus_client,
-												&entrusted,
-											)
-											.await
-										{
-											if total > 0 {
-												log_print!(
-													"\n   {} {} pending transfer(s) you can intercept",
-													"⚠️".bright_yellow(),
-													total.to_string().bright_yellow().bold()
-												);
-												for (addr, count) in per_account {
-													if count > 0 {
-														log_print!(
-															"      from {}: {}",
-															addr.bright_cyan(),
-															count
-														);
-													}
-												}
-												log_print!("   {}", "Use: quantus reversible cancel --tx-id <id> --from <you>".dimmed());
-											}
-										}
-									}
-								}
+								// Note: Guardian index storage was removed from the chain,
+								// so we can no longer show which accounts this wallet is guardian
+								// for.
 							} else {
 								log_verbose!(
 									"Could not connect to node; High Security status skipped."
