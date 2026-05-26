@@ -195,28 +195,28 @@ async fn fetch_high_security_status(
 		return Ok(None);
 	};
 
-	let interceptor_ss58 = data.interceptor.to_quantus_ss58();
+	let guardian_ss58 = data.guardian.to_quantus_ss58();
 	let delay_str = match data.delay {
 		BlockNumberOrTimestamp::BlockNumber(blocks) => format!("{} blocks", blocks),
 		BlockNumberOrTimestamp::Timestamp(ms) => format!("{} seconds", ms / 1000),
 	};
-	Ok(Some((interceptor_ss58, delay_str)))
+	Ok(Some((guardian_ss58, delay_str)))
 }
 
-/// Fetch list of accounts for which this account is guardian (interceptor_index).
+/// Fetch list of accounts for which this account is guardian (guardian_index).
 /// Returns an empty vec when the storage entry is absent (`None`), and an error on failure.
 async fn fetch_guardian_for_list(
 	quantus_client: &crate::chain::client::QuantusClient,
 	account_ss58: &str,
 ) -> crate::error::Result<Vec<String>> {
 	let account_id_sp = SpAccountId32::from_ss58check(account_ss58)
-		.map_err(|e| QuantusError::Generic(format!("Invalid SS58 for interceptor_index: {e:?}")))?;
+		.map_err(|e| QuantusError::Generic(format!("Invalid SS58 for guardian_index: {e:?}")))?;
 	let account_bytes: [u8; 32] = *account_id_sp.as_ref();
 	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
 
 	let storage_addr = quantus_subxt::api::storage()
 		.reversible_transfers()
-		.interceptor_index(account_id);
+		.guardian_index(account_id);
 	let latest = quantus_client.get_latest_block().await?;
 	let value = quantus_client
 		.client()
@@ -224,10 +224,10 @@ async fn fetch_guardian_for_list(
 		.at(latest)
 		.fetch(&storage_addr)
 		.await
-		.map_err(|e| QuantusError::NetworkError(format!("Fetch interceptor_index: {e:?}")))?;
+		.map_err(|e| QuantusError::NetworkError(format!("Fetch guardian_index: {e:?}")))?;
 
-	let list = value
-		.map(|bounded| bounded.0.iter().map(|a| a.to_quantus_ss58()).collect())
+	let list: Vec<String> = value
+		.map(|bounded| bounded.0.iter().map(|a: &subxt::ext::subxt_core::utils::AccountId32| a.to_quantus_ss58()).collect())
 		.unwrap_or_default();
 	Ok(list)
 }

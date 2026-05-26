@@ -2793,8 +2793,8 @@ struct DissolveOutput {
 /// Layer N: 2^(N-1) inputs → 2^N outputs (all below target_size)
 /// ```
 ///
-/// Each layer: batch inputs into groups of ≤DEFAULT_NUM_LEAF_PROOFS, generate proofs, aggregate, verify on-chain.
-/// The final outputs are small enough to blend with the miner reward noise floor.
+/// Each layer: batch inputs into groups of ≤DEFAULT_NUM_LEAF_PROOFS, generate proofs, aggregate,
+/// verify on-chain. The final outputs are small enough to blend with the miner reward noise floor.
 #[allow(clippy::too_many_arguments)]
 async fn run_dissolve(
 	amount: u128,

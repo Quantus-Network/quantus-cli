@@ -96,10 +96,10 @@ pub async fn handle_high_security_command(
 			if let Some(high_security_data) = value {
 				log_success!("✅ High Security: ENABLED");
 
-				// Convert interceptor to Quantus SS58 format
-				let interceptor_ss58 = high_security_data.interceptor.to_quantus_ss58();
+				// Convert guardian to Quantus SS58 format
+				let guardian_ss58 = high_security_data.guardian.to_quantus_ss58();
 
-				log_print!("🛡️  Guardian/Interceptor: {}", interceptor_ss58.bright_green());
+				log_print!("🛡️  Guardian: {}", guardian_ss58.bright_green());
 
 				// Format delay display
 				match high_security_data.delay {
@@ -200,7 +200,7 @@ pub async fn handle_high_security_command(
 			// Query storage for entrusted accounts
 			let storage_addr = quantus_subxt::api::storage()
 				.reversible_transfers()
-				.interceptor_index(guardian_account);
+				.guardian_index(guardian_account);
 			let latest = quantus_client.get_latest_block().await?;
 			let value = quantus_client
 				.client()
