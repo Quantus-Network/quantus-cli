@@ -56,8 +56,11 @@ fn main() {
 		.map(|v| v.parse().expect("QP_NUM_LEAF_PROOFS must be a valid usize"))
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS);
 
-	// Don't emit any rerun-if-changed directives - this forces the build script
-	// to run on every build. Circuit generation is fast enough in release mode.
+	// Always rebuild circuits on every build (~2s). Write a timestamp to a trigger
+	// file and tell Cargo to watch it - since we just wrote it, it's always "changed".
+	let trigger = Path::new(&out_dir).join(".rebuild-trigger");
+	std::fs::write(&trigger, format!("{:?}", Instant::now())).ok();
+	println!("cargo:rerun-if-changed={}", trigger.display());
 
 	println!(
 		"cargo:warning=[quantus-cli] Generating ZK circuit binaries (num_leaf_proofs={})...",
