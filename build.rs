@@ -56,11 +56,12 @@ fn main() {
 		.map(|v| v.parse().expect("QP_NUM_LEAF_PROOFS must be a valid usize"))
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS);
 
-	// Always rebuild circuits on every build (~2s). Write a timestamp to a trigger
-	// file and tell Cargo to watch it - since we just wrote it, it's always "changed".
-	let trigger = Path::new(&out_dir).join(".rebuild-trigger");
-	std::fs::write(&trigger, format!("{:?}", Instant::now())).ok();
-	println!("cargo:rerun-if-changed={}", trigger.display());
+	// No `cargo:rerun-if-changed` directives: Cargo uses default fingerprinting,
+	// re-running this script when any source file in the package changes.
+	// This ensures circuits are regenerated when bins_consts.rs (DEFAULT_NUM_LEAF_PROOFS)
+	// or any circuit-related code changes. For installed binaries, runtime detection
+	// in bins.rs `is_ready()` handles leaf count mismatches by regenerating on first use.
+	println!("cargo:rerun-if-env-changed=QP_NUM_LEAF_PROOFS");
 
 	println!(
 		"cargo:warning=[quantus-cli] Generating ZK circuit binaries (num_leaf_proofs={})...",

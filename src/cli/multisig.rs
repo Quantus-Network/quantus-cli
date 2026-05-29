@@ -876,12 +876,6 @@ pub async fn list_proposals(
 	Ok(proposals)
 }
 
-/// Approve dissolving a multisig
-///
-/// Requires threshold approvals. When threshold is reached, multisig is dissolved.
-/// Requirements:
-/// - No proposals exist (active, executed, or cancelled)
-/// - Multisig account balance must be zero
 // ============================================================================
 // CLI HANDLERS (Internal)
 // ============================================================================
