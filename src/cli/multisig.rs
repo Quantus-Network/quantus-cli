@@ -581,8 +581,11 @@ pub async fn propose_transfer(
 	Compact(amount).encode_to(&mut call_data);
 
 	// Build propose transaction
-	let propose_tx =
-		quantus_subxt::api::tx().multisig().propose(multisig_address, quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data), expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_address,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
@@ -611,8 +614,11 @@ pub async fn propose_custom(
 	expiry: u32,
 ) -> crate::error::Result<subxt::utils::H256> {
 	// Build propose transaction
-	let propose_tx =
-		quantus_subxt::api::tx().multisig().propose(multisig_address, quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data), expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_address,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
@@ -1544,10 +1550,11 @@ async fn handle_propose(
 	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
-	let propose_tx =
-		quantus_subxt::api::tx()
-			.multisig()
-			.propose(multisig_address.clone(), quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data), expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_address.clone(),
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
@@ -1612,10 +1619,11 @@ async fn handle_propose_with_call_data(
 	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
-	let propose_tx =
-		quantus_subxt::api::tx()
-			.multisig()
-			.propose(multisig_account_id, quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data), expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_account_id,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
@@ -3028,10 +3036,11 @@ async fn handle_high_security_set(
 	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 	// Build propose transaction
-	let propose_tx =
-		quantus_subxt::api::tx()
-			.multisig()
-			.propose(multisig_account_id, quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data), expiry);
+	let propose_tx = quantus_subxt::api::tx().multisig().propose(
+		multisig_account_id,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	);
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
