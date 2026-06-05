@@ -91,11 +91,11 @@ qp-zk-circuits-common = { version = "2.0.1", default-features = false, features 
 
 [build-dependencies]
 hex = "0.4"
-qp-poseidon-core = "2.0.2"
+qp-poseidon-core = "2.1.0"
 qp-wormhole-circuit-builder = { version = "2.0.1" }
 
 [dev-dependencies]
-qp-poseidon-core = "2.0.2"
+qp-poseidon-core = "2.1.0"
 serial_test = "3.1"
 tempfile = "3.8.1"
 

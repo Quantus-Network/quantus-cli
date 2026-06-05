@@ -56,11 +56,15 @@ fn main() {
 		.map(|v| v.parse().expect("QP_NUM_LEAF_PROOFS must be a valid usize"))
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS);
 
-	// No `cargo:rerun-if-changed` directives: Cargo uses default fingerprinting,
-	// re-running this script when any source file in the package changes.
-	// This ensures circuits are regenerated when bins_consts.rs (DEFAULT_NUM_LEAF_PROOFS)
-	// or any circuit-related code changes. For installed binaries, runtime detection
-	// in bins.rs `is_ready()` handles leaf count mismatches by regenerating on first use.
+	// Re-run when QP_NUM_LEAF_PROOFS env var changes. Note: emitting any `rerun-if-*`
+	// directive opts out of Cargo's default "re-run when any package file changes"
+	// behavior. However, the important cases still work:
+	// - Editing DEFAULT_NUM_LEAF_PROOFS in bins_consts.rs triggers a rebuild because
+	//   `include!("src/bins_consts.rs")` above creates a dependency on that file.
+	// - Circuit crate version bumps (qp-wormhole-circuit-builder) recompile the build
+	//   script, which re-runs it.
+	// For installed binaries, runtime detection in bins.rs `is_ready()` handles leaf
+	// count mismatches by regenerating on first use.
 	println!("cargo:rerun-if-env-changed=QP_NUM_LEAF_PROOFS");
 
 	println!(
