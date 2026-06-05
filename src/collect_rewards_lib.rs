@@ -485,10 +485,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	})?;
 	let batch_size = agg_config.num_leaf_proofs;
 
-	let batches: Vec<Vec<Vec<u8>>> = proof_bytes_list
-		.chunks(batch_size)
-		.map(|chunk| chunk.to_vec())
-		.collect();
+	let batches: Vec<Vec<Vec<u8>>> =
+		proof_bytes_list.chunks(batch_size).map(|chunk| chunk.to_vec()).collect();
 
 	progress.on_step("submit", &format!("Submitting {} batch(es)", batches.len()));
 

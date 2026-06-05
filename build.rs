@@ -61,8 +61,8 @@ fn main() {
 	// behavior. However, the important cases still work:
 	// - Editing DEFAULT_NUM_LEAF_PROOFS in bins_consts.rs triggers a rebuild because
 	//   `include!("src/bins_consts.rs")` above creates a dependency on that file.
-	// - Circuit crate version bumps (qp-wormhole-circuit-builder) recompile the build
-	//   script, which re-runs it.
+	// - Circuit crate version bumps (qp-wormhole-circuit-builder) recompile the build script, which
+	//   re-runs it.
 	// For installed binaries, runtime detection in bins.rs `is_ready()` handles leaf
 	// count mismatches by regenerating on first use.
 	println!("cargo:rerun-if-env-changed=QP_NUM_LEAF_PROOFS");
