@@ -22,7 +22,7 @@ const DEFAULT_TRANSFER_EXPIRY_BLOCKS: u32 = (2 * 60 * 60) / 10; // ~2h at 10s/bl
 pub struct MultisigInfo {
 	/// Multisig address (SS58 format)
 	pub address: String,
-	/// Creator address (SS58 format) - receives deposit back on dissolve
+	/// Creator address (SS58 format)
 	pub creator: String,
 	/// Current balance (spendable)
 	pub balance: u128,
@@ -360,25 +360,6 @@ pub enum MultisigCommands {
 		address: String,
 
 		/// Wallet name (must be the proposer)
-		#[arg(long)]
-		from: String,
-
-		/// Password for the wallet
-		#[arg(short, long)]
-		password: Option<String>,
-
-		/// Read password from file
-		#[arg(long)]
-		password_file: Option<String>,
-	},
-
-	/// Dissolve a multisig and recover the creation deposit
-	Dissolve {
-		/// Multisig account address
-		#[arg(long)]
-		address: String,
-
-		/// Wallet name (must be creator or a signer)
 		#[arg(long)]
 		from: String,
 
@@ -1017,8 +998,6 @@ pub async fn handle_multisig_command(
 		MultisigCommands::ClaimDeposits { address, from, password, password_file } =>
 			handle_claim_deposits(address, from, password, password_file, node_url, execution_mode)
 				.await,
-		MultisigCommands::Dissolve { address, from, password, password_file } =>
-			handle_dissolve(address, from, password, password_file, node_url, execution_mode).await,
 		MultisigCommands::Info { address, proposal_id } =>
 			handle_info(address, proposal_id, node_url).await,
 		MultisigCommands::ListProposals { address } =>
@@ -2005,22 +1984,6 @@ async fn handle_claim_deposits(
 	log_print!("   All removable proposals have been cleaned up");
 
 	Ok(())
-}
-
-/// Approve dissolving a multisig
-async fn handle_dissolve(
-	_multisig_address: String,
-	_from: String,
-	_password: Option<String>,
-	_password_file: Option<String>,
-	_node_url: &str,
-	_execution_mode: ExecutionMode,
-) -> crate::error::Result<()> {
-	Err(crate::error::QuantusError::Generic(
-		"Multisig dissolution has been removed from the chain. \
-		To recover funds from a multisig, use the standard proposal workflow to transfer funds out."
-			.to_string(),
-	))
 }
 
 /// Query multisig information (or specific proposal if proposal_id provided)

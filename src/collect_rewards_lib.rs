@@ -12,7 +12,6 @@
 //! This is designed to be called from the SDK without needing CLI-specific features.
 
 use crate::{
-	bins::DEFAULT_NUM_LEAF_PROOFS,
 	chain::{
 		client::QuantusClient,
 		quantus_subxt::{self as quantus_node, api::wormhole},
@@ -228,7 +227,7 @@ pub struct CollectRewardsConfig {
 /// 1. Derives wormhole address from mnemonic
 /// 2. Queries Subsquid for pending transfers to that address
 /// 3. Generates ZK proofs for selected transfers
-/// 4. Aggregates proofs into batches (max DEFAULT_NUM_LEAF_PROOFS per batch)
+/// 4. Aggregates proofs into batches (size determined by circuit config)
 /// 5. Submits withdrawal transactions to chain
 ///
 /// # Arguments
@@ -479,8 +478,15 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	}
 
 	// Step 5: Aggregate and submit in batches
+	// Load circuit config to get actual batch size (may differ from DEFAULT_NUM_LEAF_PROOFS
+	// if QP_NUM_LEAF_PROOFS was set during build)
+	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
+		CollectRewardsError::from(format!("Failed to load circuit bins config: {}", e))
+	})?;
+	let batch_size = agg_config.num_leaf_proofs;
+
 	let batches: Vec<Vec<Vec<u8>>> = proof_bytes_list
-		.chunks(DEFAULT_NUM_LEAF_PROOFS)
+		.chunks(batch_size)
 		.map(|chunk| chunk.to_vec())
 		.collect();
 
