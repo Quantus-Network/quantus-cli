@@ -398,10 +398,8 @@ impl SubsquidClient {
 		where_clause.insert("_or".to_string(), serde_json::Value::Array(or_conditions));
 
 		if let Some(block) = params.after_block {
-			where_clause.insert(
-				"block".to_string(),
-				serde_json::json!({ "height": { "_gte": block } }),
-			);
+			where_clause
+				.insert("block".to_string(), serde_json::json!({ "height": { "_gte": block } }));
 		}
 
 		let request = GraphQLRequest {

@@ -162,10 +162,7 @@ impl From<HasuraNullifierRow> for NullifierResult {
 		NullifierResult {
 			nullifier: row.nullifier,
 			nullifier_hash: row.nullifier_hash,
-			extrinsic_hash: row
-				.wormhole_extrinsic
-				.and_then(|e| e.extrinsic_id)
-				.unwrap_or_default(),
+			extrinsic_hash: row.wormhole_extrinsic.and_then(|e| e.extrinsic_id).unwrap_or_default(),
 			block_height: row.block.map(|b| b.height).unwrap_or_default(),
 			timestamp: row.timestamp,
 		}
