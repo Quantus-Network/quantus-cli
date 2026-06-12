@@ -99,21 +99,14 @@ pub async fn update_runtime(
 	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded_call);
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
-	// Submit Preimage::note_preimage with bounded bytes
-	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes = encoded_call.clone();
-
-	log_print!("📝 Submitting preimage...");
-	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
-	let preimage_tx_hash = crate::cli::common::submit_transaction(
+	// Submit preimage and wait for inclusion so the referendum tx gets a fresh nonce
+	crate::cli::common::submit_preimage(
 		quantus_client,
 		from_keypair,
-		note_preimage_tx,
-		None,
+		encoded_call.clone(),
 		execution_mode,
 	)
 	.await?;
-	log_success!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
 
 	// Build TechReferenda::submit call using Lookup preimage reference
 	type ProposalBounded =
