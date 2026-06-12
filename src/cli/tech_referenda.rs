@@ -554,6 +554,20 @@ async fn get_proposal_details(
 	Ok(())
 }
 
+/// Min enactment period (blocks) of the tech track, from the runtime's Tracks constant.
+fn min_enactment_period(
+	quantus_client: &crate::chain::client::QuantusClient,
+) -> crate::error::Result<u32> {
+	let tracks_addr = quantus_subxt::api::constants().tech_referenda().tracks();
+	let tracks = quantus_client.client().constants().at(&tracks_addr).map_err(|e| {
+		QuantusError::NetworkError(format!("Failed to decode Tracks constant: {e:?}"))
+	})?;
+	tracks
+		.first()
+		.map(|(_, info)| info.min_enactment_period)
+		.ok_or_else(|| QuantusError::NetworkError("No tracks configured".to_string()))
+}
+
 /// Get the status of a Tech Referendum
 async fn get_proposal_status(
 	quantus_client: &crate::chain::client::QuantusClient,
@@ -586,9 +600,18 @@ async fn get_proposal_status(
 					);
 					log_verbose!("   - Full status: {:#?}", status);
 				},
-				ReferendumInfo::Approved(submitted, ..) => {
+				ReferendumInfo::Approved(since, ..) => {
 					log_print!("   - Status: {}", "Approved".green());
-					log_print!("   - Submitted at block: {}", submitted);
+					log_print!("   - Approved at block: {}", since);
+					let period = min_enactment_period(quantus_client)?;
+					let enactment = crate::cli::common::resolve_enactment_status(
+						quantus_client,
+						index,
+						since,
+						period,
+					)
+					.await?;
+					crate::cli::common::print_enactment_status(&enactment);
 				},
 				ReferendumInfo::Rejected(submitted, ..) => {
 					log_print!("   - Status: {}", "Rejected".red());

@@ -768,6 +768,140 @@ fn format_dispatch_error(
 	}
 }
 
+/// Outcome of an approved referendum's scheduled enactment call.
+pub enum EnactmentStatus {
+	/// Still in the scheduler agenda, will dispatch at the given block.
+	Scheduled(u32),
+	/// Dispatched by the scheduler; `Err` carries the dispatch error description.
+	Executed { block: u32, result: std::result::Result<(), String> },
+	/// Dropped: the preimage was unavailable at enactment time (never executed).
+	PreimageMissing(u32),
+	/// Dropped: call weight exceeded the scheduler's maximum (never executed).
+	Overweight(u32),
+	/// Could not be determined (e.g. node pruned the enactment block's state).
+	Unknown,
+}
+
+/// Resolve whether the enactment call of an approved referendum was actually executed.
+///
+/// `pallet_referenda` only records `Approved`; the scheduled `set_code`/call dispatch happens
+/// later via `pallet_scheduler` under a named task id of `blake2_256(("assembly", "enactment",
+/// index))`. We check the scheduler agenda first, then scan events in the enactment window.
+pub async fn resolve_enactment_status(
+	quantus_client: &crate::chain::client::QuantusClient,
+	referendum_index: u32,
+	approved_at: u32,
+	min_enactment_period: u32,
+) -> Result<EnactmentStatus> {
+	use crate::chain::quantus_subxt::api::{
+		self, runtime_types::qp_scheduler::BlockNumberOrTimestamp, scheduler::events,
+	};
+	use codec::Encode;
+
+	let task_id =
+		sp_core::hashing::blake2_256(&(*b"assembly", "enactment", referendum_index).encode());
+
+	// Still scheduled for the future?
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let lookup_addr = api::storage().scheduler().lookup(task_id);
+	if let Some((when, _agenda_index)) =
+		quantus_client.client().storage().at(latest_block_hash).fetch(&lookup_addr).await?
+	{
+		if let BlockNumberOrTimestamp::BlockNumber(n) = when {
+			return Ok(EnactmentStatus::Scheduled(n));
+		}
+		return Ok(EnactmentStatus::Unknown);
+	}
+
+	// Not scheduled anymore: the dispatch happened (or was dropped) no earlier than
+	// `approved_at + min_enactment_period`. Scan a small window to cover postponements.
+	let start = approved_at.saturating_add(min_enactment_period);
+	for block_number in start..start.saturating_add(12) {
+		let Some(block_hash) = quantus_client.get_block_hash(block_number).await? else {
+			return Ok(EnactmentStatus::Unknown);
+		};
+		let block = match quantus_client.client().blocks().at(block_hash).await {
+			Ok(block) => block,
+			Err(_) => return Ok(EnactmentStatus::Unknown),
+		};
+		let block_events = block.events().await.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Failed to fetch events of block {block_number}: {e:?}"
+			))
+		})?;
+
+		for event in block_events.find::<events::Dispatched>() {
+			let event = event.map_err(|e| {
+				crate::error::QuantusError::NetworkError(format!(
+					"Failed to decode Scheduler::Dispatched event: {e:?}"
+				))
+			})?;
+			if event.id == Some(task_id) {
+				let metadata = quantus_client.client().metadata();
+				let result = event
+					.result
+					.map_err(|dispatch_error| format_dispatch_error(&dispatch_error, &metadata));
+				return Ok(EnactmentStatus::Executed { block: block_number, result });
+			}
+		}
+		for event in block_events.find::<events::CallUnavailable>() {
+			if event.ok().and_then(|e| e.id) == Some(task_id) {
+				return Ok(EnactmentStatus::PreimageMissing(block_number));
+			}
+		}
+		for event in block_events.find::<events::PermanentlyOverweight>() {
+			if event.ok().and_then(|e| e.id) == Some(task_id) {
+				return Ok(EnactmentStatus::Overweight(block_number));
+			}
+		}
+	}
+
+	Ok(EnactmentStatus::Unknown)
+}
+
+/// Print a human-readable enactment line for an approved referendum.
+pub fn print_enactment_status(status: &EnactmentStatus) {
+	match status {
+		EnactmentStatus::Scheduled(block) => {
+			crate::log_print!("   - Enactment: ⏳ scheduled at block {}", block);
+		},
+		EnactmentStatus::Executed { block, result: Ok(()) } => {
+			crate::log_print!(
+				"   - Enactment: {} at block {}",
+				"✅ executed successfully".bright_green(),
+				block
+			);
+		},
+		EnactmentStatus::Executed { block, result: Err(error) } => {
+			crate::log_print!(
+				"   - Enactment: {} at block {}: {}",
+				"❌ execution FAILED".bright_red().bold(),
+				block,
+				error
+			);
+		},
+		EnactmentStatus::PreimageMissing(block) => {
+			crate::log_print!(
+				"   - Enactment: {} - preimage unavailable at block {} (call never executed)",
+				"❌ DROPPED".bright_red().bold(),
+				block
+			);
+		},
+		EnactmentStatus::Overweight(block) => {
+			crate::log_print!(
+				"   - Enactment: {} - permanently overweight at block {} (call never executed)",
+				"❌ DROPPED".bright_red().bold(),
+				block
+			);
+		},
+		EnactmentStatus::Unknown => {
+			crate::log_print!(
+				"   - Enactment: ❓ unknown (enactment block not found or state pruned)"
+			);
+		},
+	}
+}
+
 /// Submit a preimage, treating AlreadyNoted as success (idempotent).
 /// Always waits for inclusion so subsequent txs from the same sender get a fresh nonce.
 pub async fn submit_preimage(

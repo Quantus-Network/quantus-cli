@@ -170,21 +170,31 @@ impl QuantusClient {
 		Ok(account_info.nonce as u64)
 	}
 
-	/// Get genesis hash using RPC call
-	pub async fn get_genesis_hash(&self) -> crate::error::Result<subxt::utils::H256> {
-		log_verbose!("🔍 Fetching genesis hash via RPC...");
-
+	/// Get the hash of a block by number using RPC call. `None` if the block doesn't exist.
+	pub async fn get_block_hash(
+		&self,
+		number: u32,
+	) -> crate::error::Result<Option<subxt::utils::H256>> {
 		use jsonrpsee::core::client::ClientT;
-		let genesis_hash: subxt::utils::H256 = self
+		let hash: Option<subxt::utils::H256> = self
 			.rpc_client
-			.request::<subxt::utils::H256, [u32; 1]>("chain_getBlockHash", [0u32])
+			.request::<Option<subxt::utils::H256>, [u32; 1]>("chain_getBlockHash", [number])
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch genesis hash: {e:?}"
+					"Failed to fetch hash of block {number}: {e:?}"
 				))
 			})?;
+		log_verbose!("📦 Block {} hash: {:?}", number, hash);
+		Ok(hash)
+	}
 
+	/// Get genesis hash using RPC call
+	pub async fn get_genesis_hash(&self) -> crate::error::Result<subxt::utils::H256> {
+		log_verbose!("🔍 Fetching genesis hash via RPC...");
+		let genesis_hash = self.get_block_hash(0).await?.ok_or_else(|| {
+			crate::error::QuantusError::NetworkError("Genesis block hash not found".to_string())
+		})?;
 		log_verbose!("🧬 Genesis hash: {:?}", genesis_hash);
 		Ok(genesis_hash)
 	}
