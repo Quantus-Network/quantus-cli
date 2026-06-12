@@ -3811,25 +3811,25 @@ checksum = "78172860cd960773c72e97fba07ead9e5a1c13086c5746283744933e2e4a577b"
 
 [[package]]
 name = "qp-rusty-crystals-dilithium"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e223f0218cd3d55a04d96cc9a82415d2edd5e37b5ebd0f466d44a22bf8b34532"
+checksum = "a6c16ed4031406f6d8ff14a4822a35f766b62617324c75931db7df8c3631a701"
 dependencies = [
  "zeroize",
 ]
 
 [[package]]
 name = "qp-rusty-crystals-hdwallet"
-version = "2.3.1"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ddbfc888856ab9d7b729d94ada8ddd4916cd3abbe67c1fc6af80c0ed32d17d3d"
+checksum = "e2e068be8021f2bebbabeab77ee9107a359d6e537397323ae92aae8178922fab"
 dependencies = [
  "bip39",
  "getrandom 0.2.17",
  "hex",
  "hex-literal",
  "hmac 0.12.1",
- "qp-poseidon-core 1.5.0",
+ "qp-poseidon-core 2.1.0",
  "qp-rusty-crystals-dilithium",
  "serde",
  "serde_json",
