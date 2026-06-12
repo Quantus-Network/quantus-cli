@@ -47,15 +47,126 @@ pub struct Transfer {
 	pub transfer_count: String,
 }
 
-/// Result from a prefix query.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TransfersByPrefixResult {
-	/// Matching transfers
-	pub transfers: Vec<Transfer>,
+/// Deserialize a Hasura `numeric` scalar into a `String`.
+///
+/// Hasura serializes Postgres `numeric` columns as JSON numbers by default
+/// (or strings when `HASURA_GRAPHQL_STRINGIFY_NUMERIC_TYPES` is set), so
+/// accept both representations.
+fn numeric_string<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+	D: serde::Deserializer<'de>,
+{
+	struct NumericVisitor;
 
-	/// Total count of matches
-	pub total_count: i64,
+	impl serde::de::Visitor<'_> for NumericVisitor {
+		type Value = String;
+
+		fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+			formatter.write_str("a number or a numeric string")
+		}
+
+		fn visit_str<E: serde::de::Error>(self, v: &str) -> std::result::Result<String, E> {
+			Ok(v.to_string())
+		}
+
+		fn visit_u64<E: serde::de::Error>(self, v: u64) -> std::result::Result<String, E> {
+			Ok(v.to_string())
+		}
+
+		fn visit_i64<E: serde::de::Error>(self, v: i64) -> std::result::Result<String, E> {
+			Ok(v.to_string())
+		}
+
+		fn visit_f64<E: serde::de::Error>(self, v: f64) -> std::result::Result<String, E> {
+			if v.fract() == 0.0 && v.is_finite() {
+				Ok(format!("{:.0}", v))
+			} else {
+				Ok(v.to_string())
+			}
+		}
+	}
+
+	deserializer.deserialize_any(NumericVisitor)
+}
+
+/// Nested `block { height }` relationship in Hasura responses.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HasuraBlockRef {
+	pub height: i64,
+}
+
+/// A transfer row as returned by the Hasura GraphQL server.
+///
+/// Uses snake_case column names and nested relationships; converted into the
+/// flat [`Transfer`] struct that the rest of the codebase consumes.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HasuraTransferRow {
+	pub id: String,
+	pub block_id: Option<String>,
+	pub block: Option<HasuraBlockRef>,
+	pub timestamp: String,
+	pub extrinsic_id: Option<String>,
+	pub from_id: Option<String>,
+	pub to_id: Option<String>,
+	#[serde(deserialize_with = "numeric_string")]
+	pub amount: String,
+	#[serde(deserialize_with = "numeric_string")]
+	pub fee: String,
+	pub from_hash: String,
+	pub to_hash: String,
+	#[serde(deserialize_with = "numeric_string")]
+	pub leaf_index: String,
+	#[serde(deserialize_with = "numeric_string")]
+	pub transfer_count: String,
+}
+
+impl From<HasuraTransferRow> for Transfer {
+	fn from(row: HasuraTransferRow) -> Self {
+		Transfer {
+			id: row.id,
+			block_id: row.block_id.unwrap_or_default(),
+			block_height: row.block.map(|b| b.height).unwrap_or_default(),
+			timestamp: row.timestamp,
+			extrinsic_hash: row.extrinsic_id,
+			from_id: row.from_id.unwrap_or_default(),
+			to_id: row.to_id.unwrap_or_default(),
+			amount: row.amount,
+			fee: row.fee,
+			from_hash: row.from_hash,
+			to_hash: row.to_hash,
+			leaf_index: row.leaf_index,
+			transfer_count: row.transfer_count,
+		}
+	}
+}
+
+/// A wormhole nullifier row as returned by the Hasura GraphQL server.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HasuraNullifierRow {
+	pub nullifier: String,
+	pub nullifier_hash: String,
+	pub block: Option<HasuraBlockRef>,
+	pub timestamp: String,
+	#[serde(rename = "wormholeExtrinsic")]
+	pub wormhole_extrinsic: Option<HasuraWormholeExtrinsicRef>,
+}
+
+/// Nested `wormholeExtrinsic { extrinsic_id }` relationship.
+#[derive(Debug, Clone, Deserialize)]
+pub struct HasuraWormholeExtrinsicRef {
+	pub extrinsic_id: Option<String>,
+}
+
+impl From<HasuraNullifierRow> for NullifierResult {
+	fn from(row: HasuraNullifierRow) -> Self {
+		NullifierResult {
+			nullifier: row.nullifier,
+			nullifier_hash: row.nullifier_hash,
+			extrinsic_hash: row.wormhole_extrinsic.and_then(|e| e.extrinsic_id).unwrap_or_default(),
+			block_height: row.block.map(|b| b.height).unwrap_or_default(),
+			timestamp: row.timestamp,
+		}
+	}
 }
 
 /// GraphQL response wrapper.
@@ -98,17 +209,6 @@ pub struct NullifierResult {
 
 	/// Timestamp when the nullifier was consumed
 	pub timestamp: String,
-}
-
-/// Result from a nullifier prefix query.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct NullifiersByPrefixResult {
-	/// Matching nullifiers
-	pub nullifiers: Vec<NullifierResult>,
-
-	/// Total count of matches
-	pub total_count: i64,
 }
 
 /// Query parameters for nullifier prefix queries.
@@ -286,20 +386,86 @@ mod tests {
 	}
 
 	#[test]
-	fn test_graphql_response_with_data() {
+	fn test_hasura_transfer_row_deserialization() {
+		// Hasura returns numeric columns as JSON numbers by default.
 		let json = r#"{
-            "data": {
-                "transfers": [],
-                "totalCount": 0
-            }
+            "id": "transfer-123",
+            "block_id": "block-456",
+            "block": { "height": 12345 },
+            "timestamp": "2024-01-15T12:30:00+00:00",
+            "extrinsic_id": "0xabcd1234",
+            "from_id": "qzAlice123",
+            "to_id": "qzBob456",
+            "amount": 1000000000000,
+            "fee": 1000000,
+            "from_hash": "abcd1234",
+            "to_hash": "5678efgh",
+            "leaf_index": 42,
+            "transfer_count": 100
         }"#;
 
-		let response: GraphQLResponse<TransfersByPrefixResult> =
-			serde_json::from_str(json).expect("should deserialize");
+		let row: HasuraTransferRow = serde_json::from_str(json).expect("should deserialize");
+		let transfer: Transfer = row.into();
 
-		assert!(response.data.is_some());
-		assert!(response.errors.is_none());
-		assert_eq!(response.data.unwrap().total_count, 0);
+		assert_eq!(transfer.id, "transfer-123");
+		assert_eq!(transfer.block_id, "block-456");
+		assert_eq!(transfer.block_height, 12345);
+		assert_eq!(transfer.extrinsic_hash, Some("0xabcd1234".to_string()));
+		assert_eq!(transfer.from_id, "qzAlice123");
+		assert_eq!(transfer.to_id, "qzBob456");
+		assert_eq!(transfer.amount, "1000000000000");
+		assert_eq!(transfer.fee, "1000000");
+		assert_eq!(transfer.leaf_index, "42");
+		assert_eq!(transfer.transfer_count, "100");
+	}
+
+	#[test]
+	fn test_hasura_transfer_row_stringified_numerics_and_nulls() {
+		// With HASURA_GRAPHQL_STRINGIFY_NUMERIC_TYPES enabled, numerics come as strings.
+		let json = r#"{
+            "id": "transfer-123",
+            "block_id": null,
+            "block": null,
+            "timestamp": "2024-01-15T12:30:00+00:00",
+            "extrinsic_id": null,
+            "from_id": null,
+            "to_id": null,
+            "amount": "1000000000000",
+            "fee": "0",
+            "from_hash": "abcd1234",
+            "to_hash": "5678efgh",
+            "leaf_index": "0",
+            "transfer_count": "1"
+        }"#;
+
+		let row: HasuraTransferRow = serde_json::from_str(json).expect("should deserialize");
+		let transfer: Transfer = row.into();
+
+		assert_eq!(transfer.block_id, "");
+		assert_eq!(transfer.block_height, 0);
+		assert!(transfer.extrinsic_hash.is_none());
+		assert_eq!(transfer.amount, "1000000000000");
+		assert_eq!(transfer.fee, "0");
+	}
+
+	#[test]
+	fn test_hasura_nullifier_row_deserialization() {
+		let json = r#"{
+            "nullifier": "0xdeadbeef",
+            "nullifier_hash": "aabbccdd",
+            "block": { "height": 777 },
+            "timestamp": "2024-02-01T00:00:00+00:00",
+            "wormholeExtrinsic": { "extrinsic_id": "0xfeed" }
+        }"#;
+
+		let row: HasuraNullifierRow = serde_json::from_str(json).expect("should deserialize");
+		let result: NullifierResult = row.into();
+
+		assert_eq!(result.nullifier, "0xdeadbeef");
+		assert_eq!(result.nullifier_hash, "aabbccdd");
+		assert_eq!(result.extrinsic_hash, "0xfeed");
+		assert_eq!(result.block_height, 777);
+		assert_eq!(result.timestamp, "2024-02-01T00:00:00+00:00");
 	}
 
 	#[test]
@@ -310,12 +476,12 @@ mod tests {
                 {
                     "message": "Query returned too many results",
                     "locations": [{"line": 1, "column": 1}],
-                    "path": ["transfersByHashPrefix"]
+                    "path": ["transfer"]
                 }
             ]
         }"#;
 
-		let response: GraphQLResponse<TransfersByPrefixResult> =
+		let response: GraphQLResponse<serde_json::Value> =
 			serde_json::from_str(json).expect("should deserialize");
 
 		assert!(response.data.is_none());

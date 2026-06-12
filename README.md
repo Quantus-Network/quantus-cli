@@ -264,7 +264,7 @@ quantus wormhole collect-rewards --wallet my_wallet --dry-run
 - `--destination`: Destination address for withdrawn funds (required with `--mnemonic`, defaults to wallet address).
 - `--amount`: Amount in DEV to withdraw (default: withdraw all available).
 - `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
-- `--subsquid-url`: Subsquid indexer URL (default: `https://subsquid.quantus.com/blue/graphql`).
+- `--subsquid-url`: Subsquid indexer URL (default: `https://sub2.quantus.com/v1/graphql`).
 - `--dry-run`: Show available transfers without submitting any transactions.
 - `--at-block`: Use a specific block number for proofs instead of the latest block.
 
@@ -287,7 +287,7 @@ quantus wormhole check-nullifier --secret 0x<64-hex-chars> --transfer-counts 0-5
 - `--secret`: 32-byte hex secret (alternative to `--wallet`).
 - `--transfer-counts`: Single number or range (e.g., `0-10`) of transfer counts to check.
 - `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
-- `--subsquid-url`: Subsquid indexer URL (default: `https://subsquid.quantus.com/blue/graphql`).
+- `--subsquid-url`: Subsquid indexer URL (default: `https://sub2.quantus.com/v1/graphql`).
 
 ---
 
