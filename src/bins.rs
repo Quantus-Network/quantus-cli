@@ -80,8 +80,28 @@ fn is_ready(dir: &Path) -> bool {
 	if !REQUIRED_FILES.iter().all(|f| dir.join(f).exists()) {
 		return false;
 	}
-	match std::fs::read_to_string(dir.join(VERSION_MARKER)) {
+	// Check CLI version matches
+	let version_ok = match std::fs::read_to_string(dir.join(VERSION_MARKER)) {
 		Ok(v) => v.trim() == env!("CARGO_PKG_VERSION"),
+		Err(_) => return false,
+	};
+	if !version_ok {
+		return false;
+	}
+	// Check num_leaf_proofs in config.json matches current setting
+	let config_path = dir.join("config.json");
+	match std::fs::read_to_string(&config_path) {
+		Ok(content) => {
+			// Parse just the num_leaf_proofs field to avoid pulling in full config dependency
+			#[derive(serde::Deserialize)]
+			struct ConfigCheck {
+				num_leaf_proofs: usize,
+			}
+			match serde_json::from_str::<ConfigCheck>(&content) {
+				Ok(config) => config.num_leaf_proofs == env_num_leaf_proofs(),
+				Err(_) => false,
+			}
+		},
 		Err(_) => false,
 	}
 }

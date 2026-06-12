@@ -460,8 +460,8 @@ async fn list_pending_transactions(
 					log_print!("      👤 To: {}", transfer_details.to.to_quantus_ss58());
 					log_print!("      💰 Amount: {}", formatted_amount);
 					log_print!(
-						"      🔄 Interceptor: {}",
-						transfer_details.interceptor.to_quantus_ss58()
+						"      🔄 Guardian: {}",
+						transfer_details.guardian.to_quantus_ss58()
 					);
 				}
 			}

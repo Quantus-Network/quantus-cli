@@ -2793,8 +2793,8 @@ struct DissolveOutput {
 /// Layer N: 2^(N-1) inputs → 2^N outputs (all below target_size)
 /// ```
 ///
-/// Each layer: batch inputs into groups of ≤16, generate proofs, aggregate, verify on-chain.
-/// The final outputs are small enough to blend with the miner reward noise floor.
+/// Each layer: batch inputs into groups of ≤DEFAULT_NUM_LEAF_PROOFS, generate proofs, aggregate,
+/// verify on-chain. The final outputs are small enough to blend with the miner reward noise floor.
 #[allow(clippy::too_many_arguments)]
 async fn run_dissolve(
 	amount: u128,
@@ -2934,7 +2934,7 @@ async fn run_dissolve(
 			next_secrets.push(derive_wormhole_secret(&wallet.mnemonic, layer, i + 1)?);
 		}
 
-		// Process inputs in batches of ≤16 (aggregation batch size)
+		// Process inputs in batches (aggregation batch size from config)
 		let batch_size = agg_config.num_leaf_proofs;
 		let mut all_next_outputs: Vec<DissolveOutput> = Vec::new();
 		let num_batches = num_inputs.div_ceil(batch_size);

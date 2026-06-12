@@ -227,7 +227,7 @@ pub struct CollectRewardsConfig {
 /// 1. Derives wormhole address from mnemonic
 /// 2. Queries Subsquid for pending transfers to that address
 /// 3. Generates ZK proofs for selected transfers
-/// 4. Aggregates proofs into batches (max 16 per batch)
+/// 4. Aggregates proofs into batches (size determined by circuit config)
 /// 5. Submits withdrawal transactions to chain
 ///
 /// # Arguments
@@ -478,11 +478,15 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	}
 
 	// Step 5: Aggregate and submit in batches
-	const MAX_PROOFS_PER_BATCH: usize = 16;
-	let batches: Vec<Vec<Vec<u8>>> = proof_bytes_list
-		.chunks(MAX_PROOFS_PER_BATCH)
-		.map(|chunk| chunk.to_vec())
-		.collect();
+	// Load circuit config to get actual batch size (may differ from DEFAULT_NUM_LEAF_PROOFS
+	// if QP_NUM_LEAF_PROOFS was set during build)
+	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
+		CollectRewardsError::from(format!("Failed to load circuit bins config: {}", e))
+	})?;
+	let batch_size = agg_config.num_leaf_proofs;
+
+	let batches: Vec<Vec<Vec<u8>>> =
+		proof_bytes_list.chunks(batch_size).map(|chunk| chunk.to_vec()).collect();
 
 	progress.on_step("submit", &format!("Submitting {} batch(es)", batches.len()));
 

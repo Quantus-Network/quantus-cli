@@ -84,7 +84,7 @@ async fn main() -> Result<()> {
 			for (i, signer) in info.signers.iter().enumerate() {
 				println!("     {}. {}", i + 1, signer);
 			}
-			println!("   Active Proposals: {}", info.active_proposals);
+			println!("   Proposal Nonce: {}", info.proposal_nonce);
 			println!();
 		}
 
