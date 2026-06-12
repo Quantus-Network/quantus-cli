@@ -1,15 +1,20 @@
-//! Subsquid GraphQL client for privacy-preserving transfer queries.
+//! Hasura GraphQL client for privacy-preserving transfer queries.
 
 use crate::error::{QuantusError, Result};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::types::{
-	GraphQLResponse, NullifierQueryParams, NullifierResult, NullifiersByPrefixResult, Transfer,
-	TransferQueryParams, TransfersByPrefixResult,
+	GraphQLResponse, HasuraNullifierRow, HasuraTransferRow, NullifierQueryParams, NullifierResult,
+	Transfer, TransferQueryParams,
 };
 
-/// Client for querying the Subsquid indexer.
+/// Maximum number of results the client will accept for a single broad query.
+/// Mirrors the cap the old custom GraphQL server enforced; queries matching
+/// more rows than this are rejected so callers can narrow their block range.
+const SERVER_MAX_LIMIT: u32 = 1000;
+
+/// Client for querying the Hasura GraphQL indexer.
 pub struct SubsquidClient {
 	url: String,
 	http_client: Client,
@@ -22,15 +27,24 @@ struct GraphQLRequest {
 }
 
 #[derive(Deserialize)]
-struct TransfersByHashPrefixData {
-	#[serde(rename = "transfersByHashPrefix")]
-	transfers_by_hash_prefix: TransfersByPrefixResult,
+struct HasuraTransfersData {
+	transfers: Vec<HasuraTransferRow>,
+	meta: AggregateWrapper,
 }
 
 #[derive(Deserialize)]
-struct NullifiersByPrefixData {
-	#[serde(rename = "nullifiersByPrefix")]
-	nullifiers_by_prefix: NullifiersByPrefixResult,
+struct AggregateWrapper {
+	aggregate: Option<AggregateCount>,
+}
+
+#[derive(Deserialize)]
+struct AggregateCount {
+	count: i64,
+}
+
+#[derive(Deserialize)]
+struct HasuraNullifiersData {
+	nullifiers: Vec<HasuraNullifierRow>,
 }
 
 impl SubsquidClient {
@@ -67,70 +81,127 @@ impl SubsquidClient {
 		from_prefixes: Option<Vec<String>>,
 		params: TransferQueryParams,
 	) -> Result<Vec<Transfer>> {
-		// Build the GraphQL query
+		// Hasura table query with an aggregate count so we can emulate the old
+		// server's "too many results" rejection for overly broad queries.
 		let query = r#"
-            query TransfersByHashPrefix($input: TransfersByPrefixInput!) {
-                transfersByHashPrefix(input: $input) {
-                    transfers {
-                        id
-                        blockId
-                        blockHeight
-                        timestamp
-                        extrinsicHash
-                        fromId
-                        toId
-                        amount
-                        fee
-                        fromHash
-                        toHash
-                        leafIndex
-                        transferCount
-                    }
-                    totalCount
+            query TransfersByHashPrefix($where: transfer_bool_exp!, $limit: Int!, $offset: Int!) {
+                transfers: transfer(
+                    where: $where
+                    limit: $limit
+                    offset: $offset
+                    order_by: [{ block: { height: asc } }, { id: asc }]
+                ) {
+                    id
+                    block_id
+                    block { height }
+                    timestamp
+                    extrinsic_id
+                    from_id
+                    to_id
+                    amount
+                    fee
+                    from_hash
+                    to_hash
+                    leaf_index
+                    transfer_count
+                }
+                meta: transfer_aggregate(where: $where) {
+                    aggregate { count }
                 }
             }
         "#;
 
-		// Build input variables
-		let mut input = serde_json::json!({
-			"limit": params.limit,
-			"offset": params.offset,
-		});
-
-		if let Some(prefixes) = to_prefixes {
-			input["toHashPrefixes"] = serde_json::json!(prefixes);
-		}
-
-		if let Some(prefixes) = from_prefixes {
-			input["fromHashPrefixes"] = serde_json::json!(prefixes);
-		}
-
-		if let Some(block) = params.after_block {
-			input["afterBlock"] = serde_json::json!(block);
-		}
-
-		if let Some(block) = params.before_block {
-			input["beforeBlock"] = serde_json::json!(block);
-		}
-
-		if let Some(amount) = params.min_amount {
-			input["minAmount"] = serde_json::json!(amount.to_string());
-		}
-
-		if let Some(amount) = params.max_amount {
-			input["maxAmount"] = serde_json::json!(amount.to_string());
-		}
+		let where_clause = Self::build_transfer_where(&to_prefixes, &from_prefixes, &params);
 
 		let request = GraphQLRequest {
 			query: query.to_string(),
-			variables: serde_json::json!({ "input": input }),
+			variables: serde_json::json!({
+				"where": where_clause,
+				"limit": params.limit,
+				"offset": params.offset,
+			}),
 		};
 
-		// Send request
+		let data: HasuraTransfersData = self.execute(&request).await?;
+
+		let total_count = data.meta.aggregate.map(|a| a.count).unwrap_or(0);
+		if total_count > SERVER_MAX_LIMIT as i64 {
+			// Same wording as the old server so query_all_transfers_by_prefix
+			// keeps binary-splitting block ranges on this marker.
+			return Err(QuantusError::Generic(format!(
+				"Query returned {} results, which exceeds the limit of {}. \
+				Please use longer hash prefixes or a narrower block range for more specific queries.",
+				total_count, SERVER_MAX_LIMIT
+			)));
+		}
+
+		Ok(data.transfers.into_iter().map(Transfer::from).collect())
+	}
+
+	/// Build a Hasura `transfer_bool_exp` where-clause from prefix lists and params.
+	fn build_transfer_where(
+		to_prefixes: &Option<Vec<String>>,
+		from_prefixes: &Option<Vec<String>>,
+		params: &TransferQueryParams,
+	) -> serde_json::Value {
+		let mut where_clause = serde_json::Map::new();
+
+		// Prefix conditions are OR'ed together (a transfer matches if any
+		// to/from hash prefix matches), then AND'ed with the other filters.
+		let mut or_conditions: Vec<serde_json::Value> = Vec::new();
+		if let Some(prefixes) = to_prefixes {
+			for prefix in prefixes {
+				or_conditions.push(serde_json::json!({
+					"to_hash": { "_like": format!("{}%", prefix) }
+				}));
+			}
+		}
+		if let Some(prefixes) = from_prefixes {
+			for prefix in prefixes {
+				or_conditions.push(serde_json::json!({
+					"from_hash": { "_like": format!("{}%", prefix) }
+				}));
+			}
+		}
+		if !or_conditions.is_empty() {
+			where_clause.insert("_or".to_string(), serde_json::Value::Array(or_conditions));
+		}
+
+		let mut height = serde_json::Map::new();
+		if let Some(block) = params.after_block {
+			height.insert("_gte".to_string(), serde_json::json!(block));
+		}
+		if let Some(block) = params.before_block {
+			height.insert("_lte".to_string(), serde_json::json!(block));
+		}
+		if !height.is_empty() {
+			where_clause.insert(
+				"block".to_string(),
+				serde_json::json!({ "height": serde_json::Value::Object(height) }),
+			);
+		}
+
+		// Amounts are sent as strings to avoid precision loss on large values.
+		let mut amount = serde_json::Map::new();
+		if let Some(min) = params.min_amount {
+			amount.insert("_gte".to_string(), serde_json::json!(min.to_string()));
+		}
+		if let Some(max) = params.max_amount {
+			amount.insert("_lte".to_string(), serde_json::json!(max.to_string()));
+		}
+		if !amount.is_empty() {
+			where_clause.insert("amount".to_string(), serde_json::Value::Object(amount));
+		}
+
+		serde_json::Value::Object(where_clause)
+	}
+
+	/// Execute a GraphQL request and deserialize the `data` payload.
+	async fn execute<T: serde::de::DeserializeOwned>(&self, request: &GraphQLRequest) -> Result<T> {
 		let response = self
 			.http_client
 			.post(&self.url)
-			.json(&request)
+			.json(request)
 			.send()
 			.await
 			.map_err(|e| QuantusError::Generic(format!("Failed to send request: {}", e)))?;
@@ -139,17 +210,16 @@ impl SubsquidClient {
 			let status = response.status();
 			let body = response.text().await.unwrap_or_default();
 			return Err(QuantusError::Generic(format!(
-				"Subsquid request failed with status {}: {}",
+				"Indexer request failed with status {}: {}",
 				status, body
 			)));
 		}
 
-		let graphql_response: GraphQLResponse<TransfersByHashPrefixData> = response
+		let graphql_response: GraphQLResponse<T> = response
 			.json()
 			.await
 			.map_err(|e| QuantusError::Generic(format!("Failed to parse response: {}", e)))?;
 
-		// Check for GraphQL errors
 		if let Some(errors) = graphql_response.errors {
 			let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
 			return Err(QuantusError::Generic(format!(
@@ -158,12 +228,9 @@ impl SubsquidClient {
 			)));
 		}
 
-		// Extract transfers
-		let data = graphql_response
+		graphql_response
 			.data
-			.ok_or_else(|| QuantusError::Generic("No data in response".to_string()))?;
-
-		Ok(data.transfers_by_hash_prefix.transfers)
+			.ok_or_else(|| QuantusError::Generic("No data in response".to_string()))
 	}
 
 	/// Fetch every transfer matching the given prefixes, paginating by block range.
@@ -183,7 +250,6 @@ impl SubsquidClient {
 		from_prefixes: Option<Vec<String>>,
 		base_params: TransferQueryParams,
 	) -> Result<Vec<Transfer>> {
-		const SERVER_MAX_LIMIT: u32 = 1000;
 		const LIMIT_EXCEEDED_MARKER: &str = "exceeds the limit";
 		const MAX_BLOCK_SENTINEL: u32 = i32::MAX as u32;
 
@@ -305,68 +371,49 @@ impl SubsquidClient {
 		}
 
 		let query = r#"
-            query NullifiersByPrefix($input: NullifiersByPrefixInput!) {
-                nullifiersByPrefix(input: $input) {
-                    nullifiers {
-                        nullifier
-                        nullifierHash
-                        extrinsicHash
-                        blockHeight
-                        timestamp
-                    }
-                    totalCount
+            query NullifiersByPrefix($where: wormhole_nullifier_bool_exp!) {
+                nullifiers: wormhole_nullifier(
+                    where: $where
+                    order_by: [{ timestamp: asc }]
+                ) {
+                    nullifier
+                    nullifier_hash
+                    block { height }
+                    timestamp
+                    wormholeExtrinsic { extrinsic_id }
                 }
             }
         "#;
 
-		let mut input = serde_json::json!({
-			"hashPrefixes": prefixes,
-		});
+		let or_conditions: Vec<serde_json::Value> = prefixes
+			.iter()
+			.map(|prefix| {
+				serde_json::json!({
+					"nullifier_hash": { "_like": format!("{}%", prefix) }
+				})
+			})
+			.collect();
+
+		let mut where_clause = serde_json::Map::new();
+		where_clause.insert("_or".to_string(), serde_json::Value::Array(or_conditions));
 
 		if let Some(block) = params.after_block {
-			input["afterBlock"] = serde_json::json!(block);
+			where_clause.insert(
+				"block".to_string(),
+				serde_json::json!({ "height": { "_gte": block } }),
+			);
 		}
 
 		let request = GraphQLRequest {
 			query: query.to_string(),
-			variables: serde_json::json!({ "input": input }),
+			variables: serde_json::json!({
+				"where": serde_json::Value::Object(where_clause),
+			}),
 		};
 
-		let response = self
-			.http_client
-			.post(&self.url)
-			.json(&request)
-			.send()
-			.await
-			.map_err(|e| QuantusError::Generic(format!("Failed to send request: {}", e)))?;
+		let data: HasuraNullifiersData = self.execute(&request).await?;
 
-		if !response.status().is_success() {
-			let status = response.status();
-			let body = response.text().await.unwrap_or_default();
-			return Err(QuantusError::Generic(format!(
-				"Subsquid request failed with status {}: {}",
-				status, body
-			)));
-		}
-
-		let graphql_response: GraphQLResponse<NullifiersByPrefixData> = response
-			.json()
-			.await
-			.map_err(|e| QuantusError::Generic(format!("Failed to parse response: {}", e)))?;
-
-		if let Some(errors) = graphql_response.errors {
-			let error_messages: Vec<String> = errors.iter().map(|e| e.message.clone()).collect();
-			return Err(QuantusError::Generic(format!(
-				"GraphQL errors: {}",
-				error_messages.join("; ")
-			)));
-		}
-
-		let data = graphql_response
-			.data
-			.ok_or_else(|| QuantusError::Generic("No data in response".to_string()))?;
-
-		Ok(data.nullifiers_by_prefix.nullifiers)
+		Ok(data.nullifiers.into_iter().map(NullifierResult::from).collect())
 	}
 
 	/// Check if specific nullifiers have been spent.

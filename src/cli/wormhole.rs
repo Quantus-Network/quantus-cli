@@ -839,7 +839,7 @@ pub enum WormholeCommands {
 		destination: Option<String>,
 
 		/// Subsquid indexer URL for querying transfers
-		#[arg(long, default_value = "https://subsquid.quantus.com/blue/graphql")]
+		#[arg(long, default_value = "https://sub2.quantus.com/v1/graphql")]
 		subsquid_url: String,
 
 		/// Wormhole address index for HD derivation (default: 0, ignored when using --secret)
@@ -886,7 +886,7 @@ pub enum WormholeCommands {
 		transfer_counts: String,
 
 		/// Subsquid indexer URL for querying nullifiers
-		#[arg(long, default_value = "https://subsquid.quantus.com/blue/graphql")]
+		#[arg(long, default_value = "https://sub2.quantus.com/v1/graphql")]
 		subsquid_url: String,
 	},
 }
