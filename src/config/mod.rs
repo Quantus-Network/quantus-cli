@@ -10,7 +10,7 @@ pub struct CompatibleRuntime {
 
 /// Supported runtime / transaction version pairs for the checked-in metadata snapshot.
 pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] =
-	&[CompatibleRuntime { spec_version: 127, transaction_version: 2 }];
+	&[CompatibleRuntime { spec_version: 131, transaction_version: 2 }];
 
 /// Check if a runtime version pair is compatible with this CLI.
 pub fn is_runtime_compatible(spec_version: u32, transaction_version: u32) -> bool {

@@ -822,7 +822,7 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Get the current difficulty (max_distance / distance_threshold)"]
+				#[doc = " Get the current mining difficulty"]
 				pub fn get_difficulty(
 					&self,
 				) -> ::subxt::ext::subxt_core::runtime_api::payload::StaticPayload<
@@ -2090,9 +2090,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				5u8, 105u8, 163u8, 244u8, 68u8, 98u8, 112u8, 250u8, 61u8, 241u8, 1u8, 101u8, 231u8,
-				88u8, 118u8, 173u8, 211u8, 132u8, 177u8, 161u8, 104u8, 154u8, 190u8, 71u8, 168u8,
-				146u8, 97u8, 224u8, 185u8, 79u8, 69u8, 71u8,
+				149u8, 22u8, 88u8, 66u8, 145u8, 121u8, 144u8, 45u8, 72u8, 226u8, 219u8, 201u8,
+				209u8, 125u8, 170u8, 239u8, 25u8, 38u8, 157u8, 229u8, 236u8, 69u8, 54u8, 143u8,
+				96u8, 123u8, 187u8, 158u8, 58u8, 229u8, 165u8, 193u8,
 			]
 	}
 	pub mod system {
@@ -3220,9 +3220,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							79u8, 108u8, 22u8, 139u8, 89u8, 135u8, 213u8, 82u8, 213u8, 83u8, 64u8,
-							94u8, 29u8, 221u8, 126u8, 130u8, 81u8, 75u8, 93u8, 129u8, 131u8, 82u8,
-							61u8, 187u8, 4u8, 106u8, 46u8, 54u8, 179u8, 195u8, 20u8, 71u8,
+							179u8, 170u8, 58u8, 106u8, 146u8, 26u8, 131u8, 123u8, 63u8, 145u8,
+							96u8, 92u8, 102u8, 119u8, 0u8, 98u8, 192u8, 165u8, 99u8, 111u8, 86u8,
+							243u8, 34u8, 246u8, 108u8, 240u8, 233u8, 199u8, 71u8, 214u8, 238u8,
+							209u8,
 						],
 					)
 				}
@@ -5821,6 +5822,29 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for MinerRewardRedirected {
 				const PALLET: &'static str = "MiningRewards";
 				const EVENT: &'static str = "MinerRewardRedirected";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Treasury mint failed - reward was not issued."]
+			#[doc = ""]
+			#[doc = "This is a critical operational signal. If this event is observed, it indicates"]
+			#[doc = "either a misconfigured treasury account or a currency invariant violation."]
+			#[doc = "The reward amount was permanently lost (not minted)."]
+			pub struct TreasuryMintFailed {
+				pub reward: treasury_mint_failed::Reward,
+			}
+			pub mod treasury_mint_failed {
+				use super::runtime_types;
+				pub type Reward = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for TreasuryMintFailed {
+				const PALLET: &'static str = "MiningRewards";
+				const EVENT: &'static str = "TreasuryMintFailed";
 			}
 		}
 		pub mod storage {
@@ -9543,6 +9567,12 @@ pub mod api {
 				#[doc = "functionality. This design is intentional to provide maximum security guarantees:"]
 				#[doc = "an attacker who gains access to the account cannot simply disable the protections."]
 				#[doc = ""]
+				#[doc = "This permanence also ensures that any funds subsequently sent to a compromised"]
+				#[doc = "account (e.g., from pending payments, contracts, or accidental deposits) remain"]
+				#[doc = "protected and can be recovered by the guardian via"]
+				#[doc = "[`recover_funds`](Self::recover_funds). The guardian can call `recover_funds`"]
+				#[doc = "repeatedly as needed."]
+				#[doc = ""]
 				#[doc = "Users who no longer wish to use high-security features can simply transfer their"]
 				#[doc = "funds to a different account using [`schedule_transfer`](Self::schedule_transfer)"]
 				#[doc = "or [`schedule_asset_transfer`](Self::schedule_asset_transfer)."]
@@ -9781,6 +9811,15 @@ pub mod api {
 				#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
 				#[doc = "the remaining free balance to the guardian."]
 				#[doc = ""]
+				#[doc = "# Repeated Recovery"]
+				#[doc = ""]
+				#[doc = "This function can be called multiple times on the same account. The high-security"]
+				#[doc = "status and guardian relationship are intentionally preserved after recovery, ensuring"]
+				#[doc = "that any funds subsequently deposited to the account (e.g., from pending payments,"]
+				#[doc = "contracts, or accidental deposits) remain protected and recoverable."]
+				#[doc = ""]
+				#[doc = "# Error Handling"]
+				#[doc = ""]
 				#[doc = "If releasing held funds fails for any transfer, that transfer is skipped (metadata"]
 				#[doc = "preserved for manual retry via `cancel`) and a `TransferRecoveryFailed` event is"]
 				#[doc = "emitted. Other transfers continue to be processed."]
@@ -9820,6 +9859,12 @@ pub mod api {
 				#[doc = "There is no mechanism to disable high security mode or restore normal account"]
 				#[doc = "functionality. This design is intentional to provide maximum security guarantees:"]
 				#[doc = "an attacker who gains access to the account cannot simply disable the protections."]
+				#[doc = ""]
+				#[doc = "This permanence also ensures that any funds subsequently sent to a compromised"]
+				#[doc = "account (e.g., from pending payments, contracts, or accidental deposits) remain"]
+				#[doc = "protected and can be recovered by the guardian via"]
+				#[doc = "[`recover_funds`](Self::recover_funds). The guardian can call `recover_funds`"]
+				#[doc = "repeatedly as needed."]
 				#[doc = ""]
 				#[doc = "Users who no longer wish to use high-security features can simply transfer their"]
 				#[doc = "funds to a different account using [`schedule_transfer`](Self::schedule_transfer)"]
@@ -9992,6 +10037,15 @@ pub mod api {
 				#[doc = "This is an emergency function for when the high-security account may be compromised."]
 				#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
 				#[doc = "the remaining free balance to the guardian."]
+				#[doc = ""]
+				#[doc = "# Repeated Recovery"]
+				#[doc = ""]
+				#[doc = "This function can be called multiple times on the same account. The high-security"]
+				#[doc = "status and guardian relationship are intentionally preserved after recovery, ensuring"]
+				#[doc = "that any funds subsequently deposited to the account (e.g., from pending payments,"]
+				#[doc = "contracts, or accidental deposits) remain protected and recoverable."]
+				#[doc = ""]
+				#[doc = "# Error Handling"]
 				#[doc = ""]
 				#[doc = "If releasing held funds fails for any transfer, that transfer is skipped (metadata"]
 				#[doc = "preserved for manual retry via `cancel`) and a `TransferRecoveryFailed` event is"]
@@ -19853,9 +19907,9 @@ pub mod api {
 						"Proposals",
 						(),
 						[
-							23u8, 150u8, 115u8, 215u8, 96u8, 175u8, 20u8, 135u8, 85u8, 106u8, 93u8,
-							135u8, 139u8, 72u8, 178u8, 43u8, 130u8, 76u8, 85u8, 75u8, 74u8, 69u8,
-							74u8, 232u8, 36u8, 30u8, 239u8, 26u8, 233u8, 249u8, 142u8, 163u8,
+							103u8, 36u8, 132u8, 171u8, 37u8, 120u8, 165u8, 4u8, 135u8, 65u8, 197u8,
+							203u8, 205u8, 2u8, 252u8, 201u8, 129u8, 198u8, 229u8, 173u8, 116u8,
+							60u8, 211u8, 37u8, 160u8, 117u8, 202u8, 94u8, 130u8, 86u8, 79u8, 247u8,
 						],
 					)
 				}
@@ -19877,9 +19931,9 @@ pub mod api {
 						"Proposals",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							23u8, 150u8, 115u8, 215u8, 96u8, 175u8, 20u8, 135u8, 85u8, 106u8, 93u8,
-							135u8, 139u8, 72u8, 178u8, 43u8, 130u8, 76u8, 85u8, 75u8, 74u8, 69u8,
-							74u8, 232u8, 36u8, 30u8, 239u8, 26u8, 233u8, 249u8, 142u8, 163u8,
+							103u8, 36u8, 132u8, 171u8, 37u8, 120u8, 165u8, 4u8, 135u8, 65u8, 197u8,
+							203u8, 205u8, 2u8, 252u8, 201u8, 129u8, 198u8, 229u8, 173u8, 116u8,
+							60u8, 211u8, 37u8, 160u8, 117u8, 202u8, 94u8, 130u8, 86u8, 79u8, 247u8,
 						],
 					)
 				}
@@ -19910,9 +19964,9 @@ pub mod api {
 							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
 						),
 						[
-							23u8, 150u8, 115u8, 215u8, 96u8, 175u8, 20u8, 135u8, 85u8, 106u8, 93u8,
-							135u8, 139u8, 72u8, 178u8, 43u8, 130u8, 76u8, 85u8, 75u8, 74u8, 69u8,
-							74u8, 232u8, 36u8, 30u8, 239u8, 26u8, 233u8, 249u8, 142u8, 163u8,
+							103u8, 36u8, 132u8, 171u8, 37u8, 120u8, 165u8, 4u8, 135u8, 65u8, 197u8,
+							203u8, 205u8, 2u8, 252u8, 201u8, 129u8, 198u8, 229u8, 173u8, 116u8,
+							60u8, 211u8, 37u8, 160u8, 117u8, 202u8, 94u8, 130u8, 86u8, 79u8, 247u8,
 						],
 					)
 				}
@@ -23727,6 +23781,13 @@ pub mod api {
 						miner: ::subxt::ext::subxt_core::utils::AccountId32,
 						reward: ::core::primitive::u128,
 					},
+					#[codec(index = 4)]
+					#[doc = "Treasury mint failed - reward was not issued."]
+					#[doc = ""]
+					#[doc = "This is a critical operational signal. If this event is observed, it indicates"]
+					#[doc = "either a misconfigured treasury account or a currency invariant violation."]
+					#[doc = "The reward amount was permanently lost (not minted)."]
+					TreasuryMintFailed { reward: ::core::primitive::u128 },
 				}
 			}
 		}
@@ -24071,7 +24132,6 @@ pub mod api {
 			pub struct ProposalData<_0, _1, _2, _3, _4> {
 				pub proposer: _0,
 				pub call: _3,
-				pub call_weight: runtime_types::sp_weights::weight_v2::Weight,
 				pub expiry: _2,
 				pub approvals: _4,
 				pub deposit: _1,
@@ -25532,6 +25592,12 @@ pub mod api {
 					#[doc = "functionality. This design is intentional to provide maximum security guarantees:"]
 					#[doc = "an attacker who gains access to the account cannot simply disable the protections."]
 					#[doc = ""]
+					#[doc = "This permanence also ensures that any funds subsequently sent to a compromised"]
+					#[doc = "account (e.g., from pending payments, contracts, or accidental deposits) remain"]
+					#[doc = "protected and can be recovered by the guardian via"]
+					#[doc = "[`recover_funds`](Self::recover_funds). The guardian can call `recover_funds`"]
+					#[doc = "repeatedly as needed."]
+					#[doc = ""]
 					#[doc = "Users who no longer wish to use high-security features can simply transfer their"]
 					#[doc = "funds to a different account using [`schedule_transfer`](Self::schedule_transfer)"]
 					#[doc = "or [`schedule_asset_transfer`](Self::schedule_asset_transfer)."]
@@ -25631,6 +25697,15 @@ pub mod api {
 					#[doc = "It cancels all pending transfers first (applying volume fees), then transfers"]
 					#[doc = "the remaining free balance to the guardian."]
 					#[doc = ""]
+					#[doc = "# Repeated Recovery"]
+					#[doc = ""]
+					#[doc = "This function can be called multiple times on the same account. The high-security"]
+					#[doc = "status and guardian relationship are intentionally preserved after recovery, ensuring"]
+					#[doc = "that any funds subsequently deposited to the account (e.g., from pending payments,"]
+					#[doc = "contracts, or accidental deposits) remain protected and recoverable."]
+					#[doc = ""]
+					#[doc = "# Error Handling"]
+					#[doc = ""]
 					#[doc = "If releasing held funds fails for any transfer, that transfer is skipped (metadata"]
 					#[doc = "preserved for manual retry via `cancel`) and a `TransferRecoveryFailed` event is"]
 					#[doc = "emitted. Other transfers continue to be processed."]
@@ -25659,43 +25734,37 @@ pub mod api {
 					#[doc = "Guardian cannot be the account itself, because it is redundant."]
 					GuardianCannotBeSelf,
 					#[codec(index = 3)]
-					#[doc = "Recoverer cannot be the account itself, because it is redundant."]
-					RecovererCannotBeSelf,
-					#[codec(index = 4)]
 					#[doc = "The specified pending transaction ID was not found."]
 					PendingTxNotFound,
-					#[codec(index = 5)]
+					#[codec(index = 4)]
 					#[doc = "The caller is not the original submitter of the transaction they are trying to cancel."]
 					NotOwner,
-					#[codec(index = 6)]
+					#[codec(index = 5)]
 					#[doc = "The account has reached the maximum number of pending reversible transactions."]
 					TooManyPendingTransactions,
-					#[codec(index = 7)]
+					#[codec(index = 6)]
 					#[doc = "The specified delay period is below the configured minimum."]
 					DelayTooShort,
-					#[codec(index = 8)]
+					#[codec(index = 7)]
 					#[doc = "Failed to schedule the transaction execution with the scheduler pallet."]
 					SchedulingFailed,
-					#[codec(index = 9)]
+					#[codec(index = 8)]
 					#[doc = "Failed to cancel the scheduled task with the scheduler pallet."]
 					CancellationFailed,
-					#[codec(index = 10)]
-					#[doc = "Failed to decode the OpaqueCall back into a RuntimeCall."]
-					CallDecodingFailed,
-					#[codec(index = 11)]
+					#[codec(index = 9)]
 					#[doc = "Call is invalid."]
 					InvalidCall,
-					#[codec(index = 12)]
+					#[codec(index = 10)]
 					#[doc = "Invalid scheduler origin"]
 					InvalidSchedulerOrigin,
-					#[codec(index = 13)]
+					#[codec(index = 11)]
 					#[doc = "Reverser is invalid"]
 					InvalidReverser,
-					#[codec(index = 14)]
+					#[codec(index = 12)]
 					#[doc = "Cannot schedule one time reversible transaction when account is reversible (theft"]
 					#[doc = "deterrence)"]
 					AccountAlreadyReversibleCannotScheduleOneTime,
-					#[codec(index = 15)]
+					#[codec(index = 13)]
 					#[doc = "The guardian has reached the maximum number of accounts they can protect."]
 					TooManyGuardianAccounts,
 				}
