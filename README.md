@@ -42,6 +42,34 @@ cargo build --release
 # The binary will be available as `quantus`
 ```
 
+#### Updating
+
+The CLI checks GitHub for newer releases and notifies you when one is available
+(the result is cached for a few hours, and the check is non-blocking and
+best-effort). You can update in place without visiting the releases page:
+
+```bash
+# Check whether a newer version is available (no install)
+quantus update --check
+
+# Download and install the latest release for your platform
+quantus update
+
+# Update without the confirmation prompt (useful in scripts)
+quantus update --yes
+
+# Install a specific version
+quantus update --version 1.5.0
+```
+
+`quantus update` downloads the prebuilt binary for your platform from the
+[GitHub releases](https://github.com/Quantus-Network/quantus-cli/releases) and
+replaces the running executable. If the binary lives in a protected location
+you may need to re-run with elevated privileges (e.g. `sudo quantus update`).
+
+To disable the automatic "new version available" notice, set the
+`QUANTUS_NO_UPDATE_CHECK` environment variable to any value.
+
 #### As a library
 
 Add to your `Cargo.toml`:

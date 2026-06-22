@@ -26,6 +26,7 @@ pub mod tech_collective;
 pub mod tech_referenda;
 pub mod transfers;
 pub mod treasury;
+pub mod update;
 pub mod wallet;
 pub mod wormhole;
 
@@ -238,6 +239,21 @@ pub enum Commands {
 	/// Show version information
 	Version,
 
+	/// Update the CLI to the latest release
+	Update {
+		/// Only check whether a newer version is available (don't install)
+		#[arg(long)]
+		check: bool,
+
+		/// Skip the confirmation prompt
+		#[arg(long, short = 'y')]
+		yes: bool,
+
+		/// Install a specific version instead of the latest (e.g. "1.5.0")
+		#[arg(long)]
+		version: Option<String>,
+	},
+
 	/// Check compatibility with the connected node
 	CompatibilityCheck,
 
@@ -430,6 +446,8 @@ pub async fn execute_command(
 			log_print!("CLI Version: Quantus CLI v{}", env!("CARGO_PKG_VERSION"));
 			Ok(())
 		},
+		Commands::Update { check, yes, version } =>
+			update::handle_update_command(check, yes, version).await,
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
 		Commands::Wormhole(wormhole_cmd) =>

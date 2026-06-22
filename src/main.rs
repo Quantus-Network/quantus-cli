@@ -16,6 +16,7 @@ mod config;
 mod error;
 mod log;
 mod subsquid;
+mod version_check;
 mod wallet;
 mod wormhole_lib;
 
@@ -76,6 +77,15 @@ async fn main() -> Result<(), QuantusError> {
 		wait_for_transaction: cli.wait_for_transaction,
 	};
 
+	// Kick off the update check in the background so it runs concurrently with
+	// the command and doesn't add latency. It's best-effort and never fails.
+	// Skip it for the `update` command, which performs its own version check.
+	let update_check = if matches!(cli.command, Commands::Update { .. }) {
+		None
+	} else {
+		Some(tokio::spawn(version_check::notify_if_update_available()))
+	};
+
 	// Execute the command with timing
 	let start_time = std::time::Instant::now();
 	let result =
@@ -87,12 +97,23 @@ async fn main() -> Result<(), QuantusError> {
 			log_verbose!("");
 			log_verbose!("Command executed successfully!");
 			log_print!("⏱️  Completed in {:.2}s", elapsed.as_secs_f64());
+			finish_update_check(update_check).await;
 			Ok(())
 		},
 		Err(e) => {
 			log_error!("{}", e);
 			log_print!("⏱️  Failed after {:.2}s", elapsed.as_secs_f64());
+			finish_update_check(update_check).await;
 			std::process::exit(1);
 		},
+	}
+}
+
+/// Wait for the background update check to finish so its notice (if any) is
+/// printed after the command output. Bounded by a short timeout so a slow
+/// network can never hold up the CLI.
+async fn finish_update_check(handle: Option<tokio::task::JoinHandle<()>>) {
+	if let Some(handle) = handle {
+		let _ = tokio::time::timeout(std::time::Duration::from_secs(3), handle).await;
 	}
 }
