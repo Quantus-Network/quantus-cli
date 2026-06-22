@@ -63,12 +63,12 @@ reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-feature
 # rest of the crate, avoiding duplicate dependencies. The only change in 0.44 is a
 # bump to reqwest 0.13, which would force a second reqwest build with no real gain.
 self_update = { version = "0.43", default-features = false, features = [
-	"reqwest",
-	"rustls",
 	"archive-tar",
 	"archive-zip",
 	"compression-flate2",
 	"compression-zip-deflate",
+	"reqwest",
+	"rustls",
 ] }
 
 # Force patched version of bytes (RUSTSEC-2026-0007)
