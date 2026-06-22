@@ -94,19 +94,15 @@ fn write_cache(cache: &UpdateCache) {
 	};
 	if let Some(parent) = path.parent() {
 		if let Err(e) = std::fs::create_dir_all(parent) {
-			log_verbose!(
-				"update check: failed to create cache dir {}: {e}",
-				parent.display()
-			);
+			log_verbose!("update check: failed to create cache dir {}: {e}", parent.display());
 			return;
 		}
 	}
 	match serde_json::to_string_pretty(cache) {
-		Ok(contents) => {
+		Ok(contents) =>
 			if let Err(e) = std::fs::write(&path, contents) {
 				log_verbose!("update check: failed to write cache {}: {e}", path.display());
-			}
-		},
+			},
 		Err(e) => log_verbose!("update check: failed to serialize cache: {e}"),
 	}
 }
