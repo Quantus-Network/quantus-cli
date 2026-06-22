@@ -6,9 +6,18 @@
 //! and API rate-limiting).
 //!
 //! The check is strictly best-effort: any network, parsing or filesystem error
-//! is swallowed silently so it can never interfere with the actual command.
+//! can never interfere with the actual command. To stay aligned with the
+//! "fail early / always log" rule, these errors are not silenced outright —
+//! they are downgraded to `log_verbose!` so `-v` surfaces exactly what happened
+//! without spamming normal output.
+//!
+//! To avoid adding latency, the network fetch never blocks the command. The
+//! latest version is resolved from an on-disk cache via [`refresh_cache_in_background`]
+//! (spawned to run concurrently with the command), while [`notify_if_update_available`]
+//! only consults that cache and prints instantly. The first run with a cold
+//! cache shows nothing; a later run (once the cache is warm) shows the notice.
 
-use crate::log_print;
+use crate::{log_print, log_verbose};
 use colored::Colorize;
 use serde::{Deserialize, Serialize};
 use std::{path::PathBuf, time::Duration};
@@ -85,82 +94,159 @@ fn is_newer(current: &str, latest: &str) -> bool {
 }
 
 /// Read the cache file if it exists and is well-formed.
+///
+/// A missing cache file is expected (e.g. on first run) and not logged. Any
+/// other read/parse failure is surfaced via `log_verbose!`.
 fn read_cache() -> Option<UpdateCache> {
 	let path = cache_path()?;
-	let contents = std::fs::read_to_string(path).ok()?;
-	serde_json::from_str(&contents).ok()
+	let contents = match std::fs::read_to_string(&path) {
+		Ok(contents) => contents,
+		Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+		Err(e) => {
+			log_verbose!("update check: failed to read cache {}: {e}", path.display());
+			return None;
+		},
+	};
+	match serde_json::from_str(&contents) {
+		Ok(cache) => Some(cache),
+		Err(e) => {
+			log_verbose!("update check: failed to parse cache {}: {e}", path.display());
+			None
+		},
+	}
 }
 
 /// Persist the cache file, creating the parent directory if needed.
 fn write_cache(cache: &UpdateCache) {
-	let Some(path) = cache_path() else { return };
+	let Some(path) = cache_path() else {
+		log_verbose!("update check: could not determine cache path; skipping cache write");
+		return;
+	};
 	if let Some(parent) = path.parent() {
-		let _ = std::fs::create_dir_all(parent);
+		if let Err(e) = std::fs::create_dir_all(parent) {
+			log_verbose!(
+				"update check: failed to create cache dir {}: {e}",
+				parent.display()
+			);
+			return;
+		}
 	}
-	if let Ok(contents) = serde_json::to_string_pretty(cache) {
-		let _ = std::fs::write(path, contents);
+	match serde_json::to_string_pretty(cache) {
+		Ok(contents) => {
+			if let Err(e) = std::fs::write(&path, contents) {
+				log_verbose!("update check: failed to write cache {}: {e}", path.display());
+			}
+		},
+		Err(e) => log_verbose!("update check: failed to serialize cache: {e}"),
 	}
 }
 
 /// Query GitHub for the latest release tag (without a leading `v`).
 async fn fetch_latest_version() -> Option<String> {
-	let client = reqwest::Client::builder()
+	let client = match reqwest::Client::builder()
 		.timeout(REQUEST_TIMEOUT)
 		// GitHub requires a User-Agent header on all API requests.
 		.user_agent(concat!("quantus-cli/", env!("CARGO_PKG_VERSION")))
 		.build()
-		.ok()?;
+	{
+		Ok(client) => client,
+		Err(e) => {
+			log_verbose!("update check: failed to build HTTP client: {e}");
+			return None;
+		},
+	};
 
-	let release = client
+	let response = match client
 		.get(LATEST_RELEASE_URL)
 		.header("Accept", "application/vnd.github+json")
 		.send()
 		.await
-		.ok()?
-		.error_for_status()
-		.ok()?
-		.json::<GithubRelease>()
-		.await
-		.ok()?;
+	{
+		Ok(response) => response,
+		Err(e) => {
+			log_verbose!("update check: request to GitHub failed: {e}");
+			return None;
+		},
+	};
 
-	Some(normalize(&release.tag_name).to_string())
-}
+	let response = match response.error_for_status() {
+		Ok(response) => response,
+		Err(e) => {
+			log_verbose!("update check: GitHub returned an error status: {e}");
+			return None;
+		},
+	};
 
-/// Resolve the latest known version, using the cache when it is still fresh and
-/// otherwise querying GitHub and refreshing the cache.
-async fn latest_version() -> Option<String> {
-	if let Some(cache) = read_cache() {
-		if now_secs().saturating_sub(cache.last_checked) < CACHE_TTL.as_secs() {
-			return Some(cache.latest_version);
-		}
+	match response.json::<GithubRelease>().await {
+		Ok(release) => Some(normalize(&release.tag_name).to_string()),
+		Err(e) => {
+			log_verbose!("update check: failed to parse GitHub response: {e}");
+			None
+		},
 	}
-
-	let latest = fetch_latest_version().await?;
-	write_cache(&UpdateCache { last_checked: now_secs(), latest_version: latest.clone() });
-	Some(latest)
 }
 
-/// Perform the update check and print a notice when a newer version exists.
+/// Print an update notice when a *fresh* cached result already says a newer
+/// version exists.
 ///
-/// This is best-effort and never returns an error: it is safe to call from any
-/// command path. Honors the `QUANTUS_NO_UPDATE_CHECK` opt-out.
-pub async fn notify_if_update_available() {
+/// This never performs network I/O — it only consults the on-disk cache — so it
+/// is effectively instant and adds no latency to the command. The cache is
+/// populated by [`refresh_cache_in_background`], which runs concurrently with
+/// the command. When the cache is cold or stale we print nothing; a later
+/// invocation (once the cache is warm) shows the notice. Honors the
+/// `QUANTUS_NO_UPDATE_CHECK` opt-out.
+pub fn notify_if_update_available() {
 	if std::env::var_os(DISABLE_ENV).is_some() {
 		return;
 	}
 
-	let current = env!("CARGO_PKG_VERSION");
-	let Some(latest) = latest_version().await else { return };
+	let Some(cache) = read_cache() else {
+		log_verbose!("update check: no cached result yet; nothing to show");
+		return;
+	};
 
-	if is_newer(current, &latest) {
+	if now_secs().saturating_sub(cache.last_checked) >= CACHE_TTL.as_secs() {
+		log_verbose!("update check: cached result is stale; refreshing in background");
+		return;
+	}
+
+	let current = env!("CARGO_PKG_VERSION");
+	if is_newer(current, &cache.latest_version) {
 		log_print!("");
 		log_print!(
 			"{} A new version of Quantus CLI is available: {} → {}",
 			"⬆️".bright_yellow(),
 			current.dimmed(),
-			latest.bright_green().bold()
+			cache.latest_version.bright_green().bold()
 		);
 		log_print!("   Download it from {}", RELEASES_PAGE_URL.bright_cyan());
+	}
+}
+
+/// Refresh the cached latest-version from GitHub when the cache is missing or
+/// stale.
+///
+/// Best-effort and designed to never block the command: it is meant to be
+/// spawned and left to run concurrently so the *next* invocation has a warm
+/// cache to display. Honors the `QUANTUS_NO_UPDATE_CHECK` opt-out.
+pub async fn refresh_cache_in_background() {
+	if std::env::var_os(DISABLE_ENV).is_some() {
+		return;
+	}
+
+	if let Some(cache) = read_cache() {
+		if now_secs().saturating_sub(cache.last_checked) < CACHE_TTL.as_secs() {
+			log_verbose!("update check: cache is fresh; skipping refresh");
+			return;
+		}
+	}
+
+	match fetch_latest_version().await {
+		Some(latest) => {
+			write_cache(&UpdateCache { last_checked: now_secs(), latest_version: latest });
+			log_verbose!("update check: refreshed cached latest version");
+		},
+		None => log_verbose!("update check: could not refresh latest version"),
 	}
 }
 

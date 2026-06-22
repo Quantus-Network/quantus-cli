@@ -77,13 +77,19 @@ async fn main() -> Result<(), QuantusError> {
 		wait_for_transaction: cli.wait_for_transaction,
 	};
 
-	// Kick off the update check in the background so it runs concurrently with
-	// the command and doesn't add latency. It's best-effort and never fails.
-	// Skip it for the `update` command, which performs its own version check.
-	let update_check = if matches!(cli.command, Commands::Update { .. }) {
+	// Warm the update-version cache in the background so it runs concurrently
+	// with the command and never adds latency: we never block the command on
+	// the network. The notice itself is printed (instantly, from cache) once
+	// the command finishes. It's best-effort and never fails. Skip it for the
+	// `update` command, which performs its own version check.
+	//
+	// The handle is intentionally detached: for slower commands the refresh
+	// finishes during execution and the notice can show on this same run; for
+	// near-instant commands it simply warms the cache for the next invocation.
+	let _update_refresh = if matches!(cli.command, Commands::Update { .. }) {
 		None
 	} else {
-		Some(tokio::spawn(version_check::notify_if_update_available()))
+		Some(tokio::spawn(version_check::refresh_cache_in_background()))
 	};
 
 	// Execute the command with timing
@@ -97,23 +103,14 @@ async fn main() -> Result<(), QuantusError> {
 			log_verbose!("");
 			log_verbose!("Command executed successfully!");
 			log_print!("⏱️  Completed in {:.2}s", elapsed.as_secs_f64());
-			finish_update_check(update_check).await;
+			version_check::notify_if_update_available();
 			Ok(())
 		},
 		Err(e) => {
 			log_error!("{}", e);
 			log_print!("⏱️  Failed after {:.2}s", elapsed.as_secs_f64());
-			finish_update_check(update_check).await;
+			version_check::notify_if_update_available();
 			std::process::exit(1);
 		},
-	}
-}
-
-/// Wait for the background update check to finish so its notice (if any) is
-/// printed after the command output. Bounded by a short timeout so a slow
-/// network can never hold up the CLI.
-async fn finish_update_check(handle: Option<tokio::task::JoinHandle<()>>) {
-	if let Some(handle) = handle {
-		let _ = tokio::time::timeout(std::time::Duration::from_secs(3), handle).await;
 	}
 }
