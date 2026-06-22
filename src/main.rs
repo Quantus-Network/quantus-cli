@@ -79,14 +79,11 @@ async fn main() -> Result<(), QuantusError> {
 
 	// Warm the update-version cache in the background so it runs concurrently
 	// with the command and never adds latency: we never block the command on
-	// the network. The notice itself is printed (instantly, from cache) once
-	// the command finishes. It's best-effort and never fails. Skip it for the
-	// `update` command, which performs its own version check.
-	//
-	// The handle is intentionally detached: for slower commands the refresh
-	// finishes during execution and the notice can show on this same run; for
-	// near-instant commands it simply warms the cache for the next invocation.
-	let _update_refresh = if matches!(cli.command, Commands::Update { .. }) {
+	// the network. The notice itself is printed only after the command finishes
+	// (see `finish_update_check`), never racing it into the middle of the output.
+	// It's best-effort and never fails. Skip it for the `update` command, which
+	// performs its own version check.
+	let update_refresh = if matches!(cli.command, Commands::Update { .. }) {
 		None
 	} else {
 		Some(tokio::spawn(version_check::refresh_cache_in_background()))
@@ -103,13 +100,13 @@ async fn main() -> Result<(), QuantusError> {
 			log_verbose!("");
 			log_verbose!("Command executed successfully!");
 			log_print!("⏱️  Completed in {:.2}s", elapsed.as_secs_f64());
-			version_check::notify_if_update_available();
+			version_check::finish_update_check(update_refresh).await;
 			Ok(())
 		},
 		Err(e) => {
 			log_error!("{}", e);
 			log_print!("⏱️  Failed after {:.2}s", elapsed.as_secs_f64());
-			version_check::notify_if_update_available();
+			version_check::finish_update_check(update_refresh).await;
 			std::process::exit(1);
 		},
 	}

@@ -75,34 +75,13 @@ enum UpdateOutcome {
 	Updated(String),
 }
 
-/// Blocking implementation that talks to GitHub and replaces the binary.
-fn run_update(
-	check_only: bool,
-	yes: bool,
-	version: Option<String>,
-) -> crate::error::Result<UpdateOutcome> {
-	let current = env!("CARGO_PKG_VERSION");
-
-	// In check-only mode we just look up the latest release and compare.
-	if check_only {
-		let release = self_update::backends::github::ReleaseList::configure()
-			.repo_owner(REPO_OWNER)
-			.repo_name(REPO_NAME)
-			.build()
-			.and_then(|list| list.fetch())
-			.map_err(map_self_update_err)?;
-
-		let latest = release
-			.first()
-			.ok_or_else(|| QuantusError::Generic("No releases found on GitHub.".to_string()))?;
-
-		let latest_version = latest.version.trim_start_matches('v');
-		if self_update::version::bump_is_greater(current, latest_version).unwrap_or(false) {
-			return Ok(UpdateOutcome::UpdateAvailable(latest_version.to_string()));
-		}
-		return Ok(UpdateOutcome::AlreadyLatest(current.to_string()));
-	}
-
+/// Build the shared `self_update` updater configuration.
+///
+/// This is the single source of truth for how we talk to GitHub: both the
+/// install flow and [`latest_stable_version`] derive from it, so the version a
+/// check advertises can never disagree with the version an install resolves
+/// (they both follow GitHub's `/releases/latest` semantics).
+fn configure_updater() -> self_update::backends::github::UpdateBuilder {
 	let mut builder = self_update::backends::github::Update::configure();
 	builder
 		.repo_owner(REPO_OWNER)
@@ -113,14 +92,49 @@ fn run_update(
 		// added back as a literal here.
 		.bin_path_in_archive("quantus-cli-v{{ version }}-{{ target }}/{{ bin }}")
 		.identifier(ASSET_IDENTIFIER)
-		.show_download_progress(true)
-		.no_confirm(yes)
-		.current_version(current);
+		.current_version(env!("CARGO_PKG_VERSION"));
+	builder
+}
+
+/// Resolve the latest *stable* release version from GitHub (without a leading
+/// `v`), using the same `/releases/latest` resolution as the install path.
+///
+/// Blocking: `self_update` performs synchronous I/O, so call this off the async
+/// runtime's worker threads (e.g. via `spawn_blocking`).
+pub fn latest_stable_version() -> crate::error::Result<String> {
+	let release = configure_updater()
+		.build()
+		.map_err(map_self_update_err)?
+		.get_latest_release()
+		.map_err(map_self_update_err)?;
+	Ok(release.version.trim_start_matches('v').to_string())
+}
+
+/// Blocking implementation that talks to GitHub and replaces the binary.
+fn run_update(
+	check_only: bool,
+	yes: bool,
+	version: Option<String>,
+) -> crate::error::Result<UpdateOutcome> {
+	let current = env!("CARGO_PKG_VERSION");
+
+	// In check-only mode we just look up the latest release and compare. This
+	// uses the exact same resolution as the install path below, so a reported
+	// upgrade is always one that `quantus update` can actually install.
+	if check_only {
+		let latest = latest_stable_version()?;
+		if self_update::version::bump_is_greater(current, &latest).unwrap_or(false) {
+			return Ok(UpdateOutcome::UpdateAvailable(latest));
+		}
+		return Ok(UpdateOutcome::AlreadyLatest(current.to_string()));
+	}
+
+	let mut builder = configure_updater();
+	builder.show_download_progress(true).no_confirm(yes);
 
 	if let Some(version) = version {
 		// Accept both `1.5.0` and `v1.5.0`; the release tags include the `v`.
-		let tag =
-			if version.starts_with('v') { version.clone() } else { format!("v{version}") };
+		let tag = if version.starts_with('v') { version } else { format!("v{version}") };
 		builder.target_version_tag(&tag);
 	}
 
