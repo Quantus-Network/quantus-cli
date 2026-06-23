@@ -34,7 +34,8 @@ thiserror = "2.0"
 
 # Terminal UI
 colored = "3.0"
-indicatif = "0.17"
+# Kept at 0.18 to share a single indicatif build with `self_update` (no duplicate).
+indicatif = "0.18"
 
 # Additional utilities
 chrono = { version = "0.4", features = ["serde"] }
@@ -56,6 +57,19 @@ qp-rusty-crystals-hdwallet = { version = "2.4.0" }
 # HTTP client for Subsquid queries
 blake3 = "1.8"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+# Self-update: download and replace the running binary from GitHub releases.
+# Pinned to 0.43.x: it shares the same reqwest (0.12) and indicatif (0.18) as the
+# rest of the crate, avoiding duplicate dependencies. The only change in 0.44 is a
+# bump to reqwest 0.13, which would force a second reqwest build with no real gain.
+self_update = { version = "0.43", default-features = false, features = [
+	"archive-tar",
+	"archive-zip",
+	"compression-flate2",
+	"compression-zip-deflate",
+	"reqwest",
+	"rustls",
+] }
 
 # Force patched version of bytes (RUSTSEC-2026-0007)
 bytes = "1.11.1"

@@ -12,6 +12,7 @@ pub mod config;
 pub mod error;
 pub mod log;
 pub mod subsquid;
+pub mod version_check;
 pub mod wallet;
 pub mod wormhole_lib;
 
