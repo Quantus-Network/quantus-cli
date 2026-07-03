@@ -1,6 +1,6 @@
-//! Wormhole phase (opt-in via `--phases wormhole`): drives the existing
-//! multiround flow (fund → prove → verify on-chain → exit) with one round.
-//! Proof generation is CPU-heavy, which is why this phase is not on by default.
+//! Wormhole phase: drives the existing multiround flow (fund → prove →
+//! verify on-chain → exit) with one round. Proof generation is CPU-heavy;
+//! on debug builds it can be very slow, so use `--skip wormhole` there.
 
 use crate::{
 	cli::exercise::{report::Report, runner::ExerciseCtx},

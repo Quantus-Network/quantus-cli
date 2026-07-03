@@ -21,9 +21,9 @@ use std::path::PathBuf;
 /// Arguments for `quantus exercise`.
 #[derive(Args, Debug)]
 pub struct ExerciseArgs {
-	/// Comma-separated phases to run (default: reads,balances,reversible,
-	/// multisig,recovery,preimage,governance,negative,fuzz). `wormhole` is
-	/// opt-in; `upgrade` is enabled by passing --upgrade-wasm.
+	/// Comma-separated phases to run (default: all except `upgrade`, which
+	/// is enabled by passing --upgrade-wasm). Use --skip to exclude phases,
+	/// e.g. --skip wormhole on debug builds where proving is slow.
 	#[arg(long, value_delimiter = ',')]
 	pub phases: Option<Vec<Phase>>,
 
@@ -88,6 +88,7 @@ impl Phase {
 			Phase::Governance,
 			Phase::Negative,
 			Phase::Fuzz,
+			Phase::Wormhole,
 		]
 	}
 
@@ -178,11 +179,8 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 			// Reconnect so subxt picks up the new metadata/runtime version.
 			crate::log_status!("🔁 Re-running phases against the upgraded runtime…");
 			ctx.client = QuantusClient::new(node_url).await?;
-			let rerun: Vec<Phase> = selected
-				.iter()
-				.copied()
-				.filter(|p| !matches!(p, Phase::Wormhole | Phase::Upgrade))
-				.collect();
+			let rerun: Vec<Phase> =
+				selected.iter().copied().filter(|p| *p != Phase::Upgrade).collect();
 			run_phases(&mut ctx, &mut report, &rerun, "post-upgrade:").await?;
 		} else {
 			report.record_skip("post-upgrade", "rerun", "skipped because the upgrade phase failed");
