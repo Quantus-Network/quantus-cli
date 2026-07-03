@@ -7,6 +7,7 @@ pub mod batch;
 pub mod block;
 pub mod common;
 pub mod events;
+pub mod exercise;
 pub mod generic_call;
 pub mod high_security;
 pub mod metadata;
@@ -14,8 +15,6 @@ pub mod multisend;
 pub mod multisig;
 pub mod preimage;
 pub mod recovery;
-pub mod referenda;
-pub mod referenda_decode;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
@@ -108,10 +107,6 @@ pub enum Commands {
 	#[command(subcommand)]
 	TechReferenda(tech_referenda::TechReferendaCommands),
 
-	/// Standard Referenda management commands (public governance)
-	#[command(subcommand)]
-	Referenda(referenda::ReferendaCommands),
-
 	/// Treasury account info
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
@@ -174,6 +169,9 @@ pub enum Commands {
 	/// Developer utilities and testing tools
 	#[command(subcommand)]
 	Developer(DeveloperCommands),
+
+	/// Run the chain exercise suite against a live node (smoke + fuzz + optional upgrade)
+	Exercise(exercise::ExerciseArgs),
 
 	/// Query events from blocks
 	Events {
@@ -368,8 +366,6 @@ pub async fn execute_command(
 				execution_mode,
 			)
 			.await,
-		Commands::Referenda(referenda_cmd) =>
-			referenda::handle_referenda_command(referenda_cmd, node_url, execution_mode).await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
 		Commands::Transfers(transfers_cmd) =>
@@ -421,6 +417,8 @@ pub async fn execute_command(
 			Ok(())
 		},
 		Commands::Developer(dev_cmd) => handle_developer_command(dev_cmd).await,
+		Commands::Exercise(exercise_args) =>
+			exercise::handle_exercise_command(exercise_args, node_url).await,
 		Commands::Events { block, block_hash, latest: _, finalized, pallet, raw, no_decode } =>
 			events::handle_events_command(
 				block, block_hash, finalized, pallet, raw, !no_decode, node_url,
