@@ -170,7 +170,7 @@ pub enum Commands {
 	#[command(subcommand)]
 	Developer(DeveloperCommands),
 
-	/// Run the chain exercise suite against a live node (smoke + fuzz + optional upgrade)
+	/// Run the chain exercise suite against a live node
 	Exercise(exercise::ExerciseArgs),
 
 	/// Query events from blocks

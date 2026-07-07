@@ -1,5 +1,4 @@
-//! Negative scenarios: every case asserts a specific, expected rejection so a
-//! runtime upgrade that accidentally loosens validation is caught.
+//! Expected rejection scenarios.
 
 use crate::{
 	chain::quantus_subxt,
@@ -48,7 +47,6 @@ async fn transfer_over_balance(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn transfer_below_ed(ctx: &mut ExerciseCtx) -> Result<String> {
-	// Sending less than the existential deposit to a fresh account must fail.
 	if ctx.existential_deposit <= 1 {
 		return Ok("existential deposit <= 1, below-ED case not applicable".to_string());
 	}
@@ -72,8 +70,6 @@ async fn transfer_overflow_amount(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn malformed_address(_ctx: &mut ExerciseCtx) -> Result<String> {
-	// Client-side validation: a garbage destination must be rejected before
-	// anything is signed or submitted.
 	match crate::cli::common::resolve_address("definitely-not-an-address-🦀") {
 		Err(e) => Ok(format!("rejected client-side as expected: {e}")),
 		Ok(resolved) => Err(QuantusError::Generic(format!(
@@ -83,7 +79,6 @@ async fn malformed_address(_ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn stale_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
-	// eph[0] has already submitted transactions, so nonce 0 is stale.
 	let sender = ctx.eph[0].clone();
 	let account = sender.to_account_id_32();
 	let current_nonce = ctx.client.get_account_nonce_from_best_block(&account).await?;
@@ -119,7 +114,6 @@ async fn stale_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn reversible_delay_too_short(ctx: &mut ExerciseCtx) -> Result<String> {
-	// MinDelayPeriodBlocks is 2 on this runtime; a 1-block delay must fail.
 	let sender = ctx.eph[2].clone();
 	let recipient = ctx.fresh_keypair()?;
 	use quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay;
@@ -132,8 +126,6 @@ async fn reversible_delay_too_short(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn reversible_default_delay_not_hs(ctx: &mut ExerciseCtx) -> Result<String> {
-	// `schedule_transfer` (default delay) is exclusive to high-security
-	// accounts; a regular account must be rejected.
 	let sender = ctx.eph[2].clone();
 	let recipient = ctx.fresh_keypair()?;
 	let call = quantus_subxt::api::tx().reversible_transfers().schedule_transfer(
@@ -144,7 +136,6 @@ async fn reversible_default_delay_not_hs(ctx: &mut ExerciseCtx) -> Result<String
 }
 
 async fn high_security_self_guardian(ctx: &mut ExerciseCtx) -> Result<String> {
-	// Setting yourself as your own guardian must be rejected.
 	let sender = ctx.eph[3].clone();
 	use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
 	let call = quantus_subxt::api::tx()
@@ -154,9 +145,7 @@ async fn high_security_self_guardian(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn scheduler_calls_disabled(ctx: &mut ExerciseCtx) -> Result<String> {
-	// The runtime disables Scheduler dispatchables (`#[runtime::disable_call]`),
-	// which removes them from metadata entirely. This canary fails if an
-	// upgrade ever re-enables them.
+	// Canary: Scheduler dispatchables are disabled in metadata.
 	let metadata = ctx.client.client().metadata();
 	let scheduler = metadata
 		.pallet_by_name("Scheduler")
@@ -172,8 +161,6 @@ async fn scheduler_calls_disabled(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn removed_pallets_absent(ctx: &mut ExerciseCtx) -> Result<String> {
-	// Community governance (Referenda / ConvictionVoting) and Sudo were removed
-	// from the runtime; assert they stay removed.
 	let metadata = ctx.client.client().metadata();
 	for name in ["Referenda", "ConvictionVoting", "Sudo"] {
 		if metadata.pallet_by_name(name).is_some() {

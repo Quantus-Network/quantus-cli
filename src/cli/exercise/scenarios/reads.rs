@@ -1,6 +1,4 @@
-//! Read-only sanity checks: runtime version, metadata, storage, blocks,
-//! events, treasury and high-security status. These verify that all decode
-//! paths still work — especially valuable after a runtime upgrade.
+//! Read-only decode-path checks.
 
 use crate::{
 	chain::quantus_subxt,
@@ -10,10 +8,6 @@ use crate::{
 };
 
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
-	// In the post-upgrade re-run the chain is on the candidate runtime, whose
-	// spec version is by construction *newer* than anything pinned in
-	// COMPATIBLE_RUNTIMES (the upgrade phase requires a spec bump). Requiring
-	// table membership there would fail every successful upgrade run.
 	let post_upgrade = phase.starts_with("post-upgrade:");
 	exercise_step!(report, phase, "runtime_version", runtime_version(ctx, post_upgrade));
 	exercise_step!(report, phase, "metadata_pallets", metadata_pallets(ctx));
@@ -33,10 +27,6 @@ async fn runtime_version(ctx: &ExerciseCtx, post_upgrade: bool) -> Result<String
 		return Ok(format!("spec {spec} / tx {tx}, compatible with CLI bindings"));
 	}
 	if post_upgrade {
-		// The candidate runtime is expected to be absent from the table; the
-		// rest of the re-run verifies the checked-in bindings still work
-		// against it. A transaction_version change, however, invalidates the
-		// signing payload and must be flagged.
 		if crate::config::COMPATIBLE_RUNTIMES.iter().any(|r| r.transaction_version == tx) {
 			return Ok(format!(
 				"spec {spec} / tx {tx}: candidate runtime not in the compatibility table \
@@ -123,7 +113,6 @@ async fn high_security_status(ctx: &ExerciseCtx) -> Result<String> {
 }
 
 async fn scheduler_agenda(ctx: &ExerciseCtx) -> Result<String> {
-	// The scheduler pallet has no dispatchables, but its storage must decode.
 	let timestamp = crate::cli::scheduler::get_last_processed_timestamp(&ctx.client).await?;
 	Ok(format!("scheduler last processed timestamp: {timestamp:?}"))
 }

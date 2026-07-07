@@ -768,8 +768,6 @@ fn format_dispatch_error(
 	}
 }
 
-/// Submit a preimage, treating AlreadyNoted as success (idempotent).
-/// Always waits for inclusion so subsequent txs from the same sender get a fresh nonce.
 pub async fn submit_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	keypair: &crate::wallet::QuantumKeyPair,

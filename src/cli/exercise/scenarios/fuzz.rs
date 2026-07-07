@@ -1,10 +1,4 @@
-//! Seeded fuzz loop. Each iteration draws a random action (transfers with
-//! boundary amounts, random-size remarks, random batches, random reversible
-//! delays) from the shared RNG. The invariant asserted for every iteration is
-//! that the node responds and the transaction either executes successfully or
-//! is rejected with a cleanly decoded error — anything else (hang, stream
-//! ending, undecodable failure) fails the step. The seed is logged so any
-//! failure is reproducible with `--seed`.
+//! Seeded fuzz loop; failures are reproducible with `--seed`.
 
 use crate::{
 	chain::quantus_subxt,
@@ -27,7 +21,6 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	Ok(())
 }
 
-/// Outcome classifier: clean success or clean rejection both pass.
 fn classify(result: crate::error::Result<subxt::utils::H256>, what: &str) -> Result<String> {
 	match result {
 		Ok(hash) => Ok(format!("{what}: included ({hash:?})")),
@@ -73,14 +66,11 @@ fn random_amount(ctx: &mut ExerciseCtx) -> u128 {
 fn random_recipient(ctx: &mut ExerciseCtx) -> Result<crate::cli::common::SubxtAccountId32> {
 	let choice = ctx.rng.random_range(0..3u8);
 	Ok(match choice {
-		// Existing funded account.
 		0 => {
 			let idx = ctx.rng.random_range(0..ctx.eph.len());
 			account_id_of(&ctx.eph[idx])
 		},
-		// Brand new account.
 		1 => account_id_of(&ctx.fresh_keypair()?),
-		// Self-transfer.
 		_ => account_id_of(&ctx.eph[0]),
 	})
 }
@@ -134,8 +124,7 @@ async fn fuzz_batch(ctx: &mut ExerciseCtx) -> Result<String> {
 	let result =
 		crate::cli::common::submit_transaction(&ctx.client, &sender, call, None, ctx.wait_mode())
 			.await;
-	// Utility::batch itself succeeds even when inner calls fail (it emits
-	// BatchInterrupted), so both outcomes are legitimate here.
+	// Batch succeeds even when inner calls fail.
 	classify(result, &format!("batch of {n} transfers"))
 }
 
@@ -144,7 +133,6 @@ async fn fuzz_reversible(ctx: &mut ExerciseCtx) -> Result<String> {
 	let to = random_recipient(ctx)?;
 	let amount = random_amount(ctx);
 	use quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay;
-	// Mix of too-short, sane, and absurd delays in both units.
 	let delay = match ctx.rng.random_range(0..5u8) {
 		0 => Delay::BlockNumber(0),
 		1 => Delay::BlockNumber(1),

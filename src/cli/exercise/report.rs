@@ -1,4 +1,4 @@
-//! Result collection and rendering for the exercise suite.
+//! Result collection and rendering.
 
 use colored::Colorize;
 use serde::Serialize;
@@ -35,7 +35,6 @@ impl Report {
 		Self { node_url: node_url.to_string(), seed, spec_version, steps: Vec::new(), fail_fast }
 	}
 
-	/// Record the outcome of a step. `Ok(detail)` marks it passed, `Err` failed.
 	pub fn record(
 		&mut self,
 		phase: &str,
@@ -85,7 +84,6 @@ impl Report {
 		self.count(StepStatus::Failed) > 0
 	}
 
-	/// True when fail-fast is enabled and something already failed.
 	pub fn should_abort(&self) -> bool {
 		self.fail_fast && self.has_failures()
 	}

@@ -1,6 +1,4 @@
-//! Recovery scenarios. The CLI does not wrap `create_recovery`, so no account
-//! has a recovery configuration on a fresh dev chain; the wrapped calls are
-//! exercised as far as chain state allows, asserting the documented errors.
+//! Recovery scenarios.
 
 use crate::{
 	chain::quantus_subxt,
@@ -36,8 +34,6 @@ async fn config_reads(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn initiate_not_recoverable(ctx: &mut ExerciseCtx) -> Result<String> {
-	// No account has called create_recovery on a fresh chain, so initiating
-	// recovery must fail with Recovery::NotRecoverable.
 	let lost = account_id_of(&ctx.bob);
 	let call = quantus_subxt::api::tx()
 		.recovery()

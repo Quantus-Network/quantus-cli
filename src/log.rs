@@ -10,9 +10,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 // Global verbose flag
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
-// Global quiet flag: suppresses per-transaction chatter (progress prints,
-// expected-failure error banners) while a higher-level reporter owns the
-// output, e.g. `quantus exercise`. Verbose mode takes precedence over quiet.
+// Suppresses per-transaction output while a reporter owns the output (e.g. exercise).
 static QUIET: AtomicBool = AtomicBool::new(false);
 
 /// Set the verbose mode for the application
@@ -25,8 +23,7 @@ pub fn is_verbose() -> bool {
 	VERBOSE.load(Ordering::Relaxed)
 }
 
-/// Set quiet mode: suppresses `log_print!`, `log_error!` and `log_success!`
-/// output. `log_status!` and verbose logging are unaffected.
+/// Suppresses `log_print!`, `log_error!`, and `log_success!`.
 pub fn set_quiet(quiet: bool) {
 	QUIET.store(quiet, Ordering::Relaxed);
 }
@@ -50,8 +47,7 @@ pub fn println(args: std::fmt::Arguments) {
 	}
 }
 
-/// Print formatted message unconditionally, even in quiet mode. For
-/// top-level status output owned by a reporter (e.g. exercise step results).
+/// Always printed, even in quiet mode.
 pub fn statusln(args: std::fmt::Arguments) {
 	println!("{args}");
 }
