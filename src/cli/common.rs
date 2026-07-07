@@ -629,7 +629,7 @@ async fn wait_tx_inclusion(
 	let start_time = std::time::Instant::now();
 	let mut execution_success_checked_for = None;
 
-	let spinner = if !crate::log::is_verbose() {
+	let spinner = if !crate::log::is_verbose() && !crate::log::is_quiet() {
 		let pb = ProgressBar::new_spinner();
 		pb.set_style(
 			ProgressStyle::default_spinner()
@@ -768,8 +768,6 @@ fn format_dispatch_error(
 	}
 }
 
-/// Submit a preimage, treating AlreadyNoted as success (idempotent).
-/// Always waits for inclusion so subsequent txs from the same sender get a fresh nonce.
 pub async fn submit_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	keypair: &crate::wallet::QuantumKeyPair,
@@ -800,7 +798,7 @@ pub async fn submit_preimage(
 	Ok(())
 }
 
-async fn check_execution_success(
+pub(crate) async fn check_execution_success(
 	client: &OnlineClient<ChainConfig>,
 	block_hash: &subxt::utils::H256,
 	tx_hash: &subxt::utils::H256,

@@ -1617,7 +1617,6 @@ fn load_multiround_wallet(
 			let m = generate_mnemonic(sensitive_entropy).map_err(|e| {
 				crate::error::QuantusError::Generic(format!("Failed to generate mnemonic: {:?}", e))
 			})?;
-			log_verbose!("Generated mnemonic (not saved): {}", m);
 			m
 		},
 	};
@@ -2591,7 +2590,6 @@ fn run_multiround_dry_run(
 			let address = sp_core::crypto::AccountId32::new(secret.address)
 				.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 			log_print!("    [{}] {}", i, address);
-			log_verbose!("        secret: 0x{}", hex::encode(secret.secret));
 		}
 
 		log_print!("");
@@ -3338,9 +3336,8 @@ async fn run_check_nullifier(
 	use colored::Colorize;
 
 	// Get secret either directly or from wallet
-	let (secret, secret_hex_display) = if let Some(hex) = secret_hex {
-		let secret = parse_secret_hex(&hex).map_err(crate::error::QuantusError::Generic)?;
-		(secret, hex)
+	let secret = if let Some(hex) = secret_hex {
+		parse_secret_hex(&hex).map_err(crate::error::QuantusError::Generic)?
 	} else if let Some(wallet) = wallet_name {
 		// Load wallet and derive wormhole secret
 		let wallet_manager = WalletManager::new()?;
@@ -3362,9 +3359,8 @@ async fn run_check_nullifier(
 		let secret: [u8; 32] = wormhole_pair.secret.as_ref().try_into().map_err(|_| {
 			crate::error::QuantusError::Generic("Invalid secret length".to_string())
 		})?;
-		let hex = hex::encode(secret);
 		log_print!("Derived wormhole secret from wallet '{}' (index {})", wallet, wormhole_index);
-		(secret, hex)
+		secret
 	} else {
 		return Err(crate::error::QuantusError::Generic(
 			"Either --secret or --wallet must be provided".to_string(),
@@ -3396,7 +3392,6 @@ async fn run_check_nullifier(
 	};
 
 	log_print!("{}", "Checking Nullifiers".bright_cyan());
-	log_print!("  Secret: 0x{}...", &secret_hex_display[..16.min(secret_hex_display.len())]);
 	log_print!("  Transfer counts: {:?}", transfer_counts);
 	log_print!("  Subsquid URL: {}", subsquid_url);
 	log_print!("");

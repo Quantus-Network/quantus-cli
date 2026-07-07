@@ -1,0 +1,109 @@
+---
+name: Chain Exercise Suite
+
+on:
+  schedule:
+    - cron: "0 2 * * *" # nightly at 02:00 UTC
+  workflow_dispatch:
+    inputs:
+      chain_ref:
+        description: "Git ref of Quantus-Network/chain to build the node from"
+        required: false
+        default: "main"
+      fuzz_iterations:
+        description: "Number of seeded fuzz iterations"
+        required: false
+        default: "25"
+
+permissions:
+  contents: read
+
+env:
+  CARGO_INCREMENTAL: 0
+  CARGO_TERM_COLOR: always
+  CARGO_NET_RETRY: 10
+  CARGO_NET_TIMEOUT: 60
+
+jobs:
+  exercise:
+    name: 🏋️ Exercise Suite (fast-governance dev node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Checkout quantus-cli
+        uses: actions/checkout@v5
+
+      - name: Checkout chain
+        uses: actions/checkout@v5
+        with:
+          repository: Quantus-Network/chain
+          ref: ${{ github.event.inputs.chain_ref || 'main' }}
+          path: chain
+
+      - uses: ./.github/actions/ubuntu
+
+      - name: Cache cargo registry & CLI target
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-exercise-cli-${{ hashFiles('Cargo.lock', 'rust-toolchain.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-exercise-cli-
+
+      - name: Cache chain target
+        uses: actions/cache@v5
+        with:
+          path: chain/target
+          key: ${{ runner.os }}-cargo-exercise-node-${{ hashFiles('chain/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-exercise-node-
+
+      - name: Build quantus-node (fast-governance)
+        working-directory: chain
+        run: cargo build --release -p quantus-node --features quantus-runtime/fast-governance
+
+      - name: Build quantus-cli
+        run: SKIP_CIRCUIT_BUILD=1 cargo build --release --locked
+
+      - name: Start dev node
+        run: |
+          nohup chain/target/release/quantus-node --dev \
+            --base-path /tmp/quantus-exercise-dev \
+            > /tmp/quantus-node.log 2>&1 &
+          echo "NODE_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do
+            if curl -sf -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"system_health","params":[]}' \
+              http://127.0.0.1:9944 > /dev/null; then
+              echo "RPC up after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "node RPC never came up" >&2
+          tail -50 /tmp/quantus-node.log >&2
+          exit 1
+
+      - name: Run exercise suite
+        run: |
+          ./target/release/quantus exercise \
+            --json \
+            --fuzz-iterations "${{ github.event.inputs.fuzz_iterations || '25' }}" \
+            | tee exercise-report.txt
+
+      - name: Upload report and node log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exercise-report
+          path: |
+            exercise-report.txt
+            /tmp/quantus-node.log
+          if-no-files-found: ignore
+
+      - name: Stop dev node
+        if: always()
+        run: kill "$NODE_PID" 2>/dev/null || true

@@ -13,16 +13,6 @@ pub enum SchedulerCommands {
 		#[arg(long)]
 		range: String,
 	},
-
-	/// Schedule a test System::remark after N blocks
-	ScheduleRemark {
-		/// Blocks after current to schedule
-		#[arg(long)]
-		after: u32,
-		/// Wallet name to sign with
-		#[arg(long)]
-		from: String,
-	},
 }
 
 /// Get the last processed timestamp from the scheduler
@@ -102,48 +92,14 @@ async fn list_agenda_range(
 	Ok(())
 }
 
-async fn schedule_remark(
-	quantus_client: &crate::chain::client::QuantusClient,
-	after: u32,
-	from: &str,
-	execution_mode: crate::cli::common::ExecutionMode,
-) -> Result<()> {
-	use quantus_subxt::api;
-
-	log_print!("🗓️  Scheduling System::remark after {} blocks", after);
-
-	// Build call as RuntimeCall
-	let system_remark = quantus_subxt::api::runtime_types::frame_system::pallet::Call::remark {
-		remark: Vec::new(),
-	};
-	let runtime_call =
-		quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall::System(system_remark);
-
-	// When: after N blocks (u32)
-	let when_u32: u32 = after;
-	let priority: u8 = 0;
-
-	// Submit schedule extrinsic
-	let keypair = crate::wallet::load_keypair_from_wallet(from, None, None)?;
-	let schedule_tx = api::tx().scheduler().schedule(when_u32, priority, runtime_call);
-	let tx_hash = crate::cli::common::submit_transaction(
-		quantus_client,
-		&keypair,
-		schedule_tx,
-		None,
-		execution_mode,
-	)
-	.await?;
-	log_success!("📩 Schedule extrinsic submitted: {:?}", tx_hash);
-
-	Ok(())
-}
+// NOTE: The runtime disables all Scheduler dispatchables (`#[runtime::disable_call]`),
+// so this module only exposes read-only storage queries.
 
 /// Handle scheduler commands
 pub async fn handle_scheduler_command(
 	command: SchedulerCommands,
 	node_url: &str,
-	execution_mode: crate::cli::common::ExecutionMode,
+	_execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	log_print!("🗓️  Scheduler");
 
@@ -164,7 +120,5 @@ pub async fn handle_scheduler_command(
 			Ok(())
 		},
 		SchedulerCommands::Agenda { range } => list_agenda_range(&quantus_client, &range).await,
-		SchedulerCommands::ScheduleRemark { after, from } =>
-			schedule_remark(&quantus_client, after, &from, execution_mode).await,
 	}
 }

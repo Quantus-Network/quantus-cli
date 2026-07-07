@@ -6,7 +6,7 @@ pub mod api {
 	mod root_mod {
 		pub use super::*;
 	}
-	pub static PALLETS: [&str; 21usize] = [
+	pub static PALLETS: [&str; 19usize] = [
 		"System",
 		"Timestamp",
 		"Balances",
@@ -16,9 +16,7 @@ pub mod api {
 		"Preimage",
 		"Scheduler",
 		"Utility",
-		"Referenda",
 		"ReversibleTransfers",
-		"ConvictionVoting",
 		"TechCollective",
 		"TechReferenda",
 		"TreasuryPallet",
@@ -1567,9 +1565,10 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							90u8, 202u8, 9u8, 88u8, 111u8, 175u8, 220u8, 96u8, 150u8, 13u8, 71u8,
-							123u8, 120u8, 157u8, 193u8, 172u8, 169u8, 180u8, 196u8, 6u8, 184u8,
-							18u8, 24u8, 97u8, 141u8, 50u8, 253u8, 167u8, 244u8, 99u8, 102u8, 235u8,
+							32u8, 234u8, 47u8, 160u8, 157u8, 142u8, 236u8, 40u8, 222u8, 22u8, 75u8,
+							92u8, 244u8, 90u8, 235u8, 228u8, 137u8, 249u8, 207u8, 89u8, 87u8,
+							244u8, 41u8, 20u8, 102u8, 145u8, 48u8, 54u8, 164u8, 114u8, 122u8,
+							182u8,
 						],
 					)
 				}
@@ -1587,10 +1586,10 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							248u8, 32u8, 253u8, 238u8, 202u8, 178u8, 245u8, 211u8, 219u8, 2u8,
-							220u8, 116u8, 141u8, 73u8, 22u8, 47u8, 212u8, 17u8, 197u8, 149u8,
-							250u8, 160u8, 205u8, 101u8, 50u8, 121u8, 214u8, 31u8, 8u8, 161u8, 32u8,
-							91u8,
+							135u8, 197u8, 88u8, 132u8, 222u8, 66u8, 219u8, 154u8, 162u8, 155u8,
+							161u8, 58u8, 176u8, 115u8, 33u8, 214u8, 171u8, 221u8, 230u8, 21u8,
+							60u8, 15u8, 36u8, 117u8, 182u8, 70u8, 181u8, 108u8, 125u8, 72u8, 252u8,
+							40u8,
 						],
 					)
 				}
@@ -1936,14 +1935,8 @@ pub mod api {
 		pub fn utility(&self) -> utility::constants::ConstantsApi {
 			utility::constants::ConstantsApi
 		}
-		pub fn referenda(&self) -> referenda::constants::ConstantsApi {
-			referenda::constants::ConstantsApi
-		}
 		pub fn reversible_transfers(&self) -> reversible_transfers::constants::ConstantsApi {
 			reversible_transfers::constants::ConstantsApi
-		}
-		pub fn conviction_voting(&self) -> conviction_voting::constants::ConstantsApi {
-			conviction_voting::constants::ConstantsApi
 		}
 		pub fn tech_referenda(&self) -> tech_referenda::constants::ConstantsApi {
 			tech_referenda::constants::ConstantsApi
@@ -1987,14 +1980,8 @@ pub mod api {
 		pub fn scheduler(&self) -> scheduler::storage::StorageApi {
 			scheduler::storage::StorageApi
 		}
-		pub fn referenda(&self) -> referenda::storage::StorageApi {
-			referenda::storage::StorageApi
-		}
 		pub fn reversible_transfers(&self) -> reversible_transfers::storage::StorageApi {
 			reversible_transfers::storage::StorageApi
-		}
-		pub fn conviction_voting(&self) -> conviction_voting::storage::StorageApi {
-			conviction_voting::storage::StorageApi
 		}
 		pub fn tech_collective(&self) -> tech_collective::storage::StorageApi {
 			tech_collective::storage::StorageApi
@@ -2038,20 +2025,11 @@ pub mod api {
 		pub fn preimage(&self) -> preimage::calls::TransactionApi {
 			preimage::calls::TransactionApi
 		}
-		pub fn scheduler(&self) -> scheduler::calls::TransactionApi {
-			scheduler::calls::TransactionApi
-		}
 		pub fn utility(&self) -> utility::calls::TransactionApi {
 			utility::calls::TransactionApi
 		}
-		pub fn referenda(&self) -> referenda::calls::TransactionApi {
-			referenda::calls::TransactionApi
-		}
 		pub fn reversible_transfers(&self) -> reversible_transfers::calls::TransactionApi {
 			reversible_transfers::calls::TransactionApi
-		}
-		pub fn conviction_voting(&self) -> conviction_voting::calls::TransactionApi {
-			conviction_voting::calls::TransactionApi
 		}
 		pub fn tech_collective(&self) -> tech_collective::calls::TransactionApi {
 			tech_collective::calls::TransactionApi
@@ -2090,9 +2068,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				149u8, 22u8, 88u8, 66u8, 145u8, 121u8, 144u8, 45u8, 72u8, 226u8, 219u8, 201u8,
-				209u8, 125u8, 170u8, 239u8, 25u8, 38u8, 157u8, 229u8, 236u8, 69u8, 54u8, 143u8,
-				96u8, 123u8, 187u8, 158u8, 58u8, 229u8, 165u8, 193u8,
+				0u8, 140u8, 5u8, 40u8, 237u8, 46u8, 42u8, 0u8, 228u8, 200u8, 1u8, 226u8, 132u8,
+				185u8, 140u8, 253u8, 54u8, 127u8, 56u8, 200u8, 164u8, 237u8, 198u8, 151u8, 133u8,
+				33u8, 239u8, 56u8, 190u8, 69u8, 228u8, 26u8,
 			]
 	}
 	pub mod system {
@@ -3220,10 +3198,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							179u8, 170u8, 58u8, 106u8, 146u8, 26u8, 131u8, 123u8, 63u8, 145u8,
-							96u8, 92u8, 102u8, 119u8, 0u8, 98u8, 192u8, 165u8, 99u8, 111u8, 86u8,
-							243u8, 34u8, 246u8, 108u8, 240u8, 233u8, 199u8, 71u8, 214u8, 238u8,
-							209u8,
+							12u8, 200u8, 85u8, 114u8, 205u8, 35u8, 13u8, 101u8, 195u8, 51u8, 123u8,
+							145u8, 74u8, 61u8, 217u8, 71u8, 184u8, 61u8, 132u8, 83u8, 214u8, 117u8,
+							222u8, 18u8, 13u8, 229u8, 195u8, 147u8, 223u8, 19u8, 66u8, 105u8,
 						],
 					)
 				}
@@ -6443,558 +6420,6 @@ pub mod api {
 		use super::{root_mod, runtime_types};
 		#[doc = "The `Error` enum of this pallet."]
 		pub type Error = runtime_types::pallet_scheduler::pallet::Error;
-		#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-		pub type Call = runtime_types::pallet_scheduler::pallet::Call;
-		pub mod calls {
-			use super::{root_mod, runtime_types};
-			type DispatchError = runtime_types::sp_runtime::DispatchError;
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct Schedule {
-					pub when: schedule::When,
-					pub priority: schedule::Priority,
-					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<schedule::Call>,
-				}
-				pub mod schedule {
-					use super::runtime_types;
-					pub type When = ::core::primitive::u32;
-					pub type Priority = ::core::primitive::u8;
-					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Schedule {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "schedule";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Cancel an anonymously scheduled task."]
-				pub struct Cancel {
-					pub when: cancel::When,
-					pub index: cancel::Index,
-				}
-				pub mod cancel {
-					use super::runtime_types;
-					pub type When = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-						::core::primitive::u32,
-						::core::primitive::u64,
-					>;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Cancel {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "cancel";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct ScheduleNamed {
-					pub id: schedule_named::Id,
-					pub when: schedule_named::When,
-					pub priority: schedule_named::Priority,
-					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<schedule_named::Call>,
-				}
-				pub mod schedule_named {
-					use super::runtime_types;
-					pub type Id = [::core::primitive::u8; 32usize];
-					pub type When = ::core::primitive::u32;
-					pub type Priority = ::core::primitive::u8;
-					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ScheduleNamed {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "schedule_named";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Cancel a named scheduled task."]
-				pub struct CancelNamed {
-					pub id: cancel_named::Id,
-				}
-				pub mod cancel_named {
-					use super::runtime_types;
-					pub type Id = [::core::primitive::u8; 32usize];
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CancelNamed {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "cancel_named";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct ScheduleAfter {
-					pub after: schedule_after::After,
-					pub priority: schedule_after::Priority,
-					pub call: ::subxt::ext::subxt_core::alloc::boxed::Box<schedule_after::Call>,
-				}
-				pub mod schedule_after {
-					use super::runtime_types;
-					pub type After = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-						::core::primitive::u32,
-						::core::primitive::u64,
-					>;
-					pub type Priority = ::core::primitive::u8;
-					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ScheduleAfter {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "schedule_after";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct ScheduleNamedAfter {
-					pub id: schedule_named_after::Id,
-					pub after: schedule_named_after::After,
-					pub priority: schedule_named_after::Priority,
-					pub call:
-						::subxt::ext::subxt_core::alloc::boxed::Box<schedule_named_after::Call>,
-				}
-				pub mod schedule_named_after {
-					use super::runtime_types;
-					pub type Id = [::core::primitive::u8; 32usize];
-					pub type After = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-						::core::primitive::u32,
-						::core::primitive::u64,
-					>;
-					pub type Priority = ::core::primitive::u8;
-					pub type Call = runtime_types::quantus_runtime::RuntimeCall;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for ScheduleNamedAfter {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "schedule_named_after";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Set a retry configuration for a task so that, in case its scheduled run fails, it will"]
-				#[doc = "be retried after `period` blocks, for a total amount of `retries` retries or until it"]
-				#[doc = "succeeds."]
-				#[doc = ""]
-				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task."]
-				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
-				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
-				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
-				#[doc = "original `total_retries`."]
-				#[doc = ""]
-				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
-				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
-				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
-				pub struct SetRetry {
-					pub task: set_retry::Task,
-					pub retries: set_retry::Retries,
-					pub period: set_retry::Period,
-				}
-				pub mod set_retry {
-					use super::runtime_types;
-					pub type Task = (
-						runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						::core::primitive::u32,
-					);
-					pub type Retries = ::core::primitive::u8;
-					pub type Period = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-						::core::primitive::u32,
-						::core::primitive::u64,
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetRetry {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "set_retry";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Set a retry configuration for a named task so that, in case its scheduled run fails, it"]
-				#[doc = "will be retried after `period` blocks, for a total amount of `retries` retries or until"]
-				#[doc = "it succeeds."]
-				#[doc = ""]
-				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task."]
-				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
-				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
-				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
-				#[doc = "original `total_retries`."]
-				#[doc = ""]
-				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
-				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
-				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
-				pub struct SetRetryNamed {
-					pub id: set_retry_named::Id,
-					pub retries: set_retry_named::Retries,
-					pub period: set_retry_named::Period,
-				}
-				pub mod set_retry_named {
-					use super::runtime_types;
-					pub type Id = [::core::primitive::u8; 32usize];
-					pub type Retries = ::core::primitive::u8;
-					pub type Period = runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-						::core::primitive::u32,
-						::core::primitive::u64,
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetRetryNamed {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "set_retry_named";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Removes the retry configuration of a task."]
-				pub struct CancelRetry {
-					pub task: cancel_retry::Task,
-				}
-				pub mod cancel_retry {
-					use super::runtime_types;
-					pub type Task = (
-						runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						::core::primitive::u32,
-					);
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CancelRetry {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "cancel_retry";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Cancel the retry configuration of a named task."]
-				pub struct CancelRetryNamed {
-					pub id: cancel_retry_named::Id,
-				}
-				pub mod cancel_retry_named {
-					use super::runtime_types;
-					pub type Id = [::core::primitive::u8; 32usize];
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for CancelRetryNamed {
-					const PALLET: &'static str = "Scheduler";
-					const CALL: &'static str = "cancel_retry_named";
-				}
-			}
-			pub struct TransactionApi;
-			impl TransactionApi {
-				pub fn schedule(
-					&self,
-					when: types::schedule::When,
-					priority: types::schedule::Priority,
-					call: types::schedule::Call,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Schedule> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"schedule",
-						types::Schedule {
-							when,
-							priority,
-							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
-						},
-						[
-							111u8, 246u8, 131u8, 153u8, 188u8, 35u8, 82u8, 23u8, 214u8, 245u8,
-							97u8, 204u8, 130u8, 160u8, 102u8, 24u8, 208u8, 65u8, 222u8, 33u8, 61u8,
-							120u8, 183u8, 187u8, 133u8, 232u8, 75u8, 78u8, 207u8, 123u8, 219u8,
-							114u8,
-						],
-					)
-				}
-				#[doc = "Cancel an anonymously scheduled task."]
-				pub fn cancel(
-					&self,
-					when: types::cancel::When,
-					index: types::cancel::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Cancel> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"cancel",
-						types::Cancel { when, index },
-						[
-							134u8, 77u8, 15u8, 56u8, 137u8, 12u8, 58u8, 147u8, 164u8, 204u8, 221u8,
-							150u8, 103u8, 42u8, 36u8, 79u8, 146u8, 115u8, 13u8, 194u8, 39u8, 73u8,
-							109u8, 10u8, 168u8, 164u8, 190u8, 173u8, 30u8, 17u8, 35u8, 17u8,
-						],
-					)
-				}
-				pub fn schedule_named(
-					&self,
-					id: types::schedule_named::Id,
-					when: types::schedule_named::When,
-					priority: types::schedule_named::Priority,
-					call: types::schedule_named::Call,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ScheduleNamed>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"schedule_named",
-						types::ScheduleNamed {
-							id,
-							when,
-							priority,
-							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
-						},
-						[
-							226u8, 121u8, 55u8, 244u8, 180u8, 161u8, 195u8, 247u8, 4u8, 191u8,
-							152u8, 109u8, 162u8, 105u8, 232u8, 241u8, 102u8, 3u8, 254u8, 58u8,
-							224u8, 63u8, 127u8, 155u8, 66u8, 214u8, 20u8, 84u8, 200u8, 83u8, 252u8,
-							190u8,
-						],
-					)
-				}
-				#[doc = "Cancel a named scheduled task."]
-				pub fn cancel_named(
-					&self,
-					id: types::cancel_named::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::CancelNamed> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"cancel_named",
-						types::CancelNamed { id },
-						[
-							205u8, 35u8, 28u8, 57u8, 224u8, 7u8, 49u8, 233u8, 236u8, 163u8, 93u8,
-							236u8, 103u8, 69u8, 65u8, 51u8, 121u8, 84u8, 9u8, 196u8, 147u8, 122u8,
-							227u8, 200u8, 181u8, 233u8, 62u8, 240u8, 174u8, 83u8, 129u8, 193u8,
-						],
-					)
-				}
-				pub fn schedule_after(
-					&self,
-					after: types::schedule_after::After,
-					priority: types::schedule_after::Priority,
-					call: types::schedule_after::Call,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ScheduleAfter>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"schedule_after",
-						types::ScheduleAfter {
-							after,
-							priority,
-							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
-						},
-						[
-							223u8, 138u8, 95u8, 57u8, 29u8, 157u8, 241u8, 124u8, 62u8, 169u8,
-							220u8, 166u8, 67u8, 105u8, 102u8, 78u8, 138u8, 29u8, 181u8, 87u8,
-							236u8, 124u8, 237u8, 245u8, 85u8, 132u8, 168u8, 95u8, 130u8, 64u8, 9u8,
-							200u8,
-						],
-					)
-				}
-				pub fn schedule_named_after(
-					&self,
-					id: types::schedule_named_after::Id,
-					after: types::schedule_named_after::After,
-					priority: types::schedule_named_after::Priority,
-					call: types::schedule_named_after::Call,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::ScheduleNamedAfter>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"schedule_named_after",
-						types::ScheduleNamedAfter {
-							id,
-							after,
-							priority,
-							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
-						},
-						[
-							15u8, 107u8, 235u8, 231u8, 115u8, 180u8, 199u8, 243u8, 222u8, 191u8,
-							192u8, 130u8, 107u8, 253u8, 77u8, 228u8, 151u8, 60u8, 176u8, 69u8,
-							140u8, 120u8, 110u8, 242u8, 63u8, 35u8, 46u8, 210u8, 21u8, 83u8, 8u8,
-							123u8,
-						],
-					)
-				}
-				#[doc = "Set a retry configuration for a task so that, in case its scheduled run fails, it will"]
-				#[doc = "be retried after `period` blocks, for a total amount of `retries` retries or until it"]
-				#[doc = "succeeds."]
-				#[doc = ""]
-				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task."]
-				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
-				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
-				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
-				#[doc = "original `total_retries`."]
-				#[doc = ""]
-				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
-				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
-				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
-				pub fn set_retry(
-					&self,
-					task: types::set_retry::Task,
-					retries: types::set_retry::Retries,
-					period: types::set_retry::Period,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetRetry> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"set_retry",
-						types::SetRetry { task, retries, period },
-						[
-							31u8, 128u8, 255u8, 13u8, 13u8, 252u8, 74u8, 151u8, 60u8, 242u8, 152u8,
-							58u8, 190u8, 155u8, 132u8, 65u8, 139u8, 208u8, 222u8, 175u8, 89u8,
-							222u8, 186u8, 98u8, 53u8, 125u8, 71u8, 55u8, 95u8, 2u8, 76u8, 248u8,
-						],
-					)
-				}
-				#[doc = "Set a retry configuration for a named task so that, in case its scheduled run fails, it"]
-				#[doc = "will be retried after `period` blocks, for a total amount of `retries` retries or until"]
-				#[doc = "it succeeds."]
-				#[doc = ""]
-				#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-				#[doc = "agenda space, same as a regular task."]
-				#[doc = ""]
-				#[doc = "Tasks scheduled as a result of a retry are unnamed"]
-				#[doc = "clones of the original task. Their retry configuration will be derived from the"]
-				#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
-				#[doc = "original `total_retries`."]
-				#[doc = ""]
-				#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
-				#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
-				#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
-				pub fn set_retry_named(
-					&self,
-					id: types::set_retry_named::Id,
-					retries: types::set_retry_named::Retries,
-					period: types::set_retry_named::Period,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetRetryNamed>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"set_retry_named",
-						types::SetRetryNamed { id, retries, period },
-						[
-							102u8, 70u8, 114u8, 48u8, 180u8, 194u8, 107u8, 81u8, 104u8, 117u8,
-							33u8, 169u8, 43u8, 172u8, 61u8, 129u8, 143u8, 221u8, 44u8, 101u8,
-							235u8, 228u8, 224u8, 71u8, 65u8, 223u8, 180u8, 130u8, 83u8, 89u8,
-							157u8, 75u8,
-						],
-					)
-				}
-				#[doc = "Removes the retry configuration of a task."]
-				pub fn cancel_retry(
-					&self,
-					task: types::cancel_retry::Task,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::CancelRetry> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"cancel_retry",
-						types::CancelRetry { task },
-						[
-							153u8, 252u8, 168u8, 142u8, 100u8, 114u8, 25u8, 46u8, 225u8, 95u8,
-							243u8, 78u8, 160u8, 175u8, 17u8, 33u8, 27u8, 241u8, 149u8, 187u8,
-							228u8, 182u8, 233u8, 74u8, 10u8, 228u8, 117u8, 218u8, 210u8, 127u8,
-							245u8, 105u8,
-						],
-					)
-				}
-				#[doc = "Cancel the retry configuration of a named task."]
-				pub fn cancel_retry_named(
-					&self,
-					id: types::cancel_retry_named::Id,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::CancelRetryNamed>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Scheduler",
-						"cancel_retry_named",
-						types::CancelRetryNamed { id },
-						[
-							76u8, 157u8, 253u8, 113u8, 162u8, 54u8, 98u8, 21u8, 62u8, 44u8, 155u8,
-							202u8, 2u8, 28u8, 153u8, 219u8, 67u8, 166u8, 206u8, 79u8, 139u8, 3u8,
-							119u8, 182u8, 254u8, 134u8, 143u8, 121u8, 155u8, 220u8, 192u8, 209u8,
-						],
-					)
-				}
-			}
-		}
 		#[doc = "Events type."]
 		pub type Event = runtime_types::pallet_scheduler::pallet::Event;
 		pub mod events {
@@ -7892,9 +7317,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							168u8, 153u8, 140u8, 127u8, 49u8, 58u8, 84u8, 232u8, 97u8, 32u8, 62u8,
-							214u8, 148u8, 56u8, 117u8, 185u8, 158u8, 13u8, 116u8, 44u8, 227u8,
-							64u8, 247u8, 216u8, 184u8, 41u8, 4u8, 163u8, 162u8, 77u8, 134u8, 234u8,
+							91u8, 52u8, 14u8, 228u8, 168u8, 75u8, 218u8, 19u8, 121u8, 112u8, 126u8,
+							236u8, 87u8, 77u8, 194u8, 140u8, 196u8, 15u8, 84u8, 117u8, 80u8, 101u8,
+							217u8, 62u8, 28u8, 83u8, 226u8, 233u8, 176u8, 2u8, 158u8, 79u8,
 						],
 					)
 				}
@@ -7924,10 +7349,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							221u8, 169u8, 48u8, 6u8, 24u8, 30u8, 152u8, 227u8, 141u8, 56u8, 160u8,
-							66u8, 148u8, 225u8, 88u8, 225u8, 102u8, 31u8, 140u8, 98u8, 159u8,
-							240u8, 185u8, 45u8, 110u8, 180u8, 70u8, 228u8, 109u8, 205u8, 73u8,
-							42u8,
+							78u8, 239u8, 51u8, 124u8, 113u8, 201u8, 252u8, 171u8, 182u8, 113u8,
+							155u8, 193u8, 125u8, 113u8, 241u8, 199u8, 215u8, 237u8, 55u8, 121u8,
+							247u8, 255u8, 41u8, 35u8, 206u8, 143u8, 157u8, 90u8, 203u8, 106u8,
+							252u8, 91u8,
 						],
 					)
 				}
@@ -7953,10 +7378,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							61u8, 221u8, 247u8, 197u8, 198u8, 93u8, 227u8, 27u8, 130u8, 66u8,
-							147u8, 239u8, 234u8, 219u8, 242u8, 109u8, 220u8, 4u8, 251u8, 147u8,
-							86u8, 37u8, 232u8, 40u8, 208u8, 222u8, 123u8, 72u8, 1u8, 48u8, 39u8,
-							252u8,
+							9u8, 111u8, 191u8, 88u8, 100u8, 224u8, 185u8, 197u8, 208u8, 26u8,
+							198u8, 42u8, 215u8, 246u8, 54u8, 120u8, 3u8, 148u8, 182u8, 44u8, 233u8,
+							60u8, 26u8, 128u8, 101u8, 87u8, 141u8, 143u8, 9u8, 197u8, 184u8, 64u8,
 						],
 					)
 				}
@@ -7979,10 +7403,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							211u8, 86u8, 167u8, 189u8, 24u8, 103u8, 83u8, 11u8, 102u8, 251u8,
-							156u8, 78u8, 99u8, 174u8, 1u8, 90u8, 37u8, 195u8, 61u8, 102u8, 77u8,
-							216u8, 136u8, 168u8, 76u8, 234u8, 228u8, 234u8, 98u8, 146u8, 246u8,
-							3u8,
+							252u8, 234u8, 74u8, 189u8, 195u8, 91u8, 133u8, 238u8, 206u8, 171u8,
+							160u8, 141u8, 58u8, 250u8, 221u8, 113u8, 192u8, 201u8, 95u8, 103u8,
+							209u8, 0u8, 110u8, 235u8, 38u8, 225u8, 79u8, 73u8, 19u8, 75u8, 138u8,
+							146u8,
 						],
 					)
 				}
@@ -8008,9 +7432,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							146u8, 12u8, 37u8, 67u8, 116u8, 89u8, 65u8, 39u8, 146u8, 69u8, 186u8,
-							21u8, 192u8, 211u8, 148u8, 137u8, 201u8, 3u8, 195u8, 90u8, 80u8, 57u8,
-							116u8, 148u8, 29u8, 225u8, 149u8, 117u8, 185u8, 193u8, 159u8, 219u8,
+							130u8, 189u8, 219u8, 64u8, 240u8, 89u8, 49u8, 86u8, 163u8, 42u8, 52u8,
+							8u8, 152u8, 154u8, 147u8, 236u8, 209u8, 30u8, 243u8, 194u8, 123u8,
+							97u8, 97u8, 239u8, 97u8, 57u8, 104u8, 191u8, 235u8, 221u8, 1u8, 227u8,
 						],
 					)
 				}
@@ -8033,9 +7457,9 @@ pub mod api {
 							weight,
 						},
 						[
-							108u8, 240u8, 32u8, 97u8, 18u8, 61u8, 34u8, 62u8, 149u8, 244u8, 16u8,
-							87u8, 60u8, 116u8, 221u8, 156u8, 68u8, 51u8, 60u8, 233u8, 15u8, 160u8,
-							180u8, 31u8, 197u8, 161u8, 165u8, 93u8, 238u8, 184u8, 50u8, 36u8,
+							22u8, 169u8, 85u8, 171u8, 100u8, 38u8, 252u8, 11u8, 198u8, 55u8, 150u8,
+							190u8, 59u8, 5u8, 143u8, 123u8, 107u8, 23u8, 202u8, 0u8, 237u8, 255u8,
+							77u8, 19u8, 113u8, 77u8, 133u8, 52u8, 176u8, 110u8, 214u8, 221u8,
 						],
 					)
 				}
@@ -8075,9 +7499,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							160u8, 250u8, 232u8, 179u8, 142u8, 199u8, 97u8, 214u8, 128u8, 114u8,
-							165u8, 161u8, 57u8, 210u8, 171u8, 46u8, 89u8, 202u8, 250u8, 19u8, 45u8,
-							144u8, 223u8, 4u8, 145u8, 157u8, 184u8, 228u8, 250u8, 221u8, 6u8, 5u8,
+							210u8, 174u8, 69u8, 89u8, 81u8, 251u8, 211u8, 77u8, 44u8, 88u8, 137u8,
+							153u8, 221u8, 116u8, 10u8, 183u8, 158u8, 145u8, 229u8, 108u8, 168u8,
+							123u8, 100u8, 162u8, 121u8, 201u8, 158u8, 103u8, 96u8, 96u8, 89u8, 4u8,
 						],
 					)
 				}
@@ -8100,9 +7524,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							138u8, 211u8, 58u8, 120u8, 90u8, 178u8, 167u8, 166u8, 163u8, 135u8,
-							34u8, 41u8, 124u8, 179u8, 160u8, 200u8, 137u8, 21u8, 36u8, 100u8,
-							126u8, 66u8, 89u8, 124u8, 51u8, 155u8, 197u8, 173u8, 126u8, 1u8, 10u8,
+							68u8, 190u8, 238u8, 69u8, 88u8, 148u8, 111u8, 242u8, 200u8, 228u8,
+							47u8, 232u8, 101u8, 173u8, 104u8, 140u8, 30u8, 113u8, 236u8, 193u8,
+							48u8, 47u8, 116u8, 169u8, 97u8, 77u8, 17u8, 82u8, 37u8, 190u8, 158u8,
 							66u8,
 						],
 					)
@@ -8264,1258 +7688,6 @@ pub mod api {
 							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
 							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
 							145u8,
-						],
-					)
-				}
-			}
-		}
-	}
-	pub mod referenda {
-		use super::{root_mod, runtime_types};
-		#[doc = "The `Error` enum of this pallet."]
-		pub type Error = runtime_types::pallet_referenda::pallet::Error;
-		#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-		pub type Call = runtime_types::pallet_referenda::pallet::Call;
-		pub mod calls {
-			use super::{root_mod, runtime_types};
-			type DispatchError = runtime_types::sp_runtime::DispatchError;
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Propose a referendum on a privileged action."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `SubmitOrigin` and the account must have `SubmissionDeposit` funds"]
-				#[doc = "  available."]
-				#[doc = "- `proposal_origin`: The origin from which the proposal should be executed."]
-				#[doc = "- `proposal`: The proposal."]
-				#[doc = "- `enactment_moment`: The moment that the proposal should be enacted."]
-				#[doc = ""]
-				#[doc = "Emits `Submitted`."]
-				pub struct Submit {
-					pub proposal_origin:
-						::subxt::ext::subxt_core::alloc::boxed::Box<submit::ProposalOrigin>,
-					pub proposal: submit::Proposal,
-					pub enactment_moment: submit::EnactmentMoment,
-				}
-				pub mod submit {
-					use super::runtime_types;
-					pub type ProposalOrigin = runtime_types::quantus_runtime::OriginCaller;
-					pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
-						runtime_types::quantus_runtime::RuntimeCall,
-						runtime_types::sp_runtime::traits::BlakeTwo256,
-					>;
-					pub type EnactmentMoment =
-						runtime_types::frame_support::traits::schedule::DispatchTime<
-							::core::primitive::u32,
-						>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Submit {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "submit";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Post the Decision Deposit for a referendum."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Signed` and the account must have funds available for the"]
-				#[doc = "  referendum's track's Decision Deposit."]
-				#[doc = "- `index`: The index of the submitted referendum whose Decision Deposit is yet to be"]
-				#[doc = "  posted."]
-				#[doc = ""]
-				#[doc = "Emits `DecisionDepositPlaced`."]
-				pub struct PlaceDecisionDeposit {
-					pub index: place_decision_deposit::Index,
-				}
-				pub mod place_decision_deposit {
-					use super::runtime_types;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for PlaceDecisionDeposit {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "place_decision_deposit";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Refund the Decision Deposit for a closed referendum back to the depositor."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Signed` or `Root`."]
-				#[doc = "- `index`: The index of a closed referendum whose Decision Deposit has not yet been"]
-				#[doc = "  refunded."]
-				#[doc = ""]
-				#[doc = "Emits `DecisionDepositRefunded`."]
-				pub struct RefundDecisionDeposit {
-					pub index: refund_decision_deposit::Index,
-				}
-				pub mod refund_decision_deposit {
-					use super::runtime_types;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for RefundDecisionDeposit {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "refund_decision_deposit";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Cancel an ongoing referendum."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be the `CancelOrigin`."]
-				#[doc = "- `index`: The index of the referendum to be cancelled."]
-				#[doc = ""]
-				#[doc = "Emits `Cancelled`."]
-				pub struct Cancel {
-					pub index: cancel::Index,
-				}
-				pub mod cancel {
-					use super::runtime_types;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Cancel {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "cancel";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Cancel an ongoing referendum and slash the deposits."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be the `KillOrigin`."]
-				#[doc = "- `index`: The index of the referendum to be cancelled."]
-				#[doc = ""]
-				#[doc = "Emits `Killed` and `DepositSlashed`."]
-				pub struct Kill {
-					pub index: kill::Index,
-				}
-				pub mod kill {
-					use super::runtime_types;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Kill {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "kill";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Advance a referendum onto its next logical state. Only used internally."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Root`."]
-				#[doc = "- `index`: the referendum to be advanced."]
-				pub struct NudgeReferendum {
-					pub index: nudge_referendum::Index,
-				}
-				pub mod nudge_referendum {
-					use super::runtime_types;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for NudgeReferendum {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "nudge_referendum";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Advance a track onto its next logical state. Only used internally."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Root`."]
-				#[doc = "- `track`: the track to be advanced."]
-				#[doc = ""]
-				#[doc = "Action item for when there is now one fewer referendum in the deciding phase and the"]
-				#[doc = "`DecidingCount` is not yet updated. This means that we should either:"]
-				#[doc = "- begin deciding another referendum (and leave `DecidingCount` alone); or"]
-				#[doc = "- decrement `DecidingCount`."]
-				pub struct OneFewerDeciding {
-					pub track: one_fewer_deciding::Track,
-				}
-				pub mod one_fewer_deciding {
-					use super::runtime_types;
-					pub type Track = ::core::primitive::u16;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for OneFewerDeciding {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "one_fewer_deciding";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Refund the Submission Deposit for a closed referendum back to the depositor."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Signed` or `Root`."]
-				#[doc = "- `index`: The index of a closed referendum whose Submission Deposit has not yet been"]
-				#[doc = "  refunded."]
-				#[doc = ""]
-				#[doc = "Emits `SubmissionDepositRefunded`."]
-				pub struct RefundSubmissionDeposit {
-					pub index: refund_submission_deposit::Index,
-				}
-				pub mod refund_submission_deposit {
-					use super::runtime_types;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for RefundSubmissionDeposit {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "refund_submission_deposit";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Set or clear metadata of a referendum."]
-				#[doc = ""]
-				#[doc = "Parameters:"]
-				#[doc = "- `origin`: Must be `Signed` by a creator of a referendum or by anyone to clear a"]
-				#[doc = "  metadata of a finished referendum."]
-				#[doc = "- `index`:  The index of a referendum to set or clear metadata for."]
-				#[doc = "- `maybe_hash`: The hash of an on-chain stored preimage. `None` to clear a metadata."]
-				pub struct SetMetadata {
-					pub index: set_metadata::Index,
-					pub maybe_hash: set_metadata::MaybeHash,
-				}
-				pub mod set_metadata {
-					use super::runtime_types;
-					pub type Index = ::core::primitive::u32;
-					pub type MaybeHash =
-						::core::option::Option<::subxt::ext::subxt_core::utils::H256>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for SetMetadata {
-					const PALLET: &'static str = "Referenda";
-					const CALL: &'static str = "set_metadata";
-				}
-			}
-			pub struct TransactionApi;
-			impl TransactionApi {
-				#[doc = "Propose a referendum on a privileged action."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `SubmitOrigin` and the account must have `SubmissionDeposit` funds"]
-				#[doc = "  available."]
-				#[doc = "- `proposal_origin`: The origin from which the proposal should be executed."]
-				#[doc = "- `proposal`: The proposal."]
-				#[doc = "- `enactment_moment`: The moment that the proposal should be enacted."]
-				#[doc = ""]
-				#[doc = "Emits `Submitted`."]
-				pub fn submit(
-					&self,
-					proposal_origin: types::submit::ProposalOrigin,
-					proposal: types::submit::Proposal,
-					enactment_moment: types::submit::EnactmentMoment,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Submit> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"submit",
-						types::Submit {
-							proposal_origin: ::subxt::ext::subxt_core::alloc::boxed::Box::new(
-								proposal_origin,
-							),
-							proposal,
-							enactment_moment,
-						},
-						[
-							0u8, 18u8, 14u8, 253u8, 33u8, 212u8, 33u8, 173u8, 241u8, 29u8, 88u8,
-							160u8, 111u8, 21u8, 6u8, 234u8, 249u8, 230u8, 222u8, 119u8, 161u8,
-							114u8, 43u8, 126u8, 164u8, 140u8, 199u8, 39u8, 2u8, 64u8, 132u8, 34u8,
-						],
-					)
-				}
-				#[doc = "Post the Decision Deposit for a referendum."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Signed` and the account must have funds available for the"]
-				#[doc = "  referendum's track's Decision Deposit."]
-				#[doc = "- `index`: The index of the submitted referendum whose Decision Deposit is yet to be"]
-				#[doc = "  posted."]
-				#[doc = ""]
-				#[doc = "Emits `DecisionDepositPlaced`."]
-				pub fn place_decision_deposit(
-					&self,
-					index: types::place_decision_deposit::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::PlaceDecisionDeposit>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"place_decision_deposit",
-						types::PlaceDecisionDeposit { index },
-						[
-							247u8, 158u8, 55u8, 191u8, 188u8, 200u8, 3u8, 47u8, 20u8, 175u8, 86u8,
-							203u8, 52u8, 253u8, 91u8, 131u8, 21u8, 213u8, 56u8, 68u8, 40u8, 84u8,
-							184u8, 30u8, 9u8, 193u8, 63u8, 182u8, 178u8, 241u8, 247u8, 220u8,
-						],
-					)
-				}
-				#[doc = "Refund the Decision Deposit for a closed referendum back to the depositor."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Signed` or `Root`."]
-				#[doc = "- `index`: The index of a closed referendum whose Decision Deposit has not yet been"]
-				#[doc = "  refunded."]
-				#[doc = ""]
-				#[doc = "Emits `DecisionDepositRefunded`."]
-				pub fn refund_decision_deposit(
-					&self,
-					index: types::refund_decision_deposit::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
-					types::RefundDecisionDeposit,
-				> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"refund_decision_deposit",
-						types::RefundDecisionDeposit { index },
-						[
-							159u8, 19u8, 35u8, 216u8, 114u8, 105u8, 18u8, 42u8, 148u8, 151u8,
-							136u8, 92u8, 117u8, 30u8, 29u8, 41u8, 238u8, 58u8, 195u8, 91u8, 115u8,
-							135u8, 96u8, 99u8, 154u8, 233u8, 8u8, 249u8, 145u8, 165u8, 77u8, 164u8,
-						],
-					)
-				}
-				#[doc = "Cancel an ongoing referendum."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be the `CancelOrigin`."]
-				#[doc = "- `index`: The index of the referendum to be cancelled."]
-				#[doc = ""]
-				#[doc = "Emits `Cancelled`."]
-				pub fn cancel(
-					&self,
-					index: types::cancel::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Cancel> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"cancel",
-						types::Cancel { index },
-						[
-							55u8, 206u8, 119u8, 156u8, 238u8, 165u8, 193u8, 73u8, 242u8, 13u8,
-							212u8, 75u8, 136u8, 156u8, 151u8, 14u8, 35u8, 41u8, 156u8, 107u8, 60u8,
-							190u8, 39u8, 216u8, 8u8, 74u8, 213u8, 130u8, 160u8, 131u8, 237u8,
-							122u8,
-						],
-					)
-				}
-				#[doc = "Cancel an ongoing referendum and slash the deposits."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be the `KillOrigin`."]
-				#[doc = "- `index`: The index of the referendum to be cancelled."]
-				#[doc = ""]
-				#[doc = "Emits `Killed` and `DepositSlashed`."]
-				pub fn kill(
-					&self,
-					index: types::kill::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Kill> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"kill",
-						types::Kill { index },
-						[
-							50u8, 89u8, 57u8, 0u8, 87u8, 129u8, 113u8, 140u8, 179u8, 178u8, 126u8,
-							198u8, 92u8, 92u8, 189u8, 64u8, 123u8, 232u8, 57u8, 227u8, 223u8,
-							219u8, 73u8, 217u8, 179u8, 44u8, 210u8, 125u8, 180u8, 10u8, 143u8,
-							48u8,
-						],
-					)
-				}
-				#[doc = "Advance a referendum onto its next logical state. Only used internally."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Root`."]
-				#[doc = "- `index`: the referendum to be advanced."]
-				pub fn nudge_referendum(
-					&self,
-					index: types::nudge_referendum::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::NudgeReferendum>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"nudge_referendum",
-						types::NudgeReferendum { index },
-						[
-							75u8, 99u8, 172u8, 30u8, 170u8, 150u8, 211u8, 229u8, 249u8, 128u8,
-							194u8, 246u8, 100u8, 142u8, 193u8, 184u8, 232u8, 81u8, 29u8, 17u8,
-							99u8, 91u8, 236u8, 85u8, 230u8, 226u8, 57u8, 115u8, 45u8, 170u8, 54u8,
-							213u8,
-						],
-					)
-				}
-				#[doc = "Advance a track onto its next logical state. Only used internally."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Root`."]
-				#[doc = "- `track`: the track to be advanced."]
-				#[doc = ""]
-				#[doc = "Action item for when there is now one fewer referendum in the deciding phase and the"]
-				#[doc = "`DecidingCount` is not yet updated. This means that we should either:"]
-				#[doc = "- begin deciding another referendum (and leave `DecidingCount` alone); or"]
-				#[doc = "- decrement `DecidingCount`."]
-				pub fn one_fewer_deciding(
-					&self,
-					track: types::one_fewer_deciding::Track,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::OneFewerDeciding>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"one_fewer_deciding",
-						types::OneFewerDeciding { track },
-						[
-							15u8, 84u8, 79u8, 231u8, 21u8, 239u8, 244u8, 143u8, 183u8, 215u8,
-							181u8, 25u8, 225u8, 195u8, 95u8, 171u8, 17u8, 156u8, 182u8, 128u8,
-							111u8, 40u8, 151u8, 102u8, 196u8, 55u8, 36u8, 212u8, 89u8, 190u8,
-							131u8, 167u8,
-						],
-					)
-				}
-				#[doc = "Refund the Submission Deposit for a closed referendum back to the depositor."]
-				#[doc = ""]
-				#[doc = "- `origin`: must be `Signed` or `Root`."]
-				#[doc = "- `index`: The index of a closed referendum whose Submission Deposit has not yet been"]
-				#[doc = "  refunded."]
-				#[doc = ""]
-				#[doc = "Emits `SubmissionDepositRefunded`."]
-				pub fn refund_submission_deposit(
-					&self,
-					index: types::refund_submission_deposit::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
-					types::RefundSubmissionDeposit,
-				> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"refund_submission_deposit",
-						types::RefundSubmissionDeposit { index },
-						[
-							20u8, 217u8, 115u8, 6u8, 1u8, 60u8, 54u8, 136u8, 35u8, 41u8, 38u8,
-							23u8, 85u8, 100u8, 141u8, 126u8, 30u8, 160u8, 61u8, 46u8, 134u8, 98u8,
-							82u8, 38u8, 211u8, 124u8, 208u8, 222u8, 210u8, 10u8, 155u8, 122u8,
-						],
-					)
-				}
-				#[doc = "Set or clear metadata of a referendum."]
-				#[doc = ""]
-				#[doc = "Parameters:"]
-				#[doc = "- `origin`: Must be `Signed` by a creator of a referendum or by anyone to clear a"]
-				#[doc = "  metadata of a finished referendum."]
-				#[doc = "- `index`:  The index of a referendum to set or clear metadata for."]
-				#[doc = "- `maybe_hash`: The hash of an on-chain stored preimage. `None` to clear a metadata."]
-				pub fn set_metadata(
-					&self,
-					index: types::set_metadata::Index,
-					maybe_hash: types::set_metadata::MaybeHash,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::SetMetadata> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"Referenda",
-						"set_metadata",
-						types::SetMetadata { index, maybe_hash },
-						[
-							207u8, 29u8, 146u8, 233u8, 219u8, 205u8, 88u8, 118u8, 106u8, 61u8,
-							124u8, 101u8, 2u8, 41u8, 169u8, 70u8, 114u8, 189u8, 162u8, 118u8, 1u8,
-							108u8, 234u8, 98u8, 245u8, 245u8, 183u8, 126u8, 89u8, 13u8, 112u8,
-							88u8,
-						],
-					)
-				}
-			}
-		}
-		#[doc = "The `Event` enum of this pallet"]
-		pub type Event = runtime_types::pallet_referenda::pallet::Event1;
-		pub mod events {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A referendum has been submitted."]
-			pub struct Submitted {
-				pub index: submitted::Index,
-				pub track: submitted::Track,
-				pub proposal: submitted::Proposal,
-			}
-			pub mod submitted {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Track = ::core::primitive::u16;
-				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
-					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::sp_runtime::traits::BlakeTwo256,
-				>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Submitted {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "Submitted";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The decision deposit has been placed."]
-			pub struct DecisionDepositPlaced {
-				pub index: decision_deposit_placed::Index,
-				pub who: decision_deposit_placed::Who,
-				pub amount: decision_deposit_placed::Amount,
-			}
-			pub mod decision_deposit_placed {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for DecisionDepositPlaced {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "DecisionDepositPlaced";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The decision deposit has been refunded."]
-			pub struct DecisionDepositRefunded {
-				pub index: decision_deposit_refunded::Index,
-				pub who: decision_deposit_refunded::Who,
-				pub amount: decision_deposit_refunded::Amount,
-			}
-			pub mod decision_deposit_refunded {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for DecisionDepositRefunded {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "DecisionDepositRefunded";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A deposit has been slashed."]
-			pub struct DepositSlashed {
-				pub who: deposit_slashed::Who,
-				pub amount: deposit_slashed::Amount,
-			}
-			pub mod deposit_slashed {
-				use super::runtime_types;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for DepositSlashed {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "DepositSlashed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A referendum has moved into the deciding phase."]
-			pub struct DecisionStarted {
-				pub index: decision_started::Index,
-				pub track: decision_started::Track,
-				pub proposal: decision_started::Proposal,
-				pub tally: decision_started::Tally,
-			}
-			pub mod decision_started {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Track = ::core::primitive::u16;
-				pub type Proposal = runtime_types::frame_support::traits::preimages::Bounded<
-					runtime_types::quantus_runtime::RuntimeCall,
-					runtime_types::sp_runtime::traits::BlakeTwo256,
-				>;
-				pub type Tally =
-					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for DecisionStarted {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "DecisionStarted";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct ConfirmStarted {
-				pub index: confirm_started::Index,
-			}
-			pub mod confirm_started {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ConfirmStarted {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "ConfirmStarted";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			pub struct ConfirmAborted {
-				pub index: confirm_aborted::Index,
-			}
-			pub mod confirm_aborted {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for ConfirmAborted {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "ConfirmAborted";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A referendum has ended its confirmation phase and is ready for approval."]
-			pub struct Confirmed {
-				pub index: confirmed::Index,
-				pub tally: confirmed::Tally,
-			}
-			pub mod confirmed {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Tally =
-					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Confirmed {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "Confirmed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A referendum has been approved and its proposal has been scheduled."]
-			pub struct Approved {
-				pub index: approved::Index,
-			}
-			pub mod approved {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Approved {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "Approved";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A proposal has been rejected by referendum."]
-			pub struct Rejected {
-				pub index: rejected::Index,
-				pub tally: rejected::Tally,
-			}
-			pub mod rejected {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Tally =
-					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Rejected {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "Rejected";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A referendum has been timed out without being decided."]
-			pub struct TimedOut {
-				pub index: timed_out::Index,
-				pub tally: timed_out::Tally,
-			}
-			pub mod timed_out {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Tally =
-					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for TimedOut {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "TimedOut";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A referendum has been cancelled."]
-			pub struct Cancelled {
-				pub index: cancelled::Index,
-				pub tally: cancelled::Tally,
-			}
-			pub mod cancelled {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Tally =
-					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Cancelled {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "Cancelled";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A referendum has been killed."]
-			pub struct Killed {
-				pub index: killed::Index,
-				pub tally: killed::Tally,
-			}
-			pub mod killed {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Tally =
-					runtime_types::pallet_conviction_voting::types::Tally<::core::primitive::u128>;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Killed {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "Killed";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The submission deposit has been refunded."]
-			pub struct SubmissionDepositRefunded {
-				pub index: submission_deposit_refunded::Index,
-				pub who: submission_deposit_refunded::Who,
-				pub amount: submission_deposit_refunded::Amount,
-			}
-			pub mod submission_deposit_refunded {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Amount = ::core::primitive::u128;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for SubmissionDepositRefunded {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "SubmissionDepositRefunded";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Metadata for a referendum has been set."]
-			pub struct MetadataSet {
-				pub index: metadata_set::Index,
-				pub hash: metadata_set::Hash,
-			}
-			pub mod metadata_set {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Hash = ::subxt::ext::subxt_core::utils::H256;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for MetadataSet {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "MetadataSet";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Metadata for a referendum has been cleared."]
-			pub struct MetadataCleared {
-				pub index: metadata_cleared::Index,
-				pub hash: metadata_cleared::Hash,
-			}
-			pub mod metadata_cleared {
-				use super::runtime_types;
-				pub type Index = ::core::primitive::u32;
-				pub type Hash = ::subxt::ext::subxt_core::utils::H256;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for MetadataCleared {
-				const PALLET: &'static str = "Referenda";
-				const EVENT: &'static str = "MetadataCleared";
-			}
-		}
-		pub mod storage {
-			use super::runtime_types;
-			pub mod types {
-				use super::runtime_types;
-				pub mod referendum_count {
-					use super::runtime_types;
-					pub type ReferendumCount = ::core::primitive::u32;
-				}
-				pub mod referendum_info_for {
-					use super::runtime_types;
-					pub type ReferendumInfoFor =
-						runtime_types::pallet_referenda::types::ReferendumInfo<
-							::core::primitive::u16,
-							runtime_types::quantus_runtime::OriginCaller,
-							::core::primitive::u32,
-							runtime_types::frame_support::traits::preimages::Bounded<
-								runtime_types::quantus_runtime::RuntimeCall,
-								runtime_types::sp_runtime::traits::BlakeTwo256,
-							>,
-							::core::primitive::u128,
-							runtime_types::pallet_conviction_voting::types::Tally<
-								::core::primitive::u128,
-							>,
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(
-								runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-									::core::primitive::u32,
-									::core::primitive::u64,
-								>,
-								::core::primitive::u32,
-							),
-						>;
-					pub type Param0 = ::core::primitive::u32;
-				}
-				pub mod track_queue {
-					use super::runtime_types;
-					pub type TrackQueue =
-						runtime_types::bounded_collections::bounded_vec::BoundedVec<(
-							::core::primitive::u32,
-							::core::primitive::u128,
-						)>;
-					pub type Param0 = ::core::primitive::u16;
-				}
-				pub mod deciding_count {
-					use super::runtime_types;
-					pub type DecidingCount = ::core::primitive::u32;
-					pub type Param0 = ::core::primitive::u16;
-				}
-				pub mod metadata_of {
-					use super::runtime_types;
-					pub type MetadataOf = ::subxt::ext::subxt_core::utils::H256;
-					pub type Param0 = ::core::primitive::u32;
-				}
-			}
-			pub struct StorageApi;
-			impl StorageApi {
-				#[doc = " The next free referendum index, aka the number of referenda started so far."]
-				pub fn referendum_count(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::referendum_count::ReferendumCount,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"ReferendumCount",
-						(),
-						[
-							64u8, 145u8, 232u8, 153u8, 121u8, 87u8, 128u8, 253u8, 170u8, 192u8,
-							139u8, 18u8, 0u8, 33u8, 243u8, 11u8, 238u8, 222u8, 244u8, 5u8, 247u8,
-							198u8, 149u8, 31u8, 122u8, 208u8, 86u8, 179u8, 166u8, 167u8, 93u8,
-							67u8,
-						],
-					)
-				}
-				#[doc = " Information concerning any given referendum."]
-				pub fn referendum_info_for_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::referendum_info_for::ReferendumInfoFor,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"ReferendumInfoFor",
-						(),
-						[
-							6u8, 83u8, 1u8, 153u8, 41u8, 128u8, 169u8, 32u8, 101u8, 55u8, 230u8,
-							219u8, 157u8, 37u8, 148u8, 156u8, 183u8, 164u8, 133u8, 238u8, 54u8,
-							243u8, 158u8, 246u8, 58u8, 235u8, 6u8, 127u8, 29u8, 163u8, 255u8,
-							157u8,
-						],
-					)
-				}
-				#[doc = " Information concerning any given referendum."]
-				pub fn referendum_info_for(
-					&self,
-					_0: types::referendum_info_for::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::referendum_info_for::Param0,
-					>,
-					types::referendum_info_for::ReferendumInfoFor,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"ReferendumInfoFor",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							6u8, 83u8, 1u8, 153u8, 41u8, 128u8, 169u8, 32u8, 101u8, 55u8, 230u8,
-							219u8, 157u8, 37u8, 148u8, 156u8, 183u8, 164u8, 133u8, 238u8, 54u8,
-							243u8, 158u8, 246u8, 58u8, 235u8, 6u8, 127u8, 29u8, 163u8, 255u8,
-							157u8,
-						],
-					)
-				}
-				#[doc = " The sorted list of referenda ready to be decided but not yet being decided, ordered by"]
-				#[doc = " conviction-weighted approvals."]
-				#[doc = ""]
-				#[doc = " This should be empty if `DecidingCount` is less than `TrackInfo::max_deciding`."]
-				pub fn track_queue_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::track_queue::TrackQueue,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"TrackQueue",
-						(),
-						[
-							125u8, 59u8, 111u8, 68u8, 27u8, 236u8, 82u8, 55u8, 83u8, 159u8, 105u8,
-							20u8, 241u8, 118u8, 58u8, 141u8, 103u8, 60u8, 246u8, 49u8, 121u8,
-							183u8, 7u8, 203u8, 225u8, 67u8, 132u8, 79u8, 150u8, 107u8, 71u8, 89u8,
-						],
-					)
-				}
-				#[doc = " The sorted list of referenda ready to be decided but not yet being decided, ordered by"]
-				#[doc = " conviction-weighted approvals."]
-				#[doc = ""]
-				#[doc = " This should be empty if `DecidingCount` is less than `TrackInfo::max_deciding`."]
-				pub fn track_queue(
-					&self,
-					_0: types::track_queue::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::track_queue::Param0,
-					>,
-					types::track_queue::TrackQueue,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"TrackQueue",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							125u8, 59u8, 111u8, 68u8, 27u8, 236u8, 82u8, 55u8, 83u8, 159u8, 105u8,
-							20u8, 241u8, 118u8, 58u8, 141u8, 103u8, 60u8, 246u8, 49u8, 121u8,
-							183u8, 7u8, 203u8, 225u8, 67u8, 132u8, 79u8, 150u8, 107u8, 71u8, 89u8,
-						],
-					)
-				}
-				#[doc = " The number of referenda being decided currently."]
-				pub fn deciding_count_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::deciding_count::DecidingCount,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"DecidingCount",
-						(),
-						[
-							203u8, 89u8, 158u8, 179u8, 194u8, 82u8, 248u8, 162u8, 93u8, 140u8,
-							146u8, 51u8, 110u8, 232u8, 51u8, 1u8, 128u8, 212u8, 199u8, 14u8, 182u8,
-							103u8, 47u8, 252u8, 126u8, 108u8, 166u8, 69u8, 252u8, 179u8, 126u8,
-							245u8,
-						],
-					)
-				}
-				#[doc = " The number of referenda being decided currently."]
-				pub fn deciding_count(
-					&self,
-					_0: types::deciding_count::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::deciding_count::Param0,
-					>,
-					types::deciding_count::DecidingCount,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"DecidingCount",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							203u8, 89u8, 158u8, 179u8, 194u8, 82u8, 248u8, 162u8, 93u8, 140u8,
-							146u8, 51u8, 110u8, 232u8, 51u8, 1u8, 128u8, 212u8, 199u8, 14u8, 182u8,
-							103u8, 47u8, 252u8, 126u8, 108u8, 166u8, 69u8, 252u8, 179u8, 126u8,
-							245u8,
-						],
-					)
-				}
-				#[doc = " The metadata is a general information concerning the referendum."]
-				#[doc = " The `Hash` refers to the preimage of the `Preimages` provider which can be a JSON"]
-				#[doc = " dump or IPFS hash of a JSON file."]
-				#[doc = ""]
-				#[doc = " Consider a garbage collection for a metadata of finished referendums to `unrequest` (remove)"]
-				#[doc = " large preimages."]
-				pub fn metadata_of_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::metadata_of::MetadataOf,
-					(),
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"MetadataOf",
-						(),
-						[
-							159u8, 250u8, 56u8, 189u8, 247u8, 165u8, 206u8, 166u8, 91u8, 139u8,
-							124u8, 164u8, 25u8, 246u8, 199u8, 36u8, 159u8, 56u8, 227u8, 136u8, 4u8,
-							45u8, 193u8, 72u8, 200u8, 164u8, 39u8, 207u8, 224u8, 124u8, 191u8,
-							110u8,
-						],
-					)
-				}
-				#[doc = " The metadata is a general information concerning the referendum."]
-				#[doc = " The `Hash` refers to the preimage of the `Preimages` provider which can be a JSON"]
-				#[doc = " dump or IPFS hash of a JSON file."]
-				#[doc = ""]
-				#[doc = " Consider a garbage collection for a metadata of finished referendums to `unrequest` (remove)"]
-				#[doc = " large preimages."]
-				pub fn metadata_of(
-					&self,
-					_0: types::metadata_of::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::metadata_of::Param0,
-					>,
-					types::metadata_of::MetadataOf,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"Referenda",
-						"MetadataOf",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							159u8, 250u8, 56u8, 189u8, 247u8, 165u8, 206u8, 166u8, 91u8, 139u8,
-							124u8, 164u8, 25u8, 246u8, 199u8, 36u8, 159u8, 56u8, 227u8, 136u8, 4u8,
-							45u8, 193u8, 72u8, 200u8, 164u8, 39u8, 207u8, 224u8, 124u8, 191u8,
-							110u8,
-						],
-					)
-				}
-			}
-		}
-		pub mod constants {
-			use super::runtime_types;
-			pub struct ConstantsApi;
-			impl ConstantsApi {
-				#[doc = " The minimum amount to be used as a deposit for a public referendum proposal."]
-				pub fn submission_deposit(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Referenda",
-						"SubmissionDeposit",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " Maximum size of the referendum queue for a single track."]
-				pub fn max_queued(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Referenda",
-						"MaxQueued",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
-				#[doc = " The number of blocks after submission that a referendum must begin being decided by."]
-				#[doc = " Once this passes, then anyone may cancel the referendum."]
-				pub fn undeciding_timeout(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Referenda",
-						"UndecidingTimeout",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
-				#[doc = " Quantization level for the referendum wakeup scheduler. A higher number will result in"]
-				#[doc = " fewer storage reads/writes needed for smaller voters, but also result in delays to the"]
-				#[doc = " automatic referendum status changes. Explicit servicing instructions are unaffected."]
-				pub fn alarm_interval(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Referenda",
-						"AlarmInterval",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
-				#[doc = " A list of tracks."]
-				#[doc = ""]
-				#[doc = " Note: if the tracks are dynamic, the value in the static metadata might be inaccurate."]
-				pub fn tracks(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::subxt::ext::subxt_core::alloc::vec::Vec<(
-						::core::primitive::u16,
-						runtime_types::pallet_referenda::types::TrackDetails<
-							::core::primitive::u128,
-							::core::primitive::u32,
-							::subxt::ext::subxt_core::alloc::string::String,
-						>,
-					)>,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Referenda",
-						"Tracks",
-						[
-							35u8, 226u8, 207u8, 234u8, 184u8, 139u8, 187u8, 184u8, 128u8, 199u8,
-							227u8, 15u8, 31u8, 196u8, 5u8, 207u8, 138u8, 174u8, 130u8, 201u8,
-							200u8, 113u8, 86u8, 93u8, 221u8, 243u8, 229u8, 24u8, 18u8, 150u8, 56u8,
-							159u8,
 						],
 					)
 				}
@@ -10598,809 +8770,6 @@ pub mod api {
 							65u8, 93u8, 120u8, 165u8, 204u8, 81u8, 159u8, 163u8, 93u8, 135u8,
 							114u8, 121u8, 147u8, 35u8, 215u8, 213u8, 4u8, 223u8, 83u8, 37u8, 225u8,
 							200u8, 189u8, 156u8, 140u8, 36u8, 58u8, 46u8, 42u8, 232u8, 155u8, 0u8,
-						],
-					)
-				}
-			}
-		}
-	}
-	pub mod conviction_voting {
-		use super::{root_mod, runtime_types};
-		#[doc = "The `Error` enum of this pallet."]
-		pub type Error = runtime_types::pallet_conviction_voting::pallet::Error;
-		#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-		pub type Call = runtime_types::pallet_conviction_voting::pallet::Call;
-		pub mod calls {
-			use super::{root_mod, runtime_types};
-			type DispatchError = runtime_types::sp_runtime::DispatchError;
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Vote in a poll. If `vote.is_aye()`, the vote is to enact the proposal;"]
-				#[doc = "otherwise it is a vote to keep the status quo."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `poll_index`: The index of the poll to vote for."]
-				#[doc = "- `vote`: The vote configuration."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` where R is the number of polls the voter has voted on."]
-				pub struct Vote {
-					#[codec(compact)]
-					pub poll_index: vote::PollIndex,
-					pub vote: vote::Vote,
-				}
-				pub mod vote {
-					use super::runtime_types;
-					pub type PollIndex = ::core::primitive::u32;
-					pub type Vote = runtime_types::pallet_conviction_voting::vote::AccountVote<
-						::core::primitive::u128,
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Vote {
-					const PALLET: &'static str = "ConvictionVoting";
-					const CALL: &'static str = "vote";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Delegate the voting power (with some given conviction) of the sending account for a"]
-				#[doc = "particular class of polls."]
-				#[doc = ""]
-				#[doc = "The balance delegated is locked for as long as it's delegated, and thereafter for the"]
-				#[doc = "time appropriate for the conviction's lock period."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_, and the signing account must either:"]
-				#[doc = "  - be delegating already; or"]
-				#[doc = "  - have no voting activity (if there is, then it will need to be removed through"]
-				#[doc = "    `remove_vote`)."]
-				#[doc = ""]
-				#[doc = "- `to`: The account whose voting the `target` account's voting power will follow."]
-				#[doc = "- `class`: The class of polls to delegate. To delegate multiple classes, multiple calls"]
-				#[doc = "  to this function are required."]
-				#[doc = "- `conviction`: The conviction that will be attached to the delegated votes. When the"]
-				#[doc = "  account is undelegated, the funds will be locked for the corresponding period."]
-				#[doc = "- `balance`: The amount of the account's balance to be used in delegating. This must not"]
-				#[doc = "  be more than the account's current balance."]
-				#[doc = ""]
-				#[doc = "Emits `Delegated`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` where R is the number of polls the voter delegating to has"]
-				#[doc = "  voted on. Weight is initially charged as if maximum votes, but is refunded later."]
-				pub struct Delegate {
-					pub class: delegate::Class,
-					pub to: delegate::To,
-					pub conviction: delegate::Conviction,
-					pub balance: delegate::Balance,
-				}
-				pub mod delegate {
-					use super::runtime_types;
-					pub type Class = ::core::primitive::u16;
-					pub type To = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Conviction =
-						runtime_types::pallet_conviction_voting::conviction::Conviction;
-					pub type Balance = ::core::primitive::u128;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Delegate {
-					const PALLET: &'static str = "ConvictionVoting";
-					const CALL: &'static str = "delegate";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Undelegate the voting power of the sending account for a particular class of polls."]
-				#[doc = ""]
-				#[doc = "Tokens may be unlocked following once an amount of time consistent with the lock period"]
-				#[doc = "of the conviction with which the delegation was issued has passed."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_ and the signing account must be"]
-				#[doc = "currently delegating."]
-				#[doc = ""]
-				#[doc = "- `class`: The class of polls to remove the delegation from."]
-				#[doc = ""]
-				#[doc = "Emits `Undelegated`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` where R is the number of polls the voter delegating to has"]
-				#[doc = "  voted on. Weight is initially charged as if maximum votes, but is refunded later."]
-				pub struct Undelegate {
-					pub class: undelegate::Class,
-				}
-				pub mod undelegate {
-					use super::runtime_types;
-					pub type Class = ::core::primitive::u16;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Undelegate {
-					const PALLET: &'static str = "ConvictionVoting";
-					const CALL: &'static str = "undelegate";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Remove the lock caused by prior voting/delegating which has expired within a particular"]
-				#[doc = "class."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `class`: The class of polls to unlock."]
-				#[doc = "- `target`: The account to remove the lock on."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` with R number of vote of target."]
-				pub struct Unlock {
-					pub class: unlock::Class,
-					pub target: unlock::Target,
-				}
-				pub mod unlock {
-					use super::runtime_types;
-					pub type Class = ::core::primitive::u16;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Unlock {
-					const PALLET: &'static str = "ConvictionVoting";
-					const CALL: &'static str = "unlock";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Remove a vote for a poll."]
-				#[doc = ""]
-				#[doc = "If:"]
-				#[doc = "- the poll was cancelled, or"]
-				#[doc = "- the poll is ongoing, or"]
-				#[doc = "- the poll has ended such that"]
-				#[doc = "  - the vote of the account was in opposition to the result; or"]
-				#[doc = "  - there was no conviction to the account's vote; or"]
-				#[doc = "  - the account made a split vote"]
-				#[doc = "...then the vote is removed cleanly and a following call to `unlock` may result in more"]
-				#[doc = "funds being available."]
-				#[doc = ""]
-				#[doc = "If, however, the poll has ended and:"]
-				#[doc = "- it finished corresponding to the vote of the account, and"]
-				#[doc = "- the account made a standard vote with conviction, and"]
-				#[doc = "- the lock period of the conviction is not over"]
-				#[doc = "...then the lock will be aggregated into the overall account's lock, which may involve"]
-				#[doc = "*overlocking* (where the two locks are combined into a single lock that is the maximum"]
-				#[doc = "of both the amount locked and the time is it locked for)."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_, and the signer must have a vote"]
-				#[doc = "registered for poll `index`."]
-				#[doc = ""]
-				#[doc = "- `index`: The index of poll of the vote to be removed."]
-				#[doc = "- `class`: Optional parameter, if given it indicates the class of the poll. For polls"]
-				#[doc = "  which have finished or are cancelled, this must be `Some`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R + log R)` where R is the number of polls that `target` has voted on."]
-				#[doc = "  Weight is calculated for the maximum number of vote."]
-				pub struct RemoveVote {
-					pub class: remove_vote::Class,
-					pub index: remove_vote::Index,
-				}
-				pub mod remove_vote {
-					use super::runtime_types;
-					pub type Class = ::core::option::Option<::core::primitive::u16>;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for RemoveVote {
-					const PALLET: &'static str = "ConvictionVoting";
-					const CALL: &'static str = "remove_vote";
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Remove a vote for a poll."]
-				#[doc = ""]
-				#[doc = "If the `target` is equal to the signer, then this function is exactly equivalent to"]
-				#[doc = "`remove_vote`. If not equal to the signer, then the vote must have expired,"]
-				#[doc = "either because the poll was cancelled, because the voter lost the poll or"]
-				#[doc = "because the conviction period is over."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `target`: The account of the vote to be removed; this account must have voted for poll"]
-				#[doc = "  `index`."]
-				#[doc = "- `index`: The index of poll of the vote to be removed."]
-				#[doc = "- `class`: The class of the poll."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R + log R)` where R is the number of polls that `target` has voted on."]
-				#[doc = "  Weight is calculated for the maximum number of vote."]
-				pub struct RemoveOtherVote {
-					pub target: remove_other_vote::Target,
-					pub class: remove_other_vote::Class,
-					pub index: remove_other_vote::Index,
-				}
-				pub mod remove_other_vote {
-					use super::runtime_types;
-					pub type Target = ::subxt::ext::subxt_core::utils::MultiAddress<
-						::subxt::ext::subxt_core::utils::AccountId32,
-						(),
-					>;
-					pub type Class = ::core::primitive::u16;
-					pub type Index = ::core::primitive::u32;
-				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for RemoveOtherVote {
-					const PALLET: &'static str = "ConvictionVoting";
-					const CALL: &'static str = "remove_other_vote";
-				}
-			}
-			pub struct TransactionApi;
-			impl TransactionApi {
-				#[doc = "Vote in a poll. If `vote.is_aye()`, the vote is to enact the proposal;"]
-				#[doc = "otherwise it is a vote to keep the status quo."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `poll_index`: The index of the poll to vote for."]
-				#[doc = "- `vote`: The vote configuration."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` where R is the number of polls the voter has voted on."]
-				pub fn vote(
-					&self,
-					poll_index: types::vote::PollIndex,
-					vote: types::vote::Vote,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Vote> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"ConvictionVoting",
-						"vote",
-						types::Vote { poll_index, vote },
-						[
-							57u8, 170u8, 177u8, 168u8, 158u8, 43u8, 87u8, 242u8, 176u8, 85u8,
-							230u8, 64u8, 103u8, 239u8, 190u8, 6u8, 228u8, 165u8, 248u8, 77u8,
-							231u8, 221u8, 186u8, 107u8, 249u8, 201u8, 226u8, 52u8, 129u8, 90u8,
-							142u8, 159u8,
-						],
-					)
-				}
-				#[doc = "Delegate the voting power (with some given conviction) of the sending account for a"]
-				#[doc = "particular class of polls."]
-				#[doc = ""]
-				#[doc = "The balance delegated is locked for as long as it's delegated, and thereafter for the"]
-				#[doc = "time appropriate for the conviction's lock period."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_, and the signing account must either:"]
-				#[doc = "  - be delegating already; or"]
-				#[doc = "  - have no voting activity (if there is, then it will need to be removed through"]
-				#[doc = "    `remove_vote`)."]
-				#[doc = ""]
-				#[doc = "- `to`: The account whose voting the `target` account's voting power will follow."]
-				#[doc = "- `class`: The class of polls to delegate. To delegate multiple classes, multiple calls"]
-				#[doc = "  to this function are required."]
-				#[doc = "- `conviction`: The conviction that will be attached to the delegated votes. When the"]
-				#[doc = "  account is undelegated, the funds will be locked for the corresponding period."]
-				#[doc = "- `balance`: The amount of the account's balance to be used in delegating. This must not"]
-				#[doc = "  be more than the account's current balance."]
-				#[doc = ""]
-				#[doc = "Emits `Delegated`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` where R is the number of polls the voter delegating to has"]
-				#[doc = "  voted on. Weight is initially charged as if maximum votes, but is refunded later."]
-				pub fn delegate(
-					&self,
-					class: types::delegate::Class,
-					to: types::delegate::To,
-					conviction: types::delegate::Conviction,
-					balance: types::delegate::Balance,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Delegate> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"ConvictionVoting",
-						"delegate",
-						types::Delegate { class, to, conviction, balance },
-						[
-							223u8, 143u8, 33u8, 94u8, 32u8, 156u8, 43u8, 40u8, 142u8, 134u8, 209u8,
-							134u8, 255u8, 179u8, 97u8, 46u8, 8u8, 140u8, 5u8, 29u8, 76u8, 22u8,
-							36u8, 7u8, 108u8, 190u8, 220u8, 151u8, 10u8, 47u8, 89u8, 55u8,
-						],
-					)
-				}
-				#[doc = "Undelegate the voting power of the sending account for a particular class of polls."]
-				#[doc = ""]
-				#[doc = "Tokens may be unlocked following once an amount of time consistent with the lock period"]
-				#[doc = "of the conviction with which the delegation was issued has passed."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_ and the signing account must be"]
-				#[doc = "currently delegating."]
-				#[doc = ""]
-				#[doc = "- `class`: The class of polls to remove the delegation from."]
-				#[doc = ""]
-				#[doc = "Emits `Undelegated`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` where R is the number of polls the voter delegating to has"]
-				#[doc = "  voted on. Weight is initially charged as if maximum votes, but is refunded later."]
-				pub fn undelegate(
-					&self,
-					class: types::undelegate::Class,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Undelegate> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"ConvictionVoting",
-						"undelegate",
-						types::Undelegate { class },
-						[
-							140u8, 232u8, 6u8, 53u8, 228u8, 8u8, 131u8, 144u8, 65u8, 66u8, 245u8,
-							247u8, 147u8, 135u8, 198u8, 57u8, 82u8, 212u8, 89u8, 46u8, 236u8,
-							168u8, 200u8, 220u8, 93u8, 168u8, 101u8, 29u8, 110u8, 76u8, 67u8,
-							181u8,
-						],
-					)
-				}
-				#[doc = "Remove the lock caused by prior voting/delegating which has expired within a particular"]
-				#[doc = "class."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `class`: The class of polls to unlock."]
-				#[doc = "- `target`: The account to remove the lock on."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R)` with R number of vote of target."]
-				pub fn unlock(
-					&self,
-					class: types::unlock::Class,
-					target: types::unlock::Target,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Unlock> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"ConvictionVoting",
-						"unlock",
-						types::Unlock { class, target },
-						[
-							79u8, 5u8, 252u8, 237u8, 109u8, 238u8, 157u8, 237u8, 125u8, 171u8,
-							65u8, 160u8, 102u8, 192u8, 5u8, 141u8, 179u8, 249u8, 253u8, 213u8,
-							105u8, 251u8, 241u8, 145u8, 186u8, 177u8, 244u8, 139u8, 71u8, 140u8,
-							173u8, 108u8,
-						],
-					)
-				}
-				#[doc = "Remove a vote for a poll."]
-				#[doc = ""]
-				#[doc = "If:"]
-				#[doc = "- the poll was cancelled, or"]
-				#[doc = "- the poll is ongoing, or"]
-				#[doc = "- the poll has ended such that"]
-				#[doc = "  - the vote of the account was in opposition to the result; or"]
-				#[doc = "  - there was no conviction to the account's vote; or"]
-				#[doc = "  - the account made a split vote"]
-				#[doc = "...then the vote is removed cleanly and a following call to `unlock` may result in more"]
-				#[doc = "funds being available."]
-				#[doc = ""]
-				#[doc = "If, however, the poll has ended and:"]
-				#[doc = "- it finished corresponding to the vote of the account, and"]
-				#[doc = "- the account made a standard vote with conviction, and"]
-				#[doc = "- the lock period of the conviction is not over"]
-				#[doc = "...then the lock will be aggregated into the overall account's lock, which may involve"]
-				#[doc = "*overlocking* (where the two locks are combined into a single lock that is the maximum"]
-				#[doc = "of both the amount locked and the time is it locked for)."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_, and the signer must have a vote"]
-				#[doc = "registered for poll `index`."]
-				#[doc = ""]
-				#[doc = "- `index`: The index of poll of the vote to be removed."]
-				#[doc = "- `class`: Optional parameter, if given it indicates the class of the poll. For polls"]
-				#[doc = "  which have finished or are cancelled, this must be `Some`."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R + log R)` where R is the number of polls that `target` has voted on."]
-				#[doc = "  Weight is calculated for the maximum number of vote."]
-				pub fn remove_vote(
-					&self,
-					class: types::remove_vote::Class,
-					index: types::remove_vote::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::RemoveVote> {
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"ConvictionVoting",
-						"remove_vote",
-						types::RemoveVote { class, index },
-						[
-							255u8, 108u8, 211u8, 146u8, 168u8, 231u8, 207u8, 44u8, 76u8, 24u8,
-							235u8, 60u8, 23u8, 79u8, 192u8, 192u8, 46u8, 40u8, 134u8, 27u8, 125u8,
-							114u8, 125u8, 247u8, 85u8, 102u8, 76u8, 159u8, 34u8, 167u8, 152u8,
-							148u8,
-						],
-					)
-				}
-				#[doc = "Remove a vote for a poll."]
-				#[doc = ""]
-				#[doc = "If the `target` is equal to the signer, then this function is exactly equivalent to"]
-				#[doc = "`remove_vote`. If not equal to the signer, then the vote must have expired,"]
-				#[doc = "either because the poll was cancelled, because the voter lost the poll or"]
-				#[doc = "because the conviction period is over."]
-				#[doc = ""]
-				#[doc = "The dispatch origin of this call must be _Signed_."]
-				#[doc = ""]
-				#[doc = "- `target`: The account of the vote to be removed; this account must have voted for poll"]
-				#[doc = "  `index`."]
-				#[doc = "- `index`: The index of poll of the vote to be removed."]
-				#[doc = "- `class`: The class of the poll."]
-				#[doc = ""]
-				#[doc = "Weight: `O(R + log R)` where R is the number of polls that `target` has voted on."]
-				#[doc = "  Weight is calculated for the maximum number of vote."]
-				pub fn remove_other_vote(
-					&self,
-					target: types::remove_other_vote::Target,
-					class: types::remove_other_vote::Class,
-					index: types::remove_other_vote::Index,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::RemoveOtherVote>
-				{
-					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
-						"ConvictionVoting",
-						"remove_other_vote",
-						types::RemoveOtherVote { target, class, index },
-						[
-							165u8, 26u8, 166u8, 37u8, 10u8, 174u8, 243u8, 10u8, 73u8, 93u8, 213u8,
-							69u8, 200u8, 16u8, 48u8, 146u8, 160u8, 92u8, 28u8, 26u8, 158u8, 55u8,
-							6u8, 251u8, 36u8, 132u8, 46u8, 195u8, 107u8, 34u8, 0u8, 100u8,
-						],
-					)
-				}
-			}
-		}
-		#[doc = "The `Event` enum of this pallet"]
-		pub type Event = runtime_types::pallet_conviction_voting::pallet::Event;
-		pub mod events {
-			use super::runtime_types;
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An account has delegated their vote to another account. \\[who, target\\]"]
-			pub struct Delegated(
-				pub delegated::Field0,
-				pub delegated::Field1,
-				pub delegated::Field2,
-			);
-			pub mod delegated {
-				use super::runtime_types;
-				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Field1 = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Field2 = ::core::primitive::u16;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Delegated {
-				const PALLET: &'static str = "ConvictionVoting";
-				const EVENT: &'static str = "Delegated";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An \\[account\\] has cancelled a previous delegation operation."]
-			pub struct Undelegated(pub undelegated::Field0, pub undelegated::Field1);
-			pub mod undelegated {
-				use super::runtime_types;
-				pub type Field0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Field1 = ::core::primitive::u16;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Undelegated {
-				const PALLET: &'static str = "ConvictionVoting";
-				const EVENT: &'static str = "Undelegated";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "An account has voted"]
-			pub struct Voted {
-				pub who: voted::Who,
-				pub vote: voted::Vote,
-				pub poll_index: voted::PollIndex,
-			}
-			pub mod voted {
-				use super::runtime_types;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Vote = runtime_types::pallet_conviction_voting::vote::AccountVote<
-					::core::primitive::u128,
-				>;
-				pub type PollIndex = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for Voted {
-				const PALLET: &'static str = "ConvictionVoting";
-				const EVENT: &'static str = "Voted";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "A vote has been removed"]
-			pub struct VoteRemoved {
-				pub who: vote_removed::Who,
-				pub vote: vote_removed::Vote,
-				pub poll_index: vote_removed::PollIndex,
-			}
-			pub mod vote_removed {
-				use super::runtime_types;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Vote = runtime_types::pallet_conviction_voting::vote::AccountVote<
-					::core::primitive::u128,
-				>;
-				pub type PollIndex = ::core::primitive::u32;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for VoteRemoved {
-				const PALLET: &'static str = "ConvictionVoting";
-				const EVENT: &'static str = "VoteRemoved";
-			}
-			#[derive(
-				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-				Debug,
-			)]
-			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
-			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "The lockup period of a conviction vote expired, and the funds have been unlocked."]
-			pub struct VoteUnlocked {
-				pub who: vote_unlocked::Who,
-				pub class: vote_unlocked::Class,
-			}
-			pub mod vote_unlocked {
-				use super::runtime_types;
-				pub type Who = ::subxt::ext::subxt_core::utils::AccountId32;
-				pub type Class = ::core::primitive::u16;
-			}
-			impl ::subxt::ext::subxt_core::events::StaticEvent for VoteUnlocked {
-				const PALLET: &'static str = "ConvictionVoting";
-				const EVENT: &'static str = "VoteUnlocked";
-			}
-		}
-		pub mod storage {
-			use super::runtime_types;
-			pub mod types {
-				use super::runtime_types;
-				pub mod voting_for {
-					use super::runtime_types;
-					pub type VotingFor = runtime_types::pallet_conviction_voting::vote::Voting<
-						::core::primitive::u128,
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u32,
-						::core::primitive::u32,
-					>;
-					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
-					pub type Param1 = ::core::primitive::u16;
-				}
-				pub mod class_locks_for {
-					use super::runtime_types;
-					pub type ClassLocksFor =
-						runtime_types::bounded_collections::bounded_vec::BoundedVec<(
-							::core::primitive::u16,
-							::core::primitive::u128,
-						)>;
-					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
-				}
-			}
-			pub struct StorageApi;
-			impl StorageApi {
-				#[doc = " All voting for a particular voter in a particular voting class. We store the balance for the"]
-				#[doc = " number of votes that we have recorded."]
-				pub fn voting_for_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::voting_for::VotingFor,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ConvictionVoting",
-						"VotingFor",
-						(),
-						[
-							76u8, 63u8, 153u8, 193u8, 39u8, 137u8, 186u8, 29u8, 202u8, 56u8, 169u8,
-							56u8, 103u8, 138u8, 192u8, 18u8, 179u8, 114u8, 56u8, 121u8, 197u8,
-							12u8, 29u8, 239u8, 220u8, 231u8, 24u8, 46u8, 134u8, 99u8, 53u8, 206u8,
-						],
-					)
-				}
-				#[doc = " All voting for a particular voter in a particular voting class. We store the balance for the"]
-				#[doc = " number of votes that we have recorded."]
-				pub fn voting_for_iter1(
-					&self,
-					_0: types::voting_for::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::voting_for::Param0,
-					>,
-					types::voting_for::VotingFor,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ConvictionVoting",
-						"VotingFor",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							76u8, 63u8, 153u8, 193u8, 39u8, 137u8, 186u8, 29u8, 202u8, 56u8, 169u8,
-							56u8, 103u8, 138u8, 192u8, 18u8, 179u8, 114u8, 56u8, 121u8, 197u8,
-							12u8, 29u8, 239u8, 220u8, 231u8, 24u8, 46u8, 134u8, 99u8, 53u8, 206u8,
-						],
-					)
-				}
-				#[doc = " All voting for a particular voter in a particular voting class. We store the balance for the"]
-				#[doc = " number of votes that we have recorded."]
-				pub fn voting_for(
-					&self,
-					_0: types::voting_for::Param0,
-					_1: types::voting_for::Param1,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::voting_for::Param0,
-						>,
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-							types::voting_for::Param1,
-						>,
-					),
-					types::voting_for::VotingFor,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ConvictionVoting",
-						"VotingFor",
-						(
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-							::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_1),
-						),
-						[
-							76u8, 63u8, 153u8, 193u8, 39u8, 137u8, 186u8, 29u8, 202u8, 56u8, 169u8,
-							56u8, 103u8, 138u8, 192u8, 18u8, 179u8, 114u8, 56u8, 121u8, 197u8,
-							12u8, 29u8, 239u8, 220u8, 231u8, 24u8, 46u8, 134u8, 99u8, 53u8, 206u8,
-						],
-					)
-				}
-				#[doc = " The voting classes which have a non-zero lock requirement and the lock amounts which they"]
-				#[doc = " require. The actual amount locked on behalf of this pallet should always be the maximum of"]
-				#[doc = " this list."]
-				pub fn class_locks_for_iter(
-					&self,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					(),
-					types::class_locks_for::ClassLocksFor,
-					(),
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ConvictionVoting",
-						"ClassLocksFor",
-						(),
-						[
-							74u8, 74u8, 8u8, 82u8, 215u8, 61u8, 13u8, 9u8, 44u8, 222u8, 33u8,
-							245u8, 195u8, 124u8, 6u8, 174u8, 65u8, 245u8, 71u8, 42u8, 47u8, 46u8,
-							164u8, 231u8, 11u8, 245u8, 115u8, 207u8, 209u8, 137u8, 90u8, 6u8,
-						],
-					)
-				}
-				#[doc = " The voting classes which have a non-zero lock requirement and the lock amounts which they"]
-				#[doc = " require. The actual amount locked on behalf of this pallet should always be the maximum of"]
-				#[doc = " this list."]
-				pub fn class_locks_for(
-					&self,
-					_0: types::class_locks_for::Param0,
-				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
-					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
-						types::class_locks_for::Param0,
-					>,
-					types::class_locks_for::ClassLocksFor,
-					::subxt::ext::subxt_core::utils::Yes,
-					::subxt::ext::subxt_core::utils::Yes,
-					(),
-				> {
-					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
-						"ConvictionVoting",
-						"ClassLocksFor",
-						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
-						[
-							74u8, 74u8, 8u8, 82u8, 215u8, 61u8, 13u8, 9u8, 44u8, 222u8, 33u8,
-							245u8, 195u8, 124u8, 6u8, 174u8, 65u8, 245u8, 71u8, 42u8, 47u8, 46u8,
-							164u8, 231u8, 11u8, 245u8, 115u8, 207u8, 209u8, 137u8, 90u8, 6u8,
-						],
-					)
-				}
-			}
-		}
-		pub mod constants {
-			use super::runtime_types;
-			pub struct ConstantsApi;
-			impl ConstantsApi {
-				#[doc = " The maximum number of concurrent votes an account may have."]
-				#[doc = ""]
-				#[doc = " Also used to compute weight, an overly large value can lead to extrinsics with large"]
-				#[doc = " weight estimation: see `delegate` for instance."]
-				pub fn max_votes(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"ConvictionVoting",
-						"MaxVotes",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
-						],
-					)
-				}
-				#[doc = " The minimum period of vote locking."]
-				#[doc = ""]
-				#[doc = " It should be no shorter than enactment period to ensure that in the case of an approval,"]
-				#[doc = " those successful voters are locked into the consequences that their votes entail."]
-				pub fn vote_locking_period(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u32,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"ConvictionVoting",
-						"VoteLockingPeriod",
-						[
-							98u8, 252u8, 116u8, 72u8, 26u8, 180u8, 225u8, 83u8, 200u8, 157u8,
-							125u8, 151u8, 53u8, 76u8, 168u8, 26u8, 10u8, 9u8, 98u8, 68u8, 9u8,
-							178u8, 197u8, 113u8, 31u8, 79u8, 200u8, 90u8, 203u8, 100u8, 41u8,
-							145u8,
 						],
 					)
 				}
@@ -12873,7 +10242,7 @@ pub mod api {
 			}
 		}
 		#[doc = "The `Event` enum of this pallet"]
-		pub type Event = runtime_types::pallet_referenda::pallet::Event2;
+		pub type Event = runtime_types::pallet_referenda::pallet::Event;
 		pub mod events {
 			use super::runtime_types;
 			#[derive(
@@ -14234,9 +11603,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							71u8, 178u8, 63u8, 91u8, 78u8, 140u8, 29u8, 153u8, 6u8, 45u8, 75u8,
-							246u8, 87u8, 173u8, 86u8, 162u8, 22u8, 132u8, 34u8, 59u8, 39u8, 235u8,
-							150u8, 74u8, 227u8, 47u8, 217u8, 153u8, 37u8, 164u8, 173u8, 239u8,
+							83u8, 241u8, 200u8, 95u8, 176u8, 73u8, 86u8, 254u8, 102u8, 49u8, 113u8,
+							102u8, 55u8, 250u8, 115u8, 98u8, 254u8, 96u8, 27u8, 19u8, 132u8, 79u8,
+							207u8, 104u8, 114u8, 167u8, 142u8, 208u8, 170u8, 125u8, 198u8, 136u8,
 						],
 					)
 				}
@@ -19202,8 +16571,11 @@ pub mod api {
 				#[doc = "**For threshold=1:** The proposal is created with `Approved` status immediately"]
 				#[doc = "and can be executed via `execute()` without additional approvals."]
 				#[doc = ""]
-				#[doc = "**Weight:** Charged upfront for worst-case (high-security path with decode)."]
-				#[doc = "Refunded to actual cost on success based on whether HS path was taken."]
+				#[doc = "**Weight:** Charged upfront includes bookkeeping + MaxInnerCallWeight to cover"]
+				#[doc = "the cost of decoding arbitrary RuntimeCall structures and calling get_dispatch_info()."]
+				#[doc = "On success, refunds based on actual inner call weight. On rejection after decode"]
+				#[doc = "(e.g., CallWeightExceedsLimit, CallNotAllowedForHighSecurityMultisig), the full"]
+				#[doc = "reserved weight is burned to prevent griefing with complex calls that get rejected."]
 				pub struct Propose {
 					pub multisig_address: propose::MultisigAddress,
 					pub call: propose::Call,
@@ -19442,8 +16814,11 @@ pub mod api {
 				#[doc = "**For threshold=1:** The proposal is created with `Approved` status immediately"]
 				#[doc = "and can be executed via `execute()` without additional approvals."]
 				#[doc = ""]
-				#[doc = "**Weight:** Charged upfront for worst-case (high-security path with decode)."]
-				#[doc = "Refunded to actual cost on success based on whether HS path was taken."]
+				#[doc = "**Weight:** Charged upfront includes bookkeeping + MaxInnerCallWeight to cover"]
+				#[doc = "the cost of decoding arbitrary RuntimeCall structures and calling get_dispatch_info()."]
+				#[doc = "On success, refunds based on actual inner call weight. On rejection after decode"]
+				#[doc = "(e.g., CallWeightExceedsLimit, CallNotAllowedForHighSecurityMultisig), the full"]
+				#[doc = "reserved weight is burned to prevent griefing with complex calls that get rejected."]
 				pub fn propose(
 					&self,
 					multisig_address: types::propose::MultisigAddress,
@@ -20337,6 +17712,14 @@ pub mod api {
 						(::subxt::ext::subxt_core::utils::AccountId32, ::core::primitive::u128),
 					>;
 				}
+				pub mod potential_wormhole_balance {
+					use super::runtime_types;
+					pub type PotentialWormholeBalance = ::core::primitive::u128;
+				}
+				pub mod total_wormhole_exits {
+					use super::runtime_types;
+					pub type TotalWormholeExits = ::core::primitive::u128;
+				}
 			}
 			pub struct StorageApi;
 			impl StorageApi {
@@ -20455,6 +17838,60 @@ pub mod api {
 							92u8, 149u8, 109u8, 170u8, 10u8, 130u8, 163u8, 174u8, 224u8, 98u8,
 							190u8, 125u8, 213u8, 240u8, 211u8, 23u8, 222u8, 20u8, 104u8, 45u8, 7u8,
 							73u8, 225u8, 73u8, 21u8, 88u8, 91u8, 57u8, 207u8, 252u8, 25u8, 76u8,
+						],
+					)
+				}
+				#[doc = " Sum of balances held by \"ambiguous\" addresses (accounts that have never signed a"]
+				#[doc = " dilithium transaction, i.e. `nonce == 0`). These addresses are indistinguishable from"]
+				#[doc = " wormhole deposit addresses, so this is the maximum value that could legitimately be"]
+				#[doc = " exited via the wormhole."]
+				#[doc = ""]
+				#[doc = " Maintained incrementally: transfers to ambiguous addresses add to it (see"]
+				#[doc = " `record_transfer`), and an address revealing itself by signing its first transaction"]
+				#[doc = " subtracts its balance (see `WormholeProofRecorderExtension::validate` in the runtime)."]
+				pub fn potential_wormhole_balance(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::potential_wormhole_balance::PotentialWormholeBalance,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Wormhole",
+						"PotentialWormholeBalance",
+						(),
+						[
+							224u8, 198u8, 10u8, 180u8, 226u8, 172u8, 234u8, 95u8, 228u8, 158u8,
+							211u8, 149u8, 44u8, 85u8, 157u8, 195u8, 246u8, 54u8, 25u8, 16u8, 146u8,
+							156u8, 145u8, 52u8, 144u8, 95u8, 225u8, 6u8, 120u8, 80u8, 210u8, 180u8,
+						],
+					)
+				}
+				#[doc = " Total value of all successful wormhole exits (tokens minted to exit accounts)."]
+				#[doc = ""]
+				#[doc = " The core soundness invariant enforced on every exit is"]
+				#[doc = " `TotalWormholeExits <= PotentialWormholeBalance`. A violation indicates that more value"]
+				#[doc = " is being exited than could possibly have been deposited — i.e. a ZK soundness bug."]
+				pub fn total_wormhole_exits(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::total_wormhole_exits::TotalWormholeExits,
+					::subxt::ext::subxt_core::utils::Yes,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Wormhole",
+						"TotalWormholeExits",
+						(),
+						[
+							94u8, 69u8, 80u8, 151u8, 48u8, 6u8, 147u8, 6u8, 34u8, 219u8, 205u8,
+							47u8, 250u8, 193u8, 185u8, 14u8, 198u8, 141u8, 22u8, 206u8, 36u8,
+							127u8, 94u8, 166u8, 185u8, 254u8, 244u8, 180u8, 137u8, 50u8, 55u8,
+							52u8,
 						],
 					)
 				}
@@ -23305,444 +20742,6 @@ pub mod api {
 				}
 			}
 		}
-		pub mod pallet_conviction_voting {
-			use super::runtime_types;
-			pub mod conviction {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub enum Conviction {
-					#[codec(index = 0)]
-					None,
-					#[codec(index = 1)]
-					Locked1x,
-					#[codec(index = 2)]
-					Locked2x,
-					#[codec(index = 3)]
-					Locked3x,
-					#[codec(index = 4)]
-					Locked4x,
-					#[codec(index = 5)]
-					Locked5x,
-					#[codec(index = 6)]
-					Locked6x,
-				}
-			}
-			pub mod pallet {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-				pub enum Call {
-					#[codec(index = 0)]
-					#[doc = "Vote in a poll. If `vote.is_aye()`, the vote is to enact the proposal;"]
-					#[doc = "otherwise it is a vote to keep the status quo."]
-					#[doc = ""]
-					#[doc = "The dispatch origin of this call must be _Signed_."]
-					#[doc = ""]
-					#[doc = "- `poll_index`: The index of the poll to vote for."]
-					#[doc = "- `vote`: The vote configuration."]
-					#[doc = ""]
-					#[doc = "Weight: `O(R)` where R is the number of polls the voter has voted on."]
-					vote {
-						#[codec(compact)]
-						poll_index: ::core::primitive::u32,
-						vote: runtime_types::pallet_conviction_voting::vote::AccountVote<
-							::core::primitive::u128,
-						>,
-					},
-					#[codec(index = 1)]
-					#[doc = "Delegate the voting power (with some given conviction) of the sending account for a"]
-					#[doc = "particular class of polls."]
-					#[doc = ""]
-					#[doc = "The balance delegated is locked for as long as it's delegated, and thereafter for the"]
-					#[doc = "time appropriate for the conviction's lock period."]
-					#[doc = ""]
-					#[doc = "The dispatch origin of this call must be _Signed_, and the signing account must either:"]
-					#[doc = "  - be delegating already; or"]
-					#[doc = "  - have no voting activity (if there is, then it will need to be removed through"]
-					#[doc = "    `remove_vote`)."]
-					#[doc = ""]
-					#[doc = "- `to`: The account whose voting the `target` account's voting power will follow."]
-					#[doc = "- `class`: The class of polls to delegate. To delegate multiple classes, multiple calls"]
-					#[doc = "  to this function are required."]
-					#[doc = "- `conviction`: The conviction that will be attached to the delegated votes. When the"]
-					#[doc = "  account is undelegated, the funds will be locked for the corresponding period."]
-					#[doc = "- `balance`: The amount of the account's balance to be used in delegating. This must not"]
-					#[doc = "  be more than the account's current balance."]
-					#[doc = ""]
-					#[doc = "Emits `Delegated`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(R)` where R is the number of polls the voter delegating to has"]
-					#[doc = "  voted on. Weight is initially charged as if maximum votes, but is refunded later."]
-					delegate {
-						class: ::core::primitive::u16,
-						to: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						conviction: runtime_types::pallet_conviction_voting::conviction::Conviction,
-						balance: ::core::primitive::u128,
-					},
-					#[codec(index = 2)]
-					#[doc = "Undelegate the voting power of the sending account for a particular class of polls."]
-					#[doc = ""]
-					#[doc = "Tokens may be unlocked following once an amount of time consistent with the lock period"]
-					#[doc = "of the conviction with which the delegation was issued has passed."]
-					#[doc = ""]
-					#[doc = "The dispatch origin of this call must be _Signed_ and the signing account must be"]
-					#[doc = "currently delegating."]
-					#[doc = ""]
-					#[doc = "- `class`: The class of polls to remove the delegation from."]
-					#[doc = ""]
-					#[doc = "Emits `Undelegated`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(R)` where R is the number of polls the voter delegating to has"]
-					#[doc = "  voted on. Weight is initially charged as if maximum votes, but is refunded later."]
-					undelegate { class: ::core::primitive::u16 },
-					#[codec(index = 3)]
-					#[doc = "Remove the lock caused by prior voting/delegating which has expired within a particular"]
-					#[doc = "class."]
-					#[doc = ""]
-					#[doc = "The dispatch origin of this call must be _Signed_."]
-					#[doc = ""]
-					#[doc = "- `class`: The class of polls to unlock."]
-					#[doc = "- `target`: The account to remove the lock on."]
-					#[doc = ""]
-					#[doc = "Weight: `O(R)` with R number of vote of target."]
-					unlock {
-						class: ::core::primitive::u16,
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-					},
-					#[codec(index = 4)]
-					#[doc = "Remove a vote for a poll."]
-					#[doc = ""]
-					#[doc = "If:"]
-					#[doc = "- the poll was cancelled, or"]
-					#[doc = "- the poll is ongoing, or"]
-					#[doc = "- the poll has ended such that"]
-					#[doc = "  - the vote of the account was in opposition to the result; or"]
-					#[doc = "  - there was no conviction to the account's vote; or"]
-					#[doc = "  - the account made a split vote"]
-					#[doc = "...then the vote is removed cleanly and a following call to `unlock` may result in more"]
-					#[doc = "funds being available."]
-					#[doc = ""]
-					#[doc = "If, however, the poll has ended and:"]
-					#[doc = "- it finished corresponding to the vote of the account, and"]
-					#[doc = "- the account made a standard vote with conviction, and"]
-					#[doc = "- the lock period of the conviction is not over"]
-					#[doc = "...then the lock will be aggregated into the overall account's lock, which may involve"]
-					#[doc = "*overlocking* (where the two locks are combined into a single lock that is the maximum"]
-					#[doc = "of both the amount locked and the time is it locked for)."]
-					#[doc = ""]
-					#[doc = "The dispatch origin of this call must be _Signed_, and the signer must have a vote"]
-					#[doc = "registered for poll `index`."]
-					#[doc = ""]
-					#[doc = "- `index`: The index of poll of the vote to be removed."]
-					#[doc = "- `class`: Optional parameter, if given it indicates the class of the poll. For polls"]
-					#[doc = "  which have finished or are cancelled, this must be `Some`."]
-					#[doc = ""]
-					#[doc = "Weight: `O(R + log R)` where R is the number of polls that `target` has voted on."]
-					#[doc = "  Weight is calculated for the maximum number of vote."]
-					remove_vote {
-						class: ::core::option::Option<::core::primitive::u16>,
-						index: ::core::primitive::u32,
-					},
-					#[codec(index = 5)]
-					#[doc = "Remove a vote for a poll."]
-					#[doc = ""]
-					#[doc = "If the `target` is equal to the signer, then this function is exactly equivalent to"]
-					#[doc = "`remove_vote`. If not equal to the signer, then the vote must have expired,"]
-					#[doc = "either because the poll was cancelled, because the voter lost the poll or"]
-					#[doc = "because the conviction period is over."]
-					#[doc = ""]
-					#[doc = "The dispatch origin of this call must be _Signed_."]
-					#[doc = ""]
-					#[doc = "- `target`: The account of the vote to be removed; this account must have voted for poll"]
-					#[doc = "  `index`."]
-					#[doc = "- `index`: The index of poll of the vote to be removed."]
-					#[doc = "- `class`: The class of the poll."]
-					#[doc = ""]
-					#[doc = "Weight: `O(R + log R)` where R is the number of polls that `target` has voted on."]
-					#[doc = "  Weight is calculated for the maximum number of vote."]
-					remove_other_vote {
-						target: ::subxt::ext::subxt_core::utils::MultiAddress<
-							::subxt::ext::subxt_core::utils::AccountId32,
-							(),
-						>,
-						class: ::core::primitive::u16,
-						index: ::core::primitive::u32,
-					},
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "The `Error` enum of this pallet."]
-				pub enum Error {
-					#[codec(index = 0)]
-					#[doc = "Poll is not ongoing."]
-					NotOngoing,
-					#[codec(index = 1)]
-					#[doc = "The given account did not vote on the poll."]
-					NotVoter,
-					#[codec(index = 2)]
-					#[doc = "The actor has no permission to conduct the action."]
-					NoPermission,
-					#[codec(index = 3)]
-					#[doc = "The actor has no permission to conduct the action right now but will do in the future."]
-					NoPermissionYet,
-					#[codec(index = 4)]
-					#[doc = "The account is already delegating."]
-					AlreadyDelegating,
-					#[codec(index = 5)]
-					#[doc = "The account currently has votes attached to it and the operation cannot succeed until"]
-					#[doc = "these are removed through `remove_vote`."]
-					AlreadyVoting,
-					#[codec(index = 6)]
-					#[doc = "Too high a balance was provided that the account cannot afford."]
-					InsufficientFunds,
-					#[codec(index = 7)]
-					#[doc = "The account is not currently delegating."]
-					NotDelegating,
-					#[codec(index = 8)]
-					#[doc = "Delegation to oneself makes no sense."]
-					Nonsense,
-					#[codec(index = 9)]
-					#[doc = "Maximum number of votes reached."]
-					MaxVotesReached,
-					#[codec(index = 10)]
-					#[doc = "The class must be supplied since it is not easily determinable from the state."]
-					ClassNeeded,
-					#[codec(index = 11)]
-					#[doc = "The class ID supplied is invalid."]
-					BadClass,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "The `Event` enum of this pallet"]
-				pub enum Event {
-					#[codec(index = 0)]
-					#[doc = "An account has delegated their vote to another account. \\[who, target\\]"]
-					Delegated(
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u16,
-					),
-					#[codec(index = 1)]
-					#[doc = "An \\[account\\] has cancelled a previous delegation operation."]
-					Undelegated(
-						::subxt::ext::subxt_core::utils::AccountId32,
-						::core::primitive::u16,
-					),
-					#[codec(index = 2)]
-					#[doc = "An account has voted"]
-					Voted {
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						vote: runtime_types::pallet_conviction_voting::vote::AccountVote<
-							::core::primitive::u128,
-						>,
-						poll_index: ::core::primitive::u32,
-					},
-					#[codec(index = 3)]
-					#[doc = "A vote has been removed"]
-					VoteRemoved {
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						vote: runtime_types::pallet_conviction_voting::vote::AccountVote<
-							::core::primitive::u128,
-						>,
-						poll_index: ::core::primitive::u32,
-					},
-					#[codec(index = 4)]
-					#[doc = "The lockup period of a conviction vote expired, and the funds have been unlocked."]
-					VoteUnlocked {
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						class: ::core::primitive::u16,
-					},
-				}
-			}
-			pub mod types {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct Delegations<_0> {
-					pub votes: _0,
-					pub capital: _0,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct Tally<_0> {
-					pub ayes: _0,
-					pub nays: _0,
-					pub support: _0,
-				}
-			}
-			pub mod vote {
-				use super::runtime_types;
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub enum AccountVote<_0> {
-					#[codec(index = 0)]
-					Standard {
-						vote: runtime_types::pallet_conviction_voting::vote::Vote,
-						balance: _0,
-					},
-					#[codec(index = 1)]
-					Split { aye: _0, nay: _0 },
-					#[codec(index = 2)]
-					SplitAbstain { aye: _0, nay: _0, abstain: _0 },
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct Casting<_0, _1, _2> {
-					pub votes: runtime_types::bounded_collections::bounded_vec::BoundedVec<(
-						_1,
-						runtime_types::pallet_conviction_voting::vote::AccountVote<_0>,
-					)>,
-					pub delegations:
-						runtime_types::pallet_conviction_voting::types::Delegations<_0>,
-					pub prior: runtime_types::pallet_conviction_voting::vote::PriorLock<_1, _0>,
-					#[codec(skip)]
-					pub __ignore: ::core::marker::PhantomData<_2>,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct Delegating<_0, _1, _2> {
-					pub balance: _0,
-					pub target: _1,
-					pub conviction: runtime_types::pallet_conviction_voting::conviction::Conviction,
-					pub delegations:
-						runtime_types::pallet_conviction_voting::types::Delegations<_0>,
-					pub prior: runtime_types::pallet_conviction_voting::vote::PriorLock<_2, _0>,
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct PriorLock<_0, _1>(pub _0, pub _1);
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub struct Vote(pub ::core::primitive::u8);
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				pub enum Voting<_0, _1, _2, _3> {
-					#[codec(index = 0)]
-					Casting(runtime_types::pallet_conviction_voting::vote::Casting<_0, _2, _2>),
-					#[codec(index = 1)]
-					Delegating(
-						runtime_types::pallet_conviction_voting::vote::Delegating<_0, _1, _2>,
-					),
-					__Ignore(::core::marker::PhantomData<_3>),
-				}
-			}
-		}
 		pub mod pallet_mining_rewards {
 			use super::runtime_types;
 			pub mod pallet {
@@ -23845,8 +20844,11 @@ pub mod api {
 					#[doc = "**For threshold=1:** The proposal is created with `Approved` status immediately"]
 					#[doc = "and can be executed via `execute()` without additional approvals."]
 					#[doc = ""]
-					#[doc = "**Weight:** Charged upfront for worst-case (high-security path with decode)."]
-					#[doc = "Refunded to actual cost on success based on whether HS path was taken."]
+					#[doc = "**Weight:** Charged upfront includes bookkeeping + MaxInnerCallWeight to cover"]
+					#[doc = "the cost of decoding arbitrary RuntimeCall structures and calling get_dispatch_info()."]
+					#[doc = "On success, refunds based on actual inner call weight. On rejection after decode"]
+					#[doc = "(e.g., CallWeightExceedsLimit, CallNotAllowedForHighSecurityMultisig), the full"]
+					#[doc = "reserved weight is burned to prevent griefing with complex calls that get rejected."]
 					propose {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						call: runtime_types::bounded_collections::bounded_vec::BoundedVec<
@@ -24821,48 +21823,51 @@ pub mod api {
 					#[doc = "User is not allowed to make a call on behalf of this account"]
 					NotAllowed,
 					#[codec(index = 1)]
+					#[doc = "Call is not allowed for a high-security account"]
+					CallNotAllowedForHighSecurity,
+					#[codec(index = 2)]
 					#[doc = "Threshold must be greater than zero"]
 					ZeroThreshold,
-					#[codec(index = 2)]
+					#[codec(index = 3)]
 					#[doc = "Friends list must be greater than zero and threshold"]
 					NotEnoughFriends,
-					#[codec(index = 3)]
+					#[codec(index = 4)]
 					#[doc = "Friends list must be less than max friends"]
 					MaxFriends,
-					#[codec(index = 4)]
+					#[codec(index = 5)]
 					#[doc = "Friends list must be sorted and free of duplicates"]
 					NotSorted,
-					#[codec(index = 5)]
+					#[codec(index = 6)]
 					#[doc = "This account is not set up for recovery"]
 					NotRecoverable,
-					#[codec(index = 6)]
+					#[codec(index = 7)]
 					#[doc = "This account is already set up for recovery"]
 					AlreadyRecoverable,
-					#[codec(index = 7)]
+					#[codec(index = 8)]
 					#[doc = "A recovery process has already started for this account"]
 					AlreadyStarted,
-					#[codec(index = 8)]
+					#[codec(index = 9)]
 					#[doc = "A recovery process has not started for this rescuer"]
 					NotStarted,
-					#[codec(index = 9)]
+					#[codec(index = 10)]
 					#[doc = "This account is not a friend who can vouch"]
 					NotFriend,
-					#[codec(index = 10)]
+					#[codec(index = 11)]
 					#[doc = "The friend must wait until the delay period to vouch for this recovery"]
 					DelayPeriod,
-					#[codec(index = 11)]
+					#[codec(index = 12)]
 					#[doc = "This user has already vouched for this recovery"]
 					AlreadyVouched,
-					#[codec(index = 12)]
+					#[codec(index = 13)]
 					#[doc = "The threshold for recovering this account has not been met"]
 					Threshold,
-					#[codec(index = 13)]
+					#[codec(index = 14)]
 					#[doc = "There are still active recovery attempts that need to be closed"]
 					StillActive,
-					#[codec(index = 14)]
+					#[codec(index = 15)]
 					#[doc = "This account is already set up for recovery"]
 					AlreadyProxy,
-					#[codec(index = 15)]
+					#[codec(index = 16)]
 					#[doc = "Some internal state is broken."]
 					BadState,
 				}
@@ -25144,130 +22149,7 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				#[doc = "The `Event` enum of this pallet"]
-				pub enum Event1 {
-					#[codec(index = 0)]
-					#[doc = "A referendum has been submitted."]
-					Submitted {
-						index: ::core::primitive::u32,
-						track: ::core::primitive::u16,
-						proposal: runtime_types::frame_support::traits::preimages::Bounded<
-							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::sp_runtime::traits::BlakeTwo256,
-						>,
-					},
-					#[codec(index = 1)]
-					#[doc = "The decision deposit has been placed."]
-					DecisionDepositPlaced {
-						index: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 2)]
-					#[doc = "The decision deposit has been refunded."]
-					DecisionDepositRefunded {
-						index: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 3)]
-					#[doc = "A deposit has been slashed."]
-					DepositSlashed {
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 4)]
-					#[doc = "A referendum has moved into the deciding phase."]
-					DecisionStarted {
-						index: ::core::primitive::u32,
-						track: ::core::primitive::u16,
-						proposal: runtime_types::frame_support::traits::preimages::Bounded<
-							runtime_types::quantus_runtime::RuntimeCall,
-							runtime_types::sp_runtime::traits::BlakeTwo256,
-						>,
-						tally: runtime_types::pallet_conviction_voting::types::Tally<
-							::core::primitive::u128,
-						>,
-					},
-					#[codec(index = 5)]
-					ConfirmStarted { index: ::core::primitive::u32 },
-					#[codec(index = 6)]
-					ConfirmAborted { index: ::core::primitive::u32 },
-					#[codec(index = 7)]
-					#[doc = "A referendum has ended its confirmation phase and is ready for approval."]
-					Confirmed {
-						index: ::core::primitive::u32,
-						tally: runtime_types::pallet_conviction_voting::types::Tally<
-							::core::primitive::u128,
-						>,
-					},
-					#[codec(index = 8)]
-					#[doc = "A referendum has been approved and its proposal has been scheduled."]
-					Approved { index: ::core::primitive::u32 },
-					#[codec(index = 9)]
-					#[doc = "A proposal has been rejected by referendum."]
-					Rejected {
-						index: ::core::primitive::u32,
-						tally: runtime_types::pallet_conviction_voting::types::Tally<
-							::core::primitive::u128,
-						>,
-					},
-					#[codec(index = 10)]
-					#[doc = "A referendum has been timed out without being decided."]
-					TimedOut {
-						index: ::core::primitive::u32,
-						tally: runtime_types::pallet_conviction_voting::types::Tally<
-							::core::primitive::u128,
-						>,
-					},
-					#[codec(index = 11)]
-					#[doc = "A referendum has been cancelled."]
-					Cancelled {
-						index: ::core::primitive::u32,
-						tally: runtime_types::pallet_conviction_voting::types::Tally<
-							::core::primitive::u128,
-						>,
-					},
-					#[codec(index = 12)]
-					#[doc = "A referendum has been killed."]
-					Killed {
-						index: ::core::primitive::u32,
-						tally: runtime_types::pallet_conviction_voting::types::Tally<
-							::core::primitive::u128,
-						>,
-					},
-					#[codec(index = 13)]
-					#[doc = "The submission deposit has been refunded."]
-					SubmissionDepositRefunded {
-						index: ::core::primitive::u32,
-						who: ::subxt::ext::subxt_core::utils::AccountId32,
-						amount: ::core::primitive::u128,
-					},
-					#[codec(index = 14)]
-					#[doc = "Metadata for a referendum has been set."]
-					MetadataSet {
-						index: ::core::primitive::u32,
-						hash: ::subxt::ext::subxt_core::utils::H256,
-					},
-					#[codec(index = 15)]
-					#[doc = "Metadata for a referendum has been cleared."]
-					MetadataCleared {
-						index: ::core::primitive::u32,
-						hash: ::subxt::ext::subxt_core::utils::H256,
-					},
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
-				#[doc = "The `Event` enum of this pallet"]
-				pub enum Event2 {
+				pub enum Event {
 					#[codec(index = 0)]
 					#[doc = "A referendum has been submitted."]
 					Submitted {
@@ -25890,140 +22772,6 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
-				pub enum Call {
-					#[codec(index = 0)]
-					schedule {
-						when: ::core::primitive::u32,
-						priority: ::core::primitive::u8,
-						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
-							runtime_types::quantus_runtime::RuntimeCall,
-						>,
-					},
-					#[codec(index = 1)]
-					#[doc = "Cancel an anonymously scheduled task."]
-					cancel {
-						when: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						index: ::core::primitive::u32,
-					},
-					#[codec(index = 2)]
-					schedule_named {
-						id: [::core::primitive::u8; 32usize],
-						when: ::core::primitive::u32,
-						priority: ::core::primitive::u8,
-						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
-							runtime_types::quantus_runtime::RuntimeCall,
-						>,
-					},
-					#[codec(index = 3)]
-					#[doc = "Cancel a named scheduled task."]
-					cancel_named { id: [::core::primitive::u8; 32usize] },
-					#[codec(index = 4)]
-					schedule_after {
-						after: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						priority: ::core::primitive::u8,
-						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
-							runtime_types::quantus_runtime::RuntimeCall,
-						>,
-					},
-					#[codec(index = 5)]
-					schedule_named_after {
-						id: [::core::primitive::u8; 32usize],
-						after: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-						priority: ::core::primitive::u8,
-						call: ::subxt::ext::subxt_core::alloc::boxed::Box<
-							runtime_types::quantus_runtime::RuntimeCall,
-						>,
-					},
-					#[codec(index = 6)]
-					#[doc = "Set a retry configuration for a task so that, in case its scheduled run fails, it will"]
-					#[doc = "be retried after `period` blocks, for a total amount of `retries` retries or until it"]
-					#[doc = "succeeds."]
-					#[doc = ""]
-					#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-					#[doc = "agenda space, same as a regular task."]
-					#[doc = ""]
-					#[doc = "Tasks scheduled as a result of a retry are unnamed"]
-					#[doc = "clones of the original task. Their retry configuration will be derived from the"]
-					#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
-					#[doc = "original `total_retries`."]
-					#[doc = ""]
-					#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
-					#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
-					#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
-					set_retry {
-						task: (
-							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-								::core::primitive::u32,
-								::core::primitive::u64,
-							>,
-							::core::primitive::u32,
-						),
-						retries: ::core::primitive::u8,
-						period: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-					},
-					#[codec(index = 7)]
-					#[doc = "Set a retry configuration for a named task so that, in case its scheduled run fails, it"]
-					#[doc = "will be retried after `period` blocks, for a total amount of `retries` retries or until"]
-					#[doc = "it succeeds."]
-					#[doc = ""]
-					#[doc = "Tasks which need to be scheduled for a retry are still subject to weight metering and"]
-					#[doc = "agenda space, same as a regular task."]
-					#[doc = ""]
-					#[doc = "Tasks scheduled as a result of a retry are unnamed"]
-					#[doc = "clones of the original task. Their retry configuration will be derived from the"]
-					#[doc = "original task's configuration, but will have a lower value for `remaining` than the"]
-					#[doc = "original `total_retries`."]
-					#[doc = ""]
-					#[doc = "The `period` type must match the task's scheduling type: block-scheduled tasks"]
-					#[doc = "require a block-number period, and timestamp-scheduled tasks require a timestamp"]
-					#[doc = "period. Mismatched types will return [`Error::RetryPeriodMismatch`]."]
-					set_retry_named {
-						id: [::core::primitive::u8; 32usize],
-						retries: ::core::primitive::u8,
-						period: runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-							::core::primitive::u32,
-							::core::primitive::u64,
-						>,
-					},
-					#[codec(index = 8)]
-					#[doc = "Removes the retry configuration of a task."]
-					cancel_retry {
-						task: (
-							runtime_types::qp_scheduler::BlockNumberOrTimestamp<
-								::core::primitive::u32,
-								::core::primitive::u64,
-							>,
-							::core::primitive::u32,
-						),
-					},
-					#[codec(index = 9)]
-					#[doc = "Cancel the retry configuration of a named task."]
-					cancel_retry_named { id: [::core::primitive::u8; 32usize] },
-				}
-				#[derive(
-					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
-					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
-					Debug,
-				)]
-				#[decode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
-				)]
-				#[encode_as_type(
-					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
-				)]
 				#[doc = "The `Error` enum of this pallet."]
 				pub enum Error {
 					#[codec(index = 0)]
@@ -26612,6 +23360,9 @@ pub mod api {
 					#[codec(index = 0)]
 					#[doc = "Too many calls batched."]
 					TooManyCalls,
+					#[codec(index = 1)]
+					#[doc = "Call is not allowed for a high-security account."]
+					CallNotAllowedForHighSecurity,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -26724,6 +23475,11 @@ pub mod api {
 					#[codec(index = 9)]
 					#[doc = "Only native asset (asset_id = 0) is supported in this version"]
 					NonNativeAssetNotSupported,
+					#[codec(index = 10)]
+					#[doc = "Soundness invariant violated: total wormhole exits would exceed the value that could"]
+					#[doc = "possibly have been deposited into wormhole addresses. This indicates a potential"]
+					#[doc = "soundness bug in the ZK proof system, so the exit is rejected."]
+					SoundnessInvariantViolation,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -27036,16 +23792,10 @@ pub mod api {
 				Balances(runtime_types::pallet_balances::pallet::Call),
 				#[codec(index = 7)]
 				Preimage(runtime_types::pallet_preimage::pallet::Call),
-				#[codec(index = 8)]
-				Scheduler(runtime_types::pallet_scheduler::pallet::Call),
 				#[codec(index = 9)]
 				Utility(runtime_types::pallet_utility::pallet::Call),
-				#[codec(index = 10)]
-				Referenda(runtime_types::pallet_referenda::pallet::Call),
 				#[codec(index = 11)]
 				ReversibleTransfers(runtime_types::pallet_reversible_transfers::pallet::Call),
-				#[codec(index = 12)]
-				ConvictionVoting(runtime_types::pallet_conviction_voting::pallet::Call),
 				#[codec(index = 13)]
 				TechCollective(runtime_types::pallet_ranked_collective::pallet::Call),
 				#[codec(index = 14)]
@@ -27079,12 +23829,8 @@ pub mod api {
 				Scheduler(runtime_types::pallet_scheduler::pallet::Error),
 				#[codec(index = 9)]
 				Utility(runtime_types::pallet_utility::pallet::Error),
-				#[codec(index = 10)]
-				Referenda(runtime_types::pallet_referenda::pallet::Error),
 				#[codec(index = 11)]
 				ReversibleTransfers(runtime_types::pallet_reversible_transfers::pallet::Error),
-				#[codec(index = 12)]
-				ConvictionVoting(runtime_types::pallet_conviction_voting::pallet::Error),
 				#[codec(index = 13)]
 				TechCollective(runtime_types::pallet_ranked_collective::pallet::Error),
 				#[codec(index = 14)]
@@ -27128,16 +23874,12 @@ pub mod api {
 				Scheduler(runtime_types::pallet_scheduler::pallet::Event),
 				#[codec(index = 9)]
 				Utility(runtime_types::pallet_utility::pallet::Event),
-				#[codec(index = 10)]
-				Referenda(runtime_types::pallet_referenda::pallet::Event1),
 				#[codec(index = 11)]
 				ReversibleTransfers(runtime_types::pallet_reversible_transfers::pallet::Event),
-				#[codec(index = 12)]
-				ConvictionVoting(runtime_types::pallet_conviction_voting::pallet::Event),
 				#[codec(index = 13)]
 				TechCollective(runtime_types::pallet_ranked_collective::pallet::Event),
 				#[codec(index = 14)]
-				TechReferenda(runtime_types::pallet_referenda::pallet::Event2),
+				TechReferenda(runtime_types::pallet_referenda::pallet::Event),
 				#[codec(index = 15)]
 				TreasuryPallet(runtime_types::pallet_treasury::pallet::Event),
 				#[codec(index = 16)]

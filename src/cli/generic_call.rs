@@ -98,12 +98,6 @@ pub async fn execute_generic_call(
 		("ReversibleTransfers", "schedule_transfer") =>
 			submit_reversible_transfer(quantus_client, from_keypair, &args, execution_mode).await?,
 
-		// Scheduler pallet calls
-		("Scheduler", "schedule") =>
-			submit_scheduler_schedule(quantus_client, from_keypair, &args).await?,
-		("Scheduler", "cancel") =>
-			submit_scheduler_cancel(quantus_client, from_keypair, &args).await?,
-
 		// Generic fallback for unknown calls
 		(_, _) => {
 			log_error!(
@@ -116,7 +110,6 @@ pub async fn execute_generic_call(
 			log_print!("   • System: remark");
 			log_print!("   • TechCollective: add_member, remove_member, vote");
 			log_print!("   • ReversibleTransfers: schedule_transfer");
-			log_print!("   • Scheduler: schedule, cancel");
 			log_print!("💡 For other calls, use the original 'quantus call' command");
 			return Err(QuantusError::Generic(format!(
 				"Unsupported pallet/call combination in SubXT: {pallet}.{call}"
@@ -358,32 +351,6 @@ async fn submit_reversible_transfer(
 		execution_mode,
 	)
 	.await
-}
-
-/// Submit scheduler schedule
-async fn submit_scheduler_schedule(
-	_quantus_client: &crate::chain::client::QuantusClient,
-	_from_keypair: &QuantumKeyPair,
-	_args: &[Value],
-) -> crate::error::Result<subxt::utils::H256> {
-	log_error!("❌ Scheduler calls through generic call are complex");
-	log_print!("💡 Use dedicated scheduler commands for complex scheduling");
-	Err(QuantusError::Generic(
-		"Scheduler calls not supported in generic call - use scheduler commands".to_string(),
-	))
-}
-
-/// Submit scheduler cancel
-async fn submit_scheduler_cancel(
-	_quantus_client: &crate::chain::client::QuantusClient,
-	_from_keypair: &QuantumKeyPair,
-	_args: &[Value],
-) -> crate::error::Result<subxt::utils::H256> {
-	log_error!("❌ Scheduler calls through generic call are complex");
-	log_print!("💡 Use dedicated scheduler commands for scheduling operations");
-	Err(QuantusError::Generic(
-		"Scheduler calls not supported in generic call - use scheduler commands".to_string(),
-	))
 }
 
 /// Handle generic call command execution
