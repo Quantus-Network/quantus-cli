@@ -10,7 +10,12 @@ use crate::{
 };
 
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
-	exercise_step!(report, phase, "runtime_version", runtime_version(ctx));
+	// In the post-upgrade re-run the chain is on the candidate runtime, whose
+	// spec version is by construction *newer* than anything pinned in
+	// COMPATIBLE_RUNTIMES (the upgrade phase requires a spec bump). Requiring
+	// table membership there would fail every successful upgrade run.
+	let post_upgrade = phase.starts_with("post-upgrade:");
+	exercise_step!(report, phase, "runtime_version", runtime_version(ctx, post_upgrade));
 	exercise_step!(report, phase, "metadata_pallets", metadata_pallets(ctx));
 	exercise_step!(report, phase, "chain_properties", chain_properties(ctx));
 	exercise_step!(report, phase, "latest_block_and_events", latest_block_and_events(ctx));
@@ -21,15 +26,31 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	Ok(())
 }
 
-async fn runtime_version(ctx: &ExerciseCtx) -> Result<String> {
+async fn runtime_version(ctx: &ExerciseCtx, post_upgrade: bool) -> Result<String> {
 	let (spec, tx) = ctx.client.get_runtime_version().await?;
 	let compatible = crate::config::is_runtime_compatible(spec, tx);
-	if !compatible {
+	if compatible {
+		return Ok(format!("spec {spec} / tx {tx}, compatible with CLI bindings"));
+	}
+	if post_upgrade {
+		// The candidate runtime is expected to be absent from the table; the
+		// rest of the re-run verifies the checked-in bindings still work
+		// against it. A transaction_version change, however, invalidates the
+		// signing payload and must be flagged.
+		if crate::config::COMPATIBLE_RUNTIMES.iter().any(|r| r.transaction_version == tx) {
+			return Ok(format!(
+				"spec {spec} / tx {tx}: candidate runtime not in the compatibility table \
+				 (expected after an upgrade); tx version unchanged"
+			));
+		}
 		return Err(QuantusError::Generic(format!(
-			"runtime spec {spec} / tx {tx} is not in the CLI compatibility table"
+			"candidate runtime changed transaction_version to {tx}, which is not in the \
+			 CLI compatibility table; signed extrinsics from this CLI are invalid against it"
 		)));
 	}
-	Ok(format!("spec {spec} / tx {tx}, compatible with CLI bindings"))
+	Err(QuantusError::Generic(format!(
+		"runtime spec {spec} / tx {tx} is not in the CLI compatibility table"
+	)))
 }
 
 async fn metadata_pallets(ctx: &ExerciseCtx) -> Result<String> {

@@ -318,6 +318,15 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 		ctx.eph.push(keypair);
 	}
 
+	// With --seed the keypairs are deterministic, so on a non-fresh chain the
+	// accounts may hold leftover balances from a previous run. Assert on the
+	// funding *delta* rather than the absolute balance so seeded reproduction
+	// runs don't die in setup.
+	let mut balances_before = Vec::with_capacity(count);
+	for address in &addresses {
+		balances_before.push(ctx.free_balance(address).await?);
+	}
+
 	let transfers: Vec<(String, u128)> =
 		addresses.iter().map(|a| (a.clone(), funding_per_account)).collect();
 	crate::cli::send::batch_transfer(
@@ -329,13 +338,24 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 	)
 	.await?;
 
-	for address in &addresses {
-		let balance = ctx.free_balance(address).await?;
-		if balance != funding_per_account {
+	let mut reused = 0usize;
+	for (address, before) in addresses.iter().zip(&balances_before) {
+		let after = ctx.free_balance(address).await?;
+		let delta = after.saturating_sub(*before);
+		if delta != funding_per_account {
 			return Err(QuantusError::Generic(format!(
-				"ephemeral account {address} has balance {balance}, expected {funding_per_account}"
+				"ephemeral account {address} balance went {before} -> {after} \
+				 (delta {delta}), expected a funding delta of {funding_per_account}"
 			)));
 		}
+		if *before > 0 {
+			reused += 1;
+		}
 	}
-	Ok(format!("derived and funded {count} ephemeral accounts with 1000 tokens each"))
+	let note = if reused > 0 {
+		format!(" ({reused} had leftover balances from a previous run with this seed)")
+	} else {
+		String::new()
+	};
+	Ok(format!("derived and funded {count} ephemeral accounts with 1000 tokens each{note}"))
 }
