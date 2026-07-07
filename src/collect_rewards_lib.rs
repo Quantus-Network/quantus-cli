@@ -29,7 +29,7 @@ use crate::{
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use qp_rusty_crystals_hdwallet::{derive_wormhole_from_mnemonic, QUANTUS_WORMHOLE_CHAIN_ID};
 use qp_wormhole_aggregator::{
-	aggregator::{AggregationBackend, CircuitType, Layer0Aggregator},
+	aggregator::{AggregationBackend, CircuitType, PrivateBatchAggregator},
 	config::CircuitBinsConfig,
 };
 use qp_zk_circuits_common::circuit::{C, D, F};
@@ -753,7 +753,7 @@ fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Resul
 		)));
 	}
 
-	let mut aggregator = Layer0Aggregator::new(bins_dir)
+	let mut aggregator = PrivateBatchAggregator::new(bins_dir)
 		.map_err(|e| CollectRewardsError::from(format!("Failed to load aggregator: {}", e)))?;
 
 	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
@@ -788,8 +788,8 @@ async fn submit_and_get_events(
 	// Verify locally first
 
 	let verifier = qp_wormhole_verifier::WormholeVerifier::new_from_files(
-		&bins_dir.join("aggregated_verifier.bin"),
-		&bins_dir.join("aggregated_common.bin"),
+		&bins_dir.join("private_batch_verifier.bin"),
+		&bins_dir.join("private_batch_common.bin"),
 	)
 	.map_err(|e| CollectRewardsError::from(format!("Failed to load verifier: {}", e)))?;
 
@@ -805,7 +805,7 @@ async fn submit_and_get_events(
 		.map_err(|e| CollectRewardsError::from(format!("Local verification failed: {}", e)))?;
 
 	// Parse public inputs to do pre-submission validation
-	let inputs = qp_wormhole_verifier::parse_aggregated_public_inputs(&proof).map_err(|e| {
+	let inputs = qp_wormhole_verifier::parse_private_batch_public_inputs(&proof).map_err(|e| {
 		CollectRewardsError::from(format!("Failed to parse public inputs: {:?}", e))
 	})?;
 
@@ -890,7 +890,7 @@ async fn submit_and_get_events(
 	}
 
 	// Submit unsigned tx
-	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
+	let verify_tx = quantus_node::api::tx().wormhole().verify_private_batch(proof_bytes);
 
 	let unsigned_tx =
 		quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {

@@ -1565,10 +1565,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							32u8, 234u8, 47u8, 160u8, 157u8, 142u8, 236u8, 40u8, 222u8, 22u8, 75u8,
-							92u8, 244u8, 90u8, 235u8, 228u8, 137u8, 249u8, 207u8, 89u8, 87u8,
-							244u8, 41u8, 20u8, 102u8, 145u8, 48u8, 54u8, 164u8, 114u8, 122u8,
-							182u8,
+							153u8, 244u8, 17u8, 5u8, 235u8, 4u8, 104u8, 198u8, 131u8, 158u8, 19u8,
+							216u8, 62u8, 24u8, 103u8, 252u8, 73u8, 51u8, 52u8, 184u8, 59u8, 99u8,
+							82u8, 254u8, 170u8, 57u8, 106u8, 36u8, 145u8, 163u8, 126u8, 109u8,
 						],
 					)
 				}
@@ -1586,10 +1585,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							135u8, 197u8, 88u8, 132u8, 222u8, 66u8, 219u8, 154u8, 162u8, 155u8,
-							161u8, 58u8, 176u8, 115u8, 33u8, 214u8, 171u8, 221u8, 230u8, 21u8,
-							60u8, 15u8, 36u8, 117u8, 182u8, 70u8, 181u8, 108u8, 125u8, 72u8, 252u8,
-							40u8,
+							136u8, 115u8, 112u8, 123u8, 227u8, 248u8, 72u8, 124u8, 43u8, 254u8,
+							81u8, 3u8, 0u8, 160u8, 54u8, 181u8, 3u8, 176u8, 73u8, 27u8, 41u8, 3u8,
+							210u8, 235u8, 57u8, 40u8, 93u8, 195u8, 52u8, 233u8, 28u8, 214u8,
 						],
 					)
 				}
@@ -1980,6 +1978,9 @@ pub mod api {
 		pub fn scheduler(&self) -> scheduler::storage::StorageApi {
 			scheduler::storage::StorageApi
 		}
+		pub fn utility(&self) -> utility::storage::StorageApi {
+			utility::storage::StorageApi
+		}
 		pub fn reversible_transfers(&self) -> reversible_transfers::storage::StorageApi {
 			reversible_transfers::storage::StorageApi
 		}
@@ -2068,9 +2069,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				0u8, 140u8, 5u8, 40u8, 237u8, 46u8, 42u8, 0u8, 228u8, 200u8, 1u8, 226u8, 132u8,
-				185u8, 140u8, 253u8, 54u8, 127u8, 56u8, 200u8, 164u8, 237u8, 198u8, 151u8, 133u8,
-				33u8, 239u8, 56u8, 190u8, 69u8, 228u8, 26u8,
+				114u8, 1u8, 221u8, 124u8, 22u8, 209u8, 143u8, 10u8, 63u8, 178u8, 11u8, 11u8, 164u8,
+				244u8, 230u8, 133u8, 144u8, 185u8, 104u8, 83u8, 107u8, 57u8, 232u8, 171u8, 214u8,
+				253u8, 96u8, 223u8, 155u8, 146u8, 95u8, 150u8,
 			]
 	}
 	pub mod system {
@@ -3198,9 +3199,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							12u8, 200u8, 85u8, 114u8, 205u8, 35u8, 13u8, 101u8, 195u8, 51u8, 123u8,
-							145u8, 74u8, 61u8, 217u8, 71u8, 184u8, 61u8, 132u8, 83u8, 214u8, 117u8,
-							222u8, 18u8, 13u8, 229u8, 195u8, 147u8, 223u8, 19u8, 66u8, 105u8,
+							113u8, 0u8, 253u8, 103u8, 151u8, 44u8, 145u8, 151u8, 127u8, 138u8,
+							40u8, 186u8, 228u8, 160u8, 222u8, 205u8, 105u8, 209u8, 1u8, 48u8,
+							122u8, 152u8, 43u8, 253u8, 29u8, 73u8, 224u8, 181u8, 90u8, 221u8, 5u8,
+							209u8,
 						],
 					)
 				}
@@ -7317,9 +7319,9 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							91u8, 52u8, 14u8, 228u8, 168u8, 75u8, 218u8, 19u8, 121u8, 112u8, 126u8,
-							236u8, 87u8, 77u8, 194u8, 140u8, 196u8, 15u8, 84u8, 117u8, 80u8, 101u8,
-							217u8, 62u8, 28u8, 83u8, 226u8, 233u8, 176u8, 2u8, 158u8, 79u8,
+							198u8, 134u8, 180u8, 38u8, 44u8, 142u8, 3u8, 161u8, 210u8, 157u8, 25u8,
+							100u8, 101u8, 118u8, 58u8, 60u8, 185u8, 182u8, 146u8, 41u8, 99u8,
+							144u8, 164u8, 157u8, 13u8, 5u8, 200u8, 160u8, 66u8, 69u8, 196u8, 86u8,
 						],
 					)
 				}
@@ -7349,10 +7351,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							78u8, 239u8, 51u8, 124u8, 113u8, 201u8, 252u8, 171u8, 182u8, 113u8,
-							155u8, 193u8, 125u8, 113u8, 241u8, 199u8, 215u8, 237u8, 55u8, 121u8,
-							247u8, 255u8, 41u8, 35u8, 206u8, 143u8, 157u8, 90u8, 203u8, 106u8,
-							252u8, 91u8,
+							98u8, 64u8, 99u8, 39u8, 21u8, 125u8, 101u8, 82u8, 199u8, 178u8, 105u8,
+							167u8, 22u8, 104u8, 208u8, 209u8, 9u8, 81u8, 85u8, 251u8, 83u8, 179u8,
+							110u8, 106u8, 173u8, 69u8, 234u8, 17u8, 135u8, 154u8, 77u8, 49u8,
 						],
 					)
 				}
@@ -7378,9 +7379,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							9u8, 111u8, 191u8, 88u8, 100u8, 224u8, 185u8, 197u8, 208u8, 26u8,
-							198u8, 42u8, 215u8, 246u8, 54u8, 120u8, 3u8, 148u8, 182u8, 44u8, 233u8,
-							60u8, 26u8, 128u8, 101u8, 87u8, 141u8, 143u8, 9u8, 197u8, 184u8, 64u8,
+							61u8, 118u8, 46u8, 59u8, 121u8, 170u8, 210u8, 56u8, 44u8, 191u8, 99u8,
+							173u8, 201u8, 224u8, 52u8, 179u8, 89u8, 23u8, 10u8, 153u8, 79u8, 162u8,
+							18u8, 177u8, 50u8, 85u8, 6u8, 146u8, 171u8, 129u8, 225u8, 246u8,
 						],
 					)
 				}
@@ -7403,10 +7404,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							252u8, 234u8, 74u8, 189u8, 195u8, 91u8, 133u8, 238u8, 206u8, 171u8,
-							160u8, 141u8, 58u8, 250u8, 221u8, 113u8, 192u8, 201u8, 95u8, 103u8,
-							209u8, 0u8, 110u8, 235u8, 38u8, 225u8, 79u8, 73u8, 19u8, 75u8, 138u8,
-							146u8,
+							13u8, 1u8, 171u8, 16u8, 255u8, 227u8, 167u8, 93u8, 205u8, 183u8, 129u8,
+							148u8, 74u8, 31u8, 245u8, 157u8, 213u8, 138u8, 16u8, 214u8, 198u8,
+							200u8, 8u8, 242u8, 42u8, 3u8, 37u8, 249u8, 8u8, 208u8, 211u8, 60u8,
 						],
 					)
 				}
@@ -7432,9 +7432,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							130u8, 189u8, 219u8, 64u8, 240u8, 89u8, 49u8, 86u8, 163u8, 42u8, 52u8,
-							8u8, 152u8, 154u8, 147u8, 236u8, 209u8, 30u8, 243u8, 194u8, 123u8,
-							97u8, 97u8, 239u8, 97u8, 57u8, 104u8, 191u8, 235u8, 221u8, 1u8, 227u8,
+							95u8, 138u8, 19u8, 162u8, 209u8, 244u8, 182u8, 243u8, 29u8, 174u8, 5u8,
+							110u8, 85u8, 182u8, 143u8, 11u8, 140u8, 172u8, 135u8, 193u8, 151u8,
+							60u8, 220u8, 176u8, 57u8, 18u8, 85u8, 117u8, 147u8, 38u8, 110u8, 219u8,
 						],
 					)
 				}
@@ -7457,9 +7457,10 @@ pub mod api {
 							weight,
 						},
 						[
-							22u8, 169u8, 85u8, 171u8, 100u8, 38u8, 252u8, 11u8, 198u8, 55u8, 150u8,
-							190u8, 59u8, 5u8, 143u8, 123u8, 107u8, 23u8, 202u8, 0u8, 237u8, 255u8,
-							77u8, 19u8, 113u8, 77u8, 133u8, 52u8, 176u8, 110u8, 214u8, 221u8,
+							77u8, 22u8, 171u8, 238u8, 148u8, 89u8, 143u8, 250u8, 90u8, 83u8, 43u8,
+							28u8, 252u8, 88u8, 115u8, 103u8, 133u8, 240u8, 43u8, 140u8, 196u8,
+							219u8, 151u8, 204u8, 228u8, 10u8, 216u8, 210u8, 212u8, 20u8, 210u8,
+							234u8,
 						],
 					)
 				}
@@ -7499,9 +7500,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							210u8, 174u8, 69u8, 89u8, 81u8, 251u8, 211u8, 77u8, 44u8, 88u8, 137u8,
-							153u8, 221u8, 116u8, 10u8, 183u8, 158u8, 145u8, 229u8, 108u8, 168u8,
-							123u8, 100u8, 162u8, 121u8, 201u8, 158u8, 103u8, 96u8, 96u8, 89u8, 4u8,
+							126u8, 62u8, 241u8, 109u8, 69u8, 165u8, 226u8, 71u8, 29u8, 239u8, 1u8,
+							148u8, 40u8, 89u8, 165u8, 234u8, 172u8, 253u8, 143u8, 22u8, 15u8, 4u8,
+							114u8, 186u8, 178u8, 153u8, 236u8, 50u8, 203u8, 120u8, 250u8, 83u8,
 						],
 					)
 				}
@@ -7524,10 +7525,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							68u8, 190u8, 238u8, 69u8, 88u8, 148u8, 111u8, 242u8, 200u8, 228u8,
-							47u8, 232u8, 101u8, 173u8, 104u8, 140u8, 30u8, 113u8, 236u8, 193u8,
-							48u8, 47u8, 116u8, 169u8, 97u8, 77u8, 17u8, 82u8, 37u8, 190u8, 158u8,
-							66u8,
+							204u8, 6u8, 144u8, 67u8, 40u8, 59u8, 243u8, 150u8, 123u8, 27u8, 209u8,
+							111u8, 148u8, 181u8, 184u8, 249u8, 124u8, 24u8, 183u8, 109u8, 65u8,
+							171u8, 48u8, 151u8, 122u8, 78u8, 243u8, 13u8, 31u8, 92u8, 153u8, 228u8,
 						],
 					)
 				}
@@ -7668,6 +7668,67 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for IfElseFallbackCalled {
 				const PALLET: &'static str = "Utility";
 				const EVENT: &'static str = "IfElseFallbackCalled";
+			}
+		}
+		pub mod storage {
+			use super::runtime_types;
+			pub mod types {
+				use super::runtime_types;
+				pub mod known_derivatives {
+					use super::runtime_types;
+					pub type KnownDerivatives = ();
+					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
+			}
+			pub struct StorageApi;
+			impl StorageApi {
+				#[doc = " Derivative pseudonym accounts that have been used with [`Pallet::as_derivative`] at least"]
+				#[doc = " once and have therefore been revealed to the wormhole soundness counter."]
+				pub fn known_derivatives_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::known_derivatives::KnownDerivatives,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Utility",
+						"KnownDerivatives",
+						(),
+						[
+							7u8, 191u8, 89u8, 10u8, 69u8, 99u8, 173u8, 186u8, 52u8, 139u8, 104u8,
+							183u8, 71u8, 107u8, 206u8, 3u8, 88u8, 160u8, 238u8, 53u8, 84u8, 31u8,
+							171u8, 151u8, 88u8, 158u8, 134u8, 111u8, 200u8, 72u8, 151u8, 158u8,
+						],
+					)
+				}
+				#[doc = " Derivative pseudonym accounts that have been used with [`Pallet::as_derivative`] at least"]
+				#[doc = " once and have therefore been revealed to the wormhole soundness counter."]
+				pub fn known_derivatives(
+					&self,
+					_0: types::known_derivatives::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::known_derivatives::Param0,
+					>,
+					types::known_derivatives::KnownDerivatives,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Utility",
+						"KnownDerivatives",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							7u8, 191u8, 89u8, 10u8, 69u8, 99u8, 173u8, 186u8, 52u8, 139u8, 104u8,
+							183u8, 71u8, 107u8, 206u8, 3u8, 88u8, 160u8, 238u8, 53u8, 84u8, 31u8,
+							171u8, 151u8, 88u8, 158u8, 134u8, 111u8, 200u8, 72u8, 151u8, 158u8,
+						],
+					)
+				}
 			}
 		}
 		pub mod constants {
@@ -11603,9 +11664,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							83u8, 241u8, 200u8, 95u8, 176u8, 73u8, 86u8, 254u8, 102u8, 49u8, 113u8,
-							102u8, 55u8, 250u8, 115u8, 98u8, 254u8, 96u8, 27u8, 19u8, 132u8, 79u8,
-							207u8, 104u8, 114u8, 167u8, 142u8, 208u8, 170u8, 125u8, 198u8, 136u8,
+							105u8, 110u8, 169u8, 228u8, 74u8, 169u8, 39u8, 197u8, 192u8, 205u8,
+							216u8, 84u8, 66u8, 119u8, 245u8, 183u8, 156u8, 172u8, 245u8, 107u8,
+							74u8, 156u8, 15u8, 146u8, 174u8, 199u8, 42u8, 105u8, 162u8, 121u8,
+							46u8, 224u8,
 						],
 					)
 				}
@@ -17559,46 +17621,45 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+				#[doc = "Verify a private-batch wormhole proof and process all exits in the batch."]
 				#[doc = ""]
 				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
 				#[doc = "If validation fails before ZK verification, we return minimal weight."]
 				#[doc = "If ZK verification fails, we return full weight since the work was done."]
-				pub struct VerifyAggregatedProof {
-					pub proof_bytes: verify_aggregated_proof::ProofBytes,
+				pub struct VerifyPrivateBatch {
+					pub proof_bytes: verify_private_batch::ProofBytes,
 				}
-				pub mod verify_aggregated_proof {
+				pub mod verify_private_batch {
 					use super::runtime_types;
 					pub type ProofBytes =
 						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
 				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VerifyAggregatedProof {
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VerifyPrivateBatch {
 					const PALLET: &'static str = "Wormhole";
-					const CALL: &'static str = "verify_aggregated_proof";
+					const CALL: &'static str = "verify_private_batch";
 				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+				#[doc = "Verify a private-batch wormhole proof and process all exits in the batch."]
 				#[doc = ""]
 				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
 				#[doc = "If validation fails before ZK verification, we return minimal weight."]
 				#[doc = "If ZK verification fails, we return full weight since the work was done."]
-				pub fn verify_aggregated_proof(
+				pub fn verify_private_batch(
 					&self,
-					proof_bytes: types::verify_aggregated_proof::ProofBytes,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
-					types::VerifyAggregatedProof,
-				> {
+					proof_bytes: types::verify_private_batch::ProofBytes,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::VerifyPrivateBatch>
+				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Wormhole",
-						"verify_aggregated_proof",
-						types::VerifyAggregatedProof { proof_bytes },
+						"verify_private_batch",
+						types::VerifyPrivateBatch { proof_bytes },
 						[
-							122u8, 42u8, 194u8, 153u8, 22u8, 66u8, 199u8, 173u8, 19u8, 107u8,
-							232u8, 147u8, 77u8, 40u8, 115u8, 208u8, 183u8, 77u8, 46u8, 149u8, 56u8,
-							225u8, 146u8, 168u8, 49u8, 248u8, 42u8, 195u8, 180u8, 91u8, 75u8,
-							102u8,
+							138u8, 4u8, 114u8, 57u8, 176u8, 171u8, 151u8, 90u8, 93u8, 19u8, 57u8,
+							176u8, 66u8, 92u8, 244u8, 111u8, 52u8, 102u8, 210u8, 239u8, 220u8,
+							14u8, 150u8, 134u8, 251u8, 90u8, 34u8, 237u8, 117u8, 125u8, 115u8,
+							69u8,
 						],
 					)
 				}
@@ -17690,6 +17751,28 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProofVerified {
 				const PALLET: &'static str = "Wormhole";
 				const EVENT: &'static str = "ProofVerified";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Some segments of an exit bundle were denied (their nullifiers were already"]
+			#[doc = "used, e.g. because the underlying private batch landed on-chain separately)."]
+			#[doc = "The remaining segments were processed normally."]
+			pub struct SegmentsDenied {
+				pub indices: segments_denied::Indices,
+			}
+			pub mod segments_denied {
+				use super::runtime_types;
+				pub type Indices =
+					::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u32>;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for SegmentsDenied {
+				const PALLET: &'static str = "Wormhole";
+				const EVENT: &'static str = "SegmentsDenied";
 			}
 		}
 		pub mod storage {
@@ -23429,12 +23512,12 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 2)]
-					#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+					#[doc = "Verify a private-batch wormhole proof and process all exits in the batch."]
 					#[doc = ""]
 					#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
 					#[doc = "If validation fails before ZK verification, we return minimal weight."]
 					#[doc = "If ZK verification fails, we return full weight since the work was done."]
-					verify_aggregated_proof {
+					verify_private_batch {
 						proof_bytes:
 							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
 					},
@@ -23455,17 +23538,19 @@ pub mod api {
 					#[codec(index = 0)]
 					InvalidPublicInputs,
 					#[codec(index = 1)]
+					#[doc = "No segment of the bundle is spendable: every segment contains a nullifier that"]
+					#[doc = "is already used (or the single segment of a private-batch proof does)."]
 					NullifierAlreadyUsed,
 					#[codec(index = 2)]
 					BlockNotFound,
 					#[codec(index = 3)]
-					AggregatedVerifierNotAvailable,
+					VerifierNotAvailable,
 					#[codec(index = 4)]
-					AggregatedProofDeserializationFailed,
+					ProofDeserializationFailed,
 					#[codec(index = 5)]
-					AggregatedVerificationFailed,
+					ProofVerificationFailed,
 					#[codec(index = 6)]
-					InvalidAggregatedPublicInputs,
+					InvalidProofPublicInputs,
 					#[codec(index = 7)]
 					#[doc = "The volume fee rate in the proof doesn't match the configured rate"]
 					InvalidVolumeFeeRate,
@@ -23525,6 +23610,13 @@ pub mod api {
 						nullifiers: ::subxt::ext::subxt_core::alloc::vec::Vec<
 							[::core::primitive::u8; 32usize],
 						>,
+					},
+					#[codec(index = 3)]
+					#[doc = "Some segments of an exit bundle were denied (their nullifiers were already"]
+					#[doc = "used, e.g. because the underlying private batch landed on-chain separately)."]
+					#[doc = "The remaining segments were processed normally."]
+					SegmentsDenied {
+						indices: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u32>,
 					},
 				}
 			}

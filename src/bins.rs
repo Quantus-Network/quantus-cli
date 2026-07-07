@@ -28,9 +28,9 @@ const REQUIRED_FILES: &[&str] = &[
 	"prover.bin",
 	"verifier.bin",
 	"common.bin",
-	"aggregated_prover.bin",
-	"aggregated_verifier.bin",
-	"aggregated_common.bin",
+	"private_batch_prover.bin",
+	"private_batch_verifier.bin",
+	"private_batch_common.bin",
 	"dummy_proof.bin",
 	"config.json",
 ];

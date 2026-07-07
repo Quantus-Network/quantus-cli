@@ -13,7 +13,7 @@
 //!  6. compute_merkle_positions                    -> (siblings, positions)
 //!  7. wormhole_lib::generate_proof                -> leaf proof bytes
 //!  8. aggregate_proofs([leaf])                    -> agg.hex
-//!  9. verify_aggregated_and_get_events            -> minted NativeTransferred
+//!  9. verify_private_batch_and_get_events            -> minted NativeTransferred
 //! ```
 //!
 //! All helpers are the same ones consumed by `stress-test`. The example is
@@ -54,7 +54,7 @@ use quantus_cli::{
 	cli::{address_format::bytes_to_quantus_ss58, common::ExecutionMode, send::parse_amount},
 	compute_merkle_positions, compute_wormhole_address, decode_full_leaf_data,
 	error::{QuantusError, Result},
-	get_zk_merkle_proof, parse_transfer_events, transfer, verify_aggregated_and_get_events,
+	get_zk_merkle_proof, parse_transfer_events, transfer, verify_private_batch_and_get_events,
 	wallet::WalletManager,
 	wormhole_lib::{
 		self, ProofGenerationInput, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
@@ -307,10 +307,10 @@ async fn main() -> Result<()> {
 
 	// 9. verify + submit -------------------------------------------------------
 	println!();
-	println!("[8/9] verify_aggregated_and_get_events (off-chain verify + on-chain submit)");
+	println!("[8/9] verify_private_batch_and_get_events (off-chain verify + on-chain submit)");
 	let verify_start = std::time::Instant::now();
 	let (mint_block, mint_tx, transfers) =
-		verify_aggregated_and_get_events(agg_path.to_str().unwrap(), &client).await?;
+		verify_private_batch_and_get_events(agg_path.to_str().unwrap(), &client).await?;
 	println!("  verified+included in {:.2}s", verify_start.elapsed().as_secs_f64());
 	println!("  mint block : {:?}", mint_block);
 	println!("  mint tx    : {:?}", mint_tx);
@@ -318,7 +318,7 @@ async fn main() -> Result<()> {
 	println!();
 	println!("[9/9] minted NativeTransferred events:");
 	if transfers.is_empty() {
-		println!("  (none — verify_aggregated_proof did not emit any events?)");
+		println!("  (none — verify_private_batch did not emit any events?)");
 	}
 	for (i, ev) in transfers.iter().enumerate() {
 		let to_ss58 = bytes_to_quantus_ss58(&ev.to.0);
