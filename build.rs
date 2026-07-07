@@ -56,6 +56,10 @@ fn main() {
 		.map(|v| v.parse().expect("QP_NUM_LEAF_PROOFS must be a valid usize"))
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS);
 
+	let num_private_batch_proofs: usize = env::var("QP_NUM_PRIVATE_BATCH_PROOFS")
+		.map(|v| v.parse().expect("QP_NUM_PRIVATE_BATCH_PROOFS must be a valid usize"))
+		.unwrap_or(DEFAULT_NUM_PRIVATE_BATCH_PROOFS);
+
 	// Re-run when QP_NUM_LEAF_PROOFS env var changes. Note: emitting any `rerun-if-*`
 	// directive opts out of Cargo's default "re-run when any package file changes"
 	// behavior. However, the important cases still work:
@@ -66,10 +70,11 @@ fn main() {
 	// For installed binaries, runtime detection in bins.rs `is_ready()` handles leaf
 	// count mismatches by regenerating on first use.
 	println!("cargo:rerun-if-env-changed=QP_NUM_LEAF_PROOFS");
+	println!("cargo:rerun-if-env-changed=QP_NUM_PRIVATE_BATCH_PROOFS");
 
 	println!(
-		"cargo:warning=[quantus-cli] Generating ZK circuit binaries (num_leaf_proofs={})...",
-		num_leaf_proofs
+		"cargo:warning=[quantus-cli] Generating ZK circuit binaries (num_leaf_proofs={}, num_private_batch_proofs={})...",
+		num_leaf_proofs, num_private_batch_proofs
 	);
 
 	let start = Instant::now();
@@ -81,7 +86,7 @@ fn main() {
 		&build_output_dir,
 		true,
 		num_leaf_proofs,
-		None,
+		Some(num_private_batch_proofs),
 	)
 	.expect("Failed to generate circuit binaries");
 
@@ -100,9 +105,12 @@ fn main() {
 	print_bin_hash(&build_output_dir, "verifier.bin");
 	print_bin_hash(&build_output_dir, "prover.bin");
 	print_bin_hash(&build_output_dir, "dummy_proof.bin");
-	print_bin_hash(&build_output_dir, "aggregated_common.bin");
-	print_bin_hash(&build_output_dir, "aggregated_verifier.bin");
-	print_bin_hash(&build_output_dir, "aggregated_prover.bin");
+	print_bin_hash(&build_output_dir, "private_batch_common.bin");
+	print_bin_hash(&build_output_dir, "private_batch_verifier.bin");
+	print_bin_hash(&build_output_dir, "private_batch_prover.bin");
+	print_bin_hash(&build_output_dir, "public_batch_common.bin");
+	print_bin_hash(&build_output_dir, "public_batch_verifier.bin");
+	print_bin_hash(&build_output_dir, "public_batch_prover.bin");
 
 	// Copy bins to project root for runtime access, but only during local source
 	// builds — never during `cargo publish` verification (manifest_dir is inside

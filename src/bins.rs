@@ -31,7 +31,11 @@ const REQUIRED_FILES: &[&str] = &[
 	"private_batch_prover.bin",
 	"private_batch_verifier.bin",
 	"private_batch_common.bin",
+	"public_batch_prover.bin",
+	"public_batch_verifier.bin",
+	"public_batch_common.bin",
 	"dummy_proof.bin",
+	"dummy_private_batch_proof.bin",
 	"config.json",
 ];
 
@@ -72,7 +76,8 @@ pub fn ensure_bins_dir() -> Result<PathBuf> {
 	}
 
 	let num_leaf_proofs = env_num_leaf_proofs();
-	generate(&dir, num_leaf_proofs)?;
+	let num_private_batch_proofs = env_num_private_batch_proofs();
+	generate(&dir, num_leaf_proofs, num_private_batch_proofs)?;
 	Ok(dir)
 }
 
@@ -88,17 +93,21 @@ fn is_ready(dir: &Path) -> bool {
 	if !version_ok {
 		return false;
 	}
-	// Check num_leaf_proofs in config.json matches current setting
+	// Check circuit sizing in config.json matches current settings
 	let config_path = dir.join("config.json");
 	match std::fs::read_to_string(&config_path) {
 		Ok(content) => {
-			// Parse just the num_leaf_proofs field to avoid pulling in full config dependency
+			// Parse just the sizing fields to avoid pulling in full config dependency
 			#[derive(serde::Deserialize)]
 			struct ConfigCheck {
 				num_leaf_proofs: usize,
+				#[serde(default, alias = "num_layer0_proofs")]
+				num_private_batch_proofs: Option<usize>,
 			}
 			match serde_json::from_str::<ConfigCheck>(&content) {
-				Ok(config) => config.num_leaf_proofs == env_num_leaf_proofs(),
+				Ok(config) =>
+					config.num_leaf_proofs == env_num_leaf_proofs() &&
+						config.num_private_batch_proofs == Some(env_num_private_batch_proofs()),
 				Err(_) => false,
 			}
 		},
@@ -113,7 +122,14 @@ fn env_num_leaf_proofs() -> usize {
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS)
 }
 
-fn generate(dir: &Path, num_leaf_proofs: usize) -> Result<()> {
+fn env_num_private_batch_proofs() -> usize {
+	std::env::var("QP_NUM_PRIVATE_BATCH_PROOFS")
+		.ok()
+		.and_then(|v| v.parse().ok())
+		.unwrap_or(DEFAULT_NUM_PRIVATE_BATCH_PROOFS)
+}
+
+fn generate(dir: &Path, num_leaf_proofs: usize, num_private_batch_proofs: usize) -> Result<()> {
 	std::fs::create_dir_all(dir).map_err(|e| {
 		QuantusError::Generic(format!("Failed to create bins directory {}: {}", dir.display(), e))
 	})?;
@@ -122,12 +138,16 @@ fn generate(dir: &Path, num_leaf_proofs: usize) -> Result<()> {
 	log_print!("🛠️  Generating ZK circuit binaries (first-time setup, ~30s)...");
 	log_print!("   Target: {}", dir.display());
 	log_print!("   num_leaf_proofs: {}", num_leaf_proofs);
+	log_print!("   num_private_batch_proofs: {}", num_private_batch_proofs);
 
 	let start = std::time::Instant::now();
-	qp_wormhole_circuit_builder::generate_all_circuit_binaries(dir, true, num_leaf_proofs, None)
-		.map_err(|e| {
-			QuantusError::Generic(format!("Failed to generate circuit binaries: {}", e))
-		})?;
+	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
+		dir,
+		true,
+		num_leaf_proofs,
+		Some(num_private_batch_proofs),
+	)
+	.map_err(|e| QuantusError::Generic(format!("Failed to generate circuit binaries: {}", e)))?;
 
 	std::fs::write(dir.join(VERSION_MARKER), env!("CARGO_PKG_VERSION"))
 		.map_err(|e| QuantusError::Generic(format!("Failed to write version marker: {}", e)))?;
