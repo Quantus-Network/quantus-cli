@@ -1,6 +1,4 @@
-//! Wormhole phase: drives the existing multiround flow (fund → prove →
-//! verify on-chain → exit) with 5 rounds of 5 proofs. Proof generation is
-//! CPU-heavy; on debug builds it can be very slow, so use `--skip wormhole`.
+//! Wormhole multiround smoke test (CPU-heavy; use `--skip wormhole` on debug builds).
 
 use crate::{
 	cli::exercise::{report::Report, runner::ExerciseCtx},
@@ -14,8 +12,6 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 }
 
 async fn multiround(ctx: &mut ExerciseCtx) -> Result<String> {
-	// Reuses the full CLI multiround implementation with the standard
-	// crystal_alice dev wallet (created during setup).
 	let command = crate::cli::wormhole::WormholeCommands::Multiround {
 		num_proofs: 5,
 		rounds: 5,

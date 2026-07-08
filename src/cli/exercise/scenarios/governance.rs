@@ -1,6 +1,4 @@
-//! Tech-collective / tech-referenda scenarios: membership reads, a harmless
-//! referendum (re-proposing the current treasury portion) through submit →
-//! decision deposit → votes, and origin-gating canaries.
+//! Tech-collective and tech-referenda scenarios.
 
 use crate::{
 	chain::quantus_subxt,
@@ -40,17 +38,13 @@ async fn membership_reads(ctx: &mut ExerciseCtx) -> Result<String> {
 	Ok(format!("alice is a member; collective has {count} rank-0 members"))
 }
 
-/// Submit a referendum that re-proposes the *current* treasury portion, so it
-/// is harmless even if it completes and enacts (e.g. on a fast-governance node).
 async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 	let latest = ctx.client.get_latest_block().await?;
 	let storage_at = ctx.client.client().storage().at(latest);
 
-	// Current portion (default 0 if unset).
 	let portion_addr = quantus_subxt::api::storage().treasury_pallet().treasury_portion();
 	let current_portion = storage_at.fetch(&portion_addr).await?.map(|p| p.0).unwrap_or(0);
 
-	// Encode TreasuryPallet::set_treasury_portion(current_portion) as preimage.
 	let portion =
 		quantus_subxt::api::runtime_types::sp_arithmetic::per_things::Permill(current_portion);
 	let inner = quantus_subxt::api::tx().treasury_pallet().set_treasury_portion(portion);
@@ -62,7 +56,6 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	crate::cli::common::submit_preimage(&ctx.client, &ctx.alice, encoded, ctx.wait_mode()).await?;
 
-	// Referendum index = ReferendumCount before submission.
 	let count_addr = quantus_subxt::api::storage().tech_referenda().referendum_count();
 	let index = storage_at.fetch(&count_addr).await?.unwrap_or(0);
 
@@ -70,7 +63,6 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 	let alice = ctx.alice.clone();
 	submit_ok(ctx, &alice, submit_call).await?;
 
-	// Place the decision deposit and vote aye with all three genesis members.
 	let deposit_call = quantus_subxt::api::tx().tech_referenda().place_decision_deposit(index);
 	submit_ok(ctx, &alice, deposit_call).await?;
 
@@ -85,7 +77,6 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 		.await?;
 	}
 
-	// Verify the tally recorded our votes while the referendum is ongoing.
 	use quantus_subxt::api::runtime_types::pallet_referenda::types::ReferendumInfo;
 	let info_addr = quantus_subxt::api::storage().tech_referenda().referendum_info_for(index);
 	let latest = ctx.client.get_latest_block().await?;
@@ -110,7 +101,6 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 				"referendum #{index} submitted, deposit placed, 3 aye votes tallied (ongoing)"
 			))
 		},
-		// On a fast-governance node the referendum may already have confirmed.
 		ReferendumInfo::Approved(..) => Ok(format!(
 			"referendum #{index} submitted, voted, and already approved (fast-governance node)"
 		)),
@@ -140,7 +130,6 @@ pub fn build_submit_call(preimage_hash: sp_core::H256, call_len: u32) -> impl su
 }
 
 async fn add_member_requires_root(ctx: &mut ExerciseCtx) -> Result<String> {
-	// TechCollective::AddOrigin is Root; a signed add_member must be rejected.
 	let intruder = ctx.fresh_keypair()?;
 	let call = quantus_subxt::api::tx()
 		.tech_collective()

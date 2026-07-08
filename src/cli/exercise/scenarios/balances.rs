@@ -1,11 +1,10 @@
-//! Balances happy-path scenarios: single transfer, batch transfer,
-//! transfer with tip, and manual-nonce transfer.
+//! Balances happy-path scenarios.
 
 use crate::{
 	chain::quantus_subxt,
 	cli::exercise::{
 		report::Report,
-		runner::{account_id_of, submit_ok, ExerciseCtx},
+		runner::{submit_ok, ExerciseCtx},
 	},
 	error::{QuantusError, Result},
 	exercise_step,
@@ -23,7 +22,7 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 async fn single_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_ss58 = recipient.to_account_id_ss58check();
-	let amount = ctx.unit; // 1 token
+	let amount = ctx.unit;
 
 	let sender = ctx.eph[0].clone();
 	let before = ctx.free_balance(&recipient_ss58).await?;
@@ -115,7 +114,5 @@ async fn remark_with_event(ctx: &mut ExerciseCtx) -> Result<String> {
 	let call = quantus_subxt::api::tx().system().remark_with_event(payload.to_vec());
 	let sender = ctx.eph[0].clone();
 	let hash = submit_ok(ctx, &sender, call).await?;
-	// Sanity: sender account id resolves.
-	let _ = account_id_of(&sender);
 	Ok(format!("System::remark_with_event included ({hash:?})"))
 }

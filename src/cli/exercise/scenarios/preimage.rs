@@ -1,5 +1,4 @@
-//! Preimage scenarios: note a preimage and verify its on-chain status, plus a
-//! canary asserting `request_preimage` stays Root-gated.
+//! Preimage scenarios.
 
 use crate::{
 	chain::quantus_subxt,
@@ -19,7 +18,6 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	Ok(())
 }
 
-/// Encode a unique-per-run remark call to use as preimage content.
 fn unique_remark_call_data(ctx: &mut ExerciseCtx) -> Result<Vec<u8>> {
 	let marker: [u8; 24] = rand::Rng::random(&mut ctx.rng);
 	let remark = quantus_subxt::api::tx().system().remark(marker.to_vec());
@@ -47,8 +45,6 @@ async fn note_and_verify(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn request_requires_root(ctx: &mut ExerciseCtx) -> Result<String> {
-	// Preimage::request_preimage has ManagerOrigin = Root; a signed call must be
-	// rejected. If a runtime upgrade ever loosens this, the suite fails here.
 	let encoded = unique_remark_call_data(ctx)?;
 	let hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 	let call = quantus_subxt::api::tx().preimage().request_preimage(hash);

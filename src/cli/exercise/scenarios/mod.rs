@@ -1,4 +1,4 @@
-//! Exercise scenarios, one module per pallet/domain.
+//! Exercise scenarios, one module per domain.
 
 pub mod balances;
 pub mod fuzz;

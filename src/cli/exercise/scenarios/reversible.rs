@@ -1,5 +1,4 @@
-//! Reversible-transfer scenarios: schedule with default and explicit delay,
-//! cancel a pending transfer, and enable high-security on a throwaway account.
+//! Reversible-transfer scenarios.
 
 use crate::{
 	chain::quantus_subxt,
@@ -18,7 +17,6 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	Ok(())
 }
 
-/// Fetch the pending transfer ids scheduled by `sender`.
 async fn pending_ids(
 	ctx: &ExerciseCtx,
 	sender: &crate::wallet::QuantumKeyPair,
@@ -33,9 +31,6 @@ async fn pending_ids(
 }
 
 async fn schedule_and_cancel(ctx: &mut ExerciseCtx) -> Result<String> {
-	// `schedule_transfer` (default-delay) is exclusive to high-security
-	// accounts, so a regular account must use the one-time-delay variant.
-	// The default-delay path is exercised in `set_high_security` below.
 	let sender = ctx.eph[2].clone();
 	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
 	let amount = ctx.unit;
@@ -45,7 +40,7 @@ async fn schedule_and_cancel(ctx: &mut ExerciseCtx) -> Result<String> {
 		&sender,
 		&recipient,
 		amount,
-		50, // blocks; must exceed MinDelayPeriodBlocks (2)
+		50,
 		true,
 		ctx.wait_mode(),
 	)
@@ -93,7 +88,6 @@ async fn schedule_with_delay(ctx: &mut ExerciseCtx) -> Result<String> {
 			"delayed transfer not found in PendingTransfersBySender".to_string(),
 		));
 	}
-	// Leave it pending: exercises the scheduler-driven execution path in the background.
 	Ok(format!(
 		"scheduled reversible transfer with {delay_blocks}-block delay ({} now pending)",
 		ids.len()
@@ -101,12 +95,10 @@ async fn schedule_with_delay(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
-	// High-security is sticky, so enable it on a dedicated fresh account
-	// rather than a shared ephemeral one.
+	// High-security is sticky; use a dedicated account.
 	let account = ctx.fresh_keypair()?;
 	let account_ss58 = account.to_account_id_ss58check();
 
-	// Fund it so it can pay fees.
 	let funder = ctx.eph[3].clone();
 	crate::cli::send::transfer(
 		&ctx.client,
@@ -143,8 +135,6 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 			)),
 	}
 
-	// Exercise the HS-only default-delay path: `schedule_transfer` uses the
-	// account's configured delay and is rejected for non-HS accounts.
 	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
 	crate::cli::reversible::schedule_transfer(
 		&ctx.client,
@@ -162,7 +152,6 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 		));
 	};
 
-	// For HS accounts only the guardian may cancel; funds go to the guardian.
 	let cancel_call = quantus_subxt::api::tx().reversible_transfers().cancel(tx_id);
 	submit_ok(ctx, &ctx.alice.clone(), cancel_call).await?;
 

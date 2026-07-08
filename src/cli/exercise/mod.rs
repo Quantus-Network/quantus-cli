@@ -1,7 +1,4 @@
-//! `quantus exercise` — scenario-based smoke/fuzz suite that drives every
-//! call path the CLI wraps against a live node. Designed for CI: exits
-//! nonzero when any non-skipped scenario fails, and supports an optional
-//! governance-driven runtime-upgrade phase on fast-governance nodes.
+//! `quantus exercise` — live-node smoke/fuzz suite for CI.
 
 pub mod report;
 pub mod runner;
@@ -18,45 +15,37 @@ use report::Report;
 use runner::ExerciseCtx;
 use std::path::PathBuf;
 
-/// Arguments for `quantus exercise`.
 #[derive(Args, Debug)]
 pub struct ExerciseArgs {
-	/// Comma-separated phases to run (default: all except `upgrade`, which
-	/// is enabled by passing --upgrade-wasm). Use --skip to exclude phases,
-	/// e.g. --skip wormhole on debug builds where proving is slow.
+	/// Phases to run (default: all except upgrade; pass --upgrade-wasm to enable it).
 	#[arg(long, value_delimiter = ',')]
 	pub phases: Option<Vec<Phase>>,
 
-	/// Comma-separated phases to skip.
+	/// Phases to skip.
 	#[arg(long, value_delimiter = ',')]
 	pub skip: Option<Vec<Phase>>,
 
-	/// Number of seeded fuzz iterations.
 	#[arg(long, default_value_t = 25)]
 	pub fuzz_iterations: u32,
 
-	/// RNG seed for reproducible fuzzing (default: random).
+	/// Reproducible fuzz seed (default: random).
 	#[arg(long)]
 	pub seed: Option<u64>,
 
-	/// Path to a runtime WASM with a higher spec_version; enables the
-	/// governance runtime-upgrade phase (requires a fast-governance node).
+	/// Candidate runtime WASM; enables the upgrade phase (fast-governance node only).
 	#[arg(long)]
 	pub upgrade_wasm: Option<PathBuf>,
 
-	/// Seconds to wait for the runtime upgrade to enact before failing.
 	#[arg(long, default_value_t = 900)]
 	pub upgrade_timeout_secs: u64,
 
-	/// Number of ephemeral funded test accounts to derive.
 	#[arg(long, default_value_t = 4)]
 	pub ephemeral_accounts: usize,
 
-	/// Abort on the first failed scenario.
 	#[arg(long)]
 	pub fail_fast: bool,
 
-	/// Print the final report as JSON (machine readable, for CI).
+	/// Emit the final report as JSON.
 	#[arg(long)]
 	pub json: bool,
 }
@@ -109,7 +98,6 @@ impl Phase {
 	}
 }
 
-/// Entry point for `quantus exercise`.
 pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Result<()> {
 	let seed = args.seed.unwrap_or_else(rand::random);
 	let mut selected = args.phases.clone().unwrap_or_else(Phase::default_set);
@@ -125,11 +113,7 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 		));
 	}
 
-	// Scenarios reuse regular CLI handlers whose per-transaction output
-	// (spinners, expected-failure banners) would drown the step results, so
-	// silence it; the report is the single source of truth. `--verbose`
-	// re-enables everything. The guard restores normal logging on every exit
-	// path so the final error banner from main is never swallowed.
+	// Silence per-transaction CLI output; the exercise report owns the output.
 	struct QuietGuard;
 	impl Drop for QuietGuard {
 		fn drop(&mut self) {
@@ -147,7 +131,6 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 		selected.iter().map(|p| p.label()).collect::<Vec<_>>().join(", ")
 	);
 
-	// ---- Setup (always runs) ----
 	let client = QuantusClient::new(node_url).await?;
 	let (spec_version, _) = client.get_runtime_version().await?;
 	let mut report = Report::new(node_url, seed, spec_version, args.fail_fast);
@@ -161,10 +144,8 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 		},
 	};
 
-	// ---- Standard phases ----
 	run_phases(&mut ctx, &mut report, &selected, "").await?;
 
-	// ---- Optional upgrade phase + post-upgrade re-run ----
 	if selected.contains(&Phase::Upgrade) && !report.should_abort() {
 		let wasm = args.upgrade_wasm.clone().expect("checked above");
 		scenarios::upgrade::run(&mut ctx, &mut report, "upgrade", &wasm, args.upgrade_timeout_secs)
@@ -176,7 +157,6 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 			.filter(|s| s.phase == "upgrade")
 			.all(|s| s.status == report::StepStatus::Passed);
 		if upgrade_ok {
-			// Reconnect so subxt picks up the new metadata/runtime version.
 			crate::log_status!("🔁 Re-running phases against the upgraded runtime…");
 			ctx.client = QuantusClient::new(node_url).await?;
 			let rerun: Vec<Phase> =
@@ -219,7 +199,6 @@ async fn run_phases(
 			Phase::Negative => scenarios::negative::run(ctx, report, &label).await?,
 			Phase::Fuzz => scenarios::fuzz::run(ctx, report, &label).await?,
 			Phase::Wormhole => scenarios::wormhole::run(ctx, report, &label).await?,
-			// Handled by the caller so the post-upgrade re-run can be sequenced.
 			Phase::Upgrade => {},
 		}
 	}
@@ -234,10 +213,6 @@ fn finish(report: &Report, args: &ExerciseArgs) -> Result<()> {
 	Ok(())
 }
 
-// ---------------------------------------------------------------------------
-// Setup phase
-// ---------------------------------------------------------------------------
-
 async fn setup(
 	client: QuantusClient,
 	node_url: &str,
@@ -247,19 +222,16 @@ async fn setup(
 ) -> Result<ExerciseCtx> {
 	let started = std::time::Instant::now();
 
-	// Chain properties.
 	let (symbol, decimals) = crate::cli::send::get_chain_properties(&client).await?;
 	let unit = 10u128.pow(decimals as u32);
 	let ed_addr = quantus_subxt::api::constants().balances().existential_deposit();
 	let existential_deposit = client.client().constants().at(&ed_addr)?;
 
-	// Dev keypairs (well-known dev accounts, held in memory).
 	let alice = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_alice());
 	let bob = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::dilithium_bob());
 	let charlie = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_charlie());
 
-	// Ensure the standard dev wallets also exist on disk: some reused flows
-	// (e.g. wormhole multiround) load wallets by name.
+	// Wormhole loads dev wallets by name from disk.
 	ensure_dev_wallets_on_disk().await?;
 
 	report.record(
@@ -271,7 +243,6 @@ async fn setup(
 		)),
 	);
 
-	// Derive and fund ephemeral accounts.
 	let started = std::time::Instant::now();
 	let rng = rand::rngs::StdRng::seed_from_u64(seed);
 	let mut ctx = ExerciseCtx {
@@ -318,6 +289,12 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 		ctx.eph.push(keypair);
 	}
 
+	// Seeded keypairs are deterministic; assert on the funding delta, not absolute balance.
+	let mut balances_before = Vec::with_capacity(count);
+	for address in &addresses {
+		balances_before.push(ctx.free_balance(address).await?);
+	}
+
 	let transfers: Vec<(String, u128)> =
 		addresses.iter().map(|a| (a.clone(), funding_per_account)).collect();
 	crate::cli::send::batch_transfer(
@@ -329,13 +306,24 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 	)
 	.await?;
 
-	for address in &addresses {
-		let balance = ctx.free_balance(address).await?;
-		if balance != funding_per_account {
+	let mut reused = 0usize;
+	for (address, before) in addresses.iter().zip(&balances_before) {
+		let after = ctx.free_balance(address).await?;
+		let delta = after.saturating_sub(*before);
+		if delta != funding_per_account {
 			return Err(QuantusError::Generic(format!(
-				"ephemeral account {address} has balance {balance}, expected {funding_per_account}"
+				"ephemeral account {address} balance went {before} -> {after} \
+				 (delta {delta}), expected a funding delta of {funding_per_account}"
 			)));
 		}
+		if *before > 0 {
+			reused += 1;
+		}
 	}
-	Ok(format!("derived and funded {count} ephemeral accounts with 1000 tokens each"))
+	let note = if reused > 0 {
+		format!(" ({reused} had leftover balances from a previous run with this seed)")
+	} else {
+		String::new()
+	};
+	Ok(format!("derived and funded {count} ephemeral accounts with 1000 tokens each{note}"))
 }

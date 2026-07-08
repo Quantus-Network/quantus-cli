@@ -1,8 +1,4 @@
-//! Optional runtime-upgrade phase (enabled with `--upgrade-wasm`). Drives the
-//! full governance path on a fast-governance node: note the WASM preimage,
-//! submit a `System::set_code` referendum, place the decision deposit, vote
-//! aye with the three genesis collective members, then poll until the spec
-//! version bumps.
+//! Runtime upgrade via tech-referenda set_code (requires fast-governance node).
 
 use crate::{
 	chain::quantus_subxt,
@@ -50,7 +46,6 @@ async fn governance_set_code(
 		spec_before
 	);
 
-	// Encode System::set_code(wasm) and note it as a preimage.
 	let set_code = quantus_subxt::api::tx().system().set_code(wasm);
 	let encoded = set_code
 		.encode_call_data(&ctx.client.client().metadata())
@@ -59,7 +54,6 @@ async fn governance_set_code(
 	let call_len = encoded.len() as u32;
 	crate::cli::common::submit_preimage(&ctx.client, &ctx.alice, encoded, ctx.wait_mode()).await?;
 
-	// Referendum index is the count before submission.
 	let latest = ctx.client.get_latest_block().await?;
 	let count_addr = quantus_subxt::api::storage().tech_referenda().referendum_count();
 	let index = ctx.client.client().storage().at(latest).fetch(&count_addr).await?.unwrap_or(0);
@@ -85,14 +79,11 @@ async fn governance_set_code(
 	}
 	crate::log_status!("⬆️  Decision deposit placed and 3 aye votes cast; waiting for enactment…");
 
-	// Poll for the spec bump. On a fast-governance node every window is 2
-	// blocks, so this normally completes within ~10 blocks.
 	let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
 	loop {
 		tokio::time::sleep(std::time::Duration::from_secs(6)).await;
 		let (spec_now, _) = ctx.client.get_runtime_version().await?;
 		if spec_now > spec_before {
-			// Refund the deposits now that the referendum has completed.
 			let refund_decision =
 				quantus_subxt::api::tx().tech_referenda().refund_decision_deposit(index);
 			let refund_submission =
@@ -108,7 +99,6 @@ async fn governance_set_code(
 			));
 		}
 		if std::time::Instant::now() > deadline {
-			// Include the referendum state in the failure for debugging.
 			let info_addr =
 				quantus_subxt::api::storage().tech_referenda().referendum_info_for(index);
 			let latest = ctx.client.get_latest_block().await?;

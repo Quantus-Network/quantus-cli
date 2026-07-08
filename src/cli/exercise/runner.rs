@@ -1,4 +1,4 @@
-//! Shared context and submission helpers for exercise scenarios.
+//! Shared context and helpers for exercise scenarios.
 
 use crate::{
 	chain::client::QuantusClient,
@@ -8,14 +8,12 @@ use crate::{
 };
 use rand::{rngs::StdRng, Rng};
 
-/// Shared state for all exercise scenarios.
 pub struct ExerciseCtx {
 	pub client: QuantusClient,
 	pub node_url: String,
 	pub alice: QuantumKeyPair,
 	pub bob: QuantumKeyPair,
 	pub charlie: QuantumKeyPair,
-	/// Ephemeral, pre-funded throwaway accounts used by scenarios.
 	pub eph: Vec<QuantumKeyPair>,
 	pub unit: u128,
 	pub existential_deposit: u128,
@@ -25,13 +23,10 @@ pub struct ExerciseCtx {
 }
 
 impl ExerciseCtx {
-	/// Execution mode used for all happy-path submissions: wait for best-block
-	/// inclusion so we can assert on execution success and read post-state.
 	pub fn wait_mode(&self) -> ExecutionMode {
 		ExecutionMode { finalized: false, wait_for_transaction: true }
 	}
 
-	/// Generate a brand new random keypair (not funded, not saved to disk).
 	pub fn fresh_keypair(&mut self) -> Result<QuantumKeyPair> {
 		let seed: [u8; 32] = self.rng.random();
 		let pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed)
@@ -39,7 +34,6 @@ impl ExerciseCtx {
 		Ok(QuantumKeyPair::from_resonance_pair(&pair))
 	}
 
-	/// Free balance of an account.
 	pub async fn free_balance(&self, ss58: &str) -> Result<u128> {
 		crate::cli::send::get_balance(&self.client, ss58).await
 	}
@@ -51,8 +45,6 @@ pub fn account_id_of(keypair: &QuantumKeyPair) -> SubxtAccountId32 {
 	SubxtAccountId32::from(bytes)
 }
 
-/// Submit a transaction expected to succeed; waits for best-block inclusion and
-/// fails if the extrinsic is rejected or emits `ExtrinsicFailed`.
 pub async fn submit_ok<Call>(
 	ctx: &ExerciseCtx,
 	from: &QuantumKeyPair,
@@ -64,10 +56,6 @@ where
 	crate::cli::common::submit_transaction(&ctx.client, from, call, None, ctx.wait_mode()).await
 }
 
-/// Submit a transaction expected to be rejected (either at the pool or during
-/// block execution). Passes when the error message matches one of
-/// `expected_fragments` (or any error when the list is empty); fails if the
-/// transaction unexpectedly succeeds or fails with an unrelated error.
 pub async fn submit_expect_failure<Call>(
 	ctx: &ExerciseCtx,
 	from: &QuantumKeyPair,
@@ -102,8 +90,6 @@ fn first_line(msg: &str) -> &str {
 	msg.lines().next().unwrap_or(msg)
 }
 
-/// Run a future as a named step and record its outcome. Returns `true` when the
-/// phase should abort (fail-fast triggered).
 #[macro_export]
 macro_rules! exercise_step {
 	($report:expr, $phase:expr, $name:expr, $fut:expr) => {{

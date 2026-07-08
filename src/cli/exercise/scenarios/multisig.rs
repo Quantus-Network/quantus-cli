@@ -1,5 +1,4 @@
-//! Multisig lifecycle: create a 2-of-3, fund it, propose a transfer, approve,
-//! execute, verify the recipient balance, then propose + cancel a second one.
+//! Multisig lifecycle.
 
 use crate::{
 	chain::quantus_subxt,
@@ -24,10 +23,8 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	let signers =
 		vec![account_id_of(&signer_a), account_id_of(&signer_b), account_id_of(&signer_c)];
 	let threshold = 2u32;
-	// Random nonce so repeated runs against the same chain produce fresh multisigs.
 	let nonce: u64 = rand::Rng::random(&mut ctx.rng);
 
-	// Create the multisig and derive its address deterministically.
 	let create_call =
 		quantus_subxt::api::tx()
 			.multisig()
@@ -36,7 +33,6 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	let multisig_ss58 =
 		crate::cli::multisig::predict_multisig_address(signers.clone(), threshold, nonce);
 
-	// Verify it exists on-chain.
 	let multisig_id = crate::cli::common::resolve_to_subxt_account_id(&multisig_ss58)?;
 	let info = crate::cli::multisig::get_multisig_info(&ctx.client, multisig_id.clone())
 		.await?
@@ -51,7 +47,6 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 		)));
 	}
 
-	// Fund the multisig so it can pay out the proposed transfer.
 	crate::cli::send::transfer(
 		&ctx.client,
 		&signer_a,
@@ -62,8 +57,6 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	)
 	.await?;
 
-	// Propose a transfer to a fresh recipient (inner call encoded via metadata,
-	// so pallet/call indices always match the connected runtime).
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_ss58 = recipient.to_account_id_ss58check();
 	let amount = 2 * ctx.unit;
@@ -86,12 +79,10 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	submit_ok(ctx, &signer_a, propose_call).await?;
 	let proposal_id = latest_proposal_id(ctx, &multisig_id).await?;
 
-	// Second approval reaches the 2-of-3 threshold.
 	let approve_call =
 		quantus_subxt::api::tx().multisig().approve(multisig_id.clone(), proposal_id);
 	submit_ok(ctx, &signer_b, approve_call).await?;
 
-	// Execute and verify the recipient got paid.
 	let execute_call =
 		quantus_subxt::api::tx().multisig().execute(multisig_id.clone(), proposal_id);
 	submit_ok(ctx, &signer_c, execute_call).await?;
@@ -103,7 +94,6 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 		)));
 	}
 
-	// Propose a second transfer and cancel it.
 	let propose_again = quantus_subxt::api::tx().multisig().propose(
 		multisig_id.clone(),
 		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
@@ -132,8 +122,6 @@ async fn current_block(ctx: &ExerciseCtx) -> Result<u32> {
 	Ok(ctx.client.client().blocks().at(latest).await?.number())
 }
 
-/// Highest proposal id currently in storage for the multisig; assumes the most
-/// recent `propose` we submitted created it.
 async fn latest_proposal_id(
 	ctx: &ExerciseCtx,
 	multisig_id: &crate::cli::common::SubxtAccountId32,

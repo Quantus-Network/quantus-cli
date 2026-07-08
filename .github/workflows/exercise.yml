@@ -1,9 +1,6 @@
 ---
 name: Chain Exercise Suite
 
-# Runs `quantus exercise` against a freshly built fast-governance dev node.
-# Nightly + manual for now: building the node from the chain repo dominates
-# the runtime, and QPoW block times make a full run take tens of minutes.
 on:
   schedule:
     - cron: "0 2 * * *" # nightly at 02:00 UTC
@@ -77,7 +74,6 @@ jobs:
             --base-path /tmp/quantus-exercise-dev \
             > /tmp/quantus-node.log 2>&1 &
           echo "NODE_PID=$!" >> "$GITHUB_ENV"
-          # Wait for RPC to answer (mining warm-up can take a while).
           for i in $(seq 1 60); do
             if curl -sf -H 'Content-Type: application/json' \
               -d '{"jsonrpc":"2.0","id":1,"method":"system_health","params":[]}' \
