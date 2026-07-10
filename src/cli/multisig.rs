@@ -2573,11 +2573,10 @@ async fn handle_list_proposals(
 					log_print!("   Proposer: {}", proposer_sp.to_ss58check().bright_cyan());
 
 					match decode_call_data(&quantus_client, &kv.value.call.0).await {
-						Ok(decoded) => {
+						Ok(decoded) =>
 							for line in decoded.lines() {
 								log_print!("{}", line);
-							}
-						},
+							},
 						Err(_) => {
 							log_print!("   Call Size: {} bytes", kv.value.call.0.len());
 						},
@@ -2607,10 +2606,7 @@ async fn handle_list_proposals(
 							.filter(|s| !kv.value.approvals.0.contains(s))
 							.collect();
 						if !pending.is_empty() {
-							log_print!(
-								"   Pending: {}",
-								pending.len().to_string().bright_red()
-							);
+							log_print!("   Pending: {}", pending.len().to_string().bright_red());
 							for signer in &pending {
 								let bytes: &[u8; 32] = signer.as_ref();
 								let sp = SpAccountId32::from(*bytes);
