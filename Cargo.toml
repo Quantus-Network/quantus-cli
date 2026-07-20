@@ -51,8 +51,8 @@ rand = "0.9"
 
 # Quantus crypto dependencies (aligned with chain)
 qp-dilithium-crypto = { version = "0.3.1", features = ["serde"] }
-qp-rusty-crystals-dilithium = { version = "2.4.0" }
-qp-rusty-crystals-hdwallet = { version = "2.4.0" }
+qp-rusty-crystals-dilithium = { version = "3.0.0" }
+qp-rusty-crystals-hdwallet = { version = "3.0.1" }
 
 # HTTP client for Subsquid queries
 blake3 = "1.8"
@@ -93,23 +93,23 @@ subxt-metadata = "0.44"
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
 
-qp-plonky2 = { version = "1.5.1", default-features = false, features = ["rand", "std"] }
-qp-wormhole-aggregator = { version = "3.0.0", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-circuit = { version = "3.0.0", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = { version = "3.0.0" }
-qp-wormhole-inputs = { version = "3.0.0", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "3.0.0", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "3.0.0", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "3.0.0", default-features = false, features = ["std"] }
+qp-plonky2 = { version = "1.5.4", default-features = false, features = ["rand", "std"] }
+qp-wormhole-aggregator = { version = "3.1.0", default-features = false, features = ["rayon", "std"] }
+qp-wormhole-circuit = { version = "3.1.0", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { version = "3.1.0" }
+qp-wormhole-inputs = { version = "3.1.0", default-features = false, features = ["std"] }
+qp-wormhole-prover = { version = "3.1.0", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { version = "3.1.0", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { version = "3.1.0", default-features = false, features = ["std"] }
 
 
 [build-dependencies]
 hex = "0.4"
-qp-poseidon-core = "3.0.0"
-qp-wormhole-circuit-builder = { version = "3.0.0" }
+qp-poseidon-core = "3.0.2"
+qp-wormhole-circuit-builder = { version = "3.1.0" }
 
 [dev-dependencies]
-qp-poseidon-core = "3.0.0"
+qp-poseidon-core = "3.0.2"
 serial_test = "3.1"
 tempfile = "3.8.1"
 
@@ -121,13 +121,3 @@ opt-level = 3
 
 [profile.release.build-override]
 opt-level = 3
-
-# TEMPORARY: local circuits repo until the private/public batch rename ships as 3.1.0.
-[patch.crates-io]
-qp-wormhole-aggregator = { path = "../qp-zk-circuits/wormhole/aggregator" }
-qp-wormhole-circuit = { path = "../qp-zk-circuits/wormhole/circuit" }
-qp-wormhole-circuit-builder = { path = "../qp-zk-circuits/wormhole/circuit-builder" }
-qp-wormhole-inputs = { path = "../qp-zk-circuits/wormhole/inputs" }
-qp-wormhole-prover = { path = "../qp-zk-circuits/wormhole/prover" }
-qp-wormhole-verifier = { path = "../qp-zk-circuits/wormhole/verifier" }
-qp-zk-circuits-common = { path = "../qp-zk-circuits/common" }

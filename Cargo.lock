@@ -4006,6 +4006,7 @@ dependencies = [
  "anyhow",
  "qp-plonky2-verifier",
  "qp-wormhole-inputs",
+ "tiny-keccak",
 ]
 
 [[package]]
@@ -4015,7 +4016,7 @@ dependencies = [
  "anyhow",
  "qp-plonky2",
  "qp-poseidon-constants",
- "qp-poseidon-core 3.0.0",
+ "qp-poseidon-core 2.1.0",
  "qp-wormhole-inputs",
  "rand 0.8.5",
  "serde",
