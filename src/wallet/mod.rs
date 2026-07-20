@@ -472,6 +472,23 @@ impl WalletManager {
 		// Decrypt the wallet data using the provided password
 		let wallet_data = keystore.decrypt_wallet_data(&encrypted_wallet, password)?;
 
+		// Transparent migration: legacy wallet files embed the Argon2 digest (which
+		// determines the AES key) in `argon2_params`. Re-encrypt without it on unlock.
+		// Note: once migrated, the file can no longer be opened by older CLI
+		// versions (they fail with "invalid password").
+		// A failed save is non-fatal: the wallet decrypted fine, so don't block
+		// access (e.g. read-only wallets dir).
+		if Keystore::has_embedded_key_material(&encrypted_wallet) {
+			let migration = keystore
+				.encrypt_wallet_data(&wallet_data, password)
+				.and_then(|migrated| keystore.save_wallet(&migrated));
+			if let Err(e) = migration {
+				crate::log_print!(
+					"⚠️ Could not re-encrypt wallet '{name}' to remove embedded key material: {e}"
+				);
+			}
+		}
+
 		Ok(wallet_data)
 	}
 
