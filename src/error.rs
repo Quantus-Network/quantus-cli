@@ -51,7 +51,9 @@ pub enum WalletError {
 	InvalidMnemonic,
 	#[error("Mnemonic phrase is not available for this wallet")]
 	MnemonicNotAvailable,
-	#[error("Invalid password")]
+	// Decryption cannot distinguish a wrong password from a corrupted/tampered
+	// wallet file (both surface as an AES-GCM authentication failure).
+	#[error("Invalid password (or corrupted wallet file)")]
 	InvalidPassword,
 
 	#[error("Key generation failed")]

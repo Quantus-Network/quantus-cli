@@ -142,8 +142,12 @@ impl Keystore {
 	/// Save an encrypted wallet to disk
 	pub fn save_wallet(&self, wallet: &EncryptedWallet) -> Result<()> {
 		let wallet_file = self.storage_path.join(format!("{}.json", wallet.name));
+		let tmp_file = self.storage_path.join(format!("{}.json.tmp", wallet.name));
 		let wallet_json = serde_json::to_string_pretty(wallet)?;
-		std::fs::write(wallet_file, wallet_json)?;
+		// Write to a temp file and rename so a crash mid-write can never leave a
+		// truncated file behind - it may hold the only copy of the key material.
+		std::fs::write(&tmp_file, wallet_json)?;
+		std::fs::rename(&tmp_file, wallet_file)?;
 		Ok(())
 	}
 
@@ -275,6 +279,14 @@ impl Keystore {
 	/// and parameters. Works for both the current format (params only) and legacy
 	/// files (params + digest); the embedded digest of legacy files is ignored.
 	fn derive_aes_key(encrypted: &EncryptedWallet, password: &str) -> Result<Key<Aes256Gcm>> {
+		// The cost parameters come from the wallet file, so cap them: a crafted
+		// file could otherwise request an enormous m_cost and force a huge
+		// allocation. Limits are far above anything we ever write (defaults are
+		// m=19456 KiB, t=2, p=1).
+		const MAX_M_COST: u32 = 1 << 20; // 1 GiB (in KiB)
+		const MAX_T_COST: u32 = 64;
+		const MAX_P_COST: u32 = 16;
+
 		let parsed =
 			PasswordHash::new(&encrypted.argon2_params).map_err(|_| WalletError::Decryption)?;
 
@@ -282,13 +294,14 @@ impl Keystore {
 			Algorithm::new(parsed.algorithm.as_str()).map_err(|_| WalletError::Decryption)?;
 		let version = Version::try_from(parsed.version.unwrap_or(Version::V0x13 as u32))
 			.map_err(|_| WalletError::Decryption)?;
-		let params = Params::new(
-			parsed.params.get_decimal("m").unwrap_or(Params::DEFAULT_M_COST),
-			parsed.params.get_decimal("t").unwrap_or(Params::DEFAULT_T_COST),
-			parsed.params.get_decimal("p").unwrap_or(Params::DEFAULT_P_COST),
-			None,
-		)
-		.map_err(|_| WalletError::Decryption)?;
+		let m_cost = parsed.params.get_decimal("m").unwrap_or(Params::DEFAULT_M_COST);
+		let t_cost = parsed.params.get_decimal("t").unwrap_or(Params::DEFAULT_T_COST);
+		let p_cost = parsed.params.get_decimal("p").unwrap_or(Params::DEFAULT_P_COST);
+		if m_cost > MAX_M_COST || t_cost > MAX_T_COST || p_cost > MAX_P_COST {
+			return Err(WalletError::Decryption.into());
+		}
+		let params =
+			Params::new(m_cost, t_cost, p_cost, None).map_err(|_| WalletError::Decryption)?;
 		let argon2 = Argon2::new(algorithm, version, params);
 
 		let mut key = [0u8; 32];
