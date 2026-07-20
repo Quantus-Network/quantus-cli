@@ -20,7 +20,7 @@ use aes_gcm::{
 	aead::{Aead, AeadCore, KeyInit, OsRng as AesOsRng},
 	Aes256Gcm, Key, Nonce,
 };
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, Version};
 use rand::{rng, RngCore};
 
 use std::path::Path;
@@ -110,9 +110,11 @@ pub struct EncryptedWallet {
 	pub kyber_ciphertext: Vec<u8>, // Reserved for future ML-KEM implementation
 	pub kyber_public_key: Vec<u8>, // Reserved for future ML-KEM implementation
 	pub argon2_salt: Vec<u8>,      // Salt for password-based key derivation
-	pub argon2_params: String,     // Argon2 parameters for verification
-	pub aes_nonce: Vec<u8>,        // AES-GCM nonce
-	pub encryption_version: u32,   // Version for future crypto upgrades
+	/// Argon2 params as a PHC string WITHOUT the digest (the digest determines the
+	/// AES key and must never be stored)
+	pub argon2_params: String,
+	pub aes_nonce: Vec<u8>,      // AES-GCM nonce
+	pub encryption_version: u32, // Version for future crypto upgrades
 	pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
@@ -223,6 +225,14 @@ impl Keystore {
 			.encrypt(&nonce, serialized_data.as_ref())
 			.map_err(|e| WalletError::Encryption(e.to_string()))?;
 
+		// 5. Store the Argon2 parameters WITHOUT the digest. The digest determines
+		// the AES key, so persisting it next to the ciphertext would let anyone
+		// reading the wallet file decrypt it without the password. Only salt and
+		// cost parameters are persisted; the key is re-derived from the password
+		// at decrypt time.
+		let mut password_hash = password_hash;
+		password_hash.hash = None;
+
 		Ok(EncryptedWallet {
 			name: data.name.clone(),
 			address: data.keypair.to_account_id_ss58check(), // Store public address
@@ -232,7 +242,7 @@ impl Keystore {
 			argon2_salt: argon2_salt.to_vec(),
 			argon2_params: password_hash.to_string(),
 			aes_nonce: nonce.to_vec(),
-			encryption_version: 1, // Version 1: Argon2 + AES-256-GCM (quantum-safe)
+			encryption_version: 2, // Version 2: Argon2 params+salt only (no digest) + AES-256-GCM
 			created_at: chrono::Utc::now(),
 		})
 	}
@@ -243,30 +253,60 @@ impl Keystore {
 		encrypted: &EncryptedWallet,
 		password: &str,
 	) -> Result<WalletData> {
-		// 1. Verify password using stored Argon2 hash
-		let argon2 = Argon2::default();
-		let password_hash = PasswordHash::new(&encrypted.argon2_params)
-			.map_err(|_| WalletError::InvalidPassword)?;
-
-		argon2
-			.verify_password(password.as_bytes(), &password_hash)
-			.map_err(|_| WalletError::InvalidPassword)?;
-
-		// 2. Derive AES key from verified password hash
-		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
-		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		// 1. Re-derive the AES key from the password and the stored salt + params.
+		// The key itself is never stored in the wallet file.
+		let aes_key = Self::derive_aes_key(encrypted, password)?;
 		let cipher = Aes256Gcm::new(&aes_key);
 
-		// 3. Decrypt the data
+		// 2. Decrypt the data. An AES-GCM authentication failure means the password
+		// was wrong (or the file was tampered with) - this is the password check.
 		let nonce = Nonce::from(<[u8; 12]>::try_from(&encrypted.aes_nonce[..]).unwrap());
 		let decrypted_data = cipher
 			.decrypt(&nonce, encrypted.encrypted_data.as_ref())
-			.map_err(|_| WalletError::Decryption)?;
+			.map_err(|_| WalletError::InvalidPassword)?;
 
-		// 4. Deserialize the wallet data
+		// 3. Deserialize the wallet data
 		let wallet_data: WalletData = serde_json::from_slice(&decrypted_data)?;
 
 		Ok(wallet_data)
+	}
+
+	/// Derive the AES-256 key from a password and the wallet's stored Argon2 salt
+	/// and parameters. Works for both the current format (params only) and legacy
+	/// files (params + digest); the embedded digest of legacy files is ignored.
+	fn derive_aes_key(encrypted: &EncryptedWallet, password: &str) -> Result<Key<Aes256Gcm>> {
+		let parsed =
+			PasswordHash::new(&encrypted.argon2_params).map_err(|_| WalletError::Decryption)?;
+
+		let algorithm =
+			Algorithm::new(parsed.algorithm.as_str()).map_err(|_| WalletError::Decryption)?;
+		let version = Version::try_from(parsed.version.unwrap_or(Version::V0x13 as u32))
+			.map_err(|_| WalletError::Decryption)?;
+		let params = Params::new(
+			parsed.params.get_decimal("m").unwrap_or(Params::DEFAULT_M_COST),
+			parsed.params.get_decimal("t").unwrap_or(Params::DEFAULT_T_COST),
+			parsed.params.get_decimal("p").unwrap_or(Params::DEFAULT_P_COST),
+			None,
+		)
+		.map_err(|_| WalletError::Decryption)?;
+		let argon2 = Argon2::new(algorithm, version, params);
+
+		let mut key = [0u8; 32];
+		argon2
+			.hash_password_into(password.as_bytes(), &encrypted.argon2_salt, &mut key)
+			.map_err(|_| WalletError::Decryption)?;
+
+		Ok(Key::<Aes256Gcm>::from(key))
+	}
+
+	/// Returns true if the wallet embeds the Argon2 digest in `argon2_params`
+	/// (legacy format, `encryption_version` 1). Since the digest determines the AES
+	/// key, such files allow decryption without the password and must be
+	/// re-encrypted (done transparently on unlock in `WalletManager::load_wallet`).
+	pub fn has_embedded_key_material(encrypted: &EncryptedWallet) -> bool {
+		PasswordHash::new(&encrypted.argon2_params)
+			.map(|h| h.hash.is_some())
+			.unwrap_or(false)
 	}
 }
 
@@ -702,5 +742,146 @@ mod tests {
 				"Private key should not be all zeros"
 			);
 		}
+	}
+
+	fn make_test_wallet_data(name: &str, entropy_byte: u8) -> WalletData {
+		let mut entropy = [entropy_byte; 32];
+		let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
+		let keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
+		WalletData {
+			name: name.to_string(),
+			keypair,
+			mnemonic: Some("test mnemonic phrase".to_string()),
+			derivation_path: "m/".to_string(),
+			metadata: std::collections::HashMap::new(),
+		}
+	}
+
+	/// Replicates the legacy (v1) encryption logic, which stored the full Argon2
+	/// PHC string including the digest that determines the AES key.
+	fn encrypt_legacy(data: &WalletData, password: &str) -> EncryptedWallet {
+		let mut argon2_salt = [0u8; 16];
+		rng().fill_bytes(&mut argon2_salt);
+		let argon2 = Argon2::default();
+		let salt_string = argon2::password_hash::SaltString::encode_b64(&argon2_salt).unwrap();
+		let password_hash = argon2.hash_password(password.as_bytes(), &salt_string).unwrap();
+		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
+		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		let cipher = Aes256Gcm::new(&aes_key);
+		let nonce = Aes256Gcm::generate_nonce(&mut AesOsRng);
+		let encrypted_data =
+			cipher.encrypt(&nonce, serde_json::to_vec(data).unwrap().as_ref()).unwrap();
+
+		EncryptedWallet {
+			name: data.name.clone(),
+			address: data.keypair.to_account_id_ss58check(),
+			encrypted_data,
+			kyber_ciphertext: vec![],
+			kyber_public_key: vec![],
+			argon2_salt: argon2_salt.to_vec(),
+			argon2_params: password_hash.to_string(), // legacy: includes the digest
+			aes_nonce: nonce.to_vec(),
+			encryption_version: 1,
+			created_at: chrono::Utc::now(),
+		}
+	}
+
+	#[test]
+	fn test_encrypt_does_not_store_key_material() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("no-key-material", 7);
+
+		let encrypted = keystore
+			.encrypt_wallet_data(&data, "hunter2")
+			.expect("Encryption should succeed");
+
+		// The stored params must NOT contain the Argon2 digest - the AES key is
+		// derived from that digest, so storing it would store the key.
+		let parsed = PasswordHash::new(&encrypted.argon2_params).expect("Params should parse");
+		assert!(parsed.hash.is_none(), "argon2_params must not contain the Argon2 digest");
+		assert_eq!(encrypted.encryption_version, 2);
+		assert!(!Keystore::has_embedded_key_material(&encrypted));
+
+		// The serialized wallet file must not contain the base64 digest anywhere.
+		let argon2 = Argon2::default();
+		let salt_string =
+			argon2::password_hash::SaltString::encode_b64(&encrypted.argon2_salt).unwrap();
+		let full_phc = argon2.hash_password(b"hunter2", &salt_string).unwrap().to_string();
+		let digest_b64 = full_phc.rsplit('$').next().expect("PHC should contain a digest");
+		let wallet_json = serde_json::to_string(&encrypted).unwrap();
+		assert!(!wallet_json.contains(digest_b64), "wallet JSON leaks the encryption key");
+
+		// Round-trip still works with the correct password.
+		let decrypted = keystore
+			.decrypt_wallet_data(&encrypted, "hunter2")
+			.expect("Decryption should succeed");
+		assert_eq!(decrypted.name, data.name);
+		assert_eq!(decrypted.mnemonic, data.mnemonic);
+		assert_eq!(decrypted.keypair.private_key, data.keypair.private_key);
+	}
+
+	#[test]
+	fn test_decrypt_wrong_password_fails() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("wrong-password", 8);
+
+		let encrypted =
+			keystore.encrypt_wallet_data(&data, "right").expect("Encryption should succeed");
+
+		let result = keystore.decrypt_wallet_data(&encrypted, "wrong");
+		assert!(
+			matches!(result, Err(crate::error::QuantusError::Wallet(WalletError::InvalidPassword))),
+			"Wrong password must be rejected, got: {result:?}"
+		);
+	}
+
+	#[test]
+	fn test_legacy_wallet_decrypt_and_migration() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("legacy-wallet", 9);
+
+		// Save a wallet in the legacy format (digest embedded in argon2_params)
+		let legacy = encrypt_legacy(&data, "pw");
+		assert!(Keystore::has_embedded_key_material(&legacy));
+		keystore.save_wallet(&legacy).expect("Save should succeed");
+
+		// Legacy files must still decrypt with the correct password...
+		let decrypted = keystore
+			.decrypt_wallet_data(&legacy, "pw")
+			.expect("Legacy decrypt should succeed");
+		assert_eq!(decrypted.name, data.name);
+		assert_eq!(decrypted.keypair.private_key, data.keypair.private_key);
+
+		// ...and reject the wrong one
+		let result = keystore.decrypt_wallet_data(&legacy, "nope");
+		assert!(
+			matches!(result, Err(crate::error::QuantusError::Wallet(WalletError::InvalidPassword))),
+			"Wrong password must be rejected for legacy files, got: {result:?}"
+		);
+
+		// Unlocking via WalletManager transparently re-encrypts the file
+		use crate::wallet::WalletManager;
+		let wallet_manager = WalletManager { wallets_dir: temp_dir.path().to_path_buf() };
+		wallet_manager.load_wallet("legacy-wallet", "pw").expect("Load should succeed");
+
+		let reloaded = keystore
+			.load_wallet("legacy-wallet")
+			.expect("Load should succeed")
+			.expect("Wallet should exist");
+		assert!(
+			!Keystore::has_embedded_key_material(&reloaded),
+			"wallet file should be migrated: no digest in argon2_params"
+		);
+		assert_eq!(reloaded.encryption_version, 2);
+
+		// The migrated file still decrypts with the same password
+		let decrypted = keystore
+			.decrypt_wallet_data(&reloaded, "pw")
+			.expect("Migrated wallet should decrypt");
+		assert_eq!(decrypted.name, data.name);
+		assert_eq!(decrypted.keypair.private_key, data.keypair.private_key);
 	}
 }

@@ -472,6 +472,13 @@ impl WalletManager {
 		// Decrypt the wallet data using the provided password
 		let wallet_data = keystore.decrypt_wallet_data(&encrypted_wallet, password)?;
 
+		// Transparent migration: legacy wallet files embed the Argon2 digest (which
+		// determines the AES key) in `argon2_params`. Re-encrypt without it on unlock.
+		if Keystore::has_embedded_key_material(&encrypted_wallet) {
+			let migrated = keystore.encrypt_wallet_data(&wallet_data, password)?;
+			keystore.save_wallet(&migrated)?;
+		}
+
 		Ok(wallet_data)
 	}
 
