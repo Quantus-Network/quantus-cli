@@ -14,7 +14,6 @@ use qp_wormhole_circuit::{
 	nullifier::Nullifier,
 };
 use qp_wormhole_inputs::PublicCircuitInputs;
-use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
 	utils::{digest_to_bytes, BytesDigest},
 	zk_merkle::SIBLINGS_PER_LEVEL,
@@ -267,9 +266,10 @@ pub fn generate_proof(
 
 	let circuit_inputs = CircuitInputs { public, private };
 
-	// Load prover from pre-built bins
-	let prover = WormholeProver::new_from_files(prover_bin_path, common_bin_path)
-		.map_err(|e| WormholeLibError::from(format!("Failed to load prover: {}", e)))?;
+	// Leaf prover is built from the canonical circuit config (no longer loads prover.bin).
+	// Paths are kept for API compatibility with callers that still pass bin locations.
+	let _ = (prover_bin_path, common_bin_path);
+	let prover = qp_wormhole_prover::build_fresh();
 
 	let prover_with_inputs = prover
 		.commit(&circuit_inputs)

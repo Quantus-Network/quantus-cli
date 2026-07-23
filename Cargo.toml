@@ -50,8 +50,8 @@ argon2 = "0.5"   # Password-based key derivation (quantum-safe)
 rand = "0.9"
 
 # Quantus crypto dependencies (aligned with chain)
-qp-dilithium-crypto = { version = "0.3.1", features = ["serde"] }
-qp-rusty-crystals-dilithium = { version = "3.0.0" }
+qp-dilithium-crypto = { version = "0.5.0", features = ["serde"] }
+qp-rusty-crystals-dilithium = { version = "3.0.1" }
 qp-rusty-crystals-hdwallet = { version = "3.0.1" }
 
 # HTTP client for Subsquid queries
@@ -80,7 +80,7 @@ quinn-proto = "0.11.14"
 # Force patched version of rustls-webpki (RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104)
 rustls-webpki = "0.103.13"
 
-# Blockchain deps: align with chain workspace; use chain primitives for qp-dilithium-crypto so sp-* versions match
+# Blockchain deps: align with chain workspace
 codec = { package = "parity-scale-codec", version = "3.7", features = ["derive"] }
 jsonrpsee = { version = "0.24", features = ["client"] }
 sp-core = { version = "39.0.0" }
@@ -94,6 +94,7 @@ subxt-metadata = "0.44"
 anyhow = "1.0"
 
 qp-plonky2 = { version = "1.5.4", default-features = false, features = ["rand", "std"] }
+qp-plonky2-verifier = { version = "1.5.4", default-features = false }
 qp-wormhole-aggregator = { version = "3.1.0", default-features = false, features = ["rayon", "std"] }
 qp-wormhole-circuit = { version = "3.1.0", default-features = false, features = ["std"] }
 qp-wormhole-circuit-builder = { version = "3.1.0" }
