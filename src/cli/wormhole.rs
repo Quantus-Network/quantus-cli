@@ -3043,9 +3043,10 @@ async fn parse_proof_file(
 			)
 		})?;
 
-		let verifier = crate::batch_verifier::load_public_batch_verifier(&bins_dir).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-		})?;
+		let verifier =
+			crate::batch_verifier::load_public_batch_verifier(&bins_dir).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+			})?;
 
 		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
 			qp_wormhole_verifier::F,
@@ -3113,9 +3114,10 @@ async fn parse_proof_file(
 		}
 	} else if aggregated {
 		// Load aggregated verifier (batch profile checks; not the leaf keccak pin).
-		let verifier = crate::batch_verifier::load_private_batch_verifier(&bins_dir).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
-		})?;
+		let verifier =
+			crate::batch_verifier::load_private_batch_verifier(&bins_dir).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+			})?;
 
 		// Deserialize proof using verifier's types
 		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<

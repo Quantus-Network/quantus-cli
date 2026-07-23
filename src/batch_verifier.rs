@@ -73,9 +73,10 @@ fn load_batch_verifier_from_bytes(
 	expected_public_inputs: usize,
 	name: &str,
 ) -> Result<WormholeVerifier> {
-	let verifier_only = VerifierOnlyCircuitData::from_bytes(verifier_bytes.to_vec()).map_err(|e| {
-		QuantusError::Generic(format!("Failed to deserialize {name} verifier-only data: {e}"))
-	})?;
+	let verifier_only =
+		VerifierOnlyCircuitData::from_bytes(verifier_bytes.to_vec()).map_err(|e| {
+			QuantusError::Generic(format!("Failed to deserialize {name} verifier-only data: {e}"))
+		})?;
 
 	let common = CommonCircuitData::from_bytes(common_bytes.to_vec(), &DefaultGateSerializer)
 		.map_err(|e| {
@@ -88,15 +89,11 @@ fn load_batch_verifier_from_bytes(
 		return Err(QuantusError::Generic(format!(
 			"{name} verifier artifact rejected: {reason} \
 			 (security_bits={}, num_public_inputs={}, expected_public_inputs={})",
-			common.config.security_bits,
-			common.num_public_inputs,
-			expected_public_inputs
+			common.config.security_bits, common.num_public_inputs, expected_public_inputs
 		)));
 	}
 
-	Ok(WormholeVerifier {
-		circuit_data: VerifierCircuitData { verifier_only, common },
-	})
+	Ok(WormholeVerifier { circuit_data: VerifierCircuitData { verifier_only, common } })
 }
 
 fn load_batch_verifier_from_files(
@@ -169,7 +166,6 @@ pub fn load_public_batch_verifier(bins_dir: &Path) -> Result<WormholeVerifier> {
 	)
 }
 
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -197,7 +193,9 @@ mod tests {
 		let c = std::fs::read(dir.join("private_batch_common.bin")).unwrap();
 		let leaf_err = WormholeVerifier::new_from_bytes(&v, &c).unwrap_err();
 		assert!(
-			leaf_err.to_string().contains("does not match the canonical Wormhole leaf circuit"),
+			leaf_err
+				.to_string()
+				.contains("does not match the canonical Wormhole leaf circuit"),
 			"unexpected err: {leaf_err}"
 		);
 	}
