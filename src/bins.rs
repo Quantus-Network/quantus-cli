@@ -1,11 +1,13 @@
 //! Circuit binaries path resolution and lazy generation.
 //!
-//! The CLI needs access to several large ZK-circuit files (`prover.bin`,
-//! `verifier.bin`, `aggregated_*.bin`, etc.). During `cargo build`/`cargo install`
-//! these are produced by `build.rs` into `$OUT_DIR/generated-bins/`, but
-//! `cargo install` does not copy build-script outputs alongside the installed
-//! executable. To make installed binaries self-sufficient, this module resolves
-//! a persistent storage location and regenerates the binaries there on demand.
+//! The CLI needs access to ZK-circuit artifacts (`verifier.bin`, `common.bin`,
+//! `private_batch_*.bin`, `public_batch_*.bin`, dummy proofs, etc.). The leaf
+//! circuit no longer ships a `prover.bin` — `WormholeProver` builds fresh at
+//! prove time. During `cargo build`/`cargo install` the remaining files are
+//! produced by `build.rs` into `$OUT_DIR/generated-bins/`, but `cargo install`
+//! does not copy build-script outputs alongside the installed executable. To
+//! make installed binaries self-sufficient, this module resolves a persistent
+//! storage location and regenerates the binaries there on demand.
 //!
 //! Resolution order:
 //! 1. `QUANTUS_BINS_DIR` env var (explicit override).
@@ -24,8 +26,10 @@ include!("bins_consts.rs");
 pub const BINS_DIR_ENV: &str = "QUANTUS_BINS_DIR";
 
 /// Files that must be present for all wormhole operations to succeed.
+///
+/// Note: there is no leaf `prover.bin` — qp-wormhole-circuit-builder 3.1.0+ does
+/// not emit one; leaf proofs use `qp_wormhole_prover::build_fresh()`.
 const REQUIRED_FILES: &[&str] = &[
-	"prover.bin",
 	"verifier.bin",
 	"common.bin",
 	"private_batch_prover.bin",

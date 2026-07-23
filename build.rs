@@ -1,8 +1,10 @@
 //! Build script for quantus-cli.
 //!
-//! Generates circuit binaries (prover, verifier, aggregator) at build time.
-//! This ensures the binaries are always consistent with the circuit crate version
-//! and eliminates the need to manually run `quantus developer build-circuits`.
+//! Generates circuit binaries (leaf verifier/common + private/public-batch
+//! prover/verifier artifacts) at build time. The leaf circuit has no
+//! `prover.bin` — proving uses an in-process fresh build. This keeps the
+//! binaries consistent with the circuit crate version and eliminates the need
+//! to manually run `quantus developer build-circuits`.
 //!
 //! Outputs are written to `OUT_DIR` (required by cargo) and, during local source
 //! builds only, linked/copied to `generated-bins/` in the project root. When the
@@ -103,7 +105,6 @@ fn main() {
 	// Print hashes of generated binaries
 	print_bin_hash(&build_output_dir, "common.bin");
 	print_bin_hash(&build_output_dir, "verifier.bin");
-	print_bin_hash(&build_output_dir, "prover.bin");
 	print_bin_hash(&build_output_dir, "dummy_proof.bin");
 	print_bin_hash(&build_output_dir, "private_batch_common.bin");
 	print_bin_hash(&build_output_dir, "private_batch_verifier.bin");

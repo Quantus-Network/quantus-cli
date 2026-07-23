@@ -172,10 +172,14 @@ pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 /// This function takes all necessary data as raw bytes and generates a ZK proof.
 /// It does not require a chain client - all data must be pre-fetched.
 ///
+/// The leaf prover is built fresh via [`qp_wormhole_prover::build_fresh`]; there
+/// is no leaf `prover.bin` artifact. The path arguments are retained only for
+/// API compatibility with existing callers and are ignored.
+///
 /// # Arguments
 /// * `input` - All input data for proof generation (including ZK Merkle proof)
-/// * `prover_bin_path` - Path to prover.bin
-/// * `common_bin_path` - Path to common.bin
+/// * `prover_bin_path` - Ignored (legacy; leaf prover is built in-process)
+/// * `common_bin_path` - Ignored (legacy; leaf prover is built in-process)
 ///
 /// # Returns
 /// Proof bytes and nullifier

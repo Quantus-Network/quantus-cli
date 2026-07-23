@@ -205,7 +205,7 @@ pub struct CollectRewardsConfig {
 	pub subsquid_url: String,
 	/// Chain RPC node URL
 	pub node_url: String,
-	/// Path to circuit binary files (prover.bin, common.bin, etc.)
+	/// Path to circuit binary directory (verifier/common + private/public-batch bins).
 	pub bins_dir: String,
 	/// Optional: specific amount to withdraw (None = withdraw all)
 	pub amount: Option<u128>,
