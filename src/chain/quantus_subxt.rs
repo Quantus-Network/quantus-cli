@@ -2069,9 +2069,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				177u8, 167u8, 26u8, 148u8, 155u8, 122u8, 131u8, 26u8, 195u8, 30u8, 42u8, 141u8,
-				122u8, 36u8, 59u8, 111u8, 24u8, 134u8, 210u8, 109u8, 0u8, 208u8, 83u8, 70u8, 46u8,
-				87u8, 68u8, 250u8, 165u8, 29u8, 29u8, 127u8,
+				229u8, 9u8, 51u8, 78u8, 26u8, 145u8, 221u8, 175u8, 20u8, 81u8, 176u8, 15u8, 45u8,
+				47u8, 171u8, 14u8, 83u8, 216u8, 26u8, 119u8, 216u8, 16u8, 55u8, 218u8, 129u8,
+				104u8, 141u8, 209u8, 205u8, 155u8, 6u8, 144u8,
 			]
 	}
 	pub mod system {
@@ -3199,10 +3199,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							113u8, 0u8, 253u8, 103u8, 151u8, 44u8, 145u8, 151u8, 127u8, 138u8,
-							40u8, 186u8, 228u8, 160u8, 222u8, 205u8, 105u8, 209u8, 1u8, 48u8,
-							122u8, 152u8, 43u8, 253u8, 29u8, 73u8, 224u8, 181u8, 90u8, 221u8, 5u8,
-							209u8,
+							13u8, 93u8, 203u8, 141u8, 208u8, 101u8, 248u8, 136u8, 160u8, 153u8,
+							118u8, 135u8, 207u8, 11u8, 73u8, 51u8, 253u8, 137u8, 82u8, 57u8, 46u8,
+							108u8, 144u8, 243u8, 99u8, 155u8, 153u8, 82u8, 114u8, 59u8, 251u8,
+							89u8,
 						],
 					)
 				}
@@ -17657,7 +17657,9 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Invalid segments (already-spent nullifiers) are denied individually; dummy-padded"]
 				#[doc = "segments (all-zero nullifiers) are skipped silently. A portion of the burn bucket"]
-				#[doc = "is minted to the proof's `aggregator_address`."]
+				#[doc = "is minted to the proof's `aggregator_address`; if that mint fails (e.g. the"]
+				#[doc = "account doesn't exist and the rebate is below the existential deposit) the"]
+				#[doc = "rebate is burned instead of failing the users' exits."]
 				pub struct VerifyPublicBatch {
 					pub proof_bytes: verify_public_batch::ProofBytes,
 				}
@@ -17699,7 +17701,9 @@ pub mod api {
 				#[doc = ""]
 				#[doc = "Invalid segments (already-spent nullifiers) are denied individually; dummy-padded"]
 				#[doc = "segments (all-zero nullifiers) are skipped silently. A portion of the burn bucket"]
-				#[doc = "is minted to the proof's `aggregator_address`."]
+				#[doc = "is minted to the proof's `aggregator_address`; if that mint fails (e.g. the"]
+				#[doc = "account doesn't exist and the rebate is below the existential deposit) the"]
+				#[doc = "rebate is burned instead of failing the users' exits."]
 				pub fn verify_public_batch(
 					&self,
 					proof_bytes: types::verify_public_batch::ProofBytes,
@@ -17804,6 +17808,30 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProofVerified {
 				const PALLET: &'static str = "Wormhole";
 				const EVENT: &'static str = "ProofVerified";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The block author's share of the wormhole exit volume fee was minted."]
+			#[doc = ""]
+			#[doc = "NOTE: keep this as the last variant — indexers decode events by their"]
+			#[doc = "position in this enum, so existing variants must never be reordered."]
+			pub struct MinerVolumeFeePaid {
+				pub miner: miner_volume_fee_paid::Miner,
+				pub amount: miner_volume_fee_paid::Amount,
+			}
+			pub mod miner_volume_fee_paid {
+				use super::runtime_types;
+				pub type Miner = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Amount = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for MinerVolumeFeePaid {
+				const PALLET: &'static str = "Wormhole";
+				const EVENT: &'static str = "MinerVolumeFeePaid";
 			}
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -23597,7 +23625,9 @@ pub mod api {
 					#[doc = ""]
 					#[doc = "Invalid segments (already-spent nullifiers) are denied individually; dummy-padded"]
 					#[doc = "segments (all-zero nullifiers) are skipped silently. A portion of the burn bucket"]
-					#[doc = "is minted to the proof's `aggregator_address`."]
+					#[doc = "is minted to the proof's `aggregator_address`; if that mint fails (e.g. the"]
+					#[doc = "account doesn't exist and the rebate is below the existential deposit) the"]
+					#[doc = "rebate is burned instead of failing the users' exits."]
 					verify_public_batch {
 						proof_bytes:
 							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
@@ -23619,29 +23649,35 @@ pub mod api {
 					#[codec(index = 0)]
 					InvalidPublicInputs,
 					#[codec(index = 1)]
-					#[doc = "No segment of the bundle is spendable: every segment contains a nullifier that"]
-					#[doc = "is already used (or the single segment of a private-batch proof does)."]
+					#[doc = "No segment of the bundle is spendable: every non-dummy segment contains a"]
+					#[doc = "nullifier that is already used (or the single segment of a private-batch"]
+					#[doc = "proof does)."]
 					NullifierAlreadyUsed,
 					#[codec(index = 2)]
-					BlockNotFound,
+					#[doc = "The bundle contains only dummy (all-zero) padding segments, so there is"]
+					#[doc = "nothing to exit. Distinct from [`Error::NullifierAlreadyUsed`], which is a"]
+					#[doc = "replay of real segments."]
+					NoValidSegments,
 					#[codec(index = 3)]
-					VerifierNotAvailable,
+					BlockNotFound,
 					#[codec(index = 4)]
-					ProofDeserializationFailed,
+					VerifierNotAvailable,
 					#[codec(index = 5)]
-					ProofVerificationFailed,
+					ProofDeserializationFailed,
 					#[codec(index = 6)]
-					InvalidProofPublicInputs,
+					ProofVerificationFailed,
 					#[codec(index = 7)]
+					InvalidProofPublicInputs,
+					#[codec(index = 8)]
 					#[doc = "The volume fee rate in the proof doesn't match the configured rate"]
 					InvalidVolumeFeeRate,
-					#[codec(index = 8)]
+					#[codec(index = 9)]
 					#[doc = "Transfer amount is below the minimum required"]
 					TransferAmountBelowMinimum,
-					#[codec(index = 9)]
+					#[codec(index = 10)]
 					#[doc = "Only native asset (asset_id = 0) is supported in this version"]
 					NonNativeAssetNotSupported,
-					#[codec(index = 10)]
+					#[codec(index = 11)]
 					#[doc = "Soundness invariant violated: total wormhole exits would exceed the value that could"]
 					#[doc = "possibly have been deposited into wormhole addresses. This indicates a potential"]
 					#[doc = "soundness bug in the ZK proof system, so the exit is rejected."]
@@ -23693,6 +23729,15 @@ pub mod api {
 						>,
 					},
 					#[codec(index = 3)]
+					#[doc = "The block author's share of the wormhole exit volume fee was minted."]
+					#[doc = ""]
+					#[doc = "NOTE: keep this as the last variant — indexers decode events by their"]
+					#[doc = "position in this enum, so existing variants must never be reordered."]
+					MinerVolumeFeePaid {
+						miner: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+					},
+					#[codec(index = 4)]
 					#[doc = "Some segments of an exit bundle were denied (their nullifiers were already"]
 					#[doc = "used, e.g. because the underlying private batch landed on-chain separately)."]
 					#[doc = "The remaining segments were processed normally."]
