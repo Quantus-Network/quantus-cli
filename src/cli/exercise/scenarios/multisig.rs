@@ -79,8 +79,13 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	submit_ok(ctx, &signer_a, propose_call).await?;
 	let proposal_id = latest_proposal_id(ctx, &multisig_id).await?;
 
-	let approve_call =
-		quantus_subxt::api::tx().multisig().approve(multisig_id.clone(), proposal_id);
+	let approve_call = quantus_subxt::api::tx().multisig().approve(
+		multisig_id.clone(),
+		proposal_id,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(
+			call_data.clone(),
+		),
+	);
 	submit_ok(ctx, &signer_b, approve_call).await?;
 
 	let execute_call =

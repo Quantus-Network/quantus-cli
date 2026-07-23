@@ -1297,7 +1297,7 @@ pub async fn submit_unsigned_verify_aggregated_proof(
 ) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
 	use subxt::tx::TxStatus;
 
-	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
+	let verify_tx = quantus_node::api::tx().wormhole().verify_private_batch(proof_bytes);
 
 	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))

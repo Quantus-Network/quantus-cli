@@ -890,7 +890,7 @@ async fn submit_and_get_events(
 	}
 
 	// Submit unsigned tx
-	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
+	let verify_tx = quantus_node::api::tx().wormhole().verify_private_batch(proof_bytes);
 
 	let unsigned_tx =
 		quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
