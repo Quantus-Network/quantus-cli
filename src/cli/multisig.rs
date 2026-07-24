@@ -2532,6 +2532,10 @@ async fn handle_list_proposals(
 	let storage = quantus_client.client().storage().at(latest_block_hash);
 
 	// Use iter_key_values to iterate over the double map
+	let multisig_query =
+		quantus_subxt::api::storage().multisig().multisigs(multisig_address.clone());
+	let multisig_info = storage.fetch(&multisig_query).await?;
+
 	let address = quantus_subxt::api::storage().multisig().proposals_iter1(multisig_address);
 	let mut proposals = storage.iter(address).await?;
 
@@ -2555,11 +2559,6 @@ async fn handle_list_proposals(
 					},
 				};
 
-				// Extract proposal ID from key_bytes (u32, 4 bytes with Twox64Concat hasher)
-				// The key_bytes contains:
-				// [storage_prefix][Blake2_128Concat(multisig)][Twox64Concat(u32)] Twox64Concat
-				// encoding: [8-byte hash][4-byte value] We need the last 4 bytes as
-				// little-endian u32
 				let key_bytes = kv.key_bytes;
 				if key_bytes.len() >= 4 {
 					let id_bytes = &key_bytes[key_bytes.len() - 4..];
@@ -2569,28 +2568,58 @@ async fn handle_list_proposals(
 					log_print!("📝 Proposal #{}", count);
 					log_print!("   ID: {}", proposal_id.to_string().bright_yellow());
 
-					// Convert proposer to SS58
 					let proposer_bytes: &[u8; 32] = kv.value.proposer.as_ref();
 					let proposer_sp = SpAccountId32::from(*proposer_bytes);
 					log_print!("   Proposer: {}", proposer_sp.to_ss58check().bright_cyan());
 
-					// Decode and display call data (compact format for list)
 					match decode_call_data(&quantus_client, &kv.value.call.0).await {
-						Ok(decoded) => {
-							// Extract just the call info line for compact display
-							let lines: Vec<&str> = decoded.lines().collect();
-							if !lines.is_empty() {
-								log_print!("   {}", lines[0].trim_start());
-							}
-						},
+						Ok(decoded) =>
+							for line in decoded.lines() {
+								log_print!("{}", line);
+							},
 						Err(_) => {
 							log_print!("   Call Size: {} bytes", kv.value.call.0.len());
 						},
 					}
 
 					log_print!("   Status: {}", status_str);
-					log_print!("   Approvals: {}", kv.value.approvals.0.len());
 					log_print!("   Expiry: block {}", kv.value.expiry);
+
+					if let Some(ref ms_data) = multisig_info {
+						let progress =
+							format!("{}/{}", kv.value.approvals.0.len(), ms_data.threshold);
+						log_print!("   Approvals: {}", progress.bright_cyan());
+
+						for approver in &kv.value.approvals.0 {
+							let bytes: &[u8; 32] = approver.as_ref();
+							let sp = SpAccountId32::from(*bytes);
+							let addr = sp.to_ss58check_with_version(
+								sp_core::crypto::Ss58AddressFormat::custom(189),
+							);
+							log_print!("     ✅ {}", addr.bright_green());
+						}
+
+						let pending: Vec<_> = ms_data
+							.signers
+							.0
+							.iter()
+							.filter(|s| !kv.value.approvals.0.contains(s))
+							.collect();
+						if !pending.is_empty() {
+							log_print!("   Pending: {}", pending.len().to_string().bright_red());
+							for signer in &pending {
+								let bytes: &[u8; 32] = signer.as_ref();
+								let sp = SpAccountId32::from(*bytes);
+								let addr = sp.to_ss58check_with_version(
+									sp_core::crypto::Ss58AddressFormat::custom(189),
+								);
+								log_print!("     ⏳ {}", addr.bright_red());
+							}
+						}
+					} else {
+						log_print!("   Approvals: {}", kv.value.approvals.0.len());
+					}
+
 					log_print!("");
 				}
 			},
