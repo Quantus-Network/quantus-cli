@@ -13,3 +13,9 @@ const VERSION_MARKER: &str = ".quantus-cli-version";
 /// - bins.rs: runtime lazy circuit generation  
 /// - collect_rewards_lib.rs: batching proofs for aggregation
 pub const DEFAULT_NUM_LEAF_PROOFS: usize = 7;
+
+/// Number of private-batch proofs aggregated into a single public batch.
+///
+/// Must match the chain's pallet-wormhole build default (QP_NUM_PRIVATE_BATCH_PROOFS)
+/// or on-chain verification of public batches will fail.
+pub const DEFAULT_NUM_PRIVATE_BATCH_PROOFS: usize = 4;

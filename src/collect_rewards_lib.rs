@@ -29,8 +29,7 @@ use crate::{
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use qp_rusty_crystals_hdwallet::{derive_wormhole_from_mnemonic, QUANTUS_WORMHOLE_CHAIN_ID};
 use qp_wormhole_aggregator::{
-	aggregator::{AggregationBackend, CircuitType, Layer0Aggregator},
-	config::CircuitBinsConfig,
+	config::CircuitBinsConfig, private_batch::prover::PrivateBatchProver,
 };
 use qp_zk_circuits_common::circuit::{C, D, F};
 use sp_core::crypto::{AccountId32, Ss58Codec};
@@ -182,12 +181,7 @@ pub fn resolve_credential(credential: &WormholeCredential) -> Result<(String, [u
 			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
 				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 			let address_bytes: [u8; 32] = wormhole_pair.address;
-			let secret_bytes: [u8; 32] =
-				wormhole_pair.secret.as_ref().try_into().map_err(|_| {
-					CollectRewardsError::from(
-						"Invalid secret length from HD derivation".to_string(),
-					)
-				})?;
+			let secret_bytes: [u8; 32] = *wormhole_pair.secret.as_bytes();
 			Ok((AccountId32::from(address_bytes).to_ss58check(), address_bytes, secret_bytes))
 		},
 		WormholeCredential::Secret { hex } => {
@@ -211,7 +205,7 @@ pub struct CollectRewardsConfig {
 	pub subsquid_url: String,
 	/// Chain RPC node URL
 	pub node_url: String,
-	/// Path to circuit binary files (prover.bin, common.bin, etc.)
+	/// Path to circuit binary directory (verifier/common + private/public-batch bins).
 	pub bins_dir: String,
 	/// Optional: specific amount to withdraw (None = withdraw all)
 	pub amount: Option<u128>,
@@ -753,27 +747,31 @@ fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Resul
 		)));
 	}
 
-	let mut aggregator = Layer0Aggregator::new(bins_dir)
-		.map_err(|e| CollectRewardsError::from(format!("Failed to load aggregator: {}", e)))?;
+	let common_bytes = std::fs::read(bins_dir.join("common.bin"))
+		.map_err(|e| CollectRewardsError::from(format!("Failed to read common.bin: {}", e)))?;
+	let verifier_bytes = std::fs::read(bins_dir.join("verifier.bin"))
+		.map_err(|e| CollectRewardsError::from(format!("Failed to read verifier.bin: {}", e)))?;
+	let leaf = qp_wormhole_aggregator::common::utils::load_canonical_leaf_verifier_data(
+		&common_bytes,
+		&verifier_bytes,
+	)
+	.map_err(|e| CollectRewardsError::from(format!("Failed to load leaf circuit data: {}", e)))?;
 
-	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
-		CollectRewardsError::from(format!("Failed to load leaf circuit data: {}", e))
-	})?;
-
-	// Add proofs
+	let mut proofs = Vec::with_capacity(proof_bytes_list.len());
 	for proof_bytes in proof_bytes_list {
-		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes.clone(), &common_data)
+		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes.clone(), &leaf.common)
 			.map_err(|e| {
 				CollectRewardsError::from(format!("Failed to deserialize proof: {:?}", e))
 			})?;
-		aggregator
-			.push_proof(proof)
-			.map_err(|e| CollectRewardsError::from(format!("Failed to push proof: {}", e)))?;
+		proofs.push(proof);
 	}
 
-	// Aggregate
-	let aggregated_proof = aggregator
-		.aggregate()
+	let prover = PrivateBatchProver::new_from_binaries_dir(bins_dir).map_err(|e| {
+		CollectRewardsError::from(format!("Failed to load private-batch prover: {}", e))
+	})?;
+
+	let aggregated_proof = prover
+		.aggregate(proofs)
 		.map_err(|e| CollectRewardsError::from(format!("Aggregation failed: {}", e)))?;
 
 	Ok(aggregated_proof.to_bytes())
@@ -787,11 +785,8 @@ async fn submit_and_get_events(
 ) -> Result<(subxt::utils::H256, subxt::utils::H256, Vec<wormhole::events::NativeTransferred>)> {
 	// Verify locally first
 
-	let verifier = qp_wormhole_verifier::WormholeVerifier::new_from_files(
-		&bins_dir.join("aggregated_verifier.bin"),
-		&bins_dir.join("aggregated_common.bin"),
-	)
-	.map_err(|e| CollectRewardsError::from(format!("Failed to load verifier: {}", e)))?;
+	let verifier = crate::batch_verifier::load_private_batch_verifier(bins_dir)
+		.map_err(|e| CollectRewardsError::from(format!("Failed to load verifier: {}", e)))?;
 
 	let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
 		qp_wormhole_verifier::F,
@@ -805,7 +800,7 @@ async fn submit_and_get_events(
 		.map_err(|e| CollectRewardsError::from(format!("Local verification failed: {}", e)))?;
 
 	// Parse public inputs to do pre-submission validation
-	let inputs = qp_wormhole_verifier::parse_aggregated_public_inputs(&proof).map_err(|e| {
+	let inputs = qp_wormhole_verifier::parse_private_batch_public_inputs(&proof).map_err(|e| {
 		CollectRewardsError::from(format!("Failed to parse public inputs: {:?}", e))
 	})?;
 

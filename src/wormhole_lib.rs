@@ -14,7 +14,6 @@ use qp_wormhole_circuit::{
 	nullifier::Nullifier,
 };
 use qp_wormhole_inputs::PublicCircuitInputs;
-use qp_wormhole_prover::WormholeProver;
 use qp_zk_circuits_common::{
 	utils::{digest_to_bytes, BytesDigest},
 	zk_merkle::SIBLINGS_PER_LEVEL,
@@ -173,10 +172,14 @@ pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 /// This function takes all necessary data as raw bytes and generates a ZK proof.
 /// It does not require a chain client - all data must be pre-fetched.
 ///
+/// The leaf prover is built fresh via [`qp_wormhole_prover::build_fresh`]; there
+/// is no leaf `prover.bin` artifact. The path arguments are retained only for
+/// API compatibility with existing callers and are ignored.
+///
 /// # Arguments
 /// * `input` - All input data for proof generation (including ZK Merkle proof)
-/// * `prover_bin_path` - Path to prover.bin
-/// * `common_bin_path` - Path to common.bin
+/// * `prover_bin_path` - Ignored (legacy; leaf prover is built in-process)
+/// * `common_bin_path` - Ignored (legacy; leaf prover is built in-process)
 ///
 /// # Returns
 /// Proof bytes and nullifier
@@ -267,9 +270,10 @@ pub fn generate_proof(
 
 	let circuit_inputs = CircuitInputs { public, private };
 
-	// Load prover from pre-built bins
-	let prover = WormholeProver::new_from_files(prover_bin_path, common_bin_path)
-		.map_err(|e| WormholeLibError::from(format!("Failed to load prover: {}", e)))?;
+	// Leaf prover is built from the canonical circuit config (no longer loads prover.bin).
+	// Paths are kept for API compatibility with callers that still pass bin locations.
+	let _ = (prover_bin_path, common_bin_path);
+	let prover = qp_wormhole_prover::build_fresh();
 
 	let prover_with_inputs = prover
 		.commit(&circuit_inputs)

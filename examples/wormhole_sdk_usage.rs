@@ -11,8 +11,8 @@
 //!    submitting anything: `at_best_block`, scans recent blocks for a real `NativeTransferred`
 //!    event, runs `parse_transfer_events`, fetches the ZK Merkle proof via `get_zk_merkle_proof`,
 //!    computes positions with `compute_merkle_positions` and decodes the leaf bytes with
-//!    `decode_full_leaf_data`. The submission path (`submit_unsigned_verify_aggregated_proof`,
-//!    `verify_aggregated_and_get_events`) is shown only as pseudocode — it requires a funded
+//!    `decode_full_leaf_data`. The submission path (`submit_unsigned_verify_private_batch`,
+//!    `verify_private_batch_and_get_events`) is shown only as pseudocode — it requires a funded
 //!    deposit + ZK proof generation, which [`wormhole_sdk_e2e.rs`](./wormhole_sdk_e2e.rs)
 //!    demonstrates end-to-end. If the node is unreachable the example exits cleanly with hints; CI
 //!    without a node still builds and runs it green.
@@ -34,8 +34,8 @@
 //!  aggregate_proofs(leaf_files, "agg.hex")                 → aggregated proof file
 //!         │
 //!         ▼
-//!  verify_aggregated_and_get_events("agg.hex", &client)
-//!         │   (locally verifies + submits unsigned `verify_aggregated_proof`
+//!  verify_private_batch_and_get_events("agg.hex", &client)
+//!         │   (locally verifies + submits unsigned `verify_private_batch`
 //!         │    + waits for inclusion + collects NativeTransferred events)
 //!         ▼
 //!  Vec<NativeTransferred> with the minted amounts at the exit accounts
@@ -219,7 +219,7 @@ async fn online_demo() -> Result<()> {
 			println!(
 				"  This is normal on a fresh dev chain. Run examples/wormhole_sdk_e2e.rs first"
 			);
-			println!("  (it submits a deposit + verify_aggregated_proof) to populate the chain.");
+			println!("  (it submits a deposit + verify_private_batch) to populate the chain.");
 		},
 	}
 
@@ -332,13 +332,13 @@ fn print_online_recipe() {
 	println!("  let bytes = std::fs::read(\"agg.hex\")?;");
 	println!("  let bytes = hex::decode(bytes.trim_ascii())?;");
 	println!("  let (included_at, block_hash, tx_hash) =");
-	println!("      submit_unsigned_verify_aggregated_proof(&client, bytes).await?;");
+	println!("      submit_unsigned_verify_private_batch(&client, bytes).await?;");
 	println!("  println!(\"included @ {{}} block={{:?}} tx={{:?}}\",");
 	println!("           included_at, block_hash, tx_hash);");
 	println!();
 	println!("  // Or, with local verify + event collection:");
 	println!("  let (block_hash, tx_hash, transfers) =");
-	println!("      verify_aggregated_and_get_events(\"agg.hex\", &client).await?;");
+	println!("      verify_private_batch_and_get_events(\"agg.hex\", &client).await?;");
 	println!("  for ev in transfers {{");
 	println!("      println!(\"  -> {{}} planck to {{}}\", ev.amount, ev.to.to_ss58check());");
 	println!("  }}");

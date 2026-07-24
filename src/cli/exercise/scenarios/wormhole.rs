@@ -22,6 +22,7 @@ async fn multiround(ctx: &mut ExerciseCtx) -> Result<String> {
 		keep_files: false,
 		output_dir: "/tmp/wormhole_exercise".to_string(),
 		dry_run: false,
+		public: false,
 	};
 	crate::cli::wormhole::handle_wormhole_command(command, &ctx.node_url).await?;
 	Ok("wormhole multiround (5 rounds, 5 proofs each) completed".to_string())
