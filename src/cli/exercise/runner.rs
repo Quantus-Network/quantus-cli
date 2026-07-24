@@ -15,8 +15,15 @@ pub struct ExerciseCtx {
 	pub bob: QuantumKeyPair,
 	pub charlie: QuantumKeyPair,
 	pub eph: Vec<QuantumKeyPair>,
-	pub unit: u128,
+	/// Scaled-down base for discretionary test amounts (`unit / DISCRETIONARY_SCALE`).
+	/// Fixed chain amounts (existential deposit, deposits) are never derived from this.
+	pub test_unit: u128,
 	pub existential_deposit: u128,
+	/// Name of the funding ("root") wallet on disk, used by scenarios that load it by
+	/// name (e.g. wormhole).
+	pub root_name: String,
+	/// Resolved password for the root wallet (empty string for dev accounts).
+	pub root_password: String,
 	pub rng: StdRng,
 	pub seed: u64,
 	pub fuzz_iterations: u32,

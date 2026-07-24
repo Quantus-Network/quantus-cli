@@ -12,12 +12,15 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 }
 
 async fn multiround(ctx: &mut ExerciseCtx) -> Result<String> {
+	// Round-trips a small amount through the bridge and back; scaled like the other
+	// discretionary amounts so the suite stays cheap.
+	let amount = 50.0 / crate::cli::exercise::DISCRETIONARY_SCALE as f64;
 	let command = crate::cli::wormhole::WormholeCommands::Multiround {
 		num_proofs: 5,
 		rounds: 5,
-		amount: 50.0,
-		wallet: "crystal_alice".to_string(),
-		password: Some(String::new()),
+		amount,
+		wallet: ctx.root_name.clone(),
+		password: Some(ctx.root_password.clone()),
 		password_file: None,
 		keep_files: false,
 		output_dir: "/tmp/wormhole_exercise".to_string(),

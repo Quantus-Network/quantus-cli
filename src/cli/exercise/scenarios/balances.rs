@@ -22,7 +22,7 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 async fn single_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_ss58 = recipient.to_account_id_ss58check();
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	let sender = ctx.eph[0].clone();
 	let before = ctx.free_balance(&recipient_ss58).await?;
@@ -50,7 +50,7 @@ async fn batch_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	for _ in 0..n {
 		recipients.push(ctx.fresh_keypair()?.to_account_id_ss58check());
 	}
-	let amount = ctx.unit / 2;
+	let amount = ctx.test_unit / 2;
 	let transfers: Vec<(String, u128)> = recipients.iter().map(|r| (r.clone(), amount)).collect();
 
 	let sender = ctx.eph[0].clone();
@@ -70,8 +70,8 @@ async fn batch_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 
 async fn transfer_with_tip(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
-	let amount = ctx.unit;
-	let tip = ctx.unit / 10;
+	let amount = ctx.test_unit;
+	let tip = ctx.test_unit / 10;
 	let sender = ctx.eph[1].clone();
 	crate::cli::send::transfer(
 		&ctx.client,
@@ -100,7 +100,7 @@ async fn transfer_manual_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&sender,
 		&recipient,
-		ctx.unit,
+		ctx.test_unit,
 		None,
 		Some(nonce as u32),
 		ctx.wait_mode(),

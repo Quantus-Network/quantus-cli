@@ -33,7 +33,7 @@ async fn pending_ids(
 async fn schedule_and_cancel(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[2].clone();
 	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	crate::cli::reversible::schedule_transfer_with_delay(
 		&ctx.client,
@@ -75,7 +75,7 @@ async fn schedule_with_delay(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&sender,
 		&recipient,
-		ctx.unit,
+		ctx.test_unit,
 		delay_blocks,
 		true, // delay in blocks
 		ctx.wait_mode(),
@@ -104,7 +104,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&funder,
 		&account_ss58,
-		10 * ctx.unit,
+		10 * ctx.test_unit,
 		None,
 		ctx.wait_mode(),
 	)
@@ -140,7 +140,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&account,
 		&recipient,
-		ctx.unit,
+		ctx.test_unit,
 		ctx.wait_mode(),
 	)
 	.await?;

@@ -15,6 +15,12 @@ use report::Report;
 use runner::ExerciseCtx;
 use std::path::PathBuf;
 
+/// Divisor applied to every *discretionary* token amount used by the scenarios (transfers,
+/// multisig funding, wormhole amount, …) so the suite can run on a small budget. Fixed,
+/// chain-imposed amounts (existential deposit, multisig/preimage/governance deposits) are
+/// read from the chain and never scaled.
+pub(crate) const DISCRETIONARY_SCALE: u128 = 100;
+
 #[derive(Args, Debug)]
 pub struct ExerciseArgs {
 	/// Phases to run (default: all except upgrade; pass --upgrade-wasm to enable it).
@@ -41,6 +47,28 @@ pub struct ExerciseArgs {
 
 	#[arg(long, default_value_t = 4)]
 	pub ephemeral_accounts: usize,
+
+	/// Wallet name to fund the exercise from. Defaults to the built-in `crystal_alice` dev
+	/// account (genesis-funded on `--dev` nodes). Supply a wallet of your own to run against
+	/// a public testnet. The `governance` phase still relies on the dev genesis accounts, so
+	/// pass `--skip governance` when using a custom root account.
+	#[arg(long)]
+	pub root_account: Option<String>,
+
+	/// Password for the `--root-account` wallet (or set `QUANTUS_WALLET_PASSWORD_<NAME>`).
+	#[arg(long)]
+	pub root_password: Option<String>,
+
+	/// Read the `--root-account` password from a file.
+	#[arg(long)]
+	pub root_password_file: Option<String>,
+
+	/// Total budget, in whole tokens, drawn from the root account to fund the ephemeral test
+	/// accounts (split evenly across them). Fixed chain deposits (existential deposit,
+	/// multisig/preimage deposits) are covered on top and are not scaled; discretionary test
+	/// transfers are scaled down internally so a small budget suffices.
+	#[arg(long, default_value_t = 40.0)]
+	pub total_amount: f64,
 
 	#[arg(long)]
 	pub fail_fast: bool,
@@ -227,19 +255,78 @@ async fn setup(
 	let ed_addr = quantus_subxt::api::constants().balances().existential_deposit();
 	let existential_deposit = client.client().constants().at(&ed_addr)?;
 
-	let alice = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_alice());
+	let test_unit = unit / DISCRETIONARY_SCALE;
+
 	let bob = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::dilithium_bob());
 	let charlie = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_charlie());
 
-	// Wormhole loads dev wallets by name from disk.
-	ensure_dev_wallets_on_disk().await?;
+	// Resolve the funding ("root") account. Defaults to the built-in crystal_alice dev
+	// account; a custom wallet can be supplied for public-testnet runs.
+	let (alice, root_name, root_password) = match &args.root_account {
+		Some(name) => {
+			let password = crate::wallet::password::get_wallet_password(
+				name,
+				args.root_password.clone(),
+				args.root_password_file.clone(),
+			)?;
+			let manager = crate::wallet::WalletManager::new()?;
+			let wallet_data = manager.load_wallet(name, &password)?;
+			(wallet_data.keypair, name.clone(), password)
+		},
+		None => {
+			// Wormhole loads the dev wallet by name from disk.
+			ensure_dev_wallets_on_disk().await?;
+			(
+				QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_alice()),
+				"crystal_alice".to_string(),
+				String::new(),
+			)
+		},
+	};
+
+	let count = args.ephemeral_accounts.max(4);
+	let total_budget = (args.total_amount * unit as f64).round() as u128;
+	let funding_per_account = total_budget.checked_div(count as u128).unwrap_or(0);
+
+	// The scaled discretionary base must stay above the existential deposit: the batch
+	// scenario creates fresh accounts holding `test_unit / 2`, which would be reaped below ED.
+	if test_unit == 0 || test_unit / 2 < existential_deposit {
+		return Err(QuantusError::Generic(format!(
+			"chain unit ({unit}) is too small relative to the existential deposit \
+			 ({existential_deposit}) for the built-in test scale (÷{DISCRETIONARY_SCALE})"
+		)));
+	}
+	// Each ephemeral account must also cover fixed deposits (multisig, preimage) plus its
+	// scaled discretionary spend and fees. Guard against an obviously-too-small budget.
+	let min_per_account = existential_deposit
+		.saturating_mul(2)
+		.saturating_add(test_unit.saturating_mul(30));
+	if funding_per_account < min_per_account {
+		return Err(QuantusError::Generic(format!(
+			"--total-amount {} is too low: only {funding_per_account} raw units per account \
+			 across {count} accounts (need at least {min_per_account} each to cover deposits)",
+			args.total_amount
+		)));
+	}
+
+	// Preflight: fail early with a clear message if the funder can't pay, instead of a raw
+	// "Inability to pay some fees" RPC rejection mid-run.
+	let root_ss58 = alice.to_account_id_ss58check();
+	let root_balance = crate::cli::send::get_balance(&client, &root_ss58).await?;
+	if root_balance < total_budget {
+		return Err(QuantusError::Generic(format!(
+			"root account {root_name} ({root_ss58}) holds {root_balance} raw units but \
+			 --total-amount needs {total_budget}; fund it or lower --total-amount"
+		)));
+	}
 
 	report.record(
 		"setup",
 		"connect_and_wallets",
 		started.elapsed(),
 		Ok(format!(
-			"connected to {node_url}; token {symbol} ({decimals} decimals), ED {existential_deposit}"
+			"connected to {node_url}; token {symbol} ({decimals} decimals), ED {existential_deposit}; \
+			 funder {root_name} ({root_balance} raw), funding {count} accounts with {funding_per_account} each"
 		)),
 	);
 
@@ -252,15 +339,16 @@ async fn setup(
 		bob,
 		charlie,
 		eph: Vec::new(),
-		unit,
+		test_unit,
 		existential_deposit,
+		root_name,
+		root_password,
 		rng,
 		seed,
 		fuzz_iterations: args.fuzz_iterations,
 	};
 
-	let count = args.ephemeral_accounts.max(4);
-	let funding_result = fund_ephemeral_accounts(&mut ctx, count).await;
+	let funding_result = fund_ephemeral_accounts(&mut ctx, count, funding_per_account).await;
 	report.record("setup", "fund_ephemeral_accounts", started.elapsed(), funding_result);
 	if report.has_failures() {
 		return Err(QuantusError::Generic("setup failed while funding accounts".to_string()));
@@ -280,8 +368,11 @@ async fn ensure_dev_wallets_on_disk() -> Result<()> {
 	Ok(())
 }
 
-async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<String> {
-	let funding_per_account = 1_000 * ctx.unit;
+async fn fund_ephemeral_accounts(
+	ctx: &mut ExerciseCtx,
+	count: usize,
+	funding_per_account: u128,
+) -> Result<String> {
 	let mut addresses = Vec::with_capacity(count);
 	for _ in 0..count {
 		let keypair = ctx.fresh_keypair()?;
@@ -325,5 +416,7 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 	} else {
 		String::new()
 	};
-	Ok(format!("derived and funded {count} ephemeral accounts with 1000 tokens each{note}"))
+	Ok(format!(
+		"derived and funded {count} ephemeral accounts with {funding_per_account} raw units each{note}"
+	))
 }
