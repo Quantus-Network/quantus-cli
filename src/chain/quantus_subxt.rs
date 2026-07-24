@@ -1565,9 +1565,10 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							90u8, 50u8, 211u8, 137u8, 17u8, 184u8, 134u8, 190u8, 29u8, 156u8, 36u8,
-							214u8, 214u8, 65u8, 28u8, 181u8, 114u8, 218u8, 8u8, 229u8, 48u8, 10u8,
-							183u8, 105u8, 113u8, 49u8, 40u8, 174u8, 69u8, 246u8, 158u8, 197u8,
+							236u8, 179u8, 121u8, 45u8, 163u8, 162u8, 34u8, 178u8, 209u8, 79u8,
+							52u8, 219u8, 68u8, 182u8, 97u8, 219u8, 73u8, 251u8, 70u8, 59u8, 64u8,
+							168u8, 120u8, 180u8, 167u8, 201u8, 167u8, 243u8, 129u8, 233u8, 219u8,
+							140u8,
 						],
 					)
 				}
@@ -1585,9 +1586,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							34u8, 56u8, 164u8, 48u8, 105u8, 57u8, 32u8, 57u8, 215u8, 116u8, 66u8,
-							5u8, 117u8, 168u8, 51u8, 154u8, 198u8, 60u8, 29u8, 154u8, 73u8, 240u8,
-							9u8, 177u8, 134u8, 205u8, 14u8, 43u8, 39u8, 95u8, 12u8, 151u8,
+							252u8, 97u8, 2u8, 156u8, 196u8, 243u8, 70u8, 237u8, 248u8, 84u8, 199u8,
+							239u8, 252u8, 191u8, 212u8, 127u8, 115u8, 240u8, 6u8, 118u8, 134u8,
+							144u8, 50u8, 63u8, 32u8, 215u8, 0u8, 31u8, 77u8, 120u8, 162u8, 55u8,
 						],
 					)
 				}
@@ -2069,9 +2070,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				229u8, 9u8, 51u8, 78u8, 26u8, 145u8, 221u8, 175u8, 20u8, 81u8, 176u8, 15u8, 45u8,
-				47u8, 171u8, 14u8, 83u8, 216u8, 26u8, 119u8, 216u8, 16u8, 55u8, 218u8, 129u8,
-				104u8, 141u8, 209u8, 205u8, 155u8, 6u8, 144u8,
+				17u8, 27u8, 154u8, 214u8, 45u8, 173u8, 211u8, 92u8, 142u8, 98u8, 221u8, 90u8, 77u8,
+				55u8, 227u8, 93u8, 181u8, 184u8, 117u8, 132u8, 94u8, 193u8, 34u8, 100u8, 60u8, 0u8,
+				52u8, 15u8, 91u8, 247u8, 16u8, 225u8,
 			]
 	}
 	pub mod system {
@@ -7319,10 +7320,10 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							135u8, 158u8, 49u8, 34u8, 225u8, 221u8, 148u8, 92u8, 90u8, 100u8,
-							166u8, 203u8, 132u8, 97u8, 40u8, 94u8, 123u8, 153u8, 237u8, 174u8,
-							111u8, 204u8, 191u8, 249u8, 58u8, 94u8, 185u8, 231u8, 204u8, 56u8,
-							141u8, 234u8,
+							158u8, 27u8, 226u8, 243u8, 42u8, 43u8, 44u8, 250u8, 239u8, 116u8,
+							186u8, 179u8, 26u8, 182u8, 183u8, 240u8, 77u8, 60u8, 151u8, 112u8,
+							192u8, 172u8, 170u8, 249u8, 62u8, 90u8, 206u8, 6u8, 191u8, 122u8,
+							230u8, 223u8,
 						],
 					)
 				}
@@ -7352,10 +7353,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							250u8, 88u8, 125u8, 217u8, 141u8, 180u8, 83u8, 152u8, 176u8, 72u8,
-							192u8, 96u8, 124u8, 89u8, 66u8, 74u8, 237u8, 221u8, 238u8, 59u8, 40u8,
-							119u8, 147u8, 155u8, 130u8, 213u8, 199u8, 186u8, 246u8, 227u8, 27u8,
-							23u8,
+							232u8, 178u8, 106u8, 7u8, 242u8, 190u8, 47u8, 25u8, 95u8, 243u8, 223u8,
+							197u8, 207u8, 81u8, 85u8, 50u8, 189u8, 8u8, 46u8, 161u8, 43u8, 177u8,
+							8u8, 100u8, 91u8, 111u8, 114u8, 13u8, 107u8, 109u8, 167u8, 122u8,
 						],
 					)
 				}
@@ -7381,10 +7381,10 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							41u8, 34u8, 6u8, 168u8, 67u8, 1u8, 242u8, 173u8, 200u8, 209u8, 197u8,
-							225u8, 4u8, 115u8, 216u8, 144u8, 128u8, 59u8, 200u8, 111u8, 188u8,
-							123u8, 242u8, 181u8, 189u8, 132u8, 82u8, 254u8, 216u8, 14u8, 144u8,
-							81u8,
+							221u8, 235u8, 105u8, 128u8, 85u8, 243u8, 162u8, 1u8, 165u8, 70u8,
+							240u8, 215u8, 127u8, 33u8, 148u8, 25u8, 171u8, 87u8, 221u8, 35u8,
+							229u8, 225u8, 78u8, 255u8, 85u8, 137u8, 173u8, 109u8, 82u8, 117u8,
+							211u8, 253u8,
 						],
 					)
 				}
@@ -7407,9 +7407,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							229u8, 3u8, 92u8, 197u8, 150u8, 217u8, 187u8, 58u8, 48u8, 34u8, 206u8,
-							72u8, 84u8, 115u8, 210u8, 133u8, 173u8, 206u8, 106u8, 64u8, 3u8, 27u8,
-							65u8, 164u8, 175u8, 238u8, 237u8, 137u8, 246u8, 15u8, 79u8, 208u8,
+							23u8, 202u8, 157u8, 79u8, 233u8, 175u8, 242u8, 28u8, 247u8, 216u8,
+							148u8, 138u8, 31u8, 93u8, 217u8, 242u8, 248u8, 122u8, 242u8, 165u8,
+							67u8, 225u8, 105u8, 241u8, 40u8, 81u8, 232u8, 151u8, 182u8, 113u8,
+							23u8, 130u8,
 						],
 					)
 				}
@@ -7435,10 +7436,9 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							100u8, 187u8, 166u8, 123u8, 181u8, 217u8, 198u8, 93u8, 192u8, 43u8,
-							120u8, 250u8, 106u8, 187u8, 184u8, 212u8, 24u8, 105u8, 102u8, 29u8,
-							145u8, 220u8, 193u8, 41u8, 113u8, 92u8, 208u8, 233u8, 80u8, 3u8, 72u8,
-							142u8,
+							66u8, 39u8, 4u8, 20u8, 8u8, 43u8, 141u8, 163u8, 45u8, 232u8, 83u8,
+							196u8, 105u8, 42u8, 231u8, 170u8, 236u8, 30u8, 98u8, 43u8, 224u8, 73u8,
+							8u8, 208u8, 50u8, 116u8, 2u8, 37u8, 226u8, 157u8, 249u8, 193u8,
 						],
 					)
 				}
@@ -7461,10 +7461,10 @@ pub mod api {
 							weight,
 						},
 						[
-							248u8, 233u8, 49u8, 17u8, 159u8, 160u8, 133u8, 104u8, 56u8, 56u8, 78u8,
-							243u8, 14u8, 78u8, 193u8, 76u8, 133u8, 40u8, 212u8, 235u8, 214u8,
-							120u8, 131u8, 18u8, 206u8, 27u8, 128u8, 210u8, 23u8, 109u8, 209u8,
-							52u8,
+							222u8, 150u8, 13u8, 118u8, 150u8, 13u8, 56u8, 211u8, 198u8, 109u8, 5u8,
+							43u8, 189u8, 147u8, 215u8, 167u8, 99u8, 160u8, 224u8, 20u8, 224u8,
+							245u8, 163u8, 253u8, 173u8, 205u8, 98u8, 170u8, 7u8, 235u8, 249u8,
+							71u8,
 						],
 					)
 				}
@@ -7504,10 +7504,9 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							246u8, 98u8, 179u8, 32u8, 49u8, 82u8, 125u8, 199u8, 214u8, 143u8,
-							112u8, 129u8, 243u8, 115u8, 206u8, 121u8, 121u8, 138u8, 185u8, 205u8,
-							207u8, 224u8, 58u8, 32u8, 231u8, 51u8, 29u8, 0u8, 16u8, 237u8, 132u8,
-							91u8,
+							167u8, 172u8, 213u8, 196u8, 158u8, 194u8, 170u8, 10u8, 101u8, 93u8,
+							54u8, 153u8, 1u8, 145u8, 163u8, 46u8, 245u8, 161u8, 87u8, 93u8, 107u8,
+							209u8, 114u8, 45u8, 38u8, 185u8, 84u8, 192u8, 227u8, 225u8, 74u8, 52u8,
 						],
 					)
 				}
@@ -7530,9 +7529,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							13u8, 36u8, 191u8, 209u8, 109u8, 31u8, 206u8, 217u8, 67u8, 167u8,
-							250u8, 116u8, 29u8, 37u8, 151u8, 20u8, 172u8, 101u8, 79u8, 112u8, 15u8,
-							154u8, 96u8, 16u8, 249u8, 103u8, 208u8, 101u8, 119u8, 2u8, 44u8, 109u8,
+							66u8, 104u8, 192u8, 138u8, 153u8, 134u8, 170u8, 122u8, 87u8, 234u8,
+							155u8, 110u8, 225u8, 138u8, 166u8, 181u8, 136u8, 86u8, 200u8, 224u8,
+							153u8, 180u8, 186u8, 125u8, 126u8, 75u8, 22u8, 179u8, 194u8, 145u8,
+							187u8, 89u8,
 						],
 					)
 				}
@@ -11669,9 +11669,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							79u8, 227u8, 217u8, 50u8, 232u8, 47u8, 229u8, 224u8, 15u8, 184u8,
-							179u8, 233u8, 18u8, 71u8, 96u8, 44u8, 175u8, 22u8, 130u8, 36u8, 30u8,
-							185u8, 23u8, 164u8, 113u8, 47u8, 169u8, 99u8, 252u8, 61u8, 41u8, 21u8,
+							32u8, 36u8, 63u8, 177u8, 5u8, 182u8, 210u8, 189u8, 81u8, 193u8, 176u8,
+							20u8, 83u8, 199u8, 186u8, 115u8, 92u8, 187u8, 93u8, 205u8, 144u8,
+							105u8, 119u8, 144u8, 115u8, 144u8, 205u8, 45u8, 118u8, 100u8, 182u8,
+							193u8,
 						],
 					)
 				}
@@ -16672,22 +16673,33 @@ pub mod api {
 				)]
 				#[doc = "Approve a proposed transaction"]
 				#[doc = ""]
+				#[doc = "The approver must resubmit the proposal's inner call bytes; the approval is"]
+				#[doc = "only valid if they are byte-equal to the payload stored at `proposal_id`."]
+				#[doc = "This binds the approver's signature to the actual call being approved, so"]
+				#[doc = "offline/cold-wallet signers can decode and inspect what they are signing"]
+				#[doc = "instead of trusting an opaque proposal id."]
+				#[doc = ""]
 				#[doc = "If this approval brings the total approvals to or above the threshold,"]
 				#[doc = "the proposal status changes to `Approved` and can be executed via `execute()`."]
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
+				#[doc = "- `call`: The encoded inner call of the proposal (must match the stored payload)"]
 				#[doc = ""]
 				#[doc = "Weight: Charges for MAX call size, refunds based on actual"]
 				pub struct Approve {
 					pub multisig_address: approve::MultisigAddress,
 					pub proposal_id: approve::ProposalId,
+					pub call: approve::Call,
 				}
 				pub mod approve {
 					use super::runtime_types;
 					pub type MultisigAddress = ::subxt::ext::subxt_core::utils::AccountId32;
 					pub type ProposalId = ::core::primitive::u32;
+					pub type Call = runtime_types::bounded_collections::bounded_vec::BoundedVec<
+						::core::primitive::u8,
+					>;
 				}
 				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for Approve {
 					const PALLET: &'static str = "Multisig";
@@ -16905,27 +16917,35 @@ pub mod api {
 				}
 				#[doc = "Approve a proposed transaction"]
 				#[doc = ""]
+				#[doc = "The approver must resubmit the proposal's inner call bytes; the approval is"]
+				#[doc = "only valid if they are byte-equal to the payload stored at `proposal_id`."]
+				#[doc = "This binds the approver's signature to the actual call being approved, so"]
+				#[doc = "offline/cold-wallet signers can decode and inspect what they are signing"]
+				#[doc = "instead of trusting an opaque proposal id."]
+				#[doc = ""]
 				#[doc = "If this approval brings the total approvals to or above the threshold,"]
 				#[doc = "the proposal status changes to `Approved` and can be executed via `execute()`."]
 				#[doc = ""]
 				#[doc = "Parameters:"]
 				#[doc = "- `multisig_address`: The multisig account"]
 				#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
+				#[doc = "- `call`: The encoded inner call of the proposal (must match the stored payload)"]
 				#[doc = ""]
 				#[doc = "Weight: Charges for MAX call size, refunds based on actual"]
 				pub fn approve(
 					&self,
 					multisig_address: types::approve::MultisigAddress,
 					proposal_id: types::approve::ProposalId,
+					call: types::approve::Call,
 				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::Approve> {
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Multisig",
 						"approve",
-						types::Approve { multisig_address, proposal_id },
+						types::Approve { multisig_address, proposal_id, call },
 						[
-							9u8, 56u8, 186u8, 135u8, 222u8, 23u8, 37u8, 64u8, 123u8, 199u8, 205u8,
-							29u8, 216u8, 128u8, 37u8, 185u8, 170u8, 121u8, 75u8, 100u8, 198u8,
-							80u8, 16u8, 249u8, 170u8, 91u8, 162u8, 201u8, 215u8, 81u8, 87u8, 190u8,
+							17u8, 24u8, 48u8, 140u8, 188u8, 27u8, 94u8, 183u8, 209u8, 243u8, 139u8,
+							55u8, 59u8, 212u8, 220u8, 78u8, 227u8, 235u8, 36u8, 122u8, 0u8, 125u8,
+							98u8, 45u8, 234u8, 134u8, 196u8, 93u8, 140u8, 152u8, 171u8, 135u8,
 						],
 					)
 				}
@@ -21041,17 +21061,27 @@ pub mod api {
 					#[codec(index = 2)]
 					#[doc = "Approve a proposed transaction"]
 					#[doc = ""]
+					#[doc = "The approver must resubmit the proposal's inner call bytes; the approval is"]
+					#[doc = "only valid if they are byte-equal to the payload stored at `proposal_id`."]
+					#[doc = "This binds the approver's signature to the actual call being approved, so"]
+					#[doc = "offline/cold-wallet signers can decode and inspect what they are signing"]
+					#[doc = "instead of trusting an opaque proposal id."]
+					#[doc = ""]
 					#[doc = "If this approval brings the total approvals to or above the threshold,"]
 					#[doc = "the proposal status changes to `Approved` and can be executed via `execute()`."]
 					#[doc = ""]
 					#[doc = "Parameters:"]
 					#[doc = "- `multisig_address`: The multisig account"]
 					#[doc = "- `proposal_id`: ID (nonce) of the proposal to approve"]
+					#[doc = "- `call`: The encoded inner call of the proposal (must match the stored payload)"]
 					#[doc = ""]
 					#[doc = "Weight: Charges for MAX call size, refunds based on actual"]
 					approve {
 						multisig_address: ::subxt::ext::subxt_core::utils::AccountId32,
 						proposal_id: ::core::primitive::u32,
+						call: runtime_types::bounded_collections::bounded_vec::BoundedVec<
+							::core::primitive::u8,
+						>,
 					},
 					#[codec(index = 3)]
 					#[doc = "Cancel a proposed transaction (only by proposer)"]
@@ -21205,6 +21235,9 @@ pub mod api {
 					#[codec(index = 24)]
 					#[doc = "Call weight exceeds MaxInnerCallWeight limit"]
 					CallWeightExceedsLimit,
+					#[codec(index = 25)]
+					#[doc = "Provided call does not match the stored proposal payload"]
+					CallMismatch,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,

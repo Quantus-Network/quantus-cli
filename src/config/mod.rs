@@ -10,6 +10,8 @@ pub struct CompatibleRuntime {
 pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
 	CompatibleRuntime { spec_version: 134, transaction_version: 2 },
 	CompatibleRuntime { spec_version: 135, transaction_version: 2 },
+	CompatibleRuntime { spec_version: 135, transaction_version: 3 },
+	CompatibleRuntime { spec_version: 136, transaction_version: 3 },
 ];
 
 /// Check whether a runtime version pair is supported by this CLI.

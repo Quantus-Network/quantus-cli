@@ -626,7 +626,21 @@ pub async fn approve_proposal(
 	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
 	proposal_id: u32,
 ) -> crate::error::Result<subxt::utils::H256> {
-	let approve_tx = quantus_subxt::api::tx().multisig().approve(multisig_address, proposal_id);
+	// The chain binds each approval to the proposal's inner call payload, so fetch
+	// the stored call bytes and resubmit them with the approval.
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+	let proposal_query = quantus_subxt::api::storage()
+		.multisig()
+		.proposals(multisig_address.clone(), proposal_id);
+	let proposal = storage_at.fetch(&proposal_query).await?.ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!("Proposal {} does not exist", proposal_id))
+	})?;
+
+	let approve_tx =
+		quantus_subxt::api::tx()
+			.multisig()
+			.approve(multisig_address, proposal_id, proposal.call);
 
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
 	let tx_hash = crate::cli::common::submit_transaction(
@@ -1699,8 +1713,12 @@ async fn handle_approve(
 		));
 	}
 
-	// Build transaction
-	let approve_tx = quantus_subxt::api::tx().multisig().approve(multisig_address, proposal_id);
+	// Build transaction. The chain binds each approval to the proposal's inner call
+	// payload, so resubmit the exact call bytes stored at this proposal id.
+	let approve_tx =
+		quantus_subxt::api::tx()
+			.multisig()
+			.approve(multisig_address, proposal_id, proposal.call);
 
 	// Always wait for transaction confirmation
 	let approve_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
