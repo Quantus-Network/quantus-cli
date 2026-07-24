@@ -1565,10 +1565,9 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							32u8, 234u8, 47u8, 160u8, 157u8, 142u8, 236u8, 40u8, 222u8, 22u8, 75u8,
-							92u8, 244u8, 90u8, 235u8, 228u8, 137u8, 249u8, 207u8, 89u8, 87u8,
-							244u8, 41u8, 20u8, 102u8, 145u8, 48u8, 54u8, 164u8, 114u8, 122u8,
-							182u8,
+							90u8, 50u8, 211u8, 137u8, 17u8, 184u8, 134u8, 190u8, 29u8, 156u8, 36u8,
+							214u8, 214u8, 65u8, 28u8, 181u8, 114u8, 218u8, 8u8, 229u8, 48u8, 10u8,
+							183u8, 105u8, 113u8, 49u8, 40u8, 174u8, 69u8, 246u8, 158u8, 197u8,
 						],
 					)
 				}
@@ -1586,10 +1585,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							135u8, 197u8, 88u8, 132u8, 222u8, 66u8, 219u8, 154u8, 162u8, 155u8,
-							161u8, 58u8, 176u8, 115u8, 33u8, 214u8, 171u8, 221u8, 230u8, 21u8,
-							60u8, 15u8, 36u8, 117u8, 182u8, 70u8, 181u8, 108u8, 125u8, 72u8, 252u8,
-							40u8,
+							34u8, 56u8, 164u8, 48u8, 105u8, 57u8, 32u8, 57u8, 215u8, 116u8, 66u8,
+							5u8, 117u8, 168u8, 51u8, 154u8, 198u8, 60u8, 29u8, 154u8, 73u8, 240u8,
+							9u8, 177u8, 134u8, 205u8, 14u8, 43u8, 39u8, 95u8, 12u8, 151u8,
 						],
 					)
 				}
@@ -1980,6 +1978,9 @@ pub mod api {
 		pub fn scheduler(&self) -> scheduler::storage::StorageApi {
 			scheduler::storage::StorageApi
 		}
+		pub fn utility(&self) -> utility::storage::StorageApi {
+			utility::storage::StorageApi
+		}
 		pub fn reversible_transfers(&self) -> reversible_transfers::storage::StorageApi {
 			reversible_transfers::storage::StorageApi
 		}
@@ -2068,9 +2069,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				0u8, 140u8, 5u8, 40u8, 237u8, 46u8, 42u8, 0u8, 228u8, 200u8, 1u8, 226u8, 132u8,
-				185u8, 140u8, 253u8, 54u8, 127u8, 56u8, 200u8, 164u8, 237u8, 198u8, 151u8, 133u8,
-				33u8, 239u8, 56u8, 190u8, 69u8, 228u8, 26u8,
+				229u8, 9u8, 51u8, 78u8, 26u8, 145u8, 221u8, 175u8, 20u8, 81u8, 176u8, 15u8, 45u8,
+				47u8, 171u8, 14u8, 83u8, 216u8, 26u8, 119u8, 216u8, 16u8, 55u8, 218u8, 129u8,
+				104u8, 141u8, 209u8, 205u8, 155u8, 6u8, 144u8,
 			]
 	}
 	pub mod system {
@@ -3198,9 +3199,10 @@ pub mod api {
 						"Events",
 						(),
 						[
-							12u8, 200u8, 85u8, 114u8, 205u8, 35u8, 13u8, 101u8, 195u8, 51u8, 123u8,
-							145u8, 74u8, 61u8, 217u8, 71u8, 184u8, 61u8, 132u8, 83u8, 214u8, 117u8,
-							222u8, 18u8, 13u8, 229u8, 195u8, 147u8, 223u8, 19u8, 66u8, 105u8,
+							13u8, 93u8, 203u8, 141u8, 208u8, 101u8, 248u8, 136u8, 160u8, 153u8,
+							118u8, 135u8, 207u8, 11u8, 73u8, 51u8, 253u8, 137u8, 82u8, 57u8, 46u8,
+							108u8, 144u8, 243u8, 99u8, 155u8, 153u8, 82u8, 114u8, 59u8, 251u8,
+							89u8,
 						],
 					)
 				}
@@ -7317,9 +7319,10 @@ pub mod api {
 						"batch",
 						types::Batch { calls },
 						[
-							91u8, 52u8, 14u8, 228u8, 168u8, 75u8, 218u8, 19u8, 121u8, 112u8, 126u8,
-							236u8, 87u8, 77u8, 194u8, 140u8, 196u8, 15u8, 84u8, 117u8, 80u8, 101u8,
-							217u8, 62u8, 28u8, 83u8, 226u8, 233u8, 176u8, 2u8, 158u8, 79u8,
+							135u8, 158u8, 49u8, 34u8, 225u8, 221u8, 148u8, 92u8, 90u8, 100u8,
+							166u8, 203u8, 132u8, 97u8, 40u8, 94u8, 123u8, 153u8, 237u8, 174u8,
+							111u8, 204u8, 191u8, 249u8, 58u8, 94u8, 185u8, 231u8, 204u8, 56u8,
+							141u8, 234u8,
 						],
 					)
 				}
@@ -7349,10 +7352,10 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							78u8, 239u8, 51u8, 124u8, 113u8, 201u8, 252u8, 171u8, 182u8, 113u8,
-							155u8, 193u8, 125u8, 113u8, 241u8, 199u8, 215u8, 237u8, 55u8, 121u8,
-							247u8, 255u8, 41u8, 35u8, 206u8, 143u8, 157u8, 90u8, 203u8, 106u8,
-							252u8, 91u8,
+							250u8, 88u8, 125u8, 217u8, 141u8, 180u8, 83u8, 152u8, 176u8, 72u8,
+							192u8, 96u8, 124u8, 89u8, 66u8, 74u8, 237u8, 221u8, 238u8, 59u8, 40u8,
+							119u8, 147u8, 155u8, 130u8, 213u8, 199u8, 186u8, 246u8, 227u8, 27u8,
+							23u8,
 						],
 					)
 				}
@@ -7378,9 +7381,10 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							9u8, 111u8, 191u8, 88u8, 100u8, 224u8, 185u8, 197u8, 208u8, 26u8,
-							198u8, 42u8, 215u8, 246u8, 54u8, 120u8, 3u8, 148u8, 182u8, 44u8, 233u8,
-							60u8, 26u8, 128u8, 101u8, 87u8, 141u8, 143u8, 9u8, 197u8, 184u8, 64u8,
+							41u8, 34u8, 6u8, 168u8, 67u8, 1u8, 242u8, 173u8, 200u8, 209u8, 197u8,
+							225u8, 4u8, 115u8, 216u8, 144u8, 128u8, 59u8, 200u8, 111u8, 188u8,
+							123u8, 242u8, 181u8, 189u8, 132u8, 82u8, 254u8, 216u8, 14u8, 144u8,
+							81u8,
 						],
 					)
 				}
@@ -7403,10 +7407,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							252u8, 234u8, 74u8, 189u8, 195u8, 91u8, 133u8, 238u8, 206u8, 171u8,
-							160u8, 141u8, 58u8, 250u8, 221u8, 113u8, 192u8, 201u8, 95u8, 103u8,
-							209u8, 0u8, 110u8, 235u8, 38u8, 225u8, 79u8, 73u8, 19u8, 75u8, 138u8,
-							146u8,
+							229u8, 3u8, 92u8, 197u8, 150u8, 217u8, 187u8, 58u8, 48u8, 34u8, 206u8,
+							72u8, 84u8, 115u8, 210u8, 133u8, 173u8, 206u8, 106u8, 64u8, 3u8, 27u8,
+							65u8, 164u8, 175u8, 238u8, 237u8, 137u8, 246u8, 15u8, 79u8, 208u8,
 						],
 					)
 				}
@@ -7432,9 +7435,10 @@ pub mod api {
 						"force_batch",
 						types::ForceBatch { calls },
 						[
-							130u8, 189u8, 219u8, 64u8, 240u8, 89u8, 49u8, 86u8, 163u8, 42u8, 52u8,
-							8u8, 152u8, 154u8, 147u8, 236u8, 209u8, 30u8, 243u8, 194u8, 123u8,
-							97u8, 97u8, 239u8, 97u8, 57u8, 104u8, 191u8, 235u8, 221u8, 1u8, 227u8,
+							100u8, 187u8, 166u8, 123u8, 181u8, 217u8, 198u8, 93u8, 192u8, 43u8,
+							120u8, 250u8, 106u8, 187u8, 184u8, 212u8, 24u8, 105u8, 102u8, 29u8,
+							145u8, 220u8, 193u8, 41u8, 113u8, 92u8, 208u8, 233u8, 80u8, 3u8, 72u8,
+							142u8,
 						],
 					)
 				}
@@ -7457,9 +7461,10 @@ pub mod api {
 							weight,
 						},
 						[
-							22u8, 169u8, 85u8, 171u8, 100u8, 38u8, 252u8, 11u8, 198u8, 55u8, 150u8,
-							190u8, 59u8, 5u8, 143u8, 123u8, 107u8, 23u8, 202u8, 0u8, 237u8, 255u8,
-							77u8, 19u8, 113u8, 77u8, 133u8, 52u8, 176u8, 110u8, 214u8, 221u8,
+							248u8, 233u8, 49u8, 17u8, 159u8, 160u8, 133u8, 104u8, 56u8, 56u8, 78u8,
+							243u8, 14u8, 78u8, 193u8, 76u8, 133u8, 40u8, 212u8, 235u8, 214u8,
+							120u8, 131u8, 18u8, 206u8, 27u8, 128u8, 210u8, 23u8, 109u8, 209u8,
+							52u8,
 						],
 					)
 				}
@@ -7499,9 +7504,10 @@ pub mod api {
 							fallback: ::subxt::ext::subxt_core::alloc::boxed::Box::new(fallback),
 						},
 						[
-							210u8, 174u8, 69u8, 89u8, 81u8, 251u8, 211u8, 77u8, 44u8, 88u8, 137u8,
-							153u8, 221u8, 116u8, 10u8, 183u8, 158u8, 145u8, 229u8, 108u8, 168u8,
-							123u8, 100u8, 162u8, 121u8, 201u8, 158u8, 103u8, 96u8, 96u8, 89u8, 4u8,
+							246u8, 98u8, 179u8, 32u8, 49u8, 82u8, 125u8, 199u8, 214u8, 143u8,
+							112u8, 129u8, 243u8, 115u8, 206u8, 121u8, 121u8, 138u8, 185u8, 205u8,
+							207u8, 224u8, 58u8, 32u8, 231u8, 51u8, 29u8, 0u8, 16u8, 237u8, 132u8,
+							91u8,
 						],
 					)
 				}
@@ -7524,10 +7530,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							68u8, 190u8, 238u8, 69u8, 88u8, 148u8, 111u8, 242u8, 200u8, 228u8,
-							47u8, 232u8, 101u8, 173u8, 104u8, 140u8, 30u8, 113u8, 236u8, 193u8,
-							48u8, 47u8, 116u8, 169u8, 97u8, 77u8, 17u8, 82u8, 37u8, 190u8, 158u8,
-							66u8,
+							13u8, 36u8, 191u8, 209u8, 109u8, 31u8, 206u8, 217u8, 67u8, 167u8,
+							250u8, 116u8, 29u8, 37u8, 151u8, 20u8, 172u8, 101u8, 79u8, 112u8, 15u8,
+							154u8, 96u8, 16u8, 249u8, 103u8, 208u8, 101u8, 119u8, 2u8, 44u8, 109u8,
 						],
 					)
 				}
@@ -7668,6 +7673,67 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for IfElseFallbackCalled {
 				const PALLET: &'static str = "Utility";
 				const EVENT: &'static str = "IfElseFallbackCalled";
+			}
+		}
+		pub mod storage {
+			use super::runtime_types;
+			pub mod types {
+				use super::runtime_types;
+				pub mod known_derivatives {
+					use super::runtime_types;
+					pub type KnownDerivatives = ();
+					pub type Param0 = ::subxt::ext::subxt_core::utils::AccountId32;
+				}
+			}
+			pub struct StorageApi;
+			impl StorageApi {
+				#[doc = " Derivative pseudonym accounts that have been used with [`Pallet::as_derivative`] at least"]
+				#[doc = " once and have therefore been revealed to the wormhole soundness counter."]
+				pub fn known_derivatives_iter(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::known_derivatives::KnownDerivatives,
+					(),
+					(),
+					::subxt::ext::subxt_core::utils::Yes,
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Utility",
+						"KnownDerivatives",
+						(),
+						[
+							7u8, 191u8, 89u8, 10u8, 69u8, 99u8, 173u8, 186u8, 52u8, 139u8, 104u8,
+							183u8, 71u8, 107u8, 206u8, 3u8, 88u8, 160u8, 238u8, 53u8, 84u8, 31u8,
+							171u8, 151u8, 88u8, 158u8, 134u8, 111u8, 200u8, 72u8, 151u8, 158u8,
+						],
+					)
+				}
+				#[doc = " Derivative pseudonym accounts that have been used with [`Pallet::as_derivative`] at least"]
+				#[doc = " once and have therefore been revealed to the wormhole soundness counter."]
+				pub fn known_derivatives(
+					&self,
+					_0: types::known_derivatives::Param0,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					::subxt::ext::subxt_core::storage::address::StaticStorageKey<
+						types::known_derivatives::Param0,
+					>,
+					types::known_derivatives::KnownDerivatives,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Utility",
+						"KnownDerivatives",
+						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
+						[
+							7u8, 191u8, 89u8, 10u8, 69u8, 99u8, 173u8, 186u8, 52u8, 139u8, 104u8,
+							183u8, 71u8, 107u8, 206u8, 3u8, 88u8, 160u8, 238u8, 53u8, 84u8, 31u8,
+							171u8, 151u8, 88u8, 158u8, 134u8, 111u8, 200u8, 72u8, 151u8, 158u8,
+						],
+					)
+				}
 			}
 		}
 		pub mod constants {
@@ -11603,9 +11669,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							83u8, 241u8, 200u8, 95u8, 176u8, 73u8, 86u8, 254u8, 102u8, 49u8, 113u8,
-							102u8, 55u8, 250u8, 115u8, 98u8, 254u8, 96u8, 27u8, 19u8, 132u8, 79u8,
-							207u8, 104u8, 114u8, 167u8, 142u8, 208u8, 170u8, 125u8, 198u8, 136u8,
+							79u8, 227u8, 217u8, 50u8, 232u8, 47u8, 229u8, 224u8, 15u8, 184u8,
+							179u8, 233u8, 18u8, 71u8, 96u8, 44u8, 175u8, 22u8, 130u8, 36u8, 30u8,
+							185u8, 23u8, 164u8, 113u8, 47u8, 169u8, 99u8, 252u8, 61u8, 41u8, 21u8,
 						],
 					)
 				}
@@ -17559,46 +17625,98 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+				#[doc = "Verify a private-batch wormhole proof and process all exits in the batch."]
 				#[doc = ""]
 				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
 				#[doc = "If validation fails before ZK verification, we return minimal weight."]
 				#[doc = "If ZK verification fails, we return full weight since the work was done."]
-				pub struct VerifyAggregatedProof {
-					pub proof_bytes: verify_aggregated_proof::ProofBytes,
+				pub struct VerifyPrivateBatch {
+					pub proof_bytes: verify_private_batch::ProofBytes,
 				}
-				pub mod verify_aggregated_proof {
+				pub mod verify_private_batch {
 					use super::runtime_types;
 					pub type ProofBytes =
 						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
 				}
-				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VerifyAggregatedProof {
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VerifyPrivateBatch {
 					const PALLET: &'static str = "Wormhole";
-					const CALL: &'static str = "verify_aggregated_proof";
+					const CALL: &'static str = "verify_private_batch";
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				#[doc = "Verify a public-batch wormhole proof and process all valid exit segments."]
+				#[doc = ""]
+				#[doc = "Invalid segments (already-spent nullifiers) are denied individually; dummy-padded"]
+				#[doc = "segments (all-zero nullifiers) are skipped silently. A portion of the burn bucket"]
+				#[doc = "is minted to the proof's `aggregator_address`; if that mint fails (e.g. the"]
+				#[doc = "account doesn't exist and the rebate is below the existential deposit) the"]
+				#[doc = "rebate is burned instead of failing the users' exits."]
+				pub struct VerifyPublicBatch {
+					pub proof_bytes: verify_public_batch::ProofBytes,
+				}
+				pub mod verify_public_batch {
+					use super::runtime_types;
+					pub type ProofBytes =
+						::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>;
+				}
+				impl ::subxt::ext::subxt_core::blocks::StaticExtrinsic for VerifyPublicBatch {
+					const PALLET: &'static str = "Wormhole";
+					const CALL: &'static str = "verify_public_batch";
 				}
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+				#[doc = "Verify a private-batch wormhole proof and process all exits in the batch."]
 				#[doc = ""]
 				#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
 				#[doc = "If validation fails before ZK verification, we return minimal weight."]
 				#[doc = "If ZK verification fails, we return full weight since the work was done."]
-				pub fn verify_aggregated_proof(
+				pub fn verify_private_batch(
 					&self,
-					proof_bytes: types::verify_aggregated_proof::ProofBytes,
-				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<
-					types::VerifyAggregatedProof,
-				> {
+					proof_bytes: types::verify_private_batch::ProofBytes,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::VerifyPrivateBatch>
+				{
 					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
 						"Wormhole",
-						"verify_aggregated_proof",
-						types::VerifyAggregatedProof { proof_bytes },
+						"verify_private_batch",
+						types::VerifyPrivateBatch { proof_bytes },
 						[
-							122u8, 42u8, 194u8, 153u8, 22u8, 66u8, 199u8, 173u8, 19u8, 107u8,
-							232u8, 147u8, 77u8, 40u8, 115u8, 208u8, 183u8, 77u8, 46u8, 149u8, 56u8,
-							225u8, 146u8, 168u8, 49u8, 248u8, 42u8, 195u8, 180u8, 91u8, 75u8,
-							102u8,
+							138u8, 4u8, 114u8, 57u8, 176u8, 171u8, 151u8, 90u8, 93u8, 19u8, 57u8,
+							176u8, 66u8, 92u8, 244u8, 111u8, 52u8, 102u8, 210u8, 239u8, 220u8,
+							14u8, 150u8, 134u8, 251u8, 90u8, 34u8, 237u8, 117u8, 125u8, 115u8,
+							69u8,
+						],
+					)
+				}
+				#[doc = "Verify a public-batch wormhole proof and process all valid exit segments."]
+				#[doc = ""]
+				#[doc = "Invalid segments (already-spent nullifiers) are denied individually; dummy-padded"]
+				#[doc = "segments (all-zero nullifiers) are skipped silently. A portion of the burn bucket"]
+				#[doc = "is minted to the proof's `aggregator_address`; if that mint fails (e.g. the"]
+				#[doc = "account doesn't exist and the rebate is below the existential deposit) the"]
+				#[doc = "rebate is burned instead of failing the users' exits."]
+				pub fn verify_public_batch(
+					&self,
+					proof_bytes: types::verify_public_batch::ProofBytes,
+				) -> ::subxt::ext::subxt_core::tx::payload::StaticPayload<types::VerifyPublicBatch>
+				{
+					::subxt::ext::subxt_core::tx::payload::StaticPayload::new_static(
+						"Wormhole",
+						"verify_public_batch",
+						types::VerifyPublicBatch { proof_bytes },
+						[
+							169u8, 13u8, 181u8, 227u8, 212u8, 168u8, 177u8, 140u8, 2u8, 34u8, 84u8,
+							69u8, 178u8, 235u8, 250u8, 24u8, 126u8, 60u8, 52u8, 76u8, 79u8, 7u8,
+							110u8, 1u8, 77u8, 209u8, 62u8, 137u8, 212u8, 98u8, 93u8, 4u8,
 						],
 					)
 				}
@@ -17690,6 +17808,52 @@ pub mod api {
 			impl ::subxt::ext::subxt_core::events::StaticEvent for ProofVerified {
 				const PALLET: &'static str = "Wormhole";
 				const EVENT: &'static str = "ProofVerified";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "The block author's share of the wormhole exit volume fee was minted."]
+			#[doc = ""]
+			#[doc = "NOTE: keep this as the last variant — indexers decode events by their"]
+			#[doc = "position in this enum, so existing variants must never be reordered."]
+			pub struct MinerVolumeFeePaid {
+				pub miner: miner_volume_fee_paid::Miner,
+				pub amount: miner_volume_fee_paid::Amount,
+			}
+			pub mod miner_volume_fee_paid {
+				use super::runtime_types;
+				pub type Miner = ::subxt::ext::subxt_core::utils::AccountId32;
+				pub type Amount = ::core::primitive::u128;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for MinerVolumeFeePaid {
+				const PALLET: &'static str = "Wormhole";
+				const EVENT: &'static str = "MinerVolumeFeePaid";
+			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Some segments of an exit bundle were denied (their nullifiers were already"]
+			#[doc = "used, e.g. because the underlying private batch landed on-chain separately)."]
+			#[doc = "The remaining segments were processed normally."]
+			pub struct SegmentsDenied {
+				pub indices: segments_denied::Indices,
+			}
+			pub mod segments_denied {
+				use super::runtime_types;
+				pub type Indices =
+					::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u32>;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for SegmentsDenied {
+				const PALLET: &'static str = "Wormhole";
+				const EVENT: &'static str = "SegmentsDenied";
 			}
 		}
 		pub mod storage {
@@ -17963,6 +18127,24 @@ pub mod api {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"Wormhole",
 						"VolumeFeesBurnRate",
+						[
+							65u8, 93u8, 120u8, 165u8, 204u8, 81u8, 159u8, 163u8, 93u8, 135u8,
+							114u8, 121u8, 147u8, 35u8, 215u8, 213u8, 4u8, 223u8, 83u8, 37u8, 225u8,
+							200u8, 189u8, 156u8, 140u8, 36u8, 58u8, 46u8, 42u8, 232u8, 155u8, 0u8,
+						],
+					)
+				}
+				#[doc = " For public-batch proofs, the proportion of the burn bucket redirected to the"]
+				#[doc = " aggregator instead of being destroyed. The miner's share is unchanged."]
+				#[doc = " Example: Permill::from_percent(50) means half the burn portion goes to the aggregator."]
+				pub fn volume_fees_aggregator_rate(
+					&self,
+				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
+					runtime_types::sp_arithmetic::per_things::Permill,
+				> {
+					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
+						"Wormhole",
+						"VolumeFeesAggregatorRate",
 						[
 							65u8, 93u8, 120u8, 165u8, 204u8, 81u8, 159u8, 163u8, 93u8, 135u8,
 							114u8, 121u8, 147u8, 35u8, 215u8, 213u8, 4u8, 223u8, 83u8, 37u8, 225u8,
@@ -23429,12 +23611,24 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 2)]
-					#[doc = "Verify an aggregated wormhole proof and process all transfers in the batch."]
+					#[doc = "Verify a private-batch wormhole proof and process all exits in the batch."]
 					#[doc = ""]
 					#[doc = "Returns `DispatchResultWithPostInfo` to allow weight correction on early failures."]
 					#[doc = "If validation fails before ZK verification, we return minimal weight."]
 					#[doc = "If ZK verification fails, we return full weight since the work was done."]
-					verify_aggregated_proof {
+					verify_private_batch {
+						proof_bytes:
+							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
+					},
+					#[codec(index = 3)]
+					#[doc = "Verify a public-batch wormhole proof and process all valid exit segments."]
+					#[doc = ""]
+					#[doc = "Invalid segments (already-spent nullifiers) are denied individually; dummy-padded"]
+					#[doc = "segments (all-zero nullifiers) are skipped silently. A portion of the burn bucket"]
+					#[doc = "is minted to the proof's `aggregator_address`; if that mint fails (e.g. the"]
+					#[doc = "account doesn't exist and the rebate is below the existential deposit) the"]
+					#[doc = "rebate is burned instead of failing the users' exits."]
+					verify_public_batch {
 						proof_bytes:
 							::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u8>,
 					},
@@ -23455,27 +23649,35 @@ pub mod api {
 					#[codec(index = 0)]
 					InvalidPublicInputs,
 					#[codec(index = 1)]
+					#[doc = "No segment of the bundle is spendable: every non-dummy segment contains a"]
+					#[doc = "nullifier that is already used (or the single segment of a private-batch"]
+					#[doc = "proof does)."]
 					NullifierAlreadyUsed,
 					#[codec(index = 2)]
-					BlockNotFound,
+					#[doc = "The bundle contains only dummy (all-zero) padding segments, so there is"]
+					#[doc = "nothing to exit. Distinct from [`Error::NullifierAlreadyUsed`], which is a"]
+					#[doc = "replay of real segments."]
+					NoValidSegments,
 					#[codec(index = 3)]
-					AggregatedVerifierNotAvailable,
+					BlockNotFound,
 					#[codec(index = 4)]
-					AggregatedProofDeserializationFailed,
+					VerifierNotAvailable,
 					#[codec(index = 5)]
-					AggregatedVerificationFailed,
+					ProofDeserializationFailed,
 					#[codec(index = 6)]
-					InvalidAggregatedPublicInputs,
+					ProofVerificationFailed,
 					#[codec(index = 7)]
+					InvalidProofPublicInputs,
+					#[codec(index = 8)]
 					#[doc = "The volume fee rate in the proof doesn't match the configured rate"]
 					InvalidVolumeFeeRate,
-					#[codec(index = 8)]
+					#[codec(index = 9)]
 					#[doc = "Transfer amount is below the minimum required"]
 					TransferAmountBelowMinimum,
-					#[codec(index = 9)]
+					#[codec(index = 10)]
 					#[doc = "Only native asset (asset_id = 0) is supported in this version"]
 					NonNativeAssetNotSupported,
-					#[codec(index = 10)]
+					#[codec(index = 11)]
 					#[doc = "Soundness invariant violated: total wormhole exits would exceed the value that could"]
 					#[doc = "possibly have been deposited into wormhole addresses. This indicates a potential"]
 					#[doc = "soundness bug in the ZK proof system, so the exit is rejected."]
@@ -23525,6 +23727,22 @@ pub mod api {
 						nullifiers: ::subxt::ext::subxt_core::alloc::vec::Vec<
 							[::core::primitive::u8; 32usize],
 						>,
+					},
+					#[codec(index = 3)]
+					#[doc = "The block author's share of the wormhole exit volume fee was minted."]
+					#[doc = ""]
+					#[doc = "NOTE: keep this as the last variant — indexers decode events by their"]
+					#[doc = "position in this enum, so existing variants must never be reordered."]
+					MinerVolumeFeePaid {
+						miner: ::subxt::ext::subxt_core::utils::AccountId32,
+						amount: ::core::primitive::u128,
+					},
+					#[codec(index = 4)]
+					#[doc = "Some segments of an exit bundle were denied (their nullifiers were already"]
+					#[doc = "used, e.g. because the underlying private batch landed on-chain separately)."]
+					#[doc = "The remaining segments were processed normally."]
+					SegmentsDenied {
+						indices: ::subxt::ext::subxt_core::alloc::vec::Vec<::core::primitive::u32>,
 					},
 				}
 			}

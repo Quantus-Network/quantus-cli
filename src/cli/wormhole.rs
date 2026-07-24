@@ -18,12 +18,9 @@ use qp_rusty_crystals_hdwallet::{
 	derive_wormhole_from_mnemonic, generate_mnemonic, SensitiveBytes32, WormholePair,
 	QUANTUS_WORMHOLE_CHAIN_ID,
 };
-use qp_wormhole_aggregator::{
-	aggregator::{AggregationBackend, CircuitType},
-	config::CircuitBinsConfig,
-};
-use qp_wormhole_circuit::inputs::ParseAggregatedPublicInputs;
-use qp_wormhole_inputs::AggregatedPublicCircuitInputs;
+use qp_wormhole_aggregator::config::CircuitBinsConfig;
+use qp_wormhole_circuit::inputs::ParsePrivateBatchPublicInputs;
+use qp_wormhole_inputs::PrivateBatchPublicInputs;
 use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	utils::BytesDigest,
@@ -696,6 +693,28 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "aggregated_proof.hex")]
 		proof: String,
 	},
+	/// Aggregate private-batch proofs into a public batch (delegated, non-private
+	/// aggregation). The aggregator address earns a rebate from the burn portion
+	/// of the volume fee when the proof is verified on-chain.
+	AggregatePublic {
+		/// Input private-batch proof files (hex-encoded, from `wormhole aggregate`)
+		#[arg(short, long, num_args = 1..)]
+		proofs: Vec<String>,
+
+		/// Aggregator address receiving the fee rebate (hex or SS58)
+		#[arg(short, long)]
+		aggregator: String,
+
+		/// Output file for the public-batch proof
+		#[arg(short, long, default_value = "public_batch_proof.hex")]
+		output: String,
+	},
+	/// Verify a public-batch wormhole proof on-chain
+	VerifyPublicBatch {
+		/// Path to the public-batch proof file (hex-encoded)
+		#[arg(short, long, default_value = "public_batch_proof.hex")]
+		proof: String,
+	},
 	/// Parse and display the contents of a proof file (for debugging)
 	ParseProof {
 		/// Path to the proof file (hex-encoded)
@@ -703,8 +722,12 @@ pub enum WormholeCommands {
 		proof: String,
 
 		/// Parse as aggregated proof (default: false, parses as leaf proof)
-		#[arg(long)]
+		#[arg(long, conflicts_with = "public_batch")]
 		aggregated: bool,
+
+		/// Parse as public-batch proof
+		#[arg(long)]
+		public_batch: bool,
 
 		/// Verify the proof cryptographically (local verification, not on-chain)
 		#[arg(long)]
@@ -747,6 +770,11 @@ pub enum WormholeCommands {
 		/// Dry run - show what would be done without executing
 		#[arg(long)]
 		dry_run: bool,
+
+		/// Route each round through a public batch (second aggregation layer).
+		/// The wallet address is used as the aggregator and earns the fee rebate.
+		#[arg(long)]
+		public: bool,
 	},
 	/// Dissolve a large wormhole deposit into many small outputs for better privacy.
 	///
@@ -948,10 +976,12 @@ pub async fn handle_wormhole_command(
 			Ok(())
 		},
 		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
-		WormholeCommands::VerifyAggregated { proof } =>
-			verify_aggregated_proof(proof, node_url).await,
-		WormholeCommands::ParseProof { proof, aggregated, verify } =>
-			parse_proof_file(proof, aggregated, verify).await,
+		WormholeCommands::VerifyAggregated { proof } => verify_private_batch(proof, node_url).await,
+		WormholeCommands::AggregatePublic { proofs, aggregator, output } =>
+			aggregate_public_batch(proofs, aggregator, output).await,
+		WormholeCommands::VerifyPublicBatch { proof } => verify_public_batch(proof, node_url).await,
+		WormholeCommands::ParseProof { proof, aggregated, public_batch, verify } =>
+			parse_proof_file(proof, aggregated, public_batch, verify).await,
 		WormholeCommands::Multiround {
 			num_proofs,
 			rounds,
@@ -962,6 +992,7 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 			dry_run,
+			public,
 		} => {
 			// Convert DEV to planck and align to SCALE_DOWN_FACTOR for clean quantization
 			let amount_planck = (amount * 1_000_000_000_000.0) as u128;
@@ -976,6 +1007,7 @@ pub async fn handle_wormhole_command(
 				keep_files,
 				output_dir,
 				dry_run,
+				public,
 				node_url,
 			)
 			.await
@@ -1124,11 +1156,29 @@ pub async fn at_best_block(
 	Ok(block)
 }
 
+/// Load leaf-circuit common data for deserializing leaf proofs from `bins_dir`.
+fn load_leaf_common_data(
+	bins_dir: &std::path::Path,
+) -> crate::error::Result<plonky2::plonk::circuit_data::CommonCircuitData<F, D>> {
+	use qp_wormhole_aggregator::common::utils::load_canonical_leaf_verifier_data;
+
+	let common_bytes = std::fs::read(bins_dir.join("common.bin")).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read common.bin: {}", e))
+	})?;
+	let verifier_bytes = std::fs::read(bins_dir.join("verifier.bin")).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to read verifier.bin: {}", e))
+	})?;
+	let leaf = load_canonical_leaf_verifier_data(&common_bytes, &verifier_bytes).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to load leaf circuit data: {}", e))
+	})?;
+	Ok(leaf.common)
+}
+
 pub async fn aggregate_proofs(
 	proof_files: Vec<String>,
 	output_file: String,
 ) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::aggregator::{AggregationBackend, CircuitType, Layer0Aggregator};
+	use qp_wormhole_aggregator::private_batch::prover::PrivateBatchProver;
 
 	log_print!("Aggregating {} proofs...", proof_files.len());
 
@@ -1141,6 +1191,11 @@ pub async fn aggregate_proofs(
 	})?;
 
 	// Validate number of proofs before doing expensive work
+	if proof_files.is_empty() {
+		return Err(crate::error::QuantusError::Generic(
+			"At least one leaf proof is required".to_string(),
+		));
+	}
 	if proof_files.len() > agg_config.num_leaf_proofs {
 		return Err(crate::error::QuantusError::Generic(format!(
 			"Too many proofs: {} provided, max {} supported by circuit",
@@ -1150,22 +1205,12 @@ pub async fn aggregate_proofs(
 	}
 
 	let num_padding_proofs = agg_config.num_leaf_proofs - proof_files.len();
+	log_print!("  Loading private-batch prover (will pad with {} dummies)...", num_padding_proofs);
+	log_verbose!("Aggregation config: num_leaf_proofs={}", agg_config.num_leaf_proofs);
 
-	log_print!("  Loading aggregator and generating {} dummy proofs...", num_padding_proofs);
+	let common_data = load_leaf_common_data(&bins_dir)?;
 
-	let mut aggregator = Layer0Aggregator::new(&bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to load aggregator from pre-built bins: {}",
-			e
-		))
-	})?;
-
-	log_verbose!("Aggregation config: num_leaf_proofs={}", aggregator.batch_size());
-	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to load leaf circuit data: {}", e))
-	})?;
-
-	// Load and add proofs using helper function
+	let mut proofs = Vec::with_capacity(proof_files.len());
 	for (idx, proof_file) in proof_files.iter().enumerate() {
 		log_verbose!("Loading proof {}/{}: {}", idx + 1, proof_files.len(), proof_file);
 
@@ -1180,23 +1225,27 @@ pub async fn aggregate_proofs(
 					proof_file, e
 				))
 			})?;
-
-		aggregator.push_proof(proof).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to add proof: {}", e))
-		})?;
+		proofs.push(proof);
 	}
+
+	let prover = PrivateBatchProver::new_from_binaries_dir(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to load private-batch prover from pre-built bins: {}",
+			e
+		))
+	})?;
 
 	log_print!("  Running aggregation...");
 	let agg_start = std::time::Instant::now();
-	let aggregated_proof = aggregator
-		.aggregate()
+	let aggregated_proof = prover
+		.aggregate(proofs)
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("  Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
 
 	// Parse and display aggregated public inputs
 	let aggregated_public_inputs =
-		AggregatedPublicCircuitInputs::try_from_felts(aggregated_proof.public_inputs.as_slice())
+		PrivateBatchPublicInputs::try_from_felts(aggregated_proof.public_inputs.as_slice())
 			.map_err(|e| {
 				crate::error::QuantusError::Generic(format!(
 					"Failed to parse aggregated public inputs: {}",
@@ -1229,14 +1278,27 @@ pub async fn aggregate_proofs(
 		}
 	}
 
-	// Verify the aggregated proof locally
+	// Verify via the verifier crate (byte round-trip keeps proof types aligned).
 	log_verbose!("Verifying aggregated proof locally...");
-	aggregator.verify(aggregated_proof.clone()).map_err(|e| {
+	let proof_bytes = aggregated_proof.to_bytes();
+	let verifier = crate::batch_verifier::load_private_batch_verifier(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to load private-batch verifier: {}", e))
+	})?;
+	let verify_proof = qp_wormhole_verifier::ProofWithPublicInputs::from_bytes(
+		proof_bytes.clone(),
+		&verifier.circuit_data.common,
+	)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to deserialize aggregated proof for verification: {}",
+			e
+		))
+	})?;
+	verifier.verify(verify_proof).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Aggregated proof verification failed: {}", e))
 	})?;
 
-	// Save aggregated proof using helper function
-	write_proof_file(&output_file, &aggregated_proof.to_bytes()).map_err(|e| {
+	write_proof_file(&output_file, &proof_bytes).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
 	})?;
 
@@ -1251,11 +1313,169 @@ pub async fn aggregate_proofs(
 	Ok(())
 }
 
+/// Aggregate private-batch proofs into a public batch with the given aggregator address.
+///
+/// Partial batches are padded with dummy private-batch proofs by the prover, so any
+/// number of proofs from 1 up to the circuit's `num_private_batch_proofs` is accepted.
+pub async fn aggregate_public_batch(
+	proof_files: Vec<String>,
+	aggregator_address_str: String,
+	output_file: String,
+) -> crate::error::Result<()> {
+	use plonky2::field::types::PrimeField64;
+	use qp_wormhole_aggregator::aggregator::PublicBatchAggregator;
+	use qp_wormhole_inputs::PublicBatchPublicInputs;
+
+	log_print!("Aggregating {} private-batch proofs into a public batch...", proof_files.len());
+
+	let aggregator_bytes = parse_exit_account(&aggregator_address_str).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Invalid aggregator address: {}", e))
+	})?;
+	let aggregator_address = BytesDigest::try_from(aggregator_bytes).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Aggregator address is not representable as field elements (must be a hash-derived account): {}",
+			e
+		))
+	})?;
+	log_print!("  Aggregator (fee rebate recipient): {}", slice_to_quantus_ss58(&aggregator_bytes));
+
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to load circuit bins config from {:?}: {}",
+			bins_dir, e
+		))
+	})?;
+	let num_private_batch_proofs = agg_config.num_private_batch_proofs.ok_or_else(|| {
+		crate::error::QuantusError::Generic(
+			"Circuit binaries were generated without public-batch support; \
+				 delete the generated-bins directory to regenerate them"
+				.to_string(),
+		)
+	})?;
+
+	if proof_files.is_empty() {
+		return Err(crate::error::QuantusError::Generic(
+			"At least one private-batch proof is required".to_string(),
+		));
+	}
+	if proof_files.len() > num_private_batch_proofs {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Too many proofs: {} provided, max {} supported by circuit",
+			proof_files.len(),
+			num_private_batch_proofs
+		)));
+	}
+
+	let mut aggregator =
+		PublicBatchAggregator::new(&bins_dir, aggregator_address).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to load public-batch aggregator from pre-built bins: {}",
+				e
+			))
+		})?;
+
+	// Inner proofs for the public-batch aggregator are private-batch proofs.
+	let common_data = aggregator.private_batch_common().clone();
+
+	let mut batch_key = None;
+	for (idx, proof_file) in proof_files.iter().enumerate() {
+		log_verbose!("Loading proof {}/{}: {}", idx + 1, proof_files.len(), proof_file);
+		let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
+		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes, &common_data)
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!(
+					"Failed to deserialize private-batch proof from {}: {}",
+					proof_file, e
+				))
+			})?;
+		let key = aggregator.push_proof(proof).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to add proof: {}", e))
+		})?;
+		match &batch_key {
+			None => batch_key = Some(key),
+			Some(existing) if existing != &key => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Proof {} is incompatible with earlier proofs (block_hash/asset_id/fee mismatch)",
+					proof_file
+				)));
+			},
+			Some(_) => {},
+		}
+	}
+
+	let batch_key = batch_key.ok_or_else(|| {
+		crate::error::QuantusError::Generic("No private-batch proofs were admitted".to_string())
+	})?;
+
+	let num_dummies = num_private_batch_proofs - proof_files.len();
+	if num_dummies > 0 {
+		log_print!("  Padding with {} dummy private-batch proof(s)...", num_dummies);
+	}
+
+	log_print!("  Running public-batch aggregation...");
+	let agg_start = std::time::Instant::now();
+	let public_batch_proof = aggregator.aggregate(&batch_key).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Public-batch aggregation failed: {}", e))
+	})?;
+	log_print!("  Aggregation: {:.2}s", agg_start.elapsed().as_secs_f64());
+
+	// Parse and display the public-batch public inputs
+	let pi_u64s: Vec<u64> =
+		public_batch_proof.public_inputs.iter().map(|f| f.to_canonical_u64()).collect();
+	let public_inputs = PublicBatchPublicInputs::try_from_u64_slice(
+		&pi_u64s,
+		num_private_batch_proofs,
+		agg_config.num_leaf_proofs,
+	)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to parse public-batch public inputs: {}",
+			e
+		))
+	})?;
+
+	log_verbose!("Public-batch public inputs: {:#?}", public_inputs);
+	log_print!("  Exit accounts in public batch:");
+	for (idx, account_data) in public_inputs.account_data.iter().enumerate() {
+		let exit_bytes: &[u8] = account_data.exit_account.as_ref();
+		let is_dummy = exit_bytes.iter().all(|&b| b == 0) || account_data.summed_output_amount == 0;
+		if is_dummy {
+			log_verbose!("    [{}] DUMMY (skipped)", idx);
+		} else {
+			let dequantized_amount =
+				(account_data.summed_output_amount as u128) * SCALE_DOWN_FACTOR;
+			log_print!(
+				"    [{}] {} -> {}",
+				idx,
+				slice_to_quantus_ss58(exit_bytes),
+				format_balance(dequantized_amount)
+			);
+		}
+	}
+
+	log_verbose!("Verifying public-batch proof locally...");
+	aggregator.verify(public_batch_proof.clone()).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Public-batch proof verification failed: {}",
+			e
+		))
+	})?;
+
+	write_proof_file(&output_file, &public_batch_proof.to_bytes()).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to write proof: {}", e))
+	})?;
+
+	log_success!("Public-batch aggregation complete!");
+	log_success!("Output: {}", output_file);
+	Ok(())
+}
+
 /// Where in the chain a submitted extrinsic has been observed.
 ///
 /// `Best` means it landed in the current best block (not yet finalised);
 /// `Finalized` means it's in a block past the finality gadget. Returned by
-/// [`submit_unsigned_verify_aggregated_proof`] alongside the block + tx hash.
+/// [`submit_unsigned_verify_private_batch`] alongside the block + tx hash.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IncludedAt {
 	Best,
@@ -1289,15 +1509,15 @@ fn read_hex_proof_file_to_bytes(proof_file: &str) -> crate::error::Result<Vec<u8
 	Ok(proof_bytes)
 }
 
-/// Submit unsigned verify_aggregated_proof(proof_bytes) and return (included_at, block_hash,
+/// Submit unsigned verify_private_batch(proof_bytes) and return (included_at, block_hash,
 /// tx_hash).
-pub async fn submit_unsigned_verify_aggregated_proof(
+pub async fn submit_unsigned_verify_private_batch(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
 ) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
 	use subxt::tx::TxStatus;
 
-	let verify_tx = quantus_node::api::tx().wormhole().verify_aggregated_proof(proof_bytes);
+	let verify_tx = quantus_node::api::tx().wormhole().verify_private_batch(proof_bytes);
 
 	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
@@ -1409,7 +1629,7 @@ async fn collect_wormhole_events_for_extrinsic(
 	Ok((found_proof_verified, transfer_events))
 }
 
-async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+async fn verify_private_batch(proof_file: String, node_url: &str) -> crate::error::Result<()> {
 	log_print!("Verifying aggregated wormhole proof on-chain...");
 
 	let proof_bytes = read_hex_proof_file_to_bytes(&proof_file)?;
@@ -1424,7 +1644,7 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 	log_verbose!("Submitting unsigned aggregated verification transaction...");
 
 	let (included_at, block_hash, tx_hash) =
-		submit_unsigned_verify_aggregated_proof(&quantus_client, proof_bytes).await?;
+		submit_unsigned_verify_private_batch(&quantus_client, proof_bytes).await?;
 
 	// One unified check (no best/finalized copy-paste)
 	let result = check_proof_verification_events(
@@ -1449,6 +1669,97 @@ async fn verify_aggregated_proof(proof_file: String, node_url: &str) -> crate::e
 
 	let error_msg = result.error_message.unwrap_or_else(|| {
 		"Aggregated proof verification failed - no ProofVerified event found".to_string()
+	});
+	log_error!("❌ {}", error_msg);
+	Err(crate::error::QuantusError::Generic(error_msg))
+}
+
+/// Submit unsigned verify_public_batch(proof_bytes) and return (included_at, block_hash,
+/// tx_hash).
+pub async fn submit_unsigned_verify_public_batch(
+	quantus_client: &QuantusClient,
+	proof_bytes: Vec<u8>,
+) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
+	use subxt::tx::TxStatus;
+
+	let verify_tx = quantus_node::api::tx().wormhole().verify_public_batch(proof_bytes);
+
+	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create unsigned tx: {}", e))
+	})?;
+
+	let mut tx_progress = unsigned_tx
+		.submit_and_watch()
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
+
+	while let Some(Ok(status)) = tx_progress.next().await {
+		match status {
+			TxStatus::InBestBlock(tx_in_block) => {
+				return Ok((
+					IncludedAt::Best,
+					tx_in_block.block_hash(),
+					tx_in_block.extrinsic_hash(),
+				));
+			},
+			TxStatus::InFinalizedBlock(tx_in_block) => {
+				return Ok((
+					IncludedAt::Finalized,
+					tx_in_block.block_hash(),
+					tx_in_block.extrinsic_hash(),
+				));
+			},
+			TxStatus::Error { message } | TxStatus::Invalid { message } => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Transaction failed: {}",
+					message
+				)));
+			},
+			_ => continue,
+		}
+	}
+
+	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+}
+
+async fn verify_public_batch(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+	log_print!("Verifying public-batch wormhole proof on-chain...");
+
+	let proof_bytes = read_hex_proof_file_to_bytes(&proof_file)?;
+	log_verbose!("Public-batch proof size: {} bytes", proof_bytes.len());
+
+	let quantus_client = QuantusClient::new(node_url)
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+	log_verbose!("Connected to node");
+
+	log_verbose!("Submitting unsigned public-batch verification transaction...");
+
+	let (included_at, block_hash, tx_hash) =
+		submit_unsigned_verify_public_batch(&quantus_client, proof_bytes).await?;
+
+	let result = check_proof_verification_events(
+		quantus_client.client(),
+		&block_hash,
+		&tx_hash,
+		crate::log::is_verbose(),
+	)
+	.await?;
+
+	if result.success {
+		log_success!("Public-batch proof verified successfully on-chain!");
+		if let Some(amount) = result.exit_amount {
+			log_success!("Total exit amount: {}", format_balance(amount));
+		}
+
+		log_print!("  Block: 0x{}", hex::encode(block_hash.0));
+		log_print!("  Extrinsic: 0x{}", hex::encode(tx_hash.0));
+		log_verbose!("Included in {}: {:?}", included_at.label(), block_hash);
+		return Ok(());
+	}
+
+	let error_msg = result.error_message.unwrap_or_else(|| {
+		"Public-batch proof verification failed - no ProofVerified event found".to_string()
 	});
 	log_error!("❌ {}", error_msg);
 	Err(crate::error::QuantusError::Generic(error_msg))
@@ -1891,7 +2202,7 @@ async fn generate_round_proofs(
 
 		// Generate proof with dual output assignment
 		generate_proof(
-			&hex::encode(secret.secret),
+			&hex::encode(secret.secret.as_bytes()),
 			transfer.amount, // Use actual transfer amount for storage key
 			&output_assignments[i],
 			&format!("0x{}", hex::encode(proof_block_hash.0)),
@@ -2031,6 +2342,7 @@ async fn run_multiround(
 	keep_files: bool,
 	output_dir: String,
 	dry_run: bool,
+	public: bool,
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	use colored::Colorize;
@@ -2177,11 +2489,24 @@ async fn run_multiround(
 
 		log_print!("  Aggregated proof saved to {}", aggregated_file);
 
-		// Step 4: Verify aggregated proof on-chain
-		log_print!("{}", "Step 4: Submitting aggregated proof on-chain...".bright_yellow());
-
-		let (verification_block, extrinsic_hash, transfer_events) =
-			verify_aggregated_and_get_events(&aggregated_file, &quantus_client).await?;
+		// Step 4: Verify on-chain (optionally wrapping in a public batch first)
+		let (verification_block, extrinsic_hash, transfer_events) = if public {
+			log_print!(
+				"{}",
+				"Step 4: Wrapping in a public batch and submitting on-chain...".bright_yellow()
+			);
+			let public_batch_file = format!("{}/public_batch.hex", round_dir);
+			aggregate_public_batch(
+				vec![aggregated_file.clone()],
+				wallet.wallet_address.clone(),
+				public_batch_file.clone(),
+			)
+			.await?;
+			verify_public_batch_and_get_events(&public_batch_file, &quantus_client).await?
+		} else {
+			log_print!("{}", "Step 4: Submitting aggregated proof on-chain...".bright_yellow());
+			verify_private_batch_and_get_events(&aggregated_file, &quantus_client).await?
+		};
 
 		log_print!(
 			"  {} Proof verified in block {} (extrinsic: 0x{})",
@@ -2454,7 +2779,7 @@ pub fn decode_full_leaf_data(leaf_data: &[u8]) -> crate::error::Result<([u8; 32]
 }
 
 /// Verify an aggregated proof and return the block hash, extrinsic hash, and transfer events
-pub async fn verify_aggregated_and_get_events(
+pub async fn verify_private_batch_and_get_events(
 	proof_file: &str,
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<(
@@ -2462,22 +2787,24 @@ pub async fn verify_aggregated_and_get_events(
 	subxt::utils::H256,
 	Vec<wormhole::events::NativeTransferred>,
 )> {
-	use qp_wormhole_verifier::WormholeVerifier;
-
 	let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
 
 	log_verbose!("Verifying aggregated proof locally before on-chain submission...");
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 
-	let common_bytes = std::fs::read(bins_dir.join("aggregated_common.bin")).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to read aggregated_common.bin: {}", e))
-	})?;
-	let verifier_bytes = std::fs::read(bins_dir.join("aggregated_verifier.bin")).map_err(|e| {
+	let common_bytes = std::fs::read(bins_dir.join("private_batch_common.bin")).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
-			"Failed to read aggregated_verifier.bin: {}",
+			"Failed to read private_batch_common.bin: {}",
 			e
 		))
 	})?;
+	let verifier_bytes =
+		std::fs::read(bins_dir.join("private_batch_verifier.bin")).map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to read private_batch_verifier.bin: {}",
+				e
+			))
+		})?;
 	log_verbose!(
 		"Circuit binaries: common_bytes.len={}, verifier_bytes.len={}, common_hash={}, verifier_hash={}",
 		common_bytes.len(),
@@ -2486,11 +2813,7 @@ pub async fn verify_aggregated_and_get_events(
 		hex::encode(blake3::hash(&verifier_bytes).as_bytes()),
 	);
 
-	let verifier = WormholeVerifier::new_from_files(
-		&bins_dir.join("aggregated_verifier.bin"),
-		&bins_dir.join("aggregated_common.bin"),
-	)
-	.map_err(|e| {
+	let verifier = crate::batch_verifier::load_private_batch_verifier(&bins_dir).map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to load aggregated verifier: {}", e))
 	})?;
 
@@ -2516,7 +2839,7 @@ pub async fn verify_aggregated_and_get_events(
 
 	// Submit unsigned tx + wait for inclusion (best or finalized)
 	let (included_at, block_hash, tx_hash) =
-		submit_unsigned_verify_aggregated_proof(quantus_client, proof_bytes).await?;
+		submit_unsigned_verify_private_batch(quantus_client, proof_bytes).await?;
 
 	log_verbose!(
 		"Submitted tx included in {}: block={:?}, tx={:?}",
@@ -2532,6 +2855,81 @@ pub async fn verify_aggregated_and_get_events(
 	if !found_proof_verified {
 		return Err(crate::error::QuantusError::Generic(
 			"Proof verification failed - no ProofVerified event".to_string(),
+		));
+	}
+
+	// Log minted amounts
+	log_print!("  Tokens minted (from NativeTransferred events):");
+	for (idx, transfer) in transfer_events.iter().enumerate() {
+		let ss58_address = bytes_to_quantus_ss58(&transfer.to.0);
+		log_print!(
+			"    [{}] {} -> {} planck ({})",
+			idx,
+			ss58_address,
+			transfer.amount,
+			format_balance(transfer.amount)
+		);
+	}
+
+	Ok((block_hash, tx_hash, transfer_events))
+}
+
+/// Verify a public-batch proof and return the block hash, extrinsic hash, and transfer events
+pub async fn verify_public_batch_and_get_events(
+	proof_file: &str,
+	quantus_client: &QuantusClient,
+) -> crate::error::Result<(
+	subxt::utils::H256,
+	subxt::utils::H256,
+	Vec<wormhole::events::NativeTransferred>,
+)> {
+	let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
+
+	log_verbose!("Verifying public-batch proof locally before on-chain submission...");
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+
+	let verifier = crate::batch_verifier::load_public_batch_verifier(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to load public-batch verifier: {}", e))
+	})?;
+
+	let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
+		qp_wormhole_verifier::F,
+		qp_wormhole_verifier::C,
+		{ qp_wormhole_verifier::D },
+	>::from_bytes(proof_bytes.clone(), &verifier.circuit_data.common)
+	.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to deserialize public-batch proof: {}",
+			e
+		))
+	})?;
+
+	verifier.verify(proof).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Local public-batch proof verification failed: {}",
+			e
+		))
+	})?;
+	log_verbose!("Local verification passed!");
+
+	// Submit unsigned tx + wait for inclusion (best or finalized)
+	let (included_at, block_hash, tx_hash) =
+		submit_unsigned_verify_public_batch(quantus_client, proof_bytes).await?;
+
+	log_verbose!(
+		"Submitted tx included in {}: block={:?}, tx={:?}",
+		included_at.label(),
+		block_hash,
+		tx_hash
+	);
+
+	// Collect events for our extrinsic only
+	let (found_proof_verified, transfer_events) =
+		collect_wormhole_events_for_extrinsic(quantus_client, block_hash, tx_hash).await?;
+
+	if !found_proof_verified {
+		return Err(crate::error::QuantusError::Generic(
+			"Public-batch proof verification failed - no ProofVerified event".to_string(),
 		));
 	}
 
@@ -2617,6 +3015,7 @@ fn run_multiround_dry_run(
 async fn parse_proof_file(
 	proof_file: String,
 	aggregated: bool,
+	public_batch: bool,
 	verify: bool,
 ) -> crate::error::Result<()> {
 	use qp_wormhole_verifier::WormholeVerifier;
@@ -2631,15 +3030,94 @@ async fn parse_proof_file(
 
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 
-	if aggregated {
-		// Load aggregated verifier
-		let verifier = WormholeVerifier::new_from_files(
-			&bins_dir.join("aggregated_verifier.bin"),
-			&bins_dir.join("aggregated_common.bin"),
-		)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+	if public_batch {
+		use plonky2::field::types::PrimeField64;
+		use qp_wormhole_inputs::PublicBatchPublicInputs;
+
+		let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Failed to load bins config: {}", e))
 		})?;
+		let num_private_batch_proofs = agg_config.num_private_batch_proofs.ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Circuit binaries lack public-batch support; regenerate them".to_string(),
+			)
+		})?;
+
+		let verifier =
+			crate::batch_verifier::load_public_batch_verifier(&bins_dir).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+			})?;
+
+		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
+			qp_wormhole_verifier::F,
+			qp_wormhole_verifier::C,
+			{ qp_wormhole_verifier::D },
+		>::from_bytes(proof_bytes.clone(), &verifier.circuit_data.common)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to deserialize public-batch proof: {:?}",
+				e
+			))
+		})?;
+
+		log_print!("\nPublic inputs count: {}", proof.public_inputs.len());
+
+		let pi_u64s: Vec<u64> = proof.public_inputs.iter().map(|f| f.to_canonical_u64()).collect();
+		match PublicBatchPublicInputs::try_from_u64_slice(
+			&pi_u64s,
+			num_private_batch_proofs,
+			agg_config.num_leaf_proofs,
+		) {
+			Ok(inputs) => {
+				log_print!("\n=== Parsed Public-Batch Public Inputs ===");
+				log_print!(
+					"Aggregator: 0x{} ({})",
+					hex::encode(inputs.aggregator_address.as_ref()),
+					slice_to_quantus_ss58(inputs.aggregator_address.as_ref())
+				);
+				log_print!("Asset ID: {}", inputs.asset_id);
+				log_print!("Volume Fee BPS: {}", inputs.volume_fee_bps);
+				log_print!("Block Hash: 0x{}", hex::encode(inputs.block_data.block_hash.as_ref()));
+				log_print!("Block Number: {}", inputs.block_data.block_number);
+				log_print!("Total Exit Slots: {}", inputs.total_exit_slots);
+				log_print!("\nAccount Data ({} slots):", inputs.account_data.len());
+				for (i, acct) in inputs.account_data.iter().enumerate() {
+					log_print!(
+						"  [{}] amount={}, exit=0x{}",
+						i,
+						acct.summed_output_amount,
+						hex::encode(acct.exit_account.as_ref())
+					);
+				}
+				log_print!("\nNullifiers ({} nullifiers):", inputs.nullifiers.len());
+				for (i, nullifier) in inputs.nullifiers.iter().enumerate() {
+					log_print!("  [{}] 0x{}", i, hex::encode(nullifier.as_ref()));
+				}
+			},
+			Err(e) => {
+				log_print!("Failed to parse as public-batch inputs: {}", e);
+			},
+		}
+
+		if verify {
+			log_print!("\n=== Verifying Proof ===");
+			match verifier.verify(proof) {
+				Ok(()) => log_success!("Proof verification PASSED"),
+				Err(e) => {
+					log_error!("Proof verification FAILED: {}", e);
+					return Err(crate::error::QuantusError::Generic(format!(
+						"Proof verification failed: {}",
+						e
+					)));
+				},
+			}
+		}
+	} else if aggregated {
+		// Load aggregated verifier (batch profile checks; not the leaf keccak pin).
+		let verifier =
+			crate::batch_verifier::load_private_batch_verifier(&bins_dir).map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Failed to load verifier: {}", e))
+			})?;
 
 		// Deserialize proof using verifier's types
 		let proof = qp_wormhole_verifier::ProofWithPublicInputs::<
@@ -2658,7 +3136,7 @@ async fn parse_proof_file(
 		log_verbose!("\nPublic inputs count: {}", proof.public_inputs.len());
 
 		// Try to parse as aggregated
-		match qp_wormhole_verifier::parse_aggregated_public_inputs(&proof) {
+		match qp_wormhole_verifier::parse_private_batch_public_inputs(&proof) {
 			Ok(agg_inputs) => {
 				log_print!("\n=== Parsed Aggregated Public Inputs ===");
 				log_print!("Asset ID: {}", agg_inputs.asset_id);
@@ -2897,7 +3375,7 @@ async fn run_dissolve(
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Event decode error: {}", e)))?;
 
 	let mut current_outputs = vec![DissolveOutput {
-		secret: initial_secret.secret,
+		secret: *initial_secret.secret.as_bytes(),
 		amount,
 		transfer_count: event.transfer_count,
 		funding_account: funding_account.clone(),
@@ -3005,7 +3483,7 @@ async fn run_dissolve(
 			// Verify on-chain
 			log_print!("    Verifying on-chain...");
 			let (verification_block, _extrinsic_hash, transfer_events) =
-				verify_aggregated_and_get_events(&aggregated_file, &quantus_client).await?;
+				verify_private_batch_and_get_events(&aggregated_file, &quantus_client).await?;
 
 			log_success!("    Verified in block 0x{}", hex::encode(verification_block.0));
 
@@ -3031,7 +3509,7 @@ async fn run_dissolve(
 					})?;
 
 					all_next_outputs.push(DissolveOutput {
-						secret: target_address.secret,
+						secret: *target_address.secret.as_bytes(),
 						amount: event.amount,
 						transfer_count: event.transfer_count,
 						funding_account: event.from.clone(),
@@ -3247,17 +3725,12 @@ async fn run_collect_rewards(
 
 /// Helper to aggregate proof files and write the result (used by dissolve command)
 fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::aggregator::Layer0Aggregator;
+	use qp_wormhole_aggregator::private_batch::prover::PrivateBatchProver;
 
 	let bins_dir = crate::bins::ensure_bins_dir()?;
-	let mut aggregator = Layer0Aggregator::new(&bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to create aggregator: {}", e))
-	})?;
+	let common_data = load_leaf_common_data(&bins_dir)?;
 
-	let common_data = aggregator.load_common_data(CircuitType::Leaf).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to load common data: {}", e))
-	})?;
-
+	let mut proofs = Vec::with_capacity(proof_files.len());
 	for proof_file in proof_files {
 		let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
 		let proof = ProofWithPublicInputs::<F, C, D>::from_bytes(proof_bytes, &common_data)
@@ -3267,14 +3740,16 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 					proof_file, e
 				))
 			})?;
-		aggregator.push_proof(proof).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to push proof: {}", e))
-		})?;
+		proofs.push(proof);
 	}
 
+	let prover = PrivateBatchProver::new_from_binaries_dir(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create private-batch prover: {}", e))
+	})?;
+
 	let agg_start = std::time::Instant::now();
-	let proof = aggregator
-		.aggregate()
+	let proof = prover
+		.aggregate(proofs)
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("    Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
@@ -3356,9 +3831,7 @@ async fn run_check_nullifier(
 			crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e))
 		})?;
 
-		let secret: [u8; 32] = wormhole_pair.secret.as_ref().try_into().map_err(|_| {
-			crate::error::QuantusError::Generic("Invalid secret length".to_string())
-		})?;
+		let secret: [u8; 32] = *wormhole_pair.secret.as_bytes();
 		log_print!("Derived wormhole secret from wallet '{}' (index {})", wallet, wormhole_index);
 		secret
 	} else {
@@ -3712,12 +4185,22 @@ mod tests {
 		// If the upstream adds/removes/renames fields, this test will catch it.
 		let json = r#"{
 			"num_leaf_proofs": 8,
-			"num_layer0_proofs": null
+			"num_private_batch_proofs": null
 		}"#;
 
 		let config: CircuitBinsConfig = serde_json::from_str(json).unwrap();
 		assert_eq!(config.num_leaf_proofs, 8);
-		assert_eq!(config.num_layer0_proofs, None);
+		assert_eq!(config.num_private_batch_proofs, None);
+
+		// Legacy config.json files (pre-rename) must still deserialize via the
+		// serde alias on the upstream field.
+		let legacy_json = r#"{
+			"num_leaf_proofs": 8,
+			"num_layer0_proofs": 4
+		}"#;
+
+		let legacy: CircuitBinsConfig = serde_json::from_str(legacy_json).unwrap();
+		assert_eq!(legacy.num_private_batch_proofs, Some(4));
 	}
 
 	fn mk_accounts(n: usize) -> Vec<[u8; 32]> {

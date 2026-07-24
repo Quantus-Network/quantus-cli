@@ -8,6 +8,7 @@
 use clap::Parser;
 use colored::Colorize;
 
+mod batch_verifier;
 mod bins;
 mod chain;
 mod cli;
