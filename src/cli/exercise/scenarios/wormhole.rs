@@ -12,13 +12,16 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 }
 
 async fn multiround(ctx: &mut ExerciseCtx) -> Result<String> {
-	// Round-trips a small amount through the bridge and back; scaled like the other
-	// discretionary amounts so the suite stays cheap.
-	let amount = 50.0 / crate::cli::exercise::DISCRETIONARY_SCALE as f64;
+	// NOT scaled by DISCRETIONARY_SCALE: the wormhole round-trips this amount back to the
+	// funding wallet and draws it from the root account (funded independently of
+	// --total-amount), so shrinking it buys nothing. Small amounts are actively harmful —
+	// each round re-partitions across `num_proofs` and deducts fees, so a scaled-down amount
+	// rounds an output below the on-chain minimum in a later round and emits no transfer
+	// event ("No transfer event found"). 50 DEV is the proven value.
 	let command = crate::cli::wormhole::WormholeCommands::Multiround {
 		num_proofs: 5,
 		rounds: 5,
-		amount,
+		amount: 50.0,
 		wallet: ctx.root_name.clone(),
 		password: Some(ctx.root_password.clone()),
 		password_file: None,
