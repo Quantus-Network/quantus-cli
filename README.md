@@ -539,6 +539,55 @@ quantus call \
 
 ---
 
+### Chain Exercise Suite
+
+`quantus exercise` runs a live-node smoke/fuzz suite against a node — reads, balances,
+reversible transfers, multisig, recovery, preimage, governance, negative cases, a seeded
+fuzz loop, and a wormhole round-trip. It derives a handful of ephemeral accounts, funds them
+from a **root account**, drives each pallet, and verifies on-chain state as it goes. Intended
+for CI and post-upgrade validation.
+
+```bash
+# Against a local dev node — crystal_alice is genesis-funded, so every phase runs
+quantus exercise
+
+# Against a public testnet: fund from your own wallet, on a small budget, and skip
+# governance (that phase needs the dev genesis tech-collective accounts)
+quantus exercise \
+  --root-account my-wallet --root-password <pw> \
+  --total-amount 40 --skip governance \
+  --node-url wss://a1-planck.quantus.cat
+
+# Run only specific phases, or skip the CPU-heavy wormhole phase
+quantus exercise --phases reads,balances,multisig
+quantus exercise --skip wormhole
+
+# Reproduce a fuzz failure from its seed; emit the report as JSON
+quantus exercise --seed 12345 --json
+```
+
+Key flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--root-account <NAME>` | `crystal_alice` | Wallet that funds the run. Supply your own to run against a public testnet. |
+| `--root-password <PW>` / `--root-password-file <PATH>` | — | Password for the root wallet (or set `QUANTUS_WALLET_PASSWORD_<NAME>`). |
+| `--total-amount <TOKENS>` | `40` | Total budget drawn from the root account, split evenly across the ephemeral accounts. Discretionary test amounts are scaled to fit; fixed chain deposits (existential deposit, multisig/preimage/governance) are always covered on top. |
+| `--ephemeral-accounts <N>` | `4` | Number of ephemeral accounts to derive and fund. |
+| `--phases <LIST>` / `--skip <LIST>` | all | Comma-separated phases to run / skip. |
+| `--seed <N>` | random | Reproducible fuzz seed. |
+| `--fuzz-iterations <N>` | `25` | Number of fuzz iterations. |
+| `--upgrade-wasm <PATH>` | — | Enable the runtime-upgrade phase with the given WASM (fast-governance node only). |
+| `--fail-fast` | off | Stop at the first failed step. |
+| `--json` | off | Emit the final report as JSON. |
+
+> **Notes:**
+> - The `governance` phase relies on the dev genesis tech-collective accounts, so pass
+>   `--skip governance` when using a custom `--root-account` on a public testnet.
+> - The `wormhole` phase is CPU-heavy (ZK proving) — use `--skip wormhole` for a faster run.
+> - The suite fails fast in setup with a clear message if the root account can't cover
+>   `--total-amount` or the budget is too low for the fixed deposits.
+
 ### Other Commands
 
 | Command | Description |
