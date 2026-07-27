@@ -12,6 +12,7 @@ pub mod collect_rewards_lib;
 pub mod config;
 pub mod error;
 pub mod log;
+pub mod qr;
 pub mod subsquid;
 pub mod version_check;
 pub mod wallet;

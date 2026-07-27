@@ -531,6 +531,50 @@ where
 	}
 }
 
+/// Submit an already-signed transaction, honoring the execution mode.
+///
+/// Used by the cold-wallet flow: unlike `submit_transaction` there is NO retry
+/// loop, because a QR-signed extrinsic can never be rebuilt or resigned behind
+/// the user's back — a stale nonce or expired mortality means asking the user
+/// to run the command (and sign) again.
+pub async fn submit_prepared_transaction(
+	quantus_client: &crate::chain::client::QuantusClient,
+	tx: subxt::tx::SubmittableTransaction<ChainConfig, OnlineClient<ChainConfig>>,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<subxt::utils::H256> {
+	let map_err = |e: subxt::Error| {
+		let msg = format!("{e:?}");
+		let stale = msg.contains("Transaction is outdated") ||
+			msg.contains("Invalid Transaction") ||
+			msg.contains("Transaction has a bad signature") ||
+			msg.contains("Priority is too low");
+		if stale {
+			crate::error::QuantusError::NetworkError(format!(
+				"Transaction rejected: {msg}. The signed transaction may have expired or the account nonce changed while signing — run the command again to generate a fresh QR"
+			))
+		} else {
+			crate::error::QuantusError::NetworkError(format!("Failed to submit transaction: {msg}"))
+		}
+	};
+
+	if execution_mode.should_watch_transaction() {
+		let mut tx_progress = tx.submit_and_watch().await.map_err(map_err)?;
+		let tx_hash = tx_progress.extrinsic_hash();
+		wait_tx_inclusion(
+			&mut tx_progress,
+			quantus_client.client(),
+			&tx_hash,
+			execution_mode.transaction_stage(),
+		)
+		.await?;
+		Ok(tx_hash)
+	} else {
+		let tx_hash = tx.submit().await.map_err(map_err)?;
+		crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+		Ok(tx_hash)
+	}
+}
+
 /// Submit transaction with manual nonce (no retry logic - use exact nonce provided)
 pub async fn submit_transaction_with_nonce<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,

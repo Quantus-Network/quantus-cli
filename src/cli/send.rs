@@ -560,6 +560,7 @@ pub async fn batch_transfer(
 // (Removed custom `AccountData` struct – we now use the runtime-generated type)
 
 /// Handle the send command
+#[allow(clippy::too_many_arguments)]
 pub async fn handle_send_command(
 	from_wallet: String,
 	to_address: String,
@@ -570,6 +571,7 @@ pub async fn handle_send_command(
 	tip: Option<String>,
 	nonce: Option<u32>,
 	execution_mode: crate::cli::common::ExecutionMode,
+	cold_io: crate::cli::cold_signing::ColdIo,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -589,8 +591,28 @@ pub async fn handle_send_command(
 		resolved_address.bright_green()
 	);
 
-	// Get password securely for decryption
 	log_verbose!("📦 Using wallet: {}", from_wallet.bright_blue().bold());
+
+	// Cold (watch-only) wallets sign over QR codes instead of a local key.
+	let wallet_manager = crate::wallet::WalletManager::new()?;
+	if wallet_manager.wallet_type(&from_wallet)? == Some(crate::wallet::WalletType::Cold) {
+		if password.is_some() || password_file.is_some() {
+			log_print!("⚠️  Cold wallets have no password; ignoring --password/--password-file");
+		}
+		return handle_cold_send(
+			&quantus_client,
+			&from_wallet,
+			to_account_id,
+			amount,
+			&tip,
+			nonce,
+			execution_mode,
+			&cold_io,
+		)
+		.await;
+	}
+
+	// Get password securely for decryption
 	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
 
 	// Get account information
@@ -636,6 +658,77 @@ pub async fn handle_send_command(
 	)
 	.await?;
 
+	print_send_result(&quantus_client, &from_account_id, balance, amount, tx_hash, execution_mode)
+		.await
+}
+
+/// Send from a cold (watch-only) wallet: builds the transfer call, runs the QR
+/// signing flow, submits, and prints the same result summary as the hot path.
+#[allow(clippy::too_many_arguments)]
+async fn handle_cold_send(
+	quantus_client: &QuantusClient,
+	from_wallet: &str,
+	to_account_id: SubxtAccountId32,
+	amount: u128,
+	tip: &Option<String>,
+	nonce: Option<u32>,
+	execution_mode: crate::cli::common::ExecutionMode,
+	cold_io: &crate::cli::cold_signing::ColdIo,
+) -> Result<()> {
+	let wallet_manager = crate::wallet::WalletManager::new()?;
+	let from_address = wallet_manager
+		.find_wallet_address(from_wallet)?
+		.ok_or(crate::error::WalletError::NotFound)?;
+
+	let balance = get_balance(quantus_client, &from_address).await?;
+	let formatted_balance = format_balance_with_symbol(quantus_client, balance).await?;
+	log_verbose!("💰 Current balance: {}", formatted_balance.bright_yellow());
+
+	let tip_amount = if let Some(tip_str) = tip {
+		Some(parse_amount(quantus_client, tip_str).await?)
+	} else {
+		None
+	};
+	let effective_tip = effective_tip_amount(tip_amount);
+	let submit_tip = positive_tip_amount(tip_amount);
+	let exact_required = checked_add(amount, effective_tip, "required send balance")?;
+
+	// No fee preflight here (fee estimation needs a signer); check amount + tip
+	// and let the chain reject if fees can't be covered.
+	if balance < exact_required {
+		return Err(crate::error::QuantusError::InsufficientBalance {
+			available: balance,
+			required: exact_required,
+		});
+	}
+
+	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount);
+
+	let tx_hash = crate::cli::cold_signing::sign_and_submit_cold(
+		quantus_client,
+		from_wallet,
+		&from_address,
+		&transfer_call,
+		submit_tip,
+		nonce,
+		execution_mode,
+		cold_io,
+	)
+	.await?;
+
+	print_send_result(quantus_client, &from_address, balance, amount, tx_hash, execution_mode).await
+}
+
+/// Print the post-submission summary (status, new balance, fee) shared by hot
+/// and cold send paths.
+async fn print_send_result(
+	quantus_client: &QuantusClient,
+	from_account_id: &str,
+	balance_before: u128,
+	amount: u128,
+	tx_hash: subxt::utils::H256,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<()> {
 	let transaction_stage = execution_mode.transaction_stage();
 	log_print!(
 		"✅ {} Transaction {}. Hash: {:?}",
@@ -659,13 +752,13 @@ pub async fn handle_send_command(
 	);
 
 	// Show updated balance with proper formatting
-	let new_balance = get_balance(&quantus_client, &from_account_id).await?;
-	let formatted_new_balance = format_balance_with_symbol(&quantus_client, new_balance).await?;
+	let new_balance = get_balance(quantus_client, from_account_id).await?;
+	let formatted_new_balance = format_balance_with_symbol(quantus_client, new_balance).await?;
 
 	// Calculate and display transaction fee in verbose mode
-	let fee_paid = balance.saturating_sub(new_balance).saturating_sub(amount);
+	let fee_paid = balance_before.saturating_sub(new_balance).saturating_sub(amount);
 	if fee_paid > 0 {
-		let formatted_fee = format_balance_with_symbol(&quantus_client, fee_paid).await?;
+		let formatted_fee = format_balance_with_symbol(quantus_client, fee_paid).await?;
 		log_verbose!("💸 Transaction fee: {}", formatted_fee.bright_cyan());
 	}
 

@@ -5,6 +5,7 @@ use colored::Colorize;
 pub mod address_format;
 pub mod batch;
 pub mod block;
+pub mod cold_signing;
 pub mod common;
 pub mod events;
 pub mod exercise;
@@ -65,6 +66,19 @@ pub enum Commands {
 		/// Manual nonce override (use with caution - must be exact next nonce for account)
 		#[arg(long)]
 		nonce: Option<u32>,
+
+		/// (cold wallets) Also write the sign-request UR parts to this file
+		#[arg(long, hide = true)]
+		cold_request_out: Option<String>,
+
+		/// (cold wallets) Read the signature response UR parts from this file, or "-" for stdin,
+		/// instead of scanning with the camera
+		#[arg(long, hide = true)]
+		cold_response_in: Option<String>,
+
+		/// Camera device index for cold-wallet QR scanning
+		#[arg(long, default_value_t = 0)]
+		camera_index: u32,
 	},
 
 	/// Batch transfer commands and configuration
@@ -312,6 +326,33 @@ pub enum Commands {
 pub enum DeveloperCommands {
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
+
+	/// Simulate the cold-wallet side of QR signing using a local hot wallet.
+	/// Reads a sign-request UR, signs it per the cold-wallet protocol, and
+	/// emits the response UR. Unlike real devices, no genesis-hash allowlist
+	/// is enforced, so it works against dev nodes.
+	#[command(hide = true)]
+	ColdSignSim {
+		/// Hot wallet that plays the cold wallet's role
+		#[arg(long)]
+		wallet: String,
+
+		/// File with the request UR parts, one per line (polls until complete; stdin if omitted)
+		#[arg(long)]
+		request_file: Option<String>,
+
+		/// File to write the response UR parts to (stdout if omitted)
+		#[arg(long)]
+		response_file: Option<String>,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
 }
 
 /// Execute a CLI command
@@ -323,7 +364,29 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
+		Commands::Send {
+			from,
+			to,
+			amount,
+			password,
+			password_file,
+			tip,
+			nonce,
+			cold_request_out,
+			cold_response_in,
+			camera_index,
+		} => {
+			let cold_io = cold_signing::ColdIo {
+				request_out: cold_request_out.map(std::path::PathBuf::from),
+				response_in: cold_response_in.map(|s| {
+					if s == "-" {
+						crate::qr::UrSource::StdinLines
+					} else {
+						crate::qr::UrSource::File(std::path::PathBuf::from(s))
+					}
+				}),
+				camera_index,
+			};
 			send::handle_send_command(
 				from,
 				to,
@@ -334,8 +397,10 @@ pub async fn execute_command(
 				tip,
 				nonce,
 				execution_mode,
+				cold_io,
 			)
-			.await,
+			.await
+		},
 		Commands::Batch(batch_cmd) =>
 			batch::handle_batch_command(batch_cmd, node_url, execution_mode).await,
 		Commands::Reversible(reversible_cmd) =>
@@ -582,6 +647,21 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 
 			Ok(())
 		},
+		DeveloperCommands::ColdSignSim {
+			wallet,
+			request_file,
+			response_file,
+			password,
+			password_file,
+		} =>
+			cold_signing::handle_cold_sign_sim(
+				wallet,
+				request_file,
+				response_file,
+				password,
+				password_file,
+			)
+			.await,
 	}
 }
 

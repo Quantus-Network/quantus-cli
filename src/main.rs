@@ -16,6 +16,7 @@ mod collect_rewards_lib;
 mod config;
 mod error;
 mod log;
+mod qr;
 mod subsquid;
 mod version_check;
 mod wallet;

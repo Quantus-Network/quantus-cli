@@ -9,7 +9,7 @@ pub mod keystore;
 pub mod password;
 
 use crate::error::{Result, WalletError};
-pub use keystore::{Keystore, QuantumKeyPair, WalletData};
+pub use keystore::{Keystore, QuantumKeyPair, WalletData, WalletType};
 use qp_dilithium_crypto::DilithiumPair;
 use qp_rusty_crystals_hdwallet::{
 	derive_key_from_mnemonic, generate_mnemonic, mnemonic_to_seed, SensitiveBytes32,
@@ -19,6 +19,9 @@ use serde::{Deserialize, Serialize};
 
 /// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'
 pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0'/0'";
+
+/// Display label for watch-only cold wallets
+pub const COLD_KEY_TYPE: &str = "Cold (watch-only)";
 
 /// Wallet information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -155,11 +158,59 @@ impl WalletManager {
 
 	/// Export a wallet's mnemonic phrase
 	pub fn export_mnemonic(&self, name: &str, password: Option<&str>) -> Result<String> {
+		// Cold wallets have nothing to export; check before prompting for a password.
+		if self.wallet_type(name)? == Some(keystore::WalletType::Cold) {
+			return Err(WalletError::ColdWalletNoKeys(name.to_string()).into());
+		}
+
 		let final_password = password::get_wallet_password(name, password.map(String::from), None)?;
 
 		let wallet_data = self.load_wallet(name, &final_password)?;
 
 		wallet_data.mnemonic.ok_or_else(|| WalletError::MnemonicNotAvailable.into())
+	}
+
+	/// Import a watch-only cold wallet from an SS58 address. The private key
+	/// stays on the air-gapped device; signing happens over QR codes.
+	pub fn create_cold_wallet(&self, name: &str, address: &str) -> Result<WalletInfo> {
+		use sp_core::crypto::{AccountId32, Ss58Codec};
+
+		let keystore = Keystore::new(&self.wallets_dir);
+		if keystore.load_wallet(name)?.is_some() {
+			return Err(WalletError::AlreadyExists.into());
+		}
+
+		let (_, format) =
+			AccountId32::from_ss58check_with_version(address.trim()).map_err(|_| {
+				crate::error::QuantusError::Generic(format!(
+					"'{}' is not a valid SS58 address",
+					address.trim()
+				))
+			})?;
+		if format != crate::cli::address_format::quantus_ss58_format() {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"'{}' is not a Quantus address (expected SS58 prefix 189, addresses starting with 'qz')",
+				address.trim()
+			)));
+		}
+
+		let encrypted_wallet = keystore::EncryptedWallet::new_cold(name, address.trim());
+		keystore.save_wallet(&encrypted_wallet)?;
+
+		Ok(WalletInfo {
+			name: name.to_string(),
+			address: encrypted_wallet.address,
+			created_at: encrypted_wallet.created_at,
+			key_type: COLD_KEY_TYPE.to_string(),
+			derivation_path: "-".to_string(),
+		})
+	}
+
+	/// Cheap wallet-type probe from the unencrypted wallet file.
+	/// Returns `None` if no wallet with that name exists.
+	pub fn wallet_type(&self, name: &str) -> Result<Option<keystore::WalletType>> {
+		let keystore = Keystore::new(&self.wallets_dir);
+		Ok(keystore.load_wallet(name)?.map(|w| w.wallet_type))
 	}
 
 	/// List all wallets
@@ -170,13 +221,22 @@ impl WalletManager {
 		let mut wallets = Vec::new();
 		for name in wallet_names {
 			if let Some(encrypted_wallet) = keystore.load_wallet(&name)? {
+				let is_cold = encrypted_wallet.wallet_type == keystore::WalletType::Cold;
 				// Create wallet info using stored public address
 				let wallet_info = WalletInfo {
 					name: encrypted_wallet.name,
 					address: encrypted_wallet.address, // Address is stored unencrypted
 					created_at: encrypted_wallet.created_at,
-					key_type: "Dilithium ML-DSA-87".to_string(),
-					derivation_path: "[Encrypted]".to_string(), // Derivation path is encrypted
+					key_type: if is_cold {
+						COLD_KEY_TYPE.to_string()
+					} else {
+						"Dilithium ML-DSA-87".to_string()
+					},
+					derivation_path: if is_cold {
+						"-".to_string()
+					} else {
+						"[Encrypted]".to_string() // Derivation path is encrypted
+					},
 				};
 				wallets.push(wallet_info);
 			}
@@ -423,6 +483,16 @@ impl WalletManager {
 		let keystore = Keystore::new(&self.wallets_dir);
 
 		if let Some(encrypted_wallet) = keystore.load_wallet(name)? {
+			if encrypted_wallet.wallet_type == keystore::WalletType::Cold {
+				// Watch-only: everything known about it is public
+				return Ok(Some(WalletInfo {
+					name: encrypted_wallet.name,
+					address: encrypted_wallet.address,
+					created_at: encrypted_wallet.created_at,
+					key_type: COLD_KEY_TYPE.to_string(),
+					derivation_path: "-".to_string(),
+				}));
+			}
 			if let Some(pwd) = password {
 				// Decrypt and show full details
 				match keystore.decrypt_wallet_data(&encrypted_wallet, pwd) {
@@ -517,6 +587,10 @@ pub fn load_keypair_from_wallet(
 	password_file: Option<String>,
 ) -> Result<QuantumKeyPair> {
 	let wallet_manager = WalletManager::new()?;
+	// Cold wallets have no key material; fail before any password prompt.
+	if wallet_manager.wallet_type(wallet_name)? == Some(keystore::WalletType::Cold) {
+		return Err(WalletError::ColdWalletNoKeys(wallet_name.to_string()).into());
+	}
 	let wallet_password = password::get_wallet_password(wallet_name, password, password_file)?;
 	let wallet_data = wallet_manager.load_wallet(wallet_name, &wallet_password)?;
 	let keypair = wallet_data.keypair;
@@ -971,5 +1045,109 @@ mod tests {
 			.expect("Should not error on non-existent wallet");
 
 		assert!(result.is_none());
+	}
+
+	// A valid prefix-189 address for cold wallet tests (crystal_alice's account)
+	fn cold_test_address() -> String {
+		let pair = qp_dilithium_crypto::crystal_alice();
+		QuantumKeyPair::from_resonance_pair(&pair).to_account_id_ss58check()
+	}
+
+	#[tokio::test]
+	async fn test_cold_wallet_create_list_find() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let address = cold_test_address();
+
+		let info = wallet_manager
+			.create_cold_wallet("frosty", &address)
+			.expect("Failed to create cold wallet");
+		assert_eq!(info.name, "frosty");
+		assert_eq!(info.address, address);
+		assert_eq!(info.key_type, COLD_KEY_TYPE);
+
+		// Listed alongside hot wallets, marked cold
+		wallet_manager.create_wallet("hot-one", Some("pw")).await.unwrap();
+		let wallets = wallet_manager.list_wallets().unwrap();
+		assert_eq!(wallets.len(), 2);
+		let cold = wallets.iter().find(|w| w.name == "frosty").unwrap();
+		assert_eq!(cold.key_type, COLD_KEY_TYPE);
+		let hot = wallets.iter().find(|w| w.name == "hot-one").unwrap();
+		assert_eq!(hot.key_type, "Dilithium ML-DSA-87");
+
+		// Address resolution and type probe work
+		assert_eq!(wallet_manager.find_wallet_address("frosty").unwrap(), Some(address));
+		assert_eq!(wallet_manager.wallet_type("frosty").unwrap(), Some(WalletType::Cold));
+		assert_eq!(wallet_manager.wallet_type("hot-one").unwrap(), Some(WalletType::Hot));
+		assert_eq!(wallet_manager.wallet_type("nope").unwrap(), None);
+
+		// get_wallet without password shows full public info
+		let viewed = wallet_manager.get_wallet("frosty", None).unwrap().unwrap();
+		assert_eq!(viewed.key_type, COLD_KEY_TYPE);
+	}
+
+	#[tokio::test]
+	async fn test_cold_wallet_file_format_and_no_keys() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let address = cold_test_address();
+		wallet_manager.create_cold_wallet("frosty", &address).unwrap();
+
+		// On-disk JSON carries the type tag and no key material
+		let file = wallet_manager.wallets_dir.join("frosty.json");
+		let json: serde_json::Value =
+			serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+		assert_eq!(json["wallet_type"], "cold");
+		assert!(json["encrypted_data"].as_array().unwrap().is_empty());
+
+		// Decryption paths refuse with ColdWalletNoKeys (no password prompt)
+		let result = wallet_manager.load_wallet("frosty", "");
+		assert!(matches!(
+			result,
+			Err(crate::error::QuantusError::Wallet(WalletError::ColdWalletNoKeys(_)))
+		));
+		let result = wallet_manager.export_mnemonic("frosty", Some("pw"));
+		assert!(matches!(
+			result,
+			Err(crate::error::QuantusError::Wallet(WalletError::ColdWalletNoKeys(_)))
+		));
+	}
+
+	#[tokio::test]
+	async fn test_cold_wallet_rejects_bad_addresses_and_duplicates() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let address = cold_test_address();
+
+		// Garbage address
+		assert!(wallet_manager.create_cold_wallet("bad", "not-an-address").is_err());
+		// Valid SS58 but wrong prefix (42 = generic Substrate)
+		use sp_core::crypto::{AccountId32, Ss58AddressFormat, Ss58Codec};
+		let generic =
+			AccountId32::from([7u8; 32]).to_ss58check_with_version(Ss58AddressFormat::custom(42));
+		assert!(wallet_manager.create_cold_wallet("bad", &generic).is_err());
+
+		// Duplicate names rejected across wallet kinds
+		wallet_manager.create_cold_wallet("frosty", &address).unwrap();
+		assert!(matches!(
+			wallet_manager.create_cold_wallet("frosty", &address),
+			Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))
+		));
+	}
+
+	#[test]
+	fn test_legacy_wallet_json_defaults_to_hot() {
+		// Files written before wallet_type existed must deserialize as Hot
+		let legacy = r#"{
+			"name": "old",
+			"address": "qzabc",
+			"encrypted_data": [1, 2, 3],
+			"kyber_ciphertext": [],
+			"kyber_public_key": [],
+			"argon2_salt": [4, 5, 6],
+			"argon2_params": "$argon2id$v=19$m=19456,t=2,p=1",
+			"aes_nonce": [7, 8, 9],
+			"encryption_version": 2,
+			"created_at": "2025-01-01T00:00:00Z"
+		}"#;
+		let wallet: keystore::EncryptedWallet = serde_json::from_str(legacy).unwrap();
+		assert_eq!(wallet.wallet_type, WalletType::Hot);
 	}
 }

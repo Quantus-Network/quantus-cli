@@ -64,6 +64,9 @@ pub enum WalletError {
 
 	#[error("Decryption failed. Check your password.")]
 	Decryption,
+
+	#[error("'{0}' is a cold (watch-only) wallet with no local key material. Transfers sign via QR (`quantus send --from {0}`); other signing commands need a hot wallet")]
+	ColdWalletNoKeys(String),
 }
 
 /// Type alias for Results using QuantusError
