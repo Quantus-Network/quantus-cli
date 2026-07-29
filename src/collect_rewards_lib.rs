@@ -5,9 +5,10 @@
 //!
 //! The main function `collect_rewards` handles the entire flow:
 //! 1. Query Subsquid for pending transfers
-//! 2. Generate ZK proofs for each transfer
-//! 3. Aggregate proofs into batches
-//! 4. Submit withdrawal transactions to chain
+//! 2. Filter spent nullifiers (Subsquid pre-filter + authoritative on-chain UsedNullifiers)
+//! 3. Generate ZK proofs for each unspent transfer
+//! 4. Aggregate proofs into batches
+//! 5. Submit withdrawal transactions to chain
 //!
 //! This is designed to be called from the SDK without needing CLI-specific features.
 
@@ -220,9 +221,10 @@ pub struct CollectRewardsConfig {
 /// This is the main entry point for the SDK to collect rewards. It handles the entire flow:
 /// 1. Derives wormhole address from mnemonic
 /// 2. Queries Subsquid for pending transfers to that address
-/// 3. Generates ZK proofs for selected transfers
-/// 4. Aggregates proofs into batches (size determined by circuit config)
-/// 5. Submits withdrawal transactions to chain
+/// 3. Filters spent nullifiers via on-chain `UsedNullifiers` (Subsquid is a pre-filter only)
+/// 4. Generates ZK proofs for selected unspent transfers
+/// 5. Aggregates proofs into batches (size determined by circuit config)
+/// 6. Submits withdrawal transactions to chain (skips batches that race on spent nullifiers)
 ///
 /// # Arguments
 /// * `config` - Configuration for the operation
@@ -267,24 +269,37 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		});
 	}
 
-	// Step 2b: Connect to chain (needed for nullifier fallback and proof submission)
+	// Step 2b: Connect to chain (needed for on-chain nullifier checks and proof submission)
 	progress.on_step("connect", "Connecting to chain");
 
 	let quantus_client = QuantusClient::new(&config.node_url)
 		.await
 		.map_err(|e| CollectRewardsError::from(format!("Failed to connect to node: {}", e)))?;
 
-	// Step 2c: Filter out already-spent transfers by checking nullifiers
-	// Tries Subsquid first, falls back to on-chain checking if Subsquid fails
-	progress.on_step("nullifiers", "Checking for already-spent nullifiers");
+	// Step 2c: Filter out already-spent transfers.
+	// Subsquid is a best-effort pre-filter; on-chain UsedNullifiers is authoritative.
+	progress.on_step("nullifiers", "Checking for already-spent nullifiers (on-chain)");
 
-	let unspent_transfers = filter_unspent_transfers_with_fallback(
+	let incoming_count = incoming_transfers.len();
+	let unspent_transfers = filter_unspent_transfers(
 		&incoming_transfers,
 		&wormhole_secret_bytes,
 		&subsquid_client,
 		&quantus_client,
 	)
 	.await?;
+
+	let spent_filtered = incoming_count.saturating_sub(unspent_transfers.len());
+	if spent_filtered > 0 {
+		progress.on_step(
+			"nullifiers",
+			&format!(
+				"Filtered {} already-spent transfer(s) via on-chain UsedNullifiers ({} remaining)",
+				spent_filtered,
+				unspent_transfers.len()
+			),
+		);
+	}
 
 	if unspent_transfers.is_empty() {
 		progress
@@ -343,6 +358,22 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		});
 	}
 
+	// Refuse to generate proofs against an unsupported runtime
+	let (spec_version, transaction_version) = quantus_client.get_runtime_version().await.map_err(
+		|e| CollectRewardsError::from(format!("Failed to get runtime version: {}", e)),
+	)?;
+	if !crate::config::is_runtime_compatible(spec_version, transaction_version) {
+		let supported = crate::config::COMPATIBLE_RUNTIMES
+			.iter()
+			.map(|r| format!("spec {} / tx {}", r.spec_version, r.transaction_version))
+			.collect::<Vec<_>>()
+			.join(", ");
+		return Err(CollectRewardsError::from(format!(
+			"CLI is incompatible with connected runtime (spec {}, tx {}). Supported: {}. Refusing to generate proofs.",
+			spec_version, transaction_version, supported
+		)));
+	}
+
 	// Get block for proofs - either specific block or latest
 	let proof_block = if let Some(block_num) = config.at_block {
 		// Fetch block hash for the specified block number
@@ -381,14 +412,27 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	let proof_block_hash = proof_block.hash();
 
 	// Step 4: Generate proofs
-	progress.on_step("proofs", &format!("Generating {} proofs", selected_transfers.len()));
+	progress.on_step("proofs", &format!("Generating up to {} proofs", selected_transfers.len()));
 
 	let bins_dir = Path::new(&config.bins_dir);
 	let num_transfers = selected_transfers.len();
 	let mut proof_bytes_list: Vec<Vec<u8>> = Vec::new();
 
 	for (i, transfer) in selected_transfers.iter().enumerate() {
-		progress.on_proof_generated(i + 1, num_transfers);
+		// Re-check on-chain immediately before proving — nullifiers can be spent
+		// while earlier proofs in this run are still being generated.
+		if is_nullifier_spent_onchain(&quantus_client, &wormhole_secret_bytes, transfer).await? {
+			progress.on_step(
+				"nullifiers",
+				&format!(
+					"Skipping transfer {} ({}/{}) — nullifier already spent on-chain",
+					transfer.id,
+					i + 1,
+					num_transfers
+				),
+			);
+			continue;
+		}
 
 		let leaf_index: u64 = transfer.leaf_index.parse().map_err(|_| {
 			CollectRewardsError::from(format!("Invalid leaf_index: {}", transfer.leaf_index))
@@ -469,6 +513,21 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			.map_err(|e| CollectRewardsError::from(e.message))?;
 
 		proof_bytes_list.push(result.proof_bytes);
+		progress.on_proof_generated(proof_bytes_list.len(), num_transfers);
+	}
+
+	if proof_bytes_list.is_empty() {
+		progress.on_step(
+			"complete",
+			"No unspent transfers remained after on-chain nullifier checks",
+		);
+		return Ok(CollectRewardsResult {
+			wormhole_address,
+			destination_address: config.destination_address,
+			total_withdrawn: 0,
+			batches: vec![],
+			transfers_processed: 0,
+		});
 	}
 
 	// Step 5: Aggregate and submit in batches
@@ -486,17 +545,31 @@ pub async fn collect_rewards<P: ProgressCallback>(
 
 	let mut total_withdrawn: u128 = 0;
 	let mut batch_results: Vec<WithdrawalBatch> = Vec::new();
+	let mut transfers_processed = 0usize;
 
 	for (batch_idx, batch_proofs) in batches.iter().enumerate() {
 		// Aggregate proofs
 		let aggregated_proof = aggregate_proof_bytes(batch_proofs, bins_dir)?;
 
-		// Submit to chain
+		// Submit to chain — skip batches that race with already-spent nullifiers
 		let (block_hash, tx_hash, transfer_events) =
-			submit_and_get_events(&quantus_client, aggregated_proof, bins_dir).await?;
+			match submit_and_get_events(&quantus_client, aggregated_proof, bins_dir).await {
+				Ok(result) => result,
+				Err(e) if is_spent_nullifier_error(&e) => {
+					progress.on_error(&format!(
+						"Batch {}/{} skipped (spent nullifier): {} — continuing with remaining batches",
+						batch_idx + 1,
+						batches.len(),
+						e.message
+					));
+					continue;
+				},
+				Err(e) => return Err(e),
+			};
 
 		let batch_amount: u128 = transfer_events.iter().map(|e| e.amount).sum();
 		total_withdrawn += batch_amount;
+		transfers_processed += batch_proofs.len();
 
 		progress.on_batch_submitted(batch_idx + 1, batches.len(), batch_amount);
 
@@ -513,7 +586,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		destination_address: config.destination_address,
 		total_withdrawn,
 		batches: batch_results,
-		transfers_processed: selected_transfers.len(),
+		transfers_processed,
 	})
 }
 
@@ -948,8 +1021,11 @@ async fn submit_and_get_events(
 			CollectRewardsError::from("Could not find extrinsic in block".to_string())
 		})?;
 
+	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
+
 	let mut transfer_events = Vec::new();
 	let mut found_proof_verified = false;
+	let mut dispatch_error_msg: Option<String> = None;
 
 	for event_result in events.iter() {
 		let event = event_result
@@ -957,6 +1033,15 @@ async fn submit_and_get_events(
 
 		if let subxt::events::Phase::ApplyExtrinsic(ext_idx) = event.phase() {
 			if ext_idx == our_ext_idx {
+				if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
+					event.as_event::<ExtrinsicFailed>()
+				{
+					let metadata = quantus_client.client().metadata();
+					dispatch_error_msg = Some(crate::cli::common::format_dispatch_error(
+						&dispatch_error,
+						&metadata,
+					));
+				}
 				if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>() {
 					found_proof_verified = true;
 				}
@@ -969,6 +1054,12 @@ async fn submit_and_get_events(
 	}
 
 	if !found_proof_verified {
+		if let Some(msg) = dispatch_error_msg {
+			return Err(CollectRewardsError::from(format!(
+				"Proof verification failed: {}",
+				msg
+			)));
+		}
 		return Err(CollectRewardsError::from(
 			"Proof verification failed - no ProofVerified event".to_string(),
 		));
@@ -977,11 +1068,49 @@ async fn submit_and_get_events(
 	Ok((block_hash, tx_hash, transfer_events))
 }
 
+/// Whether an error indicates a nullifier was already spent (safe to skip a batch).
+fn is_spent_nullifier_error(err: &CollectRewardsError) -> bool {
+	err.message.contains("NullifierAlreadyUsed")
+}
+
+/// Compute the nullifier for a transfer and check on-chain `UsedNullifiers`.
+async fn is_nullifier_spent_onchain(
+	quantus_client: &QuantusClient,
+	secret_bytes: &[u8; 32],
+	transfer: &Transfer,
+) -> Result<bool> {
+	let ctx = format!("transfer {}", transfer.id);
+	let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
+
+	let nullifier =
+		wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
+			CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
+		})?;
+
+	let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier);
+	let is_used = quantus_client
+		.client()
+		.storage()
+		.at_latest()
+		.await
+		.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?
+		.fetch(&storage_key)
+		.await
+		.map_err(|e| {
+			CollectRewardsError::from(format!(
+				"Failed to query nullifier for transfer_count {}: {}",
+				transfer_count, e
+			))
+		})?;
+
+	Ok(is_used.is_some())
+}
+
 /// Filter out transfers whose nullifiers have already been spent (on-chain check).
 ///
 /// For each transfer, computes the nullifier from (secret, transfer_count)
 /// and checks on-chain storage to see if it's been consumed by a previous withdrawal.
-/// This is more reliable than Subsquid as it queries the chain directly.
+/// This is authoritative relative to Subsquid, which can lag.
 async fn filter_unspent_transfers_onchain(
 	transfers: &[Transfer],
 	secret_bytes: &[u8; 32],
@@ -992,32 +1121,8 @@ async fn filter_unspent_transfers_onchain(
 	}
 
 	let mut unspent = Vec::new();
-	let storage = quantus_client
-		.client()
-		.storage()
-		.at_latest()
-		.await
-		.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?;
-
 	for transfer in transfers {
-		let ctx = format!("transfer {}", transfer.id);
-		let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
-
-		let nullifier =
-			wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
-				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
-			})?;
-
-		// Query on-chain UsedNullifiers storage
-		let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier);
-		let is_used = storage.fetch(&storage_key).await.map_err(|e| {
-			CollectRewardsError::from(format!(
-				"Failed to query nullifier for transfer_count {}: {}",
-				transfer_count, e
-			))
-		})?;
-
-		if is_used.is_none() {
+		if !is_nullifier_spent_onchain(quantus_client, secret_bytes, transfer).await? {
 			unspent.push(transfer.clone());
 		}
 	}
@@ -1025,16 +1130,13 @@ async fn filter_unspent_transfers_onchain(
 	Ok(unspent)
 }
 
-/// Filter out transfers whose nullifiers have already been spent.
+/// Best-effort Subsquid pre-filter for spent nullifiers.
 ///
-/// For each transfer, computes the nullifier from (secret, transfer_count)
-/// and checks Subsquid to see if it's been consumed by a previous withdrawal.
-/// If Subsquid query fails, falls back to on-chain checking.
-async fn filter_unspent_transfers_with_fallback(
+/// A successful response may still be stale; callers must verify with on-chain storage.
+async fn filter_unspent_transfers_subsquid(
 	transfers: &[Transfer],
 	secret_bytes: &[u8; 32],
 	subsquid_client: &SubsquidClient,
-	quantus_client: &QuantusClient,
 ) -> Result<Vec<Transfer>> {
 	use std::collections::HashSet;
 
@@ -1042,7 +1144,6 @@ async fn filter_unspent_transfers_with_fallback(
 		return Ok(vec![]);
 	}
 
-	// Compute nullifiers for all transfers
 	// Map: nullifier_hex -> (nullifier_hash, transfer)
 	let mut nullifier_map: std::collections::HashMap<String, (String, &Transfer)> =
 		std::collections::HashMap::new();
@@ -1061,31 +1162,50 @@ async fn filter_unspent_transfers_with_fallback(
 		nullifier_map.insert(nullifier_hex, (nullifier_hash, transfer));
 	}
 
-	// Build list for Subsquid query
 	let nullifier_pairs: Vec<(String, String)> = nullifier_map
 		.iter()
 		.map(|(nul_hex, (nul_hash, _))| (nul_hex.clone(), nul_hash.clone()))
 		.collect();
 
-	// Try Subsquid first, fall back to on-chain if it fails
 	let spent_nullifiers: HashSet<String> =
-		match subsquid_client.check_nullifiers_spent(&nullifier_pairs, 8).await {
-			Ok(spent) => spent,
-			Err(_) => {
-				// Fall back to on-chain checking
-				return filter_unspent_transfers_onchain(transfers, secret_bytes, quantus_client)
-					.await;
-			},
-		};
+		subsquid_client.check_nullifiers_spent(&nullifier_pairs, 8).await?;
 
-	// Filter to only unspent transfers
-	let unspent: Vec<Transfer> = nullifier_map
+	Ok(nullifier_map
 		.into_iter()
 		.filter(|(nul_hex, _)| !spent_nullifiers.contains(nul_hex))
 		.map(|(_, (_, transfer))| transfer.clone())
-		.collect();
+		.collect())
+}
 
-	Ok(unspent)
+/// Filter out transfers whose nullifiers have already been spent.
+///
+/// Uses Subsquid as a best-effort pre-filter when available, then always verifies
+/// remaining candidates against on-chain `UsedNullifiers`. On-chain is authoritative —
+/// a successful but stale Subsquid response must not be trusted alone.
+async fn filter_unspent_transfers(
+	transfers: &[Transfer],
+	secret_bytes: &[u8; 32],
+	subsquid_client: &SubsquidClient,
+	quantus_client: &QuantusClient,
+) -> Result<Vec<Transfer>> {
+	if transfers.is_empty() {
+		return Ok(vec![]);
+	}
+
+	// Optional fast path: shrink the candidate set via Subsquid when it works.
+	// On failure or staleness we still run the on-chain check below.
+	let candidates = match filter_unspent_transfers_subsquid(
+		transfers,
+		secret_bytes,
+		subsquid_client,
+	)
+	.await
+	{
+		Ok(filtered) => filtered,
+		Err(_) => transfers.to_vec(),
+	};
+
+	filter_unspent_transfers_onchain(&candidates, secret_bytes, quantus_client).await
 }
 
 #[cfg(test)]
@@ -1097,6 +1217,21 @@ mod tests {
 		let err = CollectRewardsError::from("test error".to_string());
 		assert_eq!(err.message, "test error");
 		assert_eq!(format!("{}", err), "test error");
+	}
+
+	#[test]
+	fn test_is_spent_nullifier_error_matches_prevalidation_and_dispatch() {
+		assert!(is_spent_nullifier_error(&CollectRewardsError::from(
+			"Pre-validation failed: NullifierAlreadyUsed - Nullifier 0 (0xab) has already been spent"
+				.to_string()
+		)));
+		assert!(is_spent_nullifier_error(&CollectRewardsError::from(
+			"Proof verification failed: Wormhole::NullifierAlreadyUsed - Nullifier already used"
+				.to_string()
+		)));
+		assert!(!is_spent_nullifier_error(&CollectRewardsError::from(
+			"Proof verification failed: Wormhole::InvalidProof".to_string()
+		)));
 	}
 
 	#[test]
