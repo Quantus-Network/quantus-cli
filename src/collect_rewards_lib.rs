@@ -218,7 +218,8 @@ pub struct CollectRewardsConfig {
 
 /// A transfer discovered outside Subsquid (e.g. captured from `NativeTransferred` at deposit time).
 ///
-/// Used by [`collect_rewards_from_known`] so tests and local tooling can withdraw without an indexer.
+/// Used by [`collect_rewards_from_known`] so tests and local tooling can withdraw without an
+/// indexer.
 #[derive(Debug, Clone)]
 pub struct KnownTransfer {
 	/// Leaf index in the ZK tree
@@ -494,9 +495,10 @@ async fn collect_rewards_pipeline<P: ProgressCallback>(
 	}
 
 	// Refuse to generate proofs against an unsupported runtime
-	let (spec_version, transaction_version) = quantus_client.get_runtime_version().await.map_err(
-		|e| CollectRewardsError::from(format!("Failed to get runtime version: {}", e)),
-	)?;
+	let (spec_version, transaction_version) = quantus_client
+		.get_runtime_version()
+		.await
+		.map_err(|e| CollectRewardsError::from(format!("Failed to get runtime version: {}", e)))?;
 	if !crate::config::is_runtime_compatible(spec_version, transaction_version) {
 		let supported = crate::config::COMPATIBLE_RUNTIMES
 			.iter()
@@ -654,10 +656,8 @@ async fn collect_rewards_pipeline<P: ProgressCallback>(
 	}
 
 	if proof_bytes_list.is_empty() {
-		progress.on_step(
-			"complete",
-			"No unspent transfers remained after on-chain nullifier checks",
-		);
+		progress
+			.on_step("complete", "No unspent transfers remained after on-chain nullifier checks");
 		return Ok(CollectRewardsResult {
 			wormhole_address: config.wormhole_address,
 			destination_address: config.destination_address,
@@ -1161,10 +1161,8 @@ async fn submit_and_get_events(
 					event.as_event::<ExtrinsicFailed>()
 				{
 					let metadata = quantus_client.client().metadata();
-					dispatch_error_msg = Some(crate::cli::common::format_dispatch_error(
-						&dispatch_error,
-						&metadata,
-					));
+					dispatch_error_msg =
+						Some(crate::cli::common::format_dispatch_error(&dispatch_error, &metadata));
 				}
 				if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>() {
 					found_proof_verified = true;
@@ -1179,10 +1177,7 @@ async fn submit_and_get_events(
 
 	if !found_proof_verified {
 		if let Some(msg) = dispatch_error_msg {
-			return Err(CollectRewardsError::from(format!(
-				"Proof verification failed: {}",
-				msg
-			)));
+			return Err(CollectRewardsError::from(format!("Proof verification failed: {}", msg)));
 		}
 		return Err(CollectRewardsError::from(
 			"Proof verification failed - no ProofVerified event".to_string(),
@@ -1216,9 +1211,7 @@ async fn is_nullifier_bytes_spent_onchain(
 		.at(best)
 		.fetch(&storage_key)
 		.await
-		.map_err(|e| {
-			CollectRewardsError::from(format!("Failed to query UsedNullifiers: {}", e))
-		})?;
+		.map_err(|e| CollectRewardsError::from(format!("Failed to query UsedNullifiers: {}", e)))?;
 	Ok(matches!(is_used, Some(true)))
 }
 
@@ -1231,10 +1224,9 @@ async fn is_nullifier_spent_onchain(
 	let ctx = format!("transfer {}", transfer.id);
 	let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
 
-	let nullifier =
-		wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
-			CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
-		})?;
+	let nullifier = wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
+		CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
+	})?;
 
 	is_nullifier_bytes_spent_onchain(quantus_client, &nullifier).await
 }
@@ -1328,24 +1320,19 @@ async fn filter_unspent_transfers<P: ProgressCallback>(
 
 	// Optional fast path: shrink the candidate set via Subsquid when it works.
 	// On failure or staleness we still run the on-chain check below.
-	let candidates = match filter_unspent_transfers_subsquid(
-		transfers,
-		secret_bytes,
-		subsquid_client,
-	)
-	.await
-	{
-		Ok(filtered) => filtered,
-		Err(e) => {
-			let msg = format!(
+	let candidates =
+		match filter_unspent_transfers_subsquid(transfers, secret_bytes, subsquid_client).await {
+			Ok(filtered) => filtered,
+			Err(e) => {
+				let msg = format!(
 				"Subsquid nullifier pre-filter failed ({}); falling back to full on-chain check",
 				e.message
 			);
-			crate::log_error!("{}", msg);
-			progress.on_step("nullifiers", &msg);
-			transfers.to_vec()
-		},
-	};
+				crate::log_error!("{}", msg);
+				progress.on_step("nullifiers", &msg);
+				transfers.to_vec()
+			},
+		};
 
 	filter_unspent_transfers_onchain(&candidates, secret_bytes, quantus_client).await
 }

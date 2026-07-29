@@ -80,8 +80,7 @@ async fn multiround_public(ctx: &mut ExerciseCtx) -> Result<String> {
 async fn collect_rewards_happy_path(ctx: &mut ExerciseCtx) -> Result<String> {
 	let secret = random_secret(ctx);
 	let mut seen_leaves = HashSet::new();
-	let deposits =
-		fund_wormhole_deposits(ctx, &secret, 2, ctx.unit, &mut seen_leaves).await?;
+	let deposits = fund_wormhole_deposits(ctx, &secret, 2, ctx.unit, &mut seen_leaves).await?;
 	let dest = ctx.eph[0].to_account_id_ss58check();
 	let before = ctx.free_balance(&dest).await?;
 
@@ -121,8 +120,7 @@ async fn collect_rewards_spent_filter(ctx: &mut ExerciseCtx) -> Result<String> {
 	let dest = ctx.eph[1].to_account_id_ss58check();
 	let mut seen_leaves = HashSet::new();
 
-	let initial =
-		fund_wormhole_deposits(ctx, &secret, 2, ctx.unit, &mut seen_leaves).await?;
+	let initial = fund_wormhole_deposits(ctx, &secret, 2, ctx.unit, &mut seen_leaves).await?;
 	let first = run_collect_known(ctx, &secret, &dest, initial.clone(), None)
 		.await
 		.map_err(|e| QuantusError::Generic(format!("initial collect failed: {e}")))?;
