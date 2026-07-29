@@ -19,7 +19,7 @@ use crate::{
 		WormholeCredential,
 	},
 	error::{QuantusError, Result},
-	exercise_step, wormhole_lib,
+	exercise_step, log_verbose, wormhole_lib,
 };
 use rand::RngCore;
 use std::{collections::HashSet, time::Duration};
@@ -330,7 +330,12 @@ async fn wait_for_native_transferred(
 			let Some(block_hash) = hash else { continue };
 			let events = match client.client().events().at(block_hash).await {
 				Ok(e) => e,
-				Err(_) => continue,
+				Err(e) => {
+					log_verbose!(
+						"wait_for_native_transferred: events().at(#{n} {block_hash:?}) failed: {e:?}"
+					);
+					continue;
+				},
 			};
 			for ev in events.find::<wormhole_api::events::NativeTransferred>().flatten() {
 				if &ev.to.0 == wh_addr && !seen_leaves.contains(&ev.leaf_index) {
