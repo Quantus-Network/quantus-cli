@@ -306,7 +306,6 @@ async fn wait_for_native_transferred(
 
 	let start = std::time::Instant::now();
 	let timeout = Duration::from_secs(60);
-	let mut last_seen_best: u32 = 0;
 
 	loop {
 		let best = client.get_latest_block().await?;
@@ -318,8 +317,10 @@ async fn wait_for_native_transferred(
 			.map_err(|e| QuantusError::NetworkError(format!("blocks().at(best): {e:?}")))?
 			.header()
 			.number;
-		let lower = best_number.saturating_sub(INCLUSION_SCAN_BLOCKS);
-		let scan_from = last_seen_best.max(lower);
+		// Always re-scan a trailing window (including the current tip). Advancing a
+		// watermark past `best_number` can skip the inclusion block when the transfer
+		// lands in that block after an earlier empty pass.
+		let scan_from = best_number.saturating_sub(INCLUSION_SCAN_BLOCKS);
 
 		for n in scan_from..=best_number {
 			let hash: Option<H256> =
@@ -337,7 +338,6 @@ async fn wait_for_native_transferred(
 				}
 			}
 		}
-		last_seen_best = best_number.saturating_add(1);
 
 		if start.elapsed() > timeout {
 			return Err(QuantusError::Generic(format!(
