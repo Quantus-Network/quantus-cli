@@ -412,6 +412,7 @@ async fn collect_rewards_pipeline<P: ProgressCallback>(
 			&config.wormhole_secret_bytes,
 			subsquid_client,
 			&quantus_client,
+			progress,
 		)
 		.await?
 	} else {
@@ -1314,11 +1315,12 @@ async fn filter_unspent_transfers_subsquid(
 /// Uses Subsquid as a best-effort pre-filter when available, then always verifies
 /// remaining candidates against on-chain `UsedNullifiers`. On-chain is authoritative —
 /// a successful but stale Subsquid response must not be trusted alone.
-async fn filter_unspent_transfers(
+async fn filter_unspent_transfers<P: ProgressCallback>(
 	transfers: &[Transfer],
 	secret_bytes: &[u8; 32],
 	subsquid_client: &SubsquidClient,
 	quantus_client: &QuantusClient,
+	progress: &P,
 ) -> Result<Vec<Transfer>> {
 	if transfers.is_empty() {
 		return Ok(vec![]);
@@ -1334,7 +1336,15 @@ async fn filter_unspent_transfers(
 	.await
 	{
 		Ok(filtered) => filtered,
-		Err(_) => transfers.to_vec(),
+		Err(e) => {
+			let msg = format!(
+				"Subsquid nullifier pre-filter failed ({}); falling back to full on-chain check",
+				e.message
+			);
+			crate::log_error!("{}", msg);
+			progress.on_step("nullifiers", &msg);
+			transfers.to_vec()
+		},
 	};
 
 	filter_unspent_transfers_onchain(&candidates, secret_bytes, quantus_client).await
