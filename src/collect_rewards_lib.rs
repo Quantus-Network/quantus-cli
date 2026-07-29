@@ -216,6 +216,58 @@ pub struct CollectRewardsConfig {
 	pub at_block: Option<u32>,
 }
 
+/// A transfer discovered outside Subsquid (e.g. captured from `NativeTransferred` at deposit time).
+///
+/// Used by [`collect_rewards_from_known`] so tests and local tooling can withdraw without an indexer.
+#[derive(Debug, Clone)]
+pub struct KnownTransfer {
+	/// Leaf index in the ZK tree
+	pub leaf_index: u64,
+	/// Transfer count (for nullifier computation)
+	pub transfer_count: u64,
+	/// Transfer amount in planck
+	pub amount: u128,
+}
+
+/// Configuration for [`collect_rewards_from_known`] (no Subsquid URL).
+#[derive(Debug, Clone)]
+pub struct CollectKnownTransfersConfig {
+	/// Wormhole credential - either mnemonic or direct secret
+	pub credential: WormholeCredential,
+	/// Destination address (SS58) to receive withdrawn funds
+	pub destination_address: String,
+	/// Chain RPC node URL
+	pub node_url: String,
+	/// Path to circuit binary directory (verifier/common + private/public-batch bins).
+	pub bins_dir: String,
+	/// Optional: specific amount to withdraw (None = withdraw all)
+	pub amount: Option<u128>,
+	/// If true, only query and return info without submitting transactions
+	pub dry_run: bool,
+	/// Optional: specific block number to use for proofs (None = use latest)
+	pub at_block: Option<u32>,
+}
+
+impl KnownTransfer {
+	fn to_transfer(&self, index: usize) -> Transfer {
+		Transfer {
+			id: format!("known-{index}"),
+			block_id: String::new(),
+			block_height: 0,
+			timestamp: String::new(),
+			extrinsic_hash: None,
+			from_id: String::new(),
+			to_id: String::new(),
+			amount: self.amount.to_string(),
+			fee: "0".to_string(),
+			from_hash: String::new(),
+			to_hash: String::new(),
+			leaf_index: self.leaf_index.to_string(),
+			transfer_count: self.transfer_count.to_string(),
+		}
+	}
+}
+
 /// Collect miner rewards by querying Subsquid, generating proofs, and submitting withdrawals.
 ///
 /// This is the main entry point for the SDK to collect rewards. It handles the entire flow:
@@ -240,9 +292,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		resolve_credential(&config.credential)?;
 	progress.on_step("derive", &format!("Derived wormhole address: {}", wormhole_address));
 
-	// Parse destination address
-	let destination_bytes = parse_ss58_address(&config.destination_address)?;
-
 	// Step 2: Query Subsquid for pending transfers
 	progress.on_step("query", "Querying Subsquid for pending transfers");
 
@@ -259,9 +308,85 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	let incoming_transfers: Vec<_> =
 		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
 
+	collect_rewards_pipeline(
+		CollectPipelineArgs {
+			wormhole_address,
+			wormhole_address_bytes,
+			wormhole_secret_bytes,
+			destination_address: config.destination_address,
+			node_url: config.node_url,
+			bins_dir: config.bins_dir,
+			amount: config.amount,
+			dry_run: config.dry_run,
+			at_block: config.at_block,
+		},
+		incoming_transfers,
+		Some(&subsquid_client),
+		progress,
+	)
+	.await
+}
+
+/// Collect rewards for transfers that are already known (no Subsquid).
+///
+/// Filters spent nullifiers against on-chain `UsedNullifiers`, then proves and submits
+/// the same way as [`collect_rewards`]. Intended for tests, local exercise, and callers
+/// that captured deposit events themselves.
+pub async fn collect_rewards_from_known<P: ProgressCallback>(
+	config: CollectKnownTransfersConfig,
+	transfers: Vec<KnownTransfer>,
+	progress: &P,
+) -> Result<CollectRewardsResult> {
+	let (wormhole_address, wormhole_address_bytes, wormhole_secret_bytes) =
+		resolve_credential(&config.credential)?;
+	progress.on_step("derive", &format!("Derived wormhole address: {}", wormhole_address));
+
+	let incoming_transfers: Vec<Transfer> =
+		transfers.iter().enumerate().map(|(i, t)| t.to_transfer(i)).collect();
+
+	collect_rewards_pipeline(
+		CollectPipelineArgs {
+			wormhole_address,
+			wormhole_address_bytes,
+			wormhole_secret_bytes,
+			destination_address: config.destination_address,
+			node_url: config.node_url,
+			bins_dir: config.bins_dir,
+			amount: config.amount,
+			dry_run: config.dry_run,
+			at_block: config.at_block,
+		},
+		incoming_transfers,
+		None,
+		progress,
+	)
+	.await
+}
+
+struct CollectPipelineArgs {
+	wormhole_address: String,
+	wormhole_address_bytes: [u8; 32],
+	wormhole_secret_bytes: [u8; 32],
+	destination_address: String,
+	node_url: String,
+	bins_dir: String,
+	amount: Option<u128>,
+	dry_run: bool,
+	at_block: Option<u32>,
+}
+
+/// Shared prove/submit pipeline after transfer discovery.
+async fn collect_rewards_pipeline<P: ProgressCallback>(
+	config: CollectPipelineArgs,
+	incoming_transfers: Vec<Transfer>,
+	subsquid_client: Option<&SubsquidClient>,
+	progress: &P,
+) -> Result<CollectRewardsResult> {
+	let destination_bytes = parse_ss58_address(&config.destination_address)?;
+
 	if incoming_transfers.is_empty() {
 		return Ok(CollectRewardsResult {
-			wormhole_address,
+			wormhole_address: config.wormhole_address,
 			destination_address: config.destination_address,
 			total_withdrawn: 0,
 			batches: vec![],
@@ -269,25 +394,34 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		});
 	}
 
-	// Step 2b: Connect to chain (needed for on-chain nullifier checks and proof submission)
+	// Connect to chain (needed for on-chain nullifier checks and proof submission)
 	progress.on_step("connect", "Connecting to chain");
 
 	let quantus_client = QuantusClient::new(&config.node_url)
 		.await
 		.map_err(|e| CollectRewardsError::from(format!("Failed to connect to node: {}", e)))?;
 
-	// Step 2c: Filter out already-spent transfers.
-	// Subsquid is a best-effort pre-filter; on-chain UsedNullifiers is authoritative.
+	// Filter out already-spent transfers.
+	// Subsquid (when provided) is a best-effort pre-filter; on-chain is authoritative.
 	progress.on_step("nullifiers", "Checking for already-spent nullifiers (on-chain)");
 
 	let incoming_count = incoming_transfers.len();
-	let unspent_transfers = filter_unspent_transfers(
-		&incoming_transfers,
-		&wormhole_secret_bytes,
-		&subsquid_client,
-		&quantus_client,
-	)
-	.await?;
+	let unspent_transfers = if let Some(subsquid_client) = subsquid_client {
+		filter_unspent_transfers(
+			&incoming_transfers,
+			&config.wormhole_secret_bytes,
+			subsquid_client,
+			&quantus_client,
+		)
+		.await?
+	} else {
+		filter_unspent_transfers_onchain(
+			&incoming_transfers,
+			&config.wormhole_secret_bytes,
+			&quantus_client,
+		)
+		.await?
+	};
 
 	let spent_filtered = incoming_count.saturating_sub(unspent_transfers.len());
 	if spent_filtered > 0 {
@@ -305,7 +439,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		progress
 			.on_step("complete", "All transfers have already been withdrawn (nullifiers spent)");
 		return Ok(CollectRewardsResult {
-			wormhole_address,
+			wormhole_address: config.wormhole_address,
 			destination_address: config.destination_address,
 			total_withdrawn: 0,
 			batches: vec![],
@@ -350,7 +484,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 
 	if config.dry_run {
 		return Ok(CollectRewardsResult {
-			wormhole_address,
+			wormhole_address: config.wormhole_address,
 			destination_address: config.destination_address,
 			total_withdrawn: 0,
 			batches: vec![],
@@ -421,7 +555,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	for (i, transfer) in selected_transfers.iter().enumerate() {
 		// Re-check on-chain immediately before proving — nullifiers can be spent
 		// while earlier proofs in this run are still being generated.
-		if is_nullifier_spent_onchain(&quantus_client, &wormhole_secret_bytes, transfer).await? {
+		if is_nullifier_spent_onchain(&quantus_client, &config.wormhole_secret_bytes, transfer)
+			.await?
+		{
 			progress.on_step(
 				"nullifiers",
 				&format!(
@@ -476,18 +612,18 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		let digest = header.digest.encode();
 		let block_number = header.number;
 
-		if leaf_to_account != wormhole_address_bytes {
+		if leaf_to_account != config.wormhole_address_bytes {
 			return Err(CollectRewardsError::from(format!(
 				"Leaf to_account mismatch: expected 0x{}, got 0x{}",
-				hex::encode(wormhole_address_bytes),
+				hex::encode(config.wormhole_address_bytes),
 				hex::encode(leaf_to_account)
 			)));
 		}
 
 		let input = wormhole_lib::ProofGenerationInput {
-			secret: wormhole_secret_bytes,
+			secret: config.wormhole_secret_bytes,
 			transfer_count,
-			wormhole_address: wormhole_address_bytes,
+			wormhole_address: config.wormhole_address_bytes,
 			input_amount,
 			block_hash: proof_block_hash.0,
 			block_number,
@@ -522,7 +658,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			"No unspent transfers remained after on-chain nullifier checks",
 		);
 		return Ok(CollectRewardsResult {
-			wormhole_address,
+			wormhole_address: config.wormhole_address,
 			destination_address: config.destination_address,
 			total_withdrawn: 0,
 			batches: vec![],
@@ -582,7 +718,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	}
 
 	Ok(CollectRewardsResult {
-		wormhole_address,
+		wormhole_address: config.wormhole_address,
 		destination_address: config.destination_address,
 		total_withdrawn,
 		batches: batch_results,
@@ -934,21 +1070,8 @@ async fn submit_and_get_events(
 			CollectRewardsError::from(format!("Failed to convert nullifier {} to bytes", i))
 		})?;
 
-		// Query UsedNullifiers storage
-		let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier_bytes);
-		let is_used = quantus_client
-			.client()
-			.storage()
-			.at_latest()
-			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?
-			.fetch(&storage_key)
-			.await
-			.map_err(|e| {
-				CollectRewardsError::from(format!("Failed to query nullifier {}: {}", i, e))
-			})?;
-
-		if is_used.is_some() {
+		// Query UsedNullifiers at best (not finalized) — PoW finality can lag inclusion.
+		if is_nullifier_bytes_spent_onchain(quantus_client, &nullifier_bytes).await? {
 			return Err(CollectRewardsError::from(format!(
 				"Pre-validation failed: NullifierAlreadyUsed - Nullifier {} (0x{}) has already been spent",
 				i,
@@ -1073,6 +1196,31 @@ fn is_spent_nullifier_error(err: &CollectRewardsError) -> bool {
 	err.message.contains("NullifierAlreadyUsed")
 }
 
+/// Whether `nullifier` is marked spent in on-chain `UsedNullifiers`.
+///
+/// Reads at the **best** block (via RPC), not Subxt's `at_latest()` which is
+/// finalized — on PoW, finality can lag best inclusion, so post-collect filters
+/// would otherwise miss freshly spent nullifiers.
+async fn is_nullifier_bytes_spent_onchain(
+	quantus_client: &QuantusClient,
+	nullifier: &[u8; 32],
+) -> Result<bool> {
+	let best = quantus_client.get_latest_block().await.map_err(|e| {
+		CollectRewardsError::from(format!("Failed to get best block for UsedNullifiers: {}", e))
+	})?;
+	let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(*nullifier);
+	let is_used = quantus_client
+		.client()
+		.storage()
+		.at(best)
+		.fetch(&storage_key)
+		.await
+		.map_err(|e| {
+			CollectRewardsError::from(format!("Failed to query UsedNullifiers: {}", e))
+		})?;
+	Ok(matches!(is_used, Some(true)))
+}
+
 /// Compute the nullifier for a transfer and check on-chain `UsedNullifiers`.
 async fn is_nullifier_spent_onchain(
 	quantus_client: &QuantusClient,
@@ -1087,23 +1235,7 @@ async fn is_nullifier_spent_onchain(
 			CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
 		})?;
 
-	let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier);
-	let is_used = quantus_client
-		.client()
-		.storage()
-		.at_latest()
-		.await
-		.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?
-		.fetch(&storage_key)
-		.await
-		.map_err(|e| {
-			CollectRewardsError::from(format!(
-				"Failed to query nullifier for transfer_count {}: {}",
-				transfer_count, e
-			))
-		})?;
-
-	Ok(is_used.is_some())
+	is_nullifier_bytes_spent_onchain(quantus_client, &nullifier).await
 }
 
 /// Filter out transfers whose nullifiers have already been spent (on-chain check).

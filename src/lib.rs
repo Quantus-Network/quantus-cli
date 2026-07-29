@@ -67,9 +67,10 @@ pub use cli::wormhole::{
 
 // Re-export collect rewards library for SDK usage
 pub use collect_rewards_lib::{
-	collect_rewards, query_pending_transfers, query_pending_transfers_for_address,
-	CollectRewardsConfig, CollectRewardsError, CollectRewardsResult, NoOpProgress, PendingTransfer,
-	ProgressCallback, QueryPendingTransfersResult, WithdrawalBatch,
+	collect_rewards, collect_rewards_from_known, query_pending_transfers,
+	query_pending_transfers_for_address, CollectKnownTransfersConfig, CollectRewardsConfig,
+	CollectRewardsError, CollectRewardsResult, KnownTransfer, NoOpProgress, PendingTransfer,
+	ProgressCallback, QueryPendingTransfersResult, WithdrawalBatch, WormholeCredential,
 };
 
 /// Library version
