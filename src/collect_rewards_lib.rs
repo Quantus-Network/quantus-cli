@@ -45,6 +45,8 @@ use subxt::{
 /// Result type for collect rewards operations
 pub type Result<T> = std::result::Result<T, CollectRewardsError>;
 
+const MAX_PRE_SUBMISSION_NULLIFIER_QUERIES: usize = 7;
+
 /// Error type for collect rewards operations
 #[derive(Debug, Clone)]
 pub struct CollectRewardsError {
@@ -802,6 +804,7 @@ async fn submit_and_get_events(
 	let inputs = qp_wormhole_verifier::parse_private_batch_public_inputs(&proof).map_err(|e| {
 		CollectRewardsError::from(format!("Failed to parse public inputs: {:?}", e))
 	})?;
+	validate_pre_submission_nullifier_count(inputs.nullifiers.len())?;
 
 	// Check asset_id (must be 0 for native)
 	if inputs.asset_id != 0 {
@@ -1001,6 +1004,17 @@ async fn submit_and_get_events(
 	Ok((block_hash, tx_hash, transfer_events))
 }
 
+fn validate_pre_submission_nullifier_count(count: usize) -> Result<()> {
+	if count > MAX_PRE_SUBMISSION_NULLIFIER_QUERIES {
+		return Err(CollectRewardsError::from(format!(
+			"Pre-validation failed: proof contains {} nullifiers; maximum supported per batch is {}",
+			count, MAX_PRE_SUBMISSION_NULLIFIER_QUERIES
+		)));
+	}
+
+	Ok(())
+}
+
 /// Filter transfers against `UsedNullifiers` at one pinned best-chain snapshot.
 async fn filter_unspent_transfers_onchain(
 	transfers: &[Transfer],
@@ -1056,6 +1070,17 @@ mod tests {
 		let err = CollectRewardsError::from("test error".to_string());
 		assert_eq!(err.message, "test error");
 		assert_eq!(format!("{}", err), "test error");
+	}
+
+	#[test]
+	fn test_pre_submission_nullifier_query_count_is_bounded() {
+		assert!(
+			validate_pre_submission_nullifier_count(MAX_PRE_SUBMISSION_NULLIFIER_QUERIES).is_ok()
+		);
+
+		let err = validate_pre_submission_nullifier_count(MAX_PRE_SUBMISSION_NULLIFIER_QUERIES + 1)
+			.unwrap_err();
+		assert!(err.message.contains("maximum supported per batch is 7"));
 	}
 
 	#[test]
