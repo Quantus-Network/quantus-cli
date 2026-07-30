@@ -9,7 +9,7 @@ pub mod keystore;
 pub mod password;
 
 use crate::error::{Result, WalletError};
-pub use keystore::{Keystore, QuantumKeyPair, WalletData, WalletType};
+pub use keystore::{Keystore, QuantumKeyPair, WalletData};
 use qp_dilithium_crypto::DilithiumPair;
 use qp_rusty_crystals_hdwallet::{
 	derive_key_from_mnemonic, generate_mnemonic, mnemonic_to_seed, SensitiveBytes32,
@@ -597,6 +597,55 @@ pub fn load_keypair_from_wallet(
 	Ok(keypair)
 }
 
+/// How an extrinsic gets signed: locally from key material, or air-gapped over
+/// QR codes by a cold (watch-only) wallet. The submit stage in
+/// `cli::common` branches on this; commands never do.
+#[derive(Debug, Clone)]
+pub enum WalletSigner {
+	Hot(QuantumKeyPair),
+	/// Watch-only: address stored unencrypted, signing happens over QR.
+	Cold { name: String, address: String },
+}
+
+impl WalletSigner {
+	/// SS58 address of the signing account, regardless of kind.
+	pub fn account_id_ss58check(&self) -> String {
+		match self {
+			WalletSigner::Hot(keypair) => keypair.to_account_id_ss58check(),
+			WalletSigner::Cold { address, .. } => address.clone(),
+		}
+	}
+
+	/// The hot keypair, if this is a hot signer. Used only by paths that
+	/// genuinely need key material (e.g. HD derivation).
+	pub fn as_hot(&self) -> Option<&QuantumKeyPair> {
+		match self {
+			WalletSigner::Hot(keypair) => Some(keypair),
+			WalletSigner::Cold { .. } => None,
+		}
+	}
+}
+
+/// Resolve a wallet into a signer without assuming it has local key material.
+/// Cold wallets resolve without a password prompt; hot wallets decrypt as usual.
+pub fn load_signer_from_wallet(
+	wallet_name: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> Result<WalletSigner> {
+	let wallet_manager = WalletManager::new()?;
+	if wallet_manager.wallet_type(wallet_name)? == Some(keystore::WalletType::Cold) {
+		if password.is_some() || password_file.is_some() {
+			crate::log_print!("⚠️  Cold wallets have no password; ignoring --password/--password-file");
+		}
+		let address = wallet_manager
+			.find_wallet_address(wallet_name)?
+			.ok_or(WalletError::NotFound)?;
+		return Ok(WalletSigner::Cold { name: wallet_name.to_string(), address });
+	}
+	Ok(WalletSigner::Hot(load_keypair_from_wallet(wallet_name, password, password_file)?))
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -1076,8 +1125,14 @@ mod tests {
 
 		// Address resolution and type probe work
 		assert_eq!(wallet_manager.find_wallet_address("frosty").unwrap(), Some(address));
-		assert_eq!(wallet_manager.wallet_type("frosty").unwrap(), Some(WalletType::Cold));
-		assert_eq!(wallet_manager.wallet_type("hot-one").unwrap(), Some(WalletType::Hot));
+		assert_eq!(
+			wallet_manager.wallet_type("frosty").unwrap(),
+			Some(keystore::WalletType::Cold)
+		);
+		assert_eq!(
+			wallet_manager.wallet_type("hot-one").unwrap(),
+			Some(keystore::WalletType::Hot)
+		);
 		assert_eq!(wallet_manager.wallet_type("nope").unwrap(), None);
 
 		// get_wallet without password shows full public info
@@ -1148,6 +1203,6 @@ mod tests {
 			"created_at": "2025-01-01T00:00:00Z"
 		}"#;
 		let wallet: keystore::EncryptedWallet = serde_json::from_str(legacy).unwrap();
-		assert_eq!(wallet.wallet_type, WalletType::Hot);
+		assert_eq!(wallet.wallet_type, keystore::WalletType::Hot);
 	}
 }

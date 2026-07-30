@@ -31,7 +31,13 @@ async fn note_and_verify(ctx: &mut ExerciseCtx) -> Result<String> {
 	let expected_hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 
 	let keypair = ctx.eph[3].clone();
-	crate::cli::common::submit_preimage(&ctx.client, &keypair, encoded, ctx.wait_mode()).await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(keypair.clone()),
+		encoded,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let status_addr = quantus_subxt::api::storage().preimage().request_status_for(expected_hash);
 	let latest = ctx.client.get_latest_block().await?;

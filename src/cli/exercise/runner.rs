@@ -53,7 +53,14 @@ pub async fn submit_ok<Call>(
 where
 	Call: subxt::tx::Payload,
 {
-	crate::cli::common::submit_transaction(&ctx.client, from, call, None, ctx.wait_mode()).await
+	crate::cli::common::submit_transaction(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(from.clone()),
+		call,
+		None,
+		ctx.wait_mode(),
+	)
+	.await
 }
 
 pub async fn submit_expect_failure<Call>(
@@ -65,8 +72,14 @@ pub async fn submit_expect_failure<Call>(
 where
 	Call: subxt::tx::Payload,
 {
-	match crate::cli::common::submit_transaction(&ctx.client, from, call, None, ctx.wait_mode())
-		.await
+	match crate::cli::common::submit_transaction(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(from.clone()),
+		call,
+		None,
+		ctx.wait_mode(),
+	)
+	.await
 	{
 		Ok(hash) => Err(QuantusError::Generic(format!(
 			"expected rejection but transaction succeeded ({hash:?})"

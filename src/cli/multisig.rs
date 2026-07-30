@@ -499,9 +499,10 @@ pub async fn create_multisig(
 	// Submit transaction
 	let execution_mode =
 		ExecutionMode { finalized: false, wait_for_transaction: wait_for_inclusion };
+	let signer = crate::wallet::WalletSigner::Hot(creator_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		creator_keypair,
+		&signer,
 		create_tx,
 		None,
 		execution_mode,
@@ -570,9 +571,10 @@ pub async fn propose_transfer(
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let signer = crate::wallet::WalletSigner::Hot(proposer_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		proposer_keypair,
+		&signer,
 		propose_tx,
 		None,
 		execution_mode,
@@ -603,9 +605,10 @@ pub async fn propose_custom(
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let signer = crate::wallet::WalletSigner::Hot(proposer_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		proposer_keypair,
+		&signer,
 		propose_tx,
 		None,
 		execution_mode,
@@ -643,9 +646,10 @@ pub async fn approve_proposal(
 			.approve(multisig_address, proposal_id, proposal.call);
 
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let signer = crate::wallet::WalletSigner::Hot(approver_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		approver_keypair,
+		&signer,
 		approve_tx,
 		None,
 		execution_mode,
@@ -669,9 +673,10 @@ pub async fn cancel_proposal(
 	let cancel_tx = quantus_subxt::api::tx().multisig().cancel(multisig_address, proposal_id);
 
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
+	let signer = crate::wallet::WalletSigner::Hot(proposer_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		proposer_keypair,
+		&signer,
 		cancel_tx,
 		None,
 		execution_mode,
@@ -1085,8 +1090,8 @@ async fn handle_create_multisig(
 	log_print!("   {}", predicted_address.bright_cyan().bold());
 	log_print!("");
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -1106,7 +1111,7 @@ async fn handle_create_multisig(
 
 	let _tx_hash = crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		create_tx,
 		None,
 		create_execution_mode,
@@ -1533,8 +1538,8 @@ async fn handle_propose(
 
 	log_verbose!("Call data size: {} bytes", call_data.len());
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
 	let propose_tx = quantus_subxt::api::tx().multisig().propose(
@@ -1549,7 +1554,7 @@ async fn handle_propose(
 	// Submit transaction and wait for on-chain confirmation
 	crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		propose_tx,
 		None,
 		propose_execution_mode,
@@ -1602,8 +1607,8 @@ async fn handle_propose_with_call_data(
 	log_verbose!("Current block: {}, expiry valid", current_block_number);
 	log_verbose!("Call data size: {} bytes", call_data.len());
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
 	let propose_tx = quantus_subxt::api::tx().multisig().propose(
@@ -1618,7 +1623,7 @@ async fn handle_propose_with_call_data(
 	// Submit transaction and wait for on-chain confirmation
 	crate::cli::common::submit_transaction(
 		quantus_client,
-		&keypair,
+		&signer,
 		propose_tx,
 		None,
 		propose_execution_mode,
@@ -1655,8 +1660,8 @@ async fn handle_approve(
 	log_verbose!("Multisig: {}", multisig_ss58);
 	log_verbose!("Proposal ID: {}", proposal_id);
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -1726,7 +1731,7 @@ async fn handle_approve(
 	// Submit transaction and wait for on-chain confirmation
 	crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		approve_tx,
 		None,
 		approve_execution_mode,
@@ -1767,8 +1772,8 @@ async fn handle_execute(
 	log_verbose!("Multisig: {}", multisig_ss58);
 	log_verbose!("Proposal ID: {}", proposal_id);
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -1808,7 +1813,7 @@ async fn handle_execute(
 
 	crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		execute_tx,
 		None,
 		exec_execution_mode,
@@ -1843,8 +1848,8 @@ async fn handle_cancel(
 
 	log_verbose!("Proposal ID: {}", proposal_id);
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -1891,7 +1896,7 @@ async fn handle_cancel(
 	// Submit transaction and wait for on-chain confirmation
 	crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		cancel_tx,
 		None,
 		cancel_execution_mode,
@@ -1927,8 +1932,8 @@ async fn handle_remove_expired(
 
 	log_verbose!("Proposal ID: {}", proposal_id);
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -1944,7 +1949,7 @@ async fn handle_remove_expired(
 	// Submit transaction and wait for on-chain confirmation
 	crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		remove_tx,
 		None,
 		remove_execution_mode,
@@ -1976,8 +1981,8 @@ async fn handle_claim_deposits(
 	let multisig_bytes: [u8; 32] = *multisig_id.as_ref();
 	let multisig_address = subxt::ext::subxt_core::utils::AccountId32::from(multisig_bytes);
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -1991,7 +1996,7 @@ async fn handle_claim_deposits(
 	// Submit transaction and wait for on-chain confirmation
 	crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		claim_tx,
 		None,
 		claim_execution_mode,
@@ -3036,8 +3041,8 @@ async fn handle_high_security_set(
 		log_print!("");
 	}
 
-	// Load keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	// Load signer
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Build propose transaction
 	let propose_tx = quantus_subxt::api::tx().multisig().propose(
@@ -3052,7 +3057,7 @@ async fn handle_high_security_set(
 	// Submit transaction and wait for on-chain confirmation
 	crate::cli::common::submit_transaction(
 		&quantus_client,
-		&keypair,
+		&signer,
 		propose_tx,
 		None,
 		propose_execution_mode,

@@ -276,13 +276,34 @@ pub(crate) fn build_batch_transfer_call(
 
 pub async fn estimate_transaction_partial_fee<Call>(
 	quantus_client: &QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	call: &Call,
 	tip: Option<u128>,
 ) -> Result<u128>
 where
 	Call: subxt::tx::Payload,
 {
+	// Cold wallets can't sign locally; the fixed-length Dilithium signature
+	// means a dummy-signature estimate is just as accurate.
+	if let crate::wallet::WalletSigner::Cold { address, .. } = signer {
+		use sp_core::crypto::Ss58Codec;
+		let account = sp_core::crypto::AccountId32::from_ss58check_with_version(address)
+			.map_err(|e| {
+				crate::error::QuantusError::Generic(format!("Invalid cold wallet address: {e:?}"))
+			})?
+			.0;
+		return crate::cli::cold_signing::estimate_cold_fee(
+			quantus_client,
+			call,
+			&account,
+			tip.unwrap_or(0),
+		)
+		.await
+		.ok_or(crate::error::QuantusError::NetworkError(
+			"Failed to estimate transaction fee".to_string(),
+		));
+	}
+	let from_keypair = signer.as_hot().expect("cold arm returned above");
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -313,7 +334,7 @@ where
 
 pub(crate) async fn ensure_balance_covers_call<Call>(
 	quantus_client: &QuantusClient,
-	keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	call: &Call,
 	balance: u128,
 	exact_required: u128,
@@ -330,7 +351,7 @@ where
 		});
 	}
 
-	match estimate_transaction_partial_fee(quantus_client, keypair, call, submit_tip).await {
+	match estimate_transaction_partial_fee(quantus_client, signer, call, submit_tip).await {
 		Ok(estimated_fee) => {
 			let estimated_total =
 				checked_add(exact_required, estimated_fee, "required balance including fee")?;
@@ -375,7 +396,7 @@ where
 
 async fn submit_transfer_call<Call>(
 	quantus_client: &QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	transfer_call: Call,
 	submit_tip: Option<u128>,
 	nonce: Option<u32>,
@@ -388,7 +409,7 @@ where
 		log_verbose!("🔢 Using manual nonce: {}", manual_nonce);
 		crate::cli::common::submit_transaction_with_nonce(
 			quantus_client,
-			from_keypair,
+			signer,
 			transfer_call,
 			submit_tip,
 			manual_nonce,
@@ -398,7 +419,7 @@ where
 	} else {
 		crate::cli::common::submit_transaction(
 			quantus_client,
-			from_keypair,
+			signer,
 			transfer_call,
 			submit_tip,
 			execution_mode,
@@ -452,7 +473,7 @@ pub async fn transfer_with_nonce(
 	// Submit the transaction with optional manual nonce
 	let tx_hash = submit_transfer_call(
 		quantus_client,
-		from_keypair,
+		&crate::wallet::WalletSigner::Hot(from_keypair.clone()),
 		transfer_call,
 		submit_tip,
 		nonce,
@@ -467,11 +488,11 @@ pub async fn transfer_with_nonce(
 
 pub(crate) async fn validate_batch_transfer_request(
 	quantus_client: &QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	transfers: &[(String, u128)],
 ) -> Result<()> {
 	log_verbose!("🚀 Preparing batch transfer transaction with {} transfers...", transfers.len());
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", signer.account_id_ss58check().bright_cyan());
 
 	if transfers.is_empty() {
 		return Err(crate::error::QuantusError::Generic(
@@ -510,7 +531,7 @@ pub(crate) async fn validate_batch_transfer_request(
 
 pub(crate) async fn submit_prebuilt_batch_transfer_call<Call>(
 	quantus_client: &QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	transfers: &[(String, u128)],
 	batch_call: Call,
 	tip: Option<u128>,
@@ -523,7 +544,7 @@ where
 
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		from_keypair,
+		signer,
 		batch_call,
 		positive_tip_amount(tip),
 		execution_mode,
@@ -543,12 +564,13 @@ pub async fn batch_transfer(
 	tip: Option<u128>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
-	validate_batch_transfer_request(quantus_client, from_keypair, &transfers).await?;
+	let signer = crate::wallet::WalletSigner::Hot(from_keypair.clone());
+	validate_batch_transfer_request(quantus_client, &signer, &transfers).await?;
 	log_verbose!("✍️  Creating batch extrinsic with {} calls...", transfers.len());
 	let batch_call = build_batch_transfer_call(&transfers)?;
 	submit_prebuilt_batch_transfer_call(
 		quantus_client,
-		from_keypair,
+		&signer,
 		&transfers,
 		batch_call,
 		tip,
@@ -571,7 +593,6 @@ pub async fn handle_send_command(
 	tip: Option<String>,
 	nonce: Option<u32>,
 	execution_mode: crate::cli::common::ExecutionMode,
-	cold_io: crate::cli::cold_signing::ColdIo,
 ) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
@@ -593,30 +614,12 @@ pub async fn handle_send_command(
 
 	log_verbose!("📦 Using wallet: {}", from_wallet.bright_blue().bold());
 
-	// Cold (watch-only) wallets sign over QR codes instead of a local key.
-	let wallet_manager = crate::wallet::WalletManager::new()?;
-	if wallet_manager.wallet_type(&from_wallet)? == Some(crate::wallet::WalletType::Cold) {
-		if password.is_some() || password_file.is_some() {
-			log_print!("⚠️  Cold wallets have no password; ignoring --password/--password-file");
-		}
-		return handle_cold_send(
-			&quantus_client,
-			&from_wallet,
-			to_account_id,
-			amount,
-			&tip,
-			nonce,
-			execution_mode,
-			&cold_io,
-		)
-		.await;
-	}
-
-	// Get password securely for decryption
-	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
+	// Hot wallets decrypt locally; cold (watch-only) wallets sign over QR in
+	// the submit stage — this command doesn't need to know which it is.
+	let signer = crate::wallet::load_signer_from_wallet(&from_wallet, password, password_file)?;
 
 	// Get account information
-	let from_account_id = keypair.to_account_id_ss58check();
+	let from_account_id = signer.account_id_ss58check();
 	let balance = get_balance(&quantus_client, &from_account_id).await?;
 
 	// Get formatted balance with proper decimals
@@ -635,7 +638,7 @@ pub async fn handle_send_command(
 	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount);
 	ensure_balance_covers_call(
 		&quantus_client,
-		&keypair,
+		&signer,
 		&transfer_call,
 		balance,
 		exact_required,
@@ -648,79 +651,15 @@ pub async fn handle_send_command(
 	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
 
 	// Submit transaction
-	let tx_hash = submit_transfer_call(
-		&quantus_client,
-		&keypair,
-		transfer_call,
-		submit_tip,
-		nonce,
-		execution_mode,
-	)
-	.await?;
+	let tx_hash =
+		submit_transfer_call(&quantus_client, &signer, transfer_call, submit_tip, nonce, execution_mode)
+			.await?;
 
 	print_send_result(&quantus_client, &from_account_id, balance, amount, tx_hash, execution_mode)
 		.await
 }
 
-/// Send from a cold (watch-only) wallet: builds the transfer call, runs the QR
-/// signing flow, submits, and prints the same result summary as the hot path.
-#[allow(clippy::too_many_arguments)]
-async fn handle_cold_send(
-	quantus_client: &QuantusClient,
-	from_wallet: &str,
-	to_account_id: SubxtAccountId32,
-	amount: u128,
-	tip: &Option<String>,
-	nonce: Option<u32>,
-	execution_mode: crate::cli::common::ExecutionMode,
-	cold_io: &crate::cli::cold_signing::ColdIo,
-) -> Result<()> {
-	let wallet_manager = crate::wallet::WalletManager::new()?;
-	let from_address = wallet_manager
-		.find_wallet_address(from_wallet)?
-		.ok_or(crate::error::WalletError::NotFound)?;
-
-	let balance = get_balance(quantus_client, &from_address).await?;
-	let formatted_balance = format_balance_with_symbol(quantus_client, balance).await?;
-	log_verbose!("💰 Current balance: {}", formatted_balance.bright_yellow());
-
-	let tip_amount = if let Some(tip_str) = tip {
-		Some(parse_amount(quantus_client, tip_str).await?)
-	} else {
-		None
-	};
-	let effective_tip = effective_tip_amount(tip_amount);
-	let submit_tip = positive_tip_amount(tip_amount);
-	let exact_required = checked_add(amount, effective_tip, "required send balance")?;
-
-	// No fee preflight here (fee estimation needs a signer); check amount + tip
-	// and let the chain reject if fees can't be covered.
-	if balance < exact_required {
-		return Err(crate::error::QuantusError::InsufficientBalance {
-			available: balance,
-			required: exact_required,
-		});
-	}
-
-	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount);
-
-	let tx_hash = crate::cli::cold_signing::sign_and_submit_cold(
-		quantus_client,
-		from_wallet,
-		&from_address,
-		&transfer_call,
-		submit_tip,
-		nonce,
-		execution_mode,
-		cold_io,
-	)
-	.await?;
-
-	print_send_result(quantus_client, &from_address, balance, amount, tx_hash, execution_mode).await
-}
-
-/// Print the post-submission summary (status, new balance, fee) shared by hot
-/// and cold send paths.
+/// Print the post-submission summary (status, new balance, fee).
 async fn print_send_result(
 	quantus_client: &QuantusClient,
 	from_account_id: &str,

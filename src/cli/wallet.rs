@@ -381,7 +381,7 @@ pub async fn handle_wallet_command(
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!("✅ Cold wallet imported (watch-only)");
 					log_print!(
-						"ℹ️  Sign transfers with `quantus send --from {name} …`: the CLI shows a QR for the cold wallet and scans its signed response."
+						"ℹ️  Use `{name}` with any extrinsic command (`--from {name}`): the CLI shows a QR for the cold wallet and scans its signed response."
 					);
 					Ok(())
 				},
@@ -836,22 +836,9 @@ pub async fn handle_wallet_command(
 						.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 					addr
 				},
-				(None, Some(wallet_name)) => {
-					let wallet_manager = WalletManager::new()?;
-					if wallet_manager.wallet_type(&wallet_name)? ==
-						Some(crate::wallet::WalletType::Cold)
-					{
-						// Watch-only: the address is stored unencrypted, no keys needed
-						wallet_manager
-							.find_wallet_address(&wallet_name)?
-							.ok_or(crate::error::WalletError::NotFound)?
-					} else {
-						// Load wallet and get its address
-						let keypair =
-							crate::wallet::load_keypair_from_wallet(&wallet_name, password, None)?;
-						keypair.to_account_id_ss58check()
-					}
-				},
+				(None, Some(wallet_name)) =>
+					crate::wallet::load_signer_from_wallet(&wallet_name, password, None)?
+						.account_id_ss58check(),
 				(None, None) => {
 					// This case should be prevented by clap's `required_unless_present`
 					unreachable!("Either --address or --wallet must be provided");

@@ -1,7 +1,7 @@
 //! `quantus runtime` subcommand - runtime management
 use crate::{
 	chain::quantus_subxt, error::QuantusError, log_print, log_success, log_verbose,
-	wallet::QuantumKeyPair,
+	wallet::WalletSigner,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -47,7 +47,7 @@ pub enum RuntimeCommands {
 pub async fn update_runtime(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_code: Vec<u8>,
-	from_keypair: &QuantumKeyPair,
+	signer: &WalletSigner,
 	force: bool,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -102,7 +102,7 @@ pub async fn update_runtime(
 	// Submit preimage and wait for inclusion so the referendum tx gets a fresh nonce
 	crate::cli::common::submit_preimage(
 		quantus_client,
-		from_keypair,
+		signer,
 		encoded_call.clone(),
 		execution_mode,
 	)
@@ -143,7 +143,7 @@ pub async fn update_runtime(
 
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		from_keypair,
+		signer,
 		submit_call,
 		None,
 		execution_mode,
@@ -220,8 +220,8 @@ pub async fn handle_runtime_command(
 				}
 			}
 
-			// Load keypair
-			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+			// Load signer
+			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 			// Read WASM file
 			log_verbose!("📖 Reading WASM file...");
@@ -231,7 +231,7 @@ pub async fn handle_runtime_command(
 			log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 
 			// Update runtime
-			update_runtime(&quantus_client, wasm_code, &keypair, force, execution_mode).await?;
+			update_runtime(&quantus_client, wasm_code, &signer, force, execution_mode).await?;
 
 			log_success!("🎉 Runtime update completed!");
 			log_print!(

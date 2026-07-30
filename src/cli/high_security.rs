@@ -129,7 +129,7 @@ pub async fn handle_high_security_command(
 		} => {
 			log_print!("🛡️  Set High Security");
 			log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
-			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 			// Resolve interceptor: allow wallet name or SS58 address
 			let interceptor_resolved = crate::cli::common::resolve_address(&interceptor)?;
@@ -169,7 +169,7 @@ pub async fn handle_high_security_command(
 
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&keypair,
+				&signer,
 				tx_call,
 				None,
 				execution_mode,

@@ -2055,7 +2055,7 @@ async fn execute_initial_transfers(
 
 	submit_transaction(
 		quantus_client,
-		&quantum_keypair,
+		&crate::wallet::WalletSigner::Hot(quantum_keypair.clone()),
 		batch_tx,
 		None,
 		ExecutionMode { finalized: false, wait_for_transaction: true },
@@ -3351,7 +3351,7 @@ async fn run_dissolve(
 
 	submit_transaction(
 		&quantus_client,
-		&quantum_keypair,
+		&crate::wallet::WalletSigner::Hot(quantum_keypair.clone()),
 		transfer_tx,
 		None,
 		ExecutionMode { finalized: false, wait_for_transaction: true },

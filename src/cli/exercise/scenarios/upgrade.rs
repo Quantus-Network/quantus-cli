@@ -52,7 +52,13 @@ async fn governance_set_code(
 		.map_err(|e| QuantusError::Generic(format!("failed to encode set_code: {e:?}")))?;
 	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 	let call_len = encoded.len() as u32;
-	crate::cli::common::submit_preimage(&ctx.client, &ctx.alice, encoded, ctx.wait_mode()).await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(ctx.alice.clone()),
+		encoded,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let latest = ctx.client.get_latest_block().await?;
 	let count_addr = quantus_subxt::api::storage().tech_referenda().referendum_count();
@@ -70,7 +76,7 @@ async fn governance_set_code(
 	for voter in [ctx.alice.clone(), ctx.bob.clone(), ctx.charlie.clone()] {
 		crate::cli::tech_collective::vote_on_referendum(
 			&ctx.client,
-			&voter,
+			&crate::wallet::WalletSigner::Hot(voter.clone()),
 			index,
 			true,
 			ctx.wait_mode(),

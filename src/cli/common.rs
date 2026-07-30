@@ -368,9 +368,13 @@ pub async fn get_incremented_nonce_with_client(
 /// By default, returns immediately after the node accepts the transaction submission.
 /// With `wait_for_transaction=true`, waits until the transaction is in a best block.
 /// With `finalized=true`, waits until the transaction is in a finalized block.
+///
+/// Cold (watch-only) signers are routed to the QR signing flow instead of local
+/// signing; there is no retry loop there, since a QR-signed extrinsic can never
+/// be silently rebuilt.
 pub async fn submit_transaction<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	call: Call,
 	tip: Option<u128>,
 	execution_mode: ExecutionMode,
@@ -378,6 +382,21 @@ pub async fn submit_transaction<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	let from_keypair = match signer {
+		crate::wallet::WalletSigner::Hot(keypair) => keypair,
+		crate::wallet::WalletSigner::Cold { name, address } =>
+			return crate::cli::cold_signing::sign_and_submit_cold(
+				quantus_client,
+				name,
+				address,
+				&call,
+				tip,
+				None,
+				execution_mode,
+				crate::cli::cold_signing::ColdIo::global(),
+			)
+			.await,
+	};
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -578,7 +597,7 @@ pub async fn submit_prepared_transaction(
 /// Submit transaction with manual nonce (no retry logic - use exact nonce provided)
 pub async fn submit_transaction_with_nonce<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	call: Call,
 	tip: Option<u128>,
 	nonce: u32,
@@ -587,6 +606,21 @@ pub async fn submit_transaction_with_nonce<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	let from_keypair = match signer {
+		crate::wallet::WalletSigner::Hot(keypair) => keypair,
+		crate::wallet::WalletSigner::Cold { name, address } =>
+			return crate::cli::cold_signing::sign_and_submit_cold(
+				quantus_client,
+				name,
+				address,
+				&call,
+				tip,
+				Some(nonce),
+				execution_mode,
+				crate::cli::cold_signing::ColdIo::global(),
+			)
+			.await,
+	};
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -814,7 +848,7 @@ fn format_dispatch_error(
 
 pub async fn submit_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
-	keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	encoded_call: Vec<u8>,
 	execution_mode: ExecutionMode,
 ) -> Result<()> {
@@ -827,7 +861,7 @@ pub async fn submit_preimage(
 		crate::chain::quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
 	let wait_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
 
-	match submit_transaction(quantus_client, keypair, note_preimage_tx, None, wait_mode).await {
+	match submit_transaction(quantus_client, signer, note_preimage_tx, None, wait_mode).await {
 		Ok(_) => {
 			crate::log_success!("Preimage submitted");
 		},

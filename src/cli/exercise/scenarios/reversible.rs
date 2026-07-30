@@ -37,7 +37,7 @@ async fn schedule_and_cancel(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	crate::cli::reversible::schedule_transfer_with_delay(
 		&ctx.client,
-		&sender,
+		&crate::wallet::WalletSigner::Hot(sender.clone()),
 		&recipient,
 		amount,
 		50,
@@ -73,7 +73,7 @@ async fn schedule_with_delay(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	crate::cli::reversible::schedule_transfer_with_delay(
 		&ctx.client,
-		&sender,
+		&crate::wallet::WalletSigner::Hot(sender.clone()),
 		&recipient,
 		ctx.unit,
 		delay_blocks,
@@ -138,7 +138,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
 	crate::cli::reversible::schedule_transfer(
 		&ctx.client,
-		&account,
+		&crate::wallet::WalletSigner::Hot(account.clone()),
 		&recipient,
 		ctx.unit,
 		ctx.wait_mode(),

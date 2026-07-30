@@ -66,19 +66,6 @@ pub enum Commands {
 		/// Manual nonce override (use with caution - must be exact next nonce for account)
 		#[arg(long)]
 		nonce: Option<u32>,
-
-		/// (cold wallets) Also write the sign-request UR parts to this file
-		#[arg(long, hide = true)]
-		cold_request_out: Option<String>,
-
-		/// (cold wallets) Read the signature response UR parts from this file, or "-" for stdin,
-		/// instead of scanning with the camera
-		#[arg(long, hide = true)]
-		cold_response_in: Option<String>,
-
-		/// Camera device index for cold-wallet QR scanning
-		#[arg(long, default_value_t = 0)]
-		camera_index: u32,
 	},
 
 	/// Batch transfer commands and configuration
@@ -364,29 +351,7 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send {
-			from,
-			to,
-			amount,
-			password,
-			password_file,
-			tip,
-			nonce,
-			cold_request_out,
-			cold_response_in,
-			camera_index,
-		} => {
-			let cold_io = cold_signing::ColdIo {
-				request_out: cold_request_out.map(std::path::PathBuf::from),
-				response_in: cold_response_in.map(|s| {
-					if s == "-" {
-						crate::qr::UrSource::StdinLines
-					} else {
-						crate::qr::UrSource::File(std::path::PathBuf::from(s))
-					}
-				}),
-				camera_index,
-			};
+		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
 			send::handle_send_command(
 				from,
 				to,
@@ -397,10 +362,8 @@ pub async fn execute_command(
 				tip,
 				nonce,
 				execution_mode,
-				cold_io,
 			)
-			.await
-		},
+			.await,
 		Commands::Batch(batch_cmd) =>
 			batch::handle_batch_command(batch_cmd, node_url, execution_mode).await,
 		Commands::Reversible(reversible_cmd) =>
@@ -573,7 +536,7 @@ async fn handle_generic_call_command(
 		return Ok(());
 	}
 
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	let args_vec = if let Some(args_str) = args {
 		serde_json::from_str(&args_str).map_err(|e| {
@@ -587,7 +550,7 @@ async fn handle_generic_call_command(
 		&pallet,
 		&call,
 		args_vec,
-		&keypair,
+		&signer,
 		tip,
 		node_url,
 		execution_mode,

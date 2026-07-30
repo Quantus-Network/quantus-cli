@@ -55,6 +55,7 @@ pub struct TxContext {
 }
 
 /// Where the sign-request goes out and the signature response comes in.
+#[derive(Default)]
 pub struct ColdIo {
 	/// Also write the request UR parts to this file (one per line). Hidden
 	/// flag, used for scripting/testing.
@@ -63,6 +64,42 @@ pub struct ColdIo {
 	pub response_in: Option<UrSource>,
 	/// Camera device index when scanning with the camera.
 	pub camera_index: u32,
+}
+
+static COLD_IO: std::sync::OnceLock<ColdIo> = std::sync::OnceLock::new();
+
+impl ColdIo {
+	/// Build from the global CLI flags. `"-"` for `response_in` means stdin.
+	pub fn from_flags(
+		request_out: Option<String>,
+		response_in: Option<String>,
+		camera_index: u32,
+	) -> Self {
+		Self {
+			request_out: request_out.map(PathBuf::from),
+			response_in: response_in.map(|s| {
+				if s == "-" {
+					UrSource::StdinLines
+				} else {
+					UrSource::File(PathBuf::from(s))
+				}
+			}),
+			camera_index,
+		}
+	}
+
+	/// Install the process-wide I/O config. Called once from `main` with the
+	/// global CLI flags so the submit stage can reach it without threading it
+	/// through every command.
+	pub fn install(self) {
+		let _ = COLD_IO.set(self);
+	}
+
+	/// The installed config, or the default (camera 0, no file overrides) for
+	/// library and test users that never call `install`.
+	pub fn global() -> &'static ColdIo {
+		COLD_IO.get_or_init(ColdIo::default)
+	}
 }
 
 /// Why a signature response was rejected.
@@ -220,8 +257,8 @@ fn confirm_or_abort(prompt: &str) -> Result<()> {
 
 /// Run the full cold signing flow for `call` and submit the result.
 ///
-/// Generic over the call payload so transfer, multisig and reversible commands
-/// can all route through it.
+/// Generic over the call payload; the shared submit stage in `cli::common`
+/// routes every extrinsic here when the signer is a cold (watch-only) wallet.
 #[allow(clippy::too_many_arguments)]
 pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 	client: &QuantusClient,
@@ -361,6 +398,19 @@ async fn estimate_fee_with_dummy_signature<Call: subxt::tx::Payload>(
 	let tx = partial
 		.sign_with_account_and_signature(account, &DilithiumSignatureScheme::Dilithium(dummy));
 	tx.partial_fee_estimate().await.ok()
+}
+
+/// Fee estimate for a cold wallet when no [`TxContext`] exists yet (balance
+/// preflight before signing). Same dummy-signature trick; the fee depends on
+/// length and weight, not on nonce or signature content.
+pub(crate) async fn estimate_cold_fee<Call: subxt::tx::Payload>(
+	client: &QuantusClient,
+	call: &Call,
+	account: &AccountId32,
+	tip: u128,
+) -> Option<u128> {
+	let ctx = capture_tx_context(client, account, tip, None).await.ok()?;
+	estimate_fee_with_dummy_signature(client, call, &ctx, account).await
 }
 
 fn default_response_source(io: &ColdIo) -> Result<UrSource> {

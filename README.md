@@ -406,12 +406,15 @@ quantus wallet import-cold --name my_cold
 # Or paste the address directly (no camera needed)
 quantus wallet import-cold --name my_cold --address qz...
 
-# Send: shows the transaction as a QR, then scans the device's animated
-# signature QR with the camera
+# Any extrinsic command works with a cold wallet: the CLI shows the
+# transaction as a QR, then scans the device's animated signature QR
 quantus send --from my_cold --to <address> --amount 10.5 --wait-for-transaction
+quantus multisig approve --from my_cold --address qz... --proposal-id 0
 ```
 
-The signing flow:
+The signing flow (identical for every command — commands don't know whether
+the wallet is hot or cold; the shared submit stage branches on the wallet
+type):
 
 1. The CLI displays the transaction as a `ur:quantus-sign-request` QR
    (animated if the payload is large). Scan it with the cold wallet, review
@@ -426,14 +429,19 @@ Notes:
 - The transaction stays valid for 256 blocks after the QR is generated; if it
   expires or the account's nonce changes before submission, re-run the
   command to sign a fresh QR.
+- Commands that submit several extrinsics (e.g. `runtime update`,
+  `tech-referenda submit-with-preimage`) do one QR roundtrip per extrinsic.
+- Wormhole operations are not cold-compatible: they derive secrets from the
+  wallet's mnemonic and submit unsigned extrinsics.
 - **macOS camera permission**: the permission prompt is attributed to your
   terminal app (Terminal, iTerm, VS Code, …) — grant it under System
   Settings > Privacy & Security > Camera.
 - **Headless / no camera**: `--cold-response-in <file>` (or `-` for stdin)
   reads the response UR parts (one per line) instead of scanning, and the
   hidden `--cold-request-out <file>` writes the request UR parts for
-  scripted flows. Builds without the default `camera` feature
-  (`cargo build --no-default-features`) support only this path.
+  scripted flows. Both are global flags that work with any command. Builds
+  without the default `camera` feature (`cargo build --no-default-features`)
+  support only this path.
 - Real devices only sign for known networks (Planck / Heisenberg genesis
   hashes) and whitelisted calls — balance transfers, reversible transfers,
   and (cold wallet app only) multisig. Test against a dev node with the

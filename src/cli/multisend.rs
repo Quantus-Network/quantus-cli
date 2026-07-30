@@ -8,8 +8,9 @@ use crate::{
 	cli::{
 		common::{resolve_address, ExecutionMode},
 		send::{
-			batch_transfer, format_balance, format_balance_with_symbol, get_balance,
-			get_chain_properties, parse_amount,
+			build_batch_transfer_call, format_balance, format_balance_with_symbol, get_balance,
+			get_chain_properties, parse_amount, submit_prebuilt_batch_transfer_call,
+			validate_batch_transfer_request,
 		},
 	},
 	error::{QuantusError, Result},
@@ -263,8 +264,8 @@ pub async fn handle_multisend_command(
 	log_info!("Preparing multisend transaction...");
 
 	// Load wallet
-	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
-	let from_account_id = keypair.to_account_id_ss58check();
+	let signer = crate::wallet::load_signer_from_wallet(&from_wallet, password, password_file)?;
+	let from_account_id = signer.account_id_ss58check();
 
 	// Check balance
 	let balance = get_balance(&quantus_client, &from_account_id).await?;
@@ -288,8 +289,18 @@ pub async fn handle_multisend_command(
 	};
 
 	// Submit batch transaction
-	let tx_hash =
-		batch_transfer(&quantus_client, &keypair, transfers, tip_amount, execution_mode).await?;
+	validate_batch_transfer_request(&quantus_client, &signer, &transfers).await?;
+	log_verbose!("✍️  Creating batch extrinsic with {} calls...", transfers.len());
+	let batch_call = build_batch_transfer_call(&transfers)?;
+	let tx_hash = submit_prebuilt_batch_transfer_call(
+		&quantus_client,
+		&signer,
+		&transfers,
+		batch_call,
+		tip_amount,
+		execution_mode,
+	)
+	.await?;
 
 	log_print!(
 		"{} Multisend transaction submitted! Hash: {:?}",
