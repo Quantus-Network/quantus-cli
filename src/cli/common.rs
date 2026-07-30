@@ -731,7 +731,7 @@ async fn wait_tx_inclusion(
 	}
 }
 
-fn format_dispatch_error(
+pub(crate) fn format_dispatch_error(
 	error: &crate::chain::quantus_subxt::api::runtime_types::sp_runtime::DispatchError,
 	metadata: &subxt::Metadata,
 ) -> String {

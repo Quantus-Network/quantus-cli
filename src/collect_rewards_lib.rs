@@ -220,9 +220,10 @@ pub struct CollectRewardsConfig {
 /// This is the main entry point for the SDK to collect rewards. It handles the entire flow:
 /// 1. Derives wormhole address from mnemonic
 /// 2. Queries Subsquid for pending transfers to that address
-/// 3. Generates ZK proofs for selected transfers
-/// 4. Aggregates proofs into batches (size determined by circuit config)
-/// 5. Submits withdrawal transactions to chain
+/// 3. Filters spent nullifiers against the current best chain state
+/// 4. Generates ZK proofs for selected transfers
+/// 5. Aggregates proofs into batches (size determined by circuit config)
+/// 6. Submits withdrawal transactions to chain
 ///
 /// # Arguments
 /// * `config` - Configuration for the operation
@@ -267,21 +268,19 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		});
 	}
 
-	// Step 2b: Connect to chain (needed for nullifier fallback and proof submission)
+	// Step 2b: Connect to chain for authoritative nullifier checks and proof submission
 	progress.on_step("connect", "Connecting to chain");
 
 	let quantus_client = QuantusClient::new(&config.node_url)
 		.await
 		.map_err(|e| CollectRewardsError::from(format!("Failed to connect to node: {}", e)))?;
 
-	// Step 2c: Filter out already-spent transfers by checking nullifiers
-	// Tries Subsquid first, falls back to on-chain checking if Subsquid fails
-	progress.on_step("nullifiers", "Checking for already-spent nullifiers");
+	// Step 2c: Filter out already-spent transfers against a pinned best-chain snapshot
+	progress.on_step("nullifiers", "Checking current on-chain nullifiers");
 
-	let unspent_transfers = filter_unspent_transfers_with_fallback(
+	let unspent_transfers = filter_unspent_transfers_onchain(
 		&incoming_transfers,
 		&wormhole_secret_bytes,
-		&subsquid_client,
 		&quantus_client,
 	)
 	.await?;
@@ -855,27 +854,29 @@ async fn submit_and_get_events(
 		},
 	}
 
-	// Check nullifiers aren't already used
+	// Check nullifiers against one fresh best-chain snapshot immediately before submission
+	let best_block = quantus_client.get_latest_block().await.map_err(|e| {
+		CollectRewardsError::from(format!(
+			"Failed to get best block for pre-submission nullifier check: {}",
+			e
+		))
+	})?;
+	let storage = quantus_client.client().storage().at(best_block);
+
 	for (i, nullifier) in inputs.nullifiers.iter().enumerate() {
 		let nullifier_bytes: [u8; 32] = (*nullifier).as_ref().try_into().map_err(|_| {
 			CollectRewardsError::from(format!("Failed to convert nullifier {} to bytes", i))
 		})?;
 
-		// Query UsedNullifiers storage
 		let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier_bytes);
-		let is_used = quantus_client
-			.client()
-			.storage()
-			.at_latest()
-			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?
-			.fetch(&storage_key)
-			.await
-			.map_err(|e| {
-				CollectRewardsError::from(format!("Failed to query nullifier {}: {}", i, e))
-			})?;
+		let is_used = storage.fetch(&storage_key).await.map_err(|e| {
+			CollectRewardsError::from(format!(
+				"Failed to query nullifier {} at best block {:?}: {}",
+				i, best_block, e
+			))
+		})?;
 
-		if is_used.is_some() {
+		if matches!(is_used, Some(true)) {
 			return Err(CollectRewardsError::from(format!(
 				"Pre-validation failed: NullifierAlreadyUsed - Nullifier {} (0x{}) has already been spent",
 				i,
@@ -892,10 +893,9 @@ async fn submit_and_get_events(
 			CollectRewardsError::from(format!("Failed to create unsigned tx: {}", e))
 		})?;
 
-	let mut tx_progress = unsigned_tx
-		.submit_and_watch()
-		.await
-		.map_err(|e| CollectRewardsError::from(format!("Failed to submit tx: {}", e)))?;
+	let mut tx_progress = unsigned_tx.submit_and_watch().await.map_err(|e| {
+		CollectRewardsError::from(format!("Failed to submit wormhole withdrawal: {}", e))
+	})?;
 
 	// Wait for inclusion
 	let (block_hash, tx_hash) = loop {
@@ -907,11 +907,17 @@ async fn submit_and_get_events(
 				break (tx_in_block.block_hash(), tx_in_block.extrinsic_hash());
 			},
 			Some(Ok(TxStatus::Error { message })) | Some(Ok(TxStatus::Invalid { message })) => {
-				return Err(CollectRewardsError::from(format!("Transaction failed: {}", message)));
+				return Err(CollectRewardsError::from(format!(
+					"Wormhole withdrawal was rejected before inclusion: {}",
+					message
+				)));
 			},
 			Some(Ok(_)) => continue,
 			Some(Err(e)) => {
-				return Err(CollectRewardsError::from(format!("Transaction error: {}", e)));
+				return Err(CollectRewardsError::from(format!(
+					"Wormhole withdrawal status error: {}",
+					e
+				)));
 			},
 			None => {
 				return Err(CollectRewardsError::from(
@@ -948,8 +954,11 @@ async fn submit_and_get_events(
 			CollectRewardsError::from("Could not find extrinsic in block".to_string())
 		})?;
 
+	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
+
 	let mut transfer_events = Vec::new();
 	let mut found_proof_verified = false;
+	let mut dispatch_error = None;
 
 	for event_result in events.iter() {
 		let event = event_result
@@ -957,6 +966,14 @@ async fn submit_and_get_events(
 
 		if let subxt::events::Phase::ApplyExtrinsic(ext_idx) = event.phase() {
 			if ext_idx == our_ext_idx {
+				if let Ok(Some(ExtrinsicFailed { dispatch_error: error, .. })) =
+					event.as_event::<ExtrinsicFailed>()
+				{
+					dispatch_error = Some(crate::cli::common::format_dispatch_error(
+						&error,
+						&quantus_client.client().metadata(),
+					));
+				}
 				if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>() {
 					found_proof_verified = true;
 				}
@@ -969,19 +986,22 @@ async fn submit_and_get_events(
 	}
 
 	if !found_proof_verified {
+		if let Some(error) = dispatch_error {
+			return Err(CollectRewardsError::from(format!(
+				"Wormhole withdrawal failed on-chain: {}",
+				error
+			)));
+		}
 		return Err(CollectRewardsError::from(
-			"Proof verification failed - no ProofVerified event".to_string(),
+			"Wormhole withdrawal was included but emitted neither Wormhole::ProofVerified nor System::ExtrinsicFailed"
+				.to_string(),
 		));
 	}
 
 	Ok((block_hash, tx_hash, transfer_events))
 }
 
-/// Filter out transfers whose nullifiers have already been spent (on-chain check).
-///
-/// For each transfer, computes the nullifier from (secret, transfer_count)
-/// and checks on-chain storage to see if it's been consumed by a previous withdrawal.
-/// This is more reliable than Subsquid as it queries the chain directly.
+/// Filter transfers against `UsedNullifiers` at one pinned best-chain snapshot.
 async fn filter_unspent_transfers_onchain(
 	transfers: &[Transfer],
 	secret_bytes: &[u8; 32],
@@ -991,13 +1011,12 @@ async fn filter_unspent_transfers_onchain(
 		return Ok(vec![]);
 	}
 
+	let best_block = quantus_client.get_latest_block().await.map_err(|e| {
+		CollectRewardsError::from(format!("Failed to get best block for nullifier check: {}", e))
+	})?;
+	let storage = quantus_client.client().storage().at(best_block);
+	let mut seen_nullifiers = std::collections::HashSet::new();
 	let mut unspent = Vec::new();
-	let storage = quantus_client
-		.client()
-		.storage()
-		.at_latest()
-		.await
-		.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?;
 
 	for transfer in transfers {
 		let ctx = format!("transfer {}", transfer.id);
@@ -1008,82 +1027,22 @@ async fn filter_unspent_transfers_onchain(
 				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
 			})?;
 
-		// Query on-chain UsedNullifiers storage
+		if !seen_nullifiers.insert(nullifier) {
+			continue;
+		}
+
 		let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier);
 		let is_used = storage.fetch(&storage_key).await.map_err(|e| {
 			CollectRewardsError::from(format!(
-				"Failed to query nullifier for transfer_count {}: {}",
-				transfer_count, e
+				"Failed to query nullifier for transfer_count {} at best block {:?}: {}",
+				transfer_count, best_block, e
 			))
 		})?;
 
-		if is_used.is_none() {
+		if !matches!(is_used, Some(true)) {
 			unspent.push(transfer.clone());
 		}
 	}
-
-	Ok(unspent)
-}
-
-/// Filter out transfers whose nullifiers have already been spent.
-///
-/// For each transfer, computes the nullifier from (secret, transfer_count)
-/// and checks Subsquid to see if it's been consumed by a previous withdrawal.
-/// If Subsquid query fails, falls back to on-chain checking.
-async fn filter_unspent_transfers_with_fallback(
-	transfers: &[Transfer],
-	secret_bytes: &[u8; 32],
-	subsquid_client: &SubsquidClient,
-	quantus_client: &QuantusClient,
-) -> Result<Vec<Transfer>> {
-	use std::collections::HashSet;
-
-	if transfers.is_empty() {
-		return Ok(vec![]);
-	}
-
-	// Compute nullifiers for all transfers
-	// Map: nullifier_hex -> (nullifier_hash, transfer)
-	let mut nullifier_map: std::collections::HashMap<String, (String, &Transfer)> =
-		std::collections::HashMap::new();
-
-	for transfer in transfers {
-		let ctx = format!("transfer {}", transfer.id);
-		let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
-
-		let nullifier =
-			wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
-				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
-			})?;
-
-		let nullifier_hex = hex::encode(nullifier);
-		let nullifier_hash = compute_address_hash(&nullifier);
-		nullifier_map.insert(nullifier_hex, (nullifier_hash, transfer));
-	}
-
-	// Build list for Subsquid query
-	let nullifier_pairs: Vec<(String, String)> = nullifier_map
-		.iter()
-		.map(|(nul_hex, (nul_hash, _))| (nul_hex.clone(), nul_hash.clone()))
-		.collect();
-
-	// Try Subsquid first, fall back to on-chain if it fails
-	let spent_nullifiers: HashSet<String> =
-		match subsquid_client.check_nullifiers_spent(&nullifier_pairs, 8).await {
-			Ok(spent) => spent,
-			Err(_) => {
-				// Fall back to on-chain checking
-				return filter_unspent_transfers_onchain(transfers, secret_bytes, quantus_client)
-					.await;
-			},
-		};
-
-	// Filter to only unspent transfers
-	let unspent: Vec<Transfer> = nullifier_map
-		.into_iter()
-		.filter(|(nul_hex, _)| !spent_nullifiers.contains(nul_hex))
-		.map(|(_, (_, transfer))| transfer.clone())
-		.collect();
 
 	Ok(unspent)
 }
