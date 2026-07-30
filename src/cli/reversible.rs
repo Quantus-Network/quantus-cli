@@ -397,8 +397,7 @@ async fn list_pending_transactions(
 		},
 		(None, Some(wallet)) => {
 			// Load wallet and get its address
-			let signer =
-				crate::wallet::load_signer_from_wallet(&wallet, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&wallet, password, password_file)?;
 			signer.account_id_ss58check()
 		},
 		(None, None) => {

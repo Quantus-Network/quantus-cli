@@ -651,9 +651,15 @@ pub async fn handle_send_command(
 	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
 
 	// Submit transaction
-	let tx_hash =
-		submit_transfer_call(&quantus_client, &signer, transfer_call, submit_tip, nonce, execution_mode)
-			.await?;
+	let tx_hash = submit_transfer_call(
+		&quantus_client,
+		&signer,
+		transfer_call,
+		submit_tip,
+		nonce,
+		execution_mode,
+	)
+	.await?;
 
 	print_send_result(&quantus_client, &from_account_id, balance, amount, tx_hash, execution_mode)
 		.await

@@ -197,14 +197,9 @@ pub async fn vote_on_referendum(
 	let wait_mode =
 		crate::cli::common::ExecutionMode { wait_for_transaction: true, ..execution_mode };
 
-	let tx_hash = crate::cli::common::submit_transaction(
-		quantus_client,
-		signer,
-		vote_call,
-		None,
-		wait_mode,
-	)
-	.await?;
+	let tx_hash =
+		crate::cli::common::submit_transaction(quantus_client, signer, vote_call, None, wait_mode)
+			.await?;
 
 	log_verbose!("📋 Vote transaction confirmed: {:?}", tx_hash);
 
@@ -368,14 +363,9 @@ pub async fn handle_tech_collective_command(
 
 			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
-			let tx_hash = vote_on_referendum(
-				&quantus_client,
-				&signer,
-				referendum_index,
-				aye,
-				execution_mode,
-			)
-			.await?;
+			let tx_hash =
+				vote_on_referendum(&quantus_client, &signer, referendum_index, aye, execution_mode)
+					.await?;
 
 			log_print!(
 				"✅ {} Vote confirmed in block! Hash: {:?}",
