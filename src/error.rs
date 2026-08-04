@@ -56,6 +56,9 @@ pub enum WalletError {
 	#[error("Invalid password (or corrupted wallet file)")]
 	InvalidPassword,
 
+	#[error("Invalid wallet address")]
+	InvalidAddress,
+
 	#[error("Key generation failed")]
 	KeyGeneration,
 

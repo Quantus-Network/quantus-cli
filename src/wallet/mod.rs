@@ -169,17 +169,22 @@ impl WalletManager {
 
 		let mut wallets = Vec::new();
 		for name in wallet_names {
-			if let Some(encrypted_wallet) = keystore.load_wallet(&name)? {
-				// Create wallet info using stored public address
-				let wallet_info = WalletInfo {
-					name: encrypted_wallet.name,
-					address: encrypted_wallet.address, // Address is stored unencrypted
-					created_at: encrypted_wallet.created_at,
-					key_type: "Dilithium ML-DSA-87".to_string(),
-					derivation_path: "[Encrypted]".to_string(), // Derivation path is encrypted
-				};
-				wallets.push(wallet_info);
-			}
+			let Some(encrypted_wallet) = (match keystore.load_wallet(&name) {
+				Ok(wallet) => wallet,
+				Err(_) => continue,
+			}) else {
+				continue;
+			};
+
+			// Create wallet info using stored public address
+			let wallet_info = WalletInfo {
+				name: encrypted_wallet.name,
+				address: encrypted_wallet.address, // Address is stored unencrypted
+				created_at: encrypted_wallet.created_at,
+				key_type: "Dilithium ML-DSA-87".to_string(),
+				derivation_path: "[Encrypted]".to_string(), // Derivation path is encrypted
+			};
+			wallets.push(wallet_info);
 		}
 
 		// Sort by creation date (newest first)
@@ -971,5 +976,60 @@ mod tests {
 			.expect("Should not error on non-existent wallet");
 
 		assert!(result.is_none());
+	}
+
+	#[tokio::test]
+	async fn list_wallets_skips_malformed_files_and_rejects_invalid_addresses() {
+		use sp_core::crypto::{AccountId32, Ss58Codec};
+
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let created = wallet_manager
+			.create_developer_wallet("crystal_alice")
+			.await
+			.expect("developer wallet creation should succeed");
+
+		let corrupt_path = wallet_manager.wallets_dir.join("corrupt.json");
+		fs::write(&corrupt_path, b"{\"name\":").expect("write malformed wallet file");
+
+		let listed = wallet_manager
+			.list_wallets()
+			.expect("listing must skip one malformed wallet file and still return valid wallets");
+		assert!(
+			listed.iter().any(|w| w.name == created.name),
+			"valid wallet must remain listable despite a malformed sibling file"
+		);
+
+		fs::remove_file(&corrupt_path).expect("remove malformed file");
+
+		let keystore = Keystore::new(&wallet_manager.wallets_dir);
+		let mut forged = keystore
+			.load_wallet("crystal_alice")
+			.expect("valid wallet load")
+			.expect("valid wallet exists");
+		forged.name = "forged_address_wallet".to_string();
+		forged.address = "not a Quantus SS58 account".to_string();
+		keystore.save_wallet(&forged).expect("save forged-address wallet JSON");
+
+		assert!(
+			matches!(
+				keystore.load_wallet("forged_address_wallet"),
+				Err(crate::error::QuantusError::Wallet(WalletError::InvalidAddress))
+			),
+			"load boundary must reject non-canonical wallet addresses"
+		);
+
+		let listed_after = wallet_manager.list_wallets().expect("listing after forgery");
+		assert!(
+			listed_after.iter().any(|w| w.name == created.name),
+			"valid wallet must remain listable"
+		);
+		assert!(
+			listed_after.iter().all(|w| AccountId32::from_ss58check_with_version(&w.address).is_ok()),
+			"listing must not return addresses the SS58 parser rejects"
+		);
+		assert!(
+			listed_after.iter().all(|w| w.name != "forged_address_wallet"),
+			"forged-address wallet must be omitted from listing"
+		);
 	}
 }

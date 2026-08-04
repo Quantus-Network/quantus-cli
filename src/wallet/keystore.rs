@@ -161,7 +161,21 @@ impl Keystore {
 
 		let wallet_json = std::fs::read_to_string(wallet_file)?;
 		let wallet: EncryptedWallet = serde_json::from_str(&wallet_json)?;
+		Self::validate_wallet_address(&wallet.address)?;
 		Ok(Some(wallet))
+	}
+
+	fn validate_wallet_address(address: &str) -> Result<()> {
+		use crate::cli::address_format::quantus_ss58_format;
+
+		let (account_id, format) = AccountId32::from_ss58check_with_version(address)
+			.map_err(|_| WalletError::InvalidAddress)?;
+		if format != quantus_ss58_format()
+			|| account_id.to_ss58check_with_version(quantus_ss58_format()) != address
+		{
+			return Err(WalletError::InvalidAddress.into());
+		}
+		Ok(())
 	}
 
 	/// List all wallet files
