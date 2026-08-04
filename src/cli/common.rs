@@ -117,9 +117,13 @@ enum WatchedTxEvent {
 	StreamError(String),
 	StreamEnded,
 	/// No status updates within the short inactivity window.
-	InactivityTimedOut { timeout_secs: u64 },
+	InactivityTimedOut {
+		timeout_secs: u64,
+	},
 	/// Overall inclusion/finalization deadline elapsed.
-	WatchDeadlineTimedOut { elapsed_secs: u64 },
+	WatchDeadlineTimedOut {
+		elapsed_secs: u64,
+	},
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -711,11 +715,9 @@ async fn wait_tx_inclusion(
 				elapsed_before_wait,
 			)
 		} else {
-			let next_status = tokio::time::timeout(
-				std::time::Duration::from_secs(wait_secs),
-				tx_progress.next(),
-			)
-			.await;
+			let next_status =
+				tokio::time::timeout(std::time::Duration::from_secs(wait_secs), tx_progress.next())
+					.await;
 			let elapsed_secs = start_time.elapsed().as_secs();
 			let next_event = match next_status {
 				Ok(Some(Ok(status))) => {
@@ -1057,9 +1059,7 @@ mod tests {
 				.is_err()
 		);
 		let inactivity_err = describe_watched_tx_event(
-			WatchedTxEvent::InactivityTimedOut {
-				timeout_secs: TX_STATUS_INACTIVITY_TIMEOUT_SECS,
-			},
+			WatchedTxEvent::InactivityTimedOut { timeout_secs: TX_STATUS_INACTIVITY_TIMEOUT_SECS },
 			TransactionStage::Included,
 		)
 		.expect_err("silent subscription must time out instead of waiting forever");
@@ -1072,7 +1072,9 @@ mod tests {
 		);
 
 		let deadline_err = describe_watched_tx_event(
-			WatchedTxEvent::WatchDeadlineTimedOut { elapsed_secs: TX_STATUS_FINALIZED_TIMEOUT_SECS },
+			WatchedTxEvent::WatchDeadlineTimedOut {
+				elapsed_secs: TX_STATUS_FINALIZED_TIMEOUT_SECS,
+			},
 			TransactionStage::Finalized,
 		)
 		.expect_err("overall finalized deadline must be an error");
