@@ -481,12 +481,11 @@ pub(crate) async fn validate_batch_transfer_request(
 		));
 	}
 
-	let (safe_limit, recommended_limit) =
-		get_batch_limits(quantus_client).await.unwrap_or((500, 1000));
+	let (safe_limit, recommended_limit) = get_batch_limits(quantus_client).await?;
 
 	if transfers.len() as u32 > recommended_limit {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Too many transfers in batch ({}) - chain limit is ~{} (safe: {})",
+			"Too many transfers in batch ({}) - chain batched calls limit is {} (safe: {})",
 			transfers.len(),
 			recommended_limit,
 			safe_limit
@@ -707,47 +706,38 @@ pub async fn load_transfers_from_file(file_path: &str) -> Result<Vec<(String, u1
 	Ok(transfers)
 }
 
+/// Derive CLI safe/recommended batch limits from the runtime call-count limit.
+pub(crate) fn limits_from_batched_calls_limit(batched_calls_limit: u32) -> (u32, u32) {
+	(batched_calls_limit / 2, batched_calls_limit)
+}
+
 /// Get chain constants for batch limits
 pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u32)> {
-	// Try to get actual chain constants
 	let constants = quantus_client.client().constants();
-
-	// Get block weight limit
-	let block_weight_limit = constants
-		.at(&quantus_subxt::api::constants().system().block_weights())
-		.map(|weights| weights.max_block.ref_time)
-		.unwrap_or(2_000_000_000_000); // Default 2 trillion weight units
-
-	// Estimate transfers per block (rough calculation)
-	let transfer_weight = 1_500_000_000u64; // Rough estimate per transfer
-	let max_transfers_by_weight = (block_weight_limit / transfer_weight) as u32;
-
-	// Get max extrinsic length
-	let max_extrinsic_length = constants
-		.at(&quantus_subxt::api::constants().system().block_length())
-		.map(|length| length.max.normal)
-		.unwrap_or(5_242_880); // Default 5MB
-
-	// Estimate transfers per extrinsic size (very rough)
-	let transfer_size = 100u32; // Rough estimate per transfer in bytes
-	let max_transfers_by_size = max_extrinsic_length / transfer_size;
-
-	let recommended_limit = std::cmp::min(max_transfers_by_weight, max_transfers_by_size);
-	let safe_limit = recommended_limit / 2; // Be conservative
+	let batched_calls_limit = constants
+		.at(&quantus_subxt::api::constants().utility().batched_calls_limit())
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to read Utility::batched_calls_limit from runtime metadata: {e:?}"
+			))
+		})?;
+	let (safe_limit, recommended_limit) = limits_from_batched_calls_limit(batched_calls_limit);
 
 	log_verbose!(
-		"📊 Chain limits: weight allows ~{}, size allows ~{}",
-		max_transfers_by_weight,
-		max_transfers_by_size
+		"📊 Chain batched calls limit: {} (safe: {})",
+		batched_calls_limit,
+		safe_limit
 	);
-	log_verbose!("📊 Recommended batch size: {} (safe: {})", recommended_limit, safe_limit);
 
 	Ok((safe_limit, recommended_limit))
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{build_batch_transfer_call, effective_tip_amount, parse_amount_with_decimals};
+	use super::{
+		build_batch_transfer_call, effective_tip_amount, limits_from_batched_calls_limit,
+		parse_amount_with_decimals,
+	};
 	use subxt::tx::Payload;
 
 	/// Substrate Alice (valid SS58); used only to construct a call for metadata checks.
@@ -808,6 +798,16 @@ mod tests {
 
 		let overflow = format!("{}.0", whole + 1);
 		assert!(parse_amount_with_decimals(&overflow, 12).is_err());
+	}
+
+	#[test]
+	fn batch_limits_come_from_runtime_batched_calls_limit() {
+		// Heuristic weight/length estimates previously returned unrelated numbers and
+		// validate_batch_transfer_request fell back to (500, 1000) on errors.
+		let (safe, recommended) = limits_from_batched_calls_limit(40);
+		assert_eq!(recommended, 40, "recommended must be Utility::batched_calls_limit");
+		assert_eq!(safe, 20, "safe limit is half the runtime call-count limit");
+		assert_ne!(recommended, 1000, "must not use the hard-coded heuristic fallback");
 	}
 
 	#[test]
