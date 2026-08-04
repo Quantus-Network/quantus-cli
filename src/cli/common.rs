@@ -10,6 +10,10 @@ use subxt::{
 
 pub type SubxtAccountId32 = subxt::ext::subxt_core::utils::AccountId32;
 
+const TX_STATUS_INACTIVITY_TIMEOUT_SECS: u64 = 30;
+const TX_STATUS_INCLUDED_TIMEOUT_SECS: u64 = 5 * 60;
+const TX_STATUS_FINALIZED_TIMEOUT_SECS: u64 = 30 * 60;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ExecutionMode {
 	pub finalized: bool,
@@ -57,6 +61,14 @@ impl TransactionStage {
 	}
 }
 
+fn tx_status_watch_timeout_secs(target_stage: TransactionStage) -> u64 {
+	match target_stage {
+		TransactionStage::Submitted => 0,
+		TransactionStage::Included => TX_STATUS_INCLUDED_TIMEOUT_SECS,
+		TransactionStage::Finalized => TX_STATUS_FINALIZED_TIMEOUT_SECS,
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum WatchedTxEvent {
 	Validated,
@@ -69,6 +81,7 @@ enum WatchedTxEvent {
 	Dropped(String),
 	StreamError(String),
 	StreamEnded,
+	StreamTimedOut,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -104,6 +117,11 @@ fn describe_watched_tx_event(
 		)),
 		WatchedTxEvent::StreamEnded => Err(crate::error::QuantusError::NetworkError(format!(
 			"Transaction status stream ended before the transaction was {}",
+			target_stage.status_label()
+		))),
+		WatchedTxEvent::StreamTimedOut => Err(crate::error::QuantusError::NetworkError(format!(
+			"Transaction status stream timed out after {} seconds without updates before the transaction was {}",
+			TX_STATUS_INACTIVITY_TIMEOUT_SECS,
 			target_stage.status_label()
 		))),
 	}
@@ -300,10 +318,9 @@ pub async fn get_fresh_nonce_with_client(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 ) -> Result<u64> {
-	let (from_account_id, _version) =
-		AccountId32::from_ss58check_with_version(&from_keypair.to_account_id_ss58check()).map_err(
-			|e| crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}")),
-		)?;
+	let from_account_id = from_keypair.try_to_account_id_32().map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Invalid from keypair public key: {e}"))
+	})?;
 
 	// Get nonce from the latest block (best block)
 	let latest_nonce = quantus_client
@@ -349,10 +366,9 @@ pub async fn get_incremented_nonce_with_client(
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	base_nonce: u64,
 ) -> Result<u64> {
-	let (from_account_id, _version) =
-		AccountId32::from_ss58check_with_version(&from_keypair.to_account_id_ss58check()).map_err(
-			|e| crate::error::QuantusError::NetworkError(format!("Invalid from address: {e:?}")),
-		)?;
+	let from_account_id = from_keypair.try_to_account_id_32().map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Invalid from keypair public key: {e}"))
+	})?;
 
 	// Get current nonce from the latest block
 	let current_nonce = quantus_client
@@ -636,69 +652,90 @@ async fn wait_tx_inclusion(
 		None
 	};
 
-	loop {
-		let elapsed_secs = start_time.elapsed().as_secs();
-		let next_event = match tx_progress.next().await {
-			Some(Ok(status)) => {
-				crate::log_verbose!(
-					"   Transaction status: {:?} (elapsed: {}s)",
-					status,
-					elapsed_secs
-				);
+	let watch_timeout_secs = tx_status_watch_timeout_secs(target_stage);
 
-				match status {
-					TxStatus::Validated => {
-						if let Some(ref pb) = spinner {
-							pb.set_message(format!("Transaction validated ✓ ({}s)", elapsed_secs));
-						}
-						WatchedTxEvent::Validated
-					},
-					TxStatus::Broadcasted => WatchedTxEvent::Broadcasted,
-					TxStatus::NoLongerInBestBlock => {
-						execution_success_checked_for = None;
-						WatchedTxEvent::NoLongerInBestBlock
-					},
-					TxStatus::InBestBlock(tx_in_block) => {
-						let block_hash = tx_in_block.block_hash();
-						match handle_in_best_block(
-							client,
-							tx_hash,
-							block_hash,
-							target_stage,
-							&mut execution_success_checked_for,
-							spinner.as_ref(),
-							elapsed_secs,
-						)
-						.await
-						{
-							std::ops::ControlFlow::Continue(()) => continue,
-							std::ops::ControlFlow::Break(result) => return result,
-						}
-					},
-					TxStatus::InFinalizedBlock(tx_in_block) => {
-						let block_hash = tx_in_block.block_hash();
-						match handle_in_finalized_block(
-							client,
-							tx_hash,
-							block_hash,
-							target_stage,
-							&mut execution_success_checked_for,
-							spinner.as_ref(),
-							elapsed_secs,
-						)
-						.await
-						{
-							std::ops::ControlFlow::Continue(()) => continue,
-							std::ops::ControlFlow::Break(result) => return result,
-						}
-					},
-					TxStatus::Error { message } => WatchedTxEvent::Error(message),
-					TxStatus::Invalid { message } => WatchedTxEvent::Invalid(message),
-					TxStatus::Dropped { message } => WatchedTxEvent::Dropped(message),
-				}
-			},
-			Some(Err(err)) => WatchedTxEvent::StreamError(err.to_string()),
-			None => WatchedTxEvent::StreamEnded,
+	loop {
+		let elapsed_before_wait = start_time.elapsed().as_secs();
+		let remaining_watch_secs = watch_timeout_secs.saturating_sub(elapsed_before_wait);
+		let (next_event, elapsed_secs) = if remaining_watch_secs == 0 {
+			(WatchedTxEvent::StreamTimedOut, elapsed_before_wait)
+		} else {
+			let next_status = tokio::time::timeout(
+				std::time::Duration::from_secs(std::cmp::min(
+					TX_STATUS_INACTIVITY_TIMEOUT_SECS,
+					remaining_watch_secs,
+				)),
+				tx_progress.next(),
+			)
+			.await;
+			let elapsed_secs = start_time.elapsed().as_secs();
+			let next_event = match next_status {
+				Ok(Some(Ok(status))) => {
+					crate::log_verbose!(
+						"   Transaction status: {:?} (elapsed: {}s)",
+						status,
+						elapsed_secs
+					);
+
+					match status {
+						TxStatus::Validated => {
+							if let Some(ref pb) = spinner {
+								pb.set_message(format!(
+									"Transaction validated ✓ ({}s)",
+									elapsed_secs
+								));
+							}
+							WatchedTxEvent::Validated
+						},
+						TxStatus::Broadcasted => WatchedTxEvent::Broadcasted,
+						TxStatus::NoLongerInBestBlock => {
+							execution_success_checked_for = None;
+							WatchedTxEvent::NoLongerInBestBlock
+						},
+						TxStatus::InBestBlock(tx_in_block) => {
+							let block_hash = tx_in_block.block_hash();
+							match handle_in_best_block(
+								client,
+								tx_hash,
+								block_hash,
+								target_stage,
+								&mut execution_success_checked_for,
+								spinner.as_ref(),
+								elapsed_secs,
+							)
+							.await
+							{
+								std::ops::ControlFlow::Continue(()) => continue,
+								std::ops::ControlFlow::Break(result) => return result,
+							}
+						},
+						TxStatus::InFinalizedBlock(tx_in_block) => {
+							let block_hash = tx_in_block.block_hash();
+							match handle_in_finalized_block(
+								client,
+								tx_hash,
+								block_hash,
+								target_stage,
+								&mut execution_success_checked_for,
+								spinner.as_ref(),
+								elapsed_secs,
+							)
+							.await
+							{
+								std::ops::ControlFlow::Continue(()) => continue,
+								std::ops::ControlFlow::Break(result) => return result,
+							}
+						},
+						TxStatus::Error { message } => WatchedTxEvent::Error(message),
+						TxStatus::Invalid { message } => WatchedTxEvent::Invalid(message),
+						TxStatus::Dropped { message } => WatchedTxEvent::Dropped(message),
+					}
+				},
+				Ok(Some(Err(err))) => WatchedTxEvent::StreamError(err.to_string()),
+				Ok(None) => WatchedTxEvent::StreamEnded,
+				Err(_) => WatchedTxEvent::StreamTimedOut,
+			};
+			(next_event, elapsed_secs)
 		};
 
 		match describe_watched_tx_event(next_event, target_stage) {
@@ -882,6 +919,30 @@ mod tests {
 			describe_watched_tx_event(WatchedTxEvent::StreamEnded, TransactionStage::Included,)
 				.is_err()
 		);
+		let timeout_err = describe_watched_tx_event(
+			WatchedTxEvent::StreamTimedOut,
+			TransactionStage::Included,
+		)
+		.expect_err("silent subscription must time out instead of waiting forever");
+		assert!(
+			timeout_err.to_string().contains("timed out"),
+			"unexpected timeout error: {timeout_err}"
+		);
+	}
+
+	#[test]
+	fn transaction_status_watch_deadlines_are_finite() {
+		assert_eq!(tx_status_watch_timeout_secs(TransactionStage::Submitted), 0);
+		assert_eq!(
+			tx_status_watch_timeout_secs(TransactionStage::Included),
+			TX_STATUS_INCLUDED_TIMEOUT_SECS
+		);
+		assert_eq!(
+			tx_status_watch_timeout_secs(TransactionStage::Finalized),
+			TX_STATUS_FINALIZED_TIMEOUT_SECS
+		);
+		assert!(TX_STATUS_INACTIVITY_TIMEOUT_SECS > 0);
+		assert!(TX_STATUS_INCLUDED_TIMEOUT_SECS < TX_STATUS_FINALIZED_TIMEOUT_SECS);
 	}
 
 	#[test]
