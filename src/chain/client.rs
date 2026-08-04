@@ -101,6 +101,24 @@ impl QuantusClient {
 		// Create SubXT client using the configured RPC client
 		let client = OnlineClient::<ChainConfig>::from_rpc_client(rpc_client).await?;
 
+		// Reject nodes that do not identify as a supported Quantus runtime before the
+		// client can be used to encode or sign transactions.
+		use jsonrpsee::core::client::ClientT;
+		let runtime_version: serde_json::Value = ws_client
+			.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+			.await
+			.map_err(|e| {
+				QuantusError::NetworkError(format!("Failed to fetch runtime version: {e:?}"))
+			})?;
+		crate::config::validate_runtime_version_value(&runtime_version).map_err(|e| {
+			match e {
+				QuantusError::NetworkError(msg) => QuantusError::NetworkError(format!(
+					"{msg} (from {node_url})"
+				)),
+				other => other,
+			}
+		})?;
+
 		log_verbose!("✅ Connected to Quantus node successfully!");
 
 		Ok(QuantusClient { client, rpc_client: ws_client, node_url: node_url.to_string() })
