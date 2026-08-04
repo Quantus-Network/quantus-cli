@@ -116,6 +116,16 @@ fn should_check_execution_success(
 	already_checked_for != Some(block_hash)
 }
 
+/// Require the watched extrinsic to be present in the reported block.
+/// Returns its index for event scanning, or an error if the hash is absent.
+fn require_extrinsic_index(our_extrinsic_index: Option<usize>) -> Result<usize> {
+	our_extrinsic_index.ok_or_else(|| {
+		crate::error::QuantusError::NetworkError(
+			"Extrinsic hash not found in reported block".to_string(),
+		)
+	})
+}
+
 type TxWatchFlow = std::ops::ControlFlow<Result<()>, ()>;
 
 fn update_waiting_spinner(
@@ -823,25 +833,25 @@ pub(crate) async fn check_execution_success(
 		crate::error::QuantusError::NetworkError(format!("Failed to fetch events: {e:?}"))
 	})?;
 
-	let metadata = client.metadata();
-	if let Some(ext_idx) = our_extrinsic_index {
-		for event_result in events.iter() {
-			let event = event_result.map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
-			})?;
+	let ext_idx = require_extrinsic_index(our_extrinsic_index)?;
 
-			if let subxt::events::Phase::ApplyExtrinsic(event_ext_idx) = event.phase() {
-				if event_ext_idx == ext_idx as u32 {
-					if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
-						event.as_event::<ExtrinsicFailed>()
-					{
-						let error_msg = format_dispatch_error(&dispatch_error, &metadata);
-						crate::log_error!("   Transaction failed: {}", error_msg);
-						return Err(crate::error::QuantusError::NetworkError(format!(
-							"Transaction execution failed: {}",
-							error_msg
-						)));
-					}
+	let metadata = client.metadata();
+	for event_result in events.iter() {
+		let event = event_result.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
+		})?;
+
+		if let subxt::events::Phase::ApplyExtrinsic(event_ext_idx) = event.phase() {
+			if event_ext_idx == ext_idx as u32 {
+				if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
+					event.as_event::<ExtrinsicFailed>()
+				{
+					let error_msg = format_dispatch_error(&dispatch_error, &metadata);
+					crate::log_error!("   Transaction failed: {}", error_msg);
+					return Err(crate::error::QuantusError::NetworkError(format!(
+						"Transaction execution failed: {}",
+						error_msg
+					)));
 				}
 			}
 		}
@@ -928,5 +938,21 @@ mod tests {
 		assert!(should_check_execution_success(&best_block_hash, None));
 		assert!(!should_check_execution_success(&best_block_hash, Some(&best_block_hash),));
 		assert!(should_check_execution_success(&finalized_block_hash, Some(&best_block_hash),));
+	}
+
+	#[test]
+	fn missing_extrinsic_hash_in_reported_block_is_error() {
+		let err = require_extrinsic_index(None).expect_err("absent extrinsic must not succeed");
+		match err {
+			crate::error::QuantusError::NetworkError(msg) => {
+				assert!(
+					msg.contains("not found in reported block"),
+					"unexpected error message: {msg}"
+				);
+			},
+			other => panic!("expected NetworkError, got {other:?}"),
+		}
+
+		assert_eq!(require_extrinsic_index(Some(3)).unwrap(), 3);
 	}
 }
