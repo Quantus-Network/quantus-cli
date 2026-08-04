@@ -81,9 +81,8 @@ impl SubsquidClient {
 		from_prefixes: Option<Vec<String>>,
 		params: TransferQueryParams,
 	) -> Result<Vec<Transfer>> {
-		let (transfers, total_count) = self
-			.query_transfers_by_prefix_page(to_prefixes, from_prefixes, params)
-			.await?;
+		let (transfers, total_count) =
+			self.query_transfers_by_prefix_page(to_prefixes, from_prefixes, params).await?;
 
 		if total_count > SERVER_MAX_LIMIT as i64 {
 			// Same wording as the old server so query_all_transfers_by_prefix
@@ -531,15 +530,17 @@ impl SubsquidClient {
 mod tests {
 	use super::*;
 	use serde_json::{json, Value};
-	use std::collections::HashSet;
-	use std::io::{Read, Write};
-	use std::net::{TcpListener, TcpStream};
-	use std::sync::{
-		atomic::{AtomicUsize, Ordering},
-		Arc, Mutex,
+	use std::{
+		collections::HashSet,
+		io::{Read, Write},
+		net::{TcpListener, TcpStream},
+		sync::{
+			atomic::{AtomicUsize, Ordering},
+			Arc, Mutex,
+		},
+		thread,
+		time::Duration,
 	};
-	use std::thread;
-	use std::time::Duration;
 
 	#[test]
 	fn test_transfer_query_params_builder() {
@@ -637,7 +638,8 @@ mod tests {
 	async fn missing_aggregate_count_rejects_incomplete_prefix_page() {
 		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
 		let endpoint = format!("http://{}", listener.local_addr().unwrap());
-		let rows: Arc<Vec<Value>> = Arc::new((0..=1000).map(|i| transfer_row(i, i as i64)).collect());
+		let rows: Arc<Vec<Value>> =
+			Arc::new((0..=1000).map(|i| transfer_row(i, i as i64)).collect());
 		let request_count = Arc::new(AtomicUsize::new(0));
 		let server_rows = Arc::clone(&rows);
 		let server_count = Arc::clone(&request_count);
@@ -776,11 +778,8 @@ mod tests {
 			.await
 			.expect("baseline exhaustive query");
 
-		let expected: HashSet<String> = complete
-			.iter()
-			.skip(GLOBAL_OFFSET as usize)
-			.map(|t| t.id.clone())
-			.collect();
+		let expected: HashSet<String> =
+			complete.iter().skip(GLOBAL_OFFSET as usize).map(|t| t.id.clone()).collect();
 
 		let shifted = client
 			.query_all_transfers_by_prefix(

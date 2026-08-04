@@ -725,11 +725,7 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 		})?;
 	let (safe_limit, recommended_limit) = limits_from_batched_calls_limit(batched_calls_limit);
 
-	log_verbose!(
-		"📊 Chain batched calls limit: {} (safe: {})",
-		batched_calls_limit,
-		safe_limit
-	);
+	log_verbose!("📊 Chain batched calls limit: {} (safe: {})", batched_calls_limit, safe_limit);
 
 	Ok((safe_limit, recommended_limit))
 }

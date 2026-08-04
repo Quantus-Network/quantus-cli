@@ -8,7 +8,9 @@ use crate::{
 	cli::send::{format_balance, get_chain_properties},
 	error::{QuantusError, Result},
 	log_error, log_print, log_success, log_verbose,
-	subsquid::{compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams},
+	subsquid::{
+		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
+	},
 	wallet::WalletManager,
 };
 use clap::Subcommand;
@@ -320,10 +322,7 @@ mod tests {
 	fn parse_transfer_amount_rejects_invalid_values() {
 		let bad = sample_transfer("not-a-number", "2024-01-01T00:00:00.000Z");
 		let err = parse_transfer_amount(&bad).unwrap_err();
-		assert!(
-			err.to_string().contains("Invalid transfer amount"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("Invalid transfer amount"), "unexpected error: {err}");
 		assert_eq!(
 			parse_transfer_amount(&sample_transfer("12345", "2024-01-01T00:00:00.000Z")).unwrap(),
 			12345
@@ -334,10 +333,7 @@ mod tests {
 	fn transfer_timestamp_prefix_rejects_short_timestamps() {
 		let short = sample_transfer("1", "short");
 		let err = transfer_timestamp_prefix(&short).unwrap_err();
-		assert!(
-			err.to_string().contains("Invalid transfer timestamp"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("Invalid transfer timestamp"), "unexpected error: {err}");
 		assert_eq!(
 			transfer_timestamp_prefix(&sample_transfer("1", "2024-01-01T00:00:00.000Z")).unwrap(),
 			"2024-01-01T00:00:00"

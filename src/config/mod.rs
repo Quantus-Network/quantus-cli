@@ -49,13 +49,13 @@ pub fn validate_runtime_version_value(runtime_version: &serde_json::Value) -> Re
 	let spec_name = runtime_version["specName"].as_str().ok_or_else(|| {
 		QuantusError::NetworkError("Failed to parse runtime spec name".to_string())
 	})?;
-	let spec_version = runtime_version["specVersion"].as_u64().ok_or_else(|| {
-		QuantusError::NetworkError("Failed to parse spec version".to_string())
+	let spec_version = runtime_version["specVersion"]
+		.as_u64()
+		.ok_or_else(|| QuantusError::NetworkError("Failed to parse spec version".to_string()))?
+		as u32;
+	let transaction_version = runtime_version["transactionVersion"].as_u64().ok_or_else(|| {
+		QuantusError::NetworkError("Failed to parse transaction version".to_string())
 	})? as u32;
-	let transaction_version =
-		runtime_version["transactionVersion"].as_u64().ok_or_else(|| {
-			QuantusError::NetworkError("Failed to parse transaction version".to_string())
-		})? as u32;
 
 	validate_runtime_identity(spec_name, spec_version, transaction_version)
 }
@@ -83,8 +83,8 @@ mod tests {
 
 	#[test]
 	fn validate_runtime_identity_rejects_incompatible_runtime_versions() {
-		let err = validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 999_999, 999_999)
-			.unwrap_err();
+		let err =
+			validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 999_999, 999_999).unwrap_err();
 		let msg = err.to_string();
 		assert!(
 			msg.contains("Unsupported Quantus runtime") &&

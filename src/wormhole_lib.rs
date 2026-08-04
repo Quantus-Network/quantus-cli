@@ -383,14 +383,16 @@ mod tests {
 			block_hash: [0u8; 32],
 			block_number: 0,
 			parent_hash: [0u8; 32],
-			state_root: decode_32("ae6e4ff0dca1ef5ede9dccc84365cecfab4e431c6f3086216bc3b819cdf0a893"),
+			state_root: decode_32(
+				"ae6e4ff0dca1ef5ede9dccc84365cecfab4e431c6f3086216bc3b819cdf0a893",
+			),
 			extrinsics_root: [0u8; 32],
 			digest: vec![
-				8, 6, 112, 111, 119, 95, 128, 233, 182, 183, 107, 158, 1, 115, 19, 219, 126, 253, 86,
-				30, 208, 176, 70, 21, 45, 180, 229, 9, 62, 91, 4, 6, 53, 245, 52, 48, 38, 123, 225,
-				5, 112, 111, 119, 95, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				8, 6, 112, 111, 119, 95, 128, 233, 182, 183, 107, 158, 1, 115, 19, 219, 126, 253,
+				86, 30, 208, 176, 70, 21, 45, 180, 229, 9, 62, 91, 4, 6, 53, 245, 52, 48, 38, 123,
+				225, 5, 112, 111, 119, 95, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 79, 226,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 79, 226,
 			],
 			zk_tree_root: [0u8; 32],
 			zk_merkle_siblings: vec![],
@@ -403,9 +405,12 @@ mod tests {
 			asset_id: NATIVE_ASSET_ID,
 		};
 
-		let output =
-			generate_proof(&input, Path::new("ignored-prover.bin"), Path::new("ignored-common.bin"))
-				.expect("real wormhole proof generation succeeds");
+		let output = generate_proof(
+			&input,
+			Path::new("ignored-prover.bin"),
+			Path::new("ignored-common.bin"),
+		)
+		.expect("real wormhole proof generation succeeds");
 
 		assert!(!output.proof_bytes.is_empty(), "the real prover produced a proof");
 		assert_eq!(

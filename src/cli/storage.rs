@@ -382,9 +382,9 @@ fn accumulate_storage_key_count(total_count: u32, keys_len: usize) -> crate::err
 	let keys_count = u32::try_from(keys_len).map_err(|_| {
 		QuantusError::Generic("RPC returned too many storage keys in one page".to_string())
 	})?;
-	total_count.checked_add(keys_count).ok_or_else(|| {
-		QuantusError::Generic("Storage entry count exceeds u32::MAX".to_string())
-	})
+	total_count
+		.checked_add(keys_count)
+		.ok_or_else(|| QuantusError::Generic("Storage entry count exceeds u32::MAX".to_string()))
 }
 
 /// Decide the next `state_getKeysPaged` start key, rejecting non-advancing cursors.
@@ -879,10 +879,7 @@ mod tests {
 	fn accumulate_storage_key_count_rejects_u32_overflow() {
 		let err = accumulate_storage_key_count(u32::MAX, 1)
 			.expect_err("unchecked u32 accumulation must not wrap");
-		assert!(
-			err.to_string().contains("u32::MAX"),
-			"unexpected overflow error: {err}"
-		);
+		assert!(err.to_string().contains("u32::MAX"), "unexpected overflow error: {err}");
 	}
 
 	#[test]
@@ -892,10 +889,7 @@ mod tests {
 		let stuck_key = page.last().cloned().unwrap();
 		let err = next_storage_pagination_key(Some(&stuck_key), &page, 1000)
 			.expect_err("same-cursor pagination must fail closed");
-		assert!(
-			err.to_string().contains("did not advance"),
-			"unexpected pagination error: {err}"
-		);
+		assert!(err.to_string().contains("did not advance"), "unexpected pagination error: {err}");
 	}
 
 	#[test]
@@ -917,10 +911,7 @@ mod tests {
 	fn validate_storage_iterate_limit_rejects_above_max() {
 		let err = validate_storage_iterate_limit(MAX_STORAGE_ITERATE_LIMIT + 1)
 			.expect_err("limit above max must fail");
-		assert!(
-			err.to_string().contains("exceeds maximum"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("exceeds maximum"), "unexpected error: {err}");
 	}
 
 	#[test]

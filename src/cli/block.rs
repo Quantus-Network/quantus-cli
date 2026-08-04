@@ -803,9 +803,7 @@ pub(crate) fn validate_block_list_range(
 	step: u32,
 ) -> crate::error::Result<u32> {
 	if step == 0 {
-		return Err(QuantusError::Generic(
-			"Block list --step must be greater than 0".to_string(),
-		));
+		return Err(QuantusError::Generic("Block list --step must be greater than 0".to_string()));
 	}
 	if start > end {
 		return Err(QuantusError::Generic(format!(
@@ -1068,10 +1066,7 @@ mod tests {
 	fn validate_block_list_range_rejects_inverted_bounds() {
 		let err = validate_block_list_range(100, 50, 1)
 			.expect_err("start > end must fail before underflow");
-		assert!(
-			err.to_string().contains("must be <= end"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("must be <= end"), "unexpected error: {err}");
 	}
 
 	#[test]
@@ -1084,10 +1079,7 @@ mod tests {
 	fn validate_block_list_range_rejects_unbounded_span() {
 		let err = validate_block_list_range(0, MAX_BLOCK_LIST_COUNT, 1)
 			.expect_err("span above MAX_BLOCK_LIST_COUNT must fail");
-		assert!(
-			err.to_string().contains("too large"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("too large"), "unexpected error: {err}");
 	}
 
 	#[test]
@@ -1098,4 +1090,3 @@ mod tests {
 		);
 	}
 }
-

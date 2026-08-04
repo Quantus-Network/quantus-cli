@@ -20,21 +20,19 @@ pub(crate) fn parse_json_u128(value: &Value, label: &str) -> crate::error::Resul
 		return Ok(u128::from(n));
 	}
 	if let Some(n) = value.as_number() {
-		return n.to_string().parse::<u128>().map_err(|_| {
-			QuantusError::Generic(format!("{label} must be a non-negative integer"))
-		});
+		return n
+			.to_string()
+			.parse::<u128>()
+			.map_err(|_| QuantusError::Generic(format!("{label} must be a non-negative integer")));
 	}
-	Err(QuantusError::Generic(format!(
-		"{label} must be a JSON string or number (got {value})"
-	)))
+	Err(QuantusError::Generic(format!("{label} must be a JSON string or number (got {value})")))
 }
 
 /// Parse a JSON value as `u32`, accepting number or numeric string forms.
 pub(crate) fn parse_json_u32(value: &Value, label: &str) -> crate::error::Result<u32> {
 	if let Some(n) = value.as_u64() {
-		return u32::try_from(n).map_err(|_| {
-			QuantusError::Generic(format!("{label} exceeds u32::MAX"))
-		});
+		return u32::try_from(n)
+			.map_err(|_| QuantusError::Generic(format!("{label} exceeds u32::MAX")));
 	}
 	if let Some(s) = value.as_str() {
 		return s.parse::<u32>().map_err(|_| {
@@ -454,10 +452,7 @@ mod tests {
 		assert!(err.to_string().contains("must be a u32"), "unexpected: {err}");
 		let err = parse_json_u32(&json!(true), "referendum_index")
 			.expect_err("bool must not become referendum 0");
-		assert!(
-			err.to_string().contains("must be a JSON number"),
-			"unexpected: {err}"
-		);
+		assert!(err.to_string().contains("must be a JSON number"), "unexpected: {err}");
 		assert_eq!(parse_json_u32(&json!(7), "referendum_index").unwrap(), 7);
 	}
 

@@ -162,10 +162,7 @@ mod tests {
 	fn accumulate_metadata_count_rejects_usize_overflow() {
 		let err = accumulate_metadata_count(usize::MAX, 1)
 			.expect_err("unchecked metadata accumulation must not wrap");
-		assert!(
-			err.to_string().contains("overflowed"),
-			"unexpected overflow error: {err}"
-		);
+		assert!(err.to_string().contains("overflowed"), "unexpected overflow error: {err}");
 	}
 
 	#[test]

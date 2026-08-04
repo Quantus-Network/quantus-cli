@@ -408,16 +408,9 @@ mod tests {
 
 	#[test]
 	fn ensure_unique_recipients_rejects_duplicates() {
-		let addrs = vec![
-			"qzAddrA".to_string(),
-			"qzAddrB".to_string(),
-			"qzAddrA".to_string(),
-		];
+		let addrs = vec!["qzAddrA".to_string(), "qzAddrB".to_string(), "qzAddrA".to_string()];
 		let err = ensure_unique_recipients(&addrs).expect_err("duplicates must fail");
-		assert!(
-			err.to_string().contains("Duplicate recipient"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("Duplicate recipient"), "unexpected error: {err}");
 	}
 
 	#[test]

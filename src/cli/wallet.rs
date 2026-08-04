@@ -12,9 +12,9 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+use std::io::{self, Write};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
-use std::io::{self, Write};
 
 /// Wallet management commands
 #[derive(Subcommand, Debug)]
@@ -71,7 +71,8 @@ pub enum WalletCommands {
 		#[arg(short, long, default_value = "mnemonic")]
 		format: String,
 
-		/// Write the mnemonic to this file instead of printing it (created with owner-only permissions)
+		/// Write the mnemonic to this file instead of printing it (created with owner-only
+		/// permissions)
 		#[arg(short, long)]
 		output: Option<std::path::PathBuf>,
 	},
@@ -315,15 +316,12 @@ fn write_mnemonic_to_protected_file(
 	let mut file = options.open(path).map_err(|e| {
 		QuantusError::Generic(format!("Failed to create mnemonic export file: {e}"))
 	})?;
-	file.write_all(mnemonic.as_bytes()).map_err(|e| {
-		QuantusError::Generic(format!("Failed to write mnemonic export file: {e}"))
-	})?;
-	file.write_all(b"\n").map_err(|e| {
-		QuantusError::Generic(format!("Failed to write mnemonic export file: {e}"))
-	})?;
-	file.sync_all().map_err(|e| {
-		QuantusError::Generic(format!("Failed to sync mnemonic export file: {e}"))
-	})?;
+	file.write_all(mnemonic.as_bytes())
+		.map_err(|e| QuantusError::Generic(format!("Failed to write mnemonic export file: {e}")))?;
+	file.write_all(b"\n")
+		.map_err(|e| QuantusError::Generic(format!("Failed to write mnemonic export file: {e}")))?;
+	file.sync_all()
+		.map_err(|e| QuantusError::Generic(format!("Failed to sync mnemonic export file: {e}")))?;
 	Ok(())
 }
 
@@ -351,9 +349,7 @@ pub async fn handle_wallet_command(
 			// Choose creation method based on flags
 			let result = if no_derivation {
 				// Use master seed directly (like quantus-node --no-derivation)
-				wallet_manager
-					.create_wallet_no_derivation(&name, Some(&final_password))
-					.await
+				wallet_manager.create_wallet_no_derivation(&name, Some(&final_password)).await
 			} else if derivation_path == DEFAULT_DERIVATION_PATH {
 				wallet_manager.create_wallet(&name, Some(&final_password)).await
 			} else {
@@ -901,10 +897,7 @@ mod tests {
 		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
 
 		let manager = WalletManager::new().expect("wallet manager");
-		manager
-			.create_wallet("export-leak", Some(""))
-			.await
-			.expect("create wallet");
+		manager.create_wallet("export-leak", Some("")).await.expect("create wallet");
 
 		let result = handle_wallet_command(
 			WalletCommands::Export {
@@ -917,10 +910,7 @@ mod tests {
 		)
 		.await;
 
-		assert!(
-			result.is_err(),
-			"export without --output must refuse stdout mnemonic emission"
-		);
+		assert!(result.is_err(), "export without --output must refuse stdout mnemonic emission");
 		assert!(
 			result.unwrap_err().to_string().contains("requires --output"),
 			"error should mention --output"
@@ -937,10 +927,7 @@ mod tests {
 		std::env::remove_var("QUANTUS_WALLET_PASSWORD_EXPORT_FILE");
 
 		let manager = WalletManager::new().expect("wallet manager");
-		manager
-			.create_wallet("export-file", Some(""))
-			.await
-			.expect("create wallet");
+		manager.create_wallet("export-file", Some("")).await.expect("create wallet");
 		let mnemonic = manager
 			.export_mnemonic("export-file", None)
 			.expect("export mnemonic for fixture");
@@ -979,10 +966,7 @@ mod tests {
 			"--mnemonic",
 			"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
 		]);
-		assert!(
-			result.is_err(),
-			"wallet import must not accept --mnemonic on the command line"
-		);
+		assert!(result.is_err(), "wallet import must not accept --mnemonic on the command line");
 	}
 
 	#[test]
@@ -996,9 +980,6 @@ mod tests {
 			"--seed",
 			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		]);
-		assert!(
-			result.is_err(),
-			"wallet from-seed must not accept --seed on the command line"
-		);
+		assert!(result.is_err(), "wallet from-seed must not accept --seed on the command line");
 	}
 }

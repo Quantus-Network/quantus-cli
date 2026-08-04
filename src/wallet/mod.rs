@@ -617,10 +617,8 @@ mod tests {
 		let dir_mode = fs::metadata(&wallet_manager.wallets_dir)
 			.expect("stat wallets dir")
 			.permissions()
-			.mode() &
-			0o777;
+			.mode() & 0o777;
 		assert_eq!(dir_mode, 0o700, "wallets directory must be owner-only (0700)");
-
 
 		let keystore = Keystore::new(&wallet_manager.wallets_dir);
 		let mut entropy = [9u8; 32];
@@ -718,8 +716,7 @@ mod tests {
 			.expect("empty password must unlock crystal_* developer wallets");
 
 		let wallet_file = wallet_manager.wallets_dir.join("crystal_bob.json");
-		let mode =
-			fs::metadata(&wallet_file).expect("stat wallet").permissions().mode() & 0o777;
+		let mode = fs::metadata(&wallet_file).expect("stat wallet").permissions().mode() & 0o777;
 		assert_eq!(mode, 0o600, "developer wallet file must be owner-read/write only");
 	}
 
@@ -1124,10 +1121,8 @@ mod tests {
 		assert_ne!(victim.address, attacker.address);
 
 		let keystore = Keystore::new(&wallet_manager.wallets_dir);
-		let mut tampered = keystore
-			.load_wallet("victim_alias")
-			.expect("load")
-			.expect("victim exists");
+		let mut tampered =
+			keystore.load_wallet("victim_alias").expect("load").expect("victim exists");
 		tampered.address = attacker.address.clone();
 		keystore.save_wallet(&tampered).expect("persist tampered envelope");
 

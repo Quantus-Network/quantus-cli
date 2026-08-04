@@ -233,7 +233,11 @@ fn validate_manifest(dir: &Path, manifest: &ArtifactManifest) -> Result<()> {
 	Ok(())
 }
 
-fn write_manifest(dir: &Path, num_leaf_proofs: usize, num_private_batch_proofs: usize) -> Result<()> {
+fn write_manifest(
+	dir: &Path,
+	num_leaf_proofs: usize,
+	num_private_batch_proofs: usize,
+) -> Result<()> {
 	let mut files = std::collections::BTreeMap::new();
 	for filename in MANIFESTED_FILES {
 		ensure_regular_file(&dir.join(filename))?;
@@ -303,11 +307,14 @@ fn atomic_write_new_file(path: &Path, contents: &[u8]) -> Result<()> {
 		}
 	}
 
-	let mut file = fs::OpenOptions::new()
-		.write(true)
-		.create_new(true)
-		.open(&temp_path)
-		.map_err(|e| QuantusError::Generic(format!("Failed to create {}: {}", path.display(), e)))?;
+	let mut file =
+		fs::OpenOptions::new()
+			.write(true)
+			.create_new(true)
+			.open(&temp_path)
+			.map_err(|e| {
+				QuantusError::Generic(format!("Failed to create {}: {}", path.display(), e))
+			})?;
 	file.write_all(contents)
 		.and_then(|_| file.sync_all())
 		.map_err(|e| QuantusError::Generic(format!("Failed to write {}: {}", path.display(), e)))?;
@@ -384,10 +391,7 @@ mod tests {
 
 		fs::write(dir.join("private_batch_verifier.bin"), b"attacker-substituted-circuit").unwrap();
 		let err = verify_manifest(dir).expect_err("tampered verifier must fail authentication");
-		assert!(
-			err.to_string().contains("hash mismatch"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("hash mismatch"), "unexpected error: {err}");
 		assert!(!is_ready(dir));
 	}
 
@@ -406,10 +410,7 @@ mod tests {
 		std::env::remove_var(BINS_DIR_ENV);
 
 		let err = result.expect_err("incomplete/unauthenticated dir must be rejected");
-		assert!(
-			err.to_string().contains("lacks a valid manifest"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("lacks a valid manifest"), "unexpected error: {err}");
 	}
 
 	#[test]
@@ -429,10 +430,7 @@ mod tests {
 		std::env::remove_var(BINS_DIR_ENV);
 
 		let err = result.expect_err("symlinked bins dir must be rejected");
-		assert!(
-			err.to_string().contains("symlinked bins directory"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("symlinked bins directory"), "unexpected error: {err}");
 	}
 
 	#[test]

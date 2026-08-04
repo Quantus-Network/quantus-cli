@@ -38,9 +38,7 @@ pub fn parse_token_info_from_properties(
 		.and_then(|v| v.as_str())
 		.filter(|symbol| !symbol.is_empty())
 		.ok_or_else(|| {
-			QuantusError::NetworkError(
-				"Invalid or missing chain property tokenSymbol".to_string(),
-			)
+			QuantusError::NetworkError("Invalid or missing chain property tokenSymbol".to_string())
 		})?
 		.to_string();
 
@@ -57,14 +55,12 @@ pub fn parse_token_info_from_properties(
 	let ss58_format = properties
 		.get("ss58Format")
 		.map(|v| {
-			v.as_u64()
-				.and_then(|format| u8::try_from(format).ok())
-				.ok_or_else(|| {
-					QuantusError::NetworkError(
-						"Invalid chain property ss58Format; expected an integer between 0 and 255"
-							.to_string(),
-					)
-				})
+			v.as_u64().and_then(|format| u8::try_from(format).ok()).ok_or_else(|| {
+				QuantusError::NetworkError(
+					"Invalid chain property ss58Format; expected an integer between 0 and 255"
+						.to_string(),
+				)
+			})
 		})
 		.transpose()?;
 

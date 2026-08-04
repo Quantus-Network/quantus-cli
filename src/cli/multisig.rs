@@ -497,10 +497,10 @@ fn matching_multisig_created_address(
 	threshold: u32,
 	nonce: u64,
 ) -> Option<String> {
-	if &event.creator != creator
-		|| event.threshold != threshold
-		|| event.nonce != nonce
-		|| !sorted_account_ids_equal(&event.signers, signers)
+	if &event.creator != creator ||
+		event.threshold != threshold ||
+		event.nonce != nonce ||
+		!sorted_account_ids_equal(&event.signers, signers)
 	{
 		return None;
 	}
@@ -3181,10 +3181,7 @@ mod tests {
 		let signer = account(7);
 		let with_dup = predict_multisig_address(vec![signer.clone(), signer.clone()], 2, 0);
 		let unique = predict_multisig_address(vec![signer], 2, 0);
-		assert_eq!(
-			with_dup, unique,
-			"multisig address prediction must ignore duplicate signers"
-		);
+		assert_eq!(with_dup, unique, "multisig address prediction must ignore duplicate signers");
 	}
 
 	#[tokio::test]
@@ -3193,11 +3190,7 @@ mod tests {
 		let signer_ss58 = ss58(&account(7));
 		let duplicate_csv = format!("{0},{0}", signer_ss58);
 		let result = handle_multisig_command(
-			MultisigCommands::PredictAddress {
-				signers: duplicate_csv,
-				threshold: 2,
-				nonce: 0,
-			},
+			MultisigCommands::PredictAddress { signers: duplicate_csv, threshold: 2, nonce: 0 },
 			"ws://127.0.0.1:9944",
 			ExecutionMode::default(),
 		)

@@ -162,7 +162,8 @@ fn expected_hash_from_sha256sums(
 			continue;
 		};
 		let name = name.strip_prefix('*').unwrap_or(name);
-		if name == asset_name || Path::new(name).file_name().and_then(|n| n.to_str()) == Some(asset_name)
+		if name == asset_name ||
+			Path::new(name).file_name().and_then(|n| n.to_str()) == Some(asset_name)
 		{
 			if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
 				return Err(QuantusError::Generic(format!(
@@ -227,13 +228,11 @@ fn install_verified_release(
 	yes: bool,
 ) -> crate::error::Result<()> {
 	let target = updater.target();
-	let archive_asset = release
-		.asset_for(&target, Some(ASSET_IDENTIFIER))
-		.ok_or_else(|| {
-			QuantusError::Generic(format!(
-				"No release archive found for target `{target}` (looking for {ASSET_IDENTIFIER})"
-			))
-		})?;
+	let archive_asset = release.asset_for(&target, Some(ASSET_IDENTIFIER)).ok_or_else(|| {
+		QuantusError::Generic(format!(
+			"No release archive found for target `{target}` (looking for {ASSET_IDENTIFIER})"
+		))
+	})?;
 	let sums_asset = release
 		.assets
 		.iter()
@@ -308,9 +307,8 @@ fn install_verified_release(
 		QuantusError::Generic(format!("Failed to resolve current executable path: {e}"))
 	})?;
 	if install_path == current_exe {
-		self_update::self_replace::self_replace(&new_exe).map_err(|e| {
-			QuantusError::Generic(format!("Failed to replace running binary: {e}"))
-		})?;
+		self_update::self_replace::self_replace(&new_exe)
+			.map_err(|e| QuantusError::Generic(format!("Failed to replace running binary: {e}")))?;
 	} else {
 		self_update::Move::from_source(&new_exe)
 			.to_dest(&install_path)
@@ -330,14 +328,16 @@ fn substitute_bin_path(template: &str, version: &str, target: &str, bin: &str) -
 		.replace("{{bin}}", bin)
 }
 
-fn download_asset(url: &str, dest: &mut impl Write, show_progress: bool) -> crate::error::Result<()> {
+fn download_asset(
+	url: &str,
+	dest: &mut impl Write,
+	show_progress: bool,
+) -> crate::error::Result<()> {
 	let mut download = self_update::Download::from_url(url);
 	download
 		.set_header(
 			reqwest::header::ACCEPT,
-			"application/octet-stream"
-				.parse()
-				.expect("static ACCEPT header"),
+			"application/octet-stream".parse().expect("static ACCEPT header"),
 		)
 		.show_progress(show_progress);
 	download.download_to(dest).map_err(map_self_update_err)
@@ -410,9 +410,7 @@ mod tests {
 		assert_eq!(expected_hash_from_sha256sums(&sums, asset).unwrap(), hash);
 
 		let other = "b".repeat(64);
-		let sums_multi = format!(
-			"{other}  other-asset.tar.gz\n{hash} *{asset}\n"
-		);
+		let sums_multi = format!("{other}  other-asset.tar.gz\n{hash} *{asset}\n");
 		assert_eq!(expected_hash_from_sha256sums(&sums_multi, asset).unwrap(), hash);
 
 		assert!(expected_hash_from_sha256sums(&sums, "missing.tar.gz").is_err());

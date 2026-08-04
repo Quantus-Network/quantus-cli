@@ -78,15 +78,9 @@ fn write_manifest(
 	let mut content = String::new();
 	content.push_str("{\n");
 	content.push_str("  \"manifest_version\": 1,\n");
-	content.push_str(&format!(
-		"  \"package_version\": \"{}\",\n",
-		json_escape(pkg_version)
-	));
+	content.push_str(&format!("  \"package_version\": \"{}\",\n", json_escape(pkg_version)));
 	content.push_str(&format!("  \"num_leaf_proofs\": {},\n", num_leaf_proofs));
-	content.push_str(&format!(
-		"  \"num_private_batch_proofs\": {},\n",
-		num_private_batch_proofs
-	));
+	content.push_str(&format!("  \"num_private_batch_proofs\": {},\n", num_private_batch_proofs));
 	content.push_str("  \"files\": {\n");
 	for (idx, filename) in MANIFESTED_FILES.iter().enumerate() {
 		let comma = if idx + 1 == MANIFESTED_FILES.len() { "" } else { "," };

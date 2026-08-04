@@ -630,11 +630,7 @@ pub async fn query_pending_transfers_for_address(
 		));
 	}
 
-	Ok(QueryPendingTransfersResult {
-		wormhole_address,
-		transfers: vec![],
-		total_available: 0,
-	})
+	Ok(QueryPendingTransfersResult { wormhole_address, transfers: vec![], total_available: 0 })
 }
 
 // ============================================================================
@@ -1128,11 +1124,7 @@ mod tests {
 	fn checked_add_amount_rejects_indexer_overflow() {
 		let err = checked_add_amount(u128::MAX, 2, "pending transfers")
 			.expect_err("untrusted transfer totals must not wrap on overflow");
-		assert!(
-			err.message.contains("overflow"),
-			"unexpected overflow error: {}",
-			err.message
-		);
+		assert!(err.message.contains("overflow"), "unexpected overflow error: {}", err.message);
 		assert_eq!(checked_add_amount(10, 5, "pending transfers").unwrap(), 15);
 	}
 
@@ -1268,8 +1260,7 @@ mod tests {
 	}
 
 	fn read_http_request(stream: &mut std::net::TcpStream) -> String {
-		use std::io::Read;
-		use std::time::Duration;
+		use std::{io::Read, time::Duration};
 
 		stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
 		let mut buf = Vec::new();
@@ -1322,8 +1313,7 @@ mod tests {
 	#[tokio::test]
 	async fn pending_transfer_query_for_address_refuses_without_secret() {
 		use serde_json::json;
-		use std::net::TcpListener;
-		use std::thread;
+		use std::{net::TcpListener, thread};
 
 		let secret = [7u8; 32];
 		let wormhole_address = wormhole_lib::compute_wormhole_address(&secret).unwrap();
@@ -1373,8 +1363,7 @@ mod tests {
 	#[tokio::test]
 	async fn query_pending_transfers_excludes_spent_nullifiers() {
 		use serde_json::json;
-		use std::net::TcpListener;
-		use std::thread;
+		use std::{net::TcpListener, thread};
 
 		let path = format!("m/44'/{}/0'/1'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
 		let wormhole_secret = derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path).unwrap();
