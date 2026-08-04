@@ -104,10 +104,12 @@ pub fn get_wallet_password(
 /// Get mnemonic phrase from user
 pub fn get_mnemonic_from_user() -> Result<String> {
 	log_print!("{}", "Please enter or paste your secret phrase:".bright_yellow());
-	let mnemonic = rpassword::read_password().map_err(|e| {
+	let mut mnemonic = rpassword::read_password().map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Failed to read secret phrase: {e}"))
 	})?;
-	Ok(mnemonic.trim().to_string())
+	let trimmed = mnemonic.trim().to_string();
+	crate::wallet::keystore::zeroize_string(&mut mnemonic);
+	Ok(trimmed)
 }
 
 /// Get password from user securely

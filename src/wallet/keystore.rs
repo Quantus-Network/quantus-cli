@@ -25,6 +25,7 @@ use rand::{rng, RngCore};
 
 use std::{
 	collections::HashSet,
+	fmt,
 	fs::{self, File, OpenOptions},
 	io::{ErrorKind, Read, Write},
 	path::{Path, PathBuf},
@@ -33,6 +34,17 @@ use std::{
 
 use qp_dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
 use sp_runtime::traits::IdentifyAccount;
+
+pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
+	for byte in bytes {
+		unsafe { std::ptr::write_volatile(byte, 0) };
+	}
+	std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+}
+
+pub(crate) fn zeroize_string(value: &mut String) {
+	unsafe { zeroize_bytes(value.as_mut_vec()) };
+}
 
 fn keystore_lock() -> &'static Mutex<()> {
 	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -168,10 +180,25 @@ impl Drop for WalletCreateGuard {
 }
 
 /// Quantum-safe key pair using Dilithium post-quantum signatures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct QuantumKeyPair {
 	pub public_key: Vec<u8>,
 	pub private_key: Vec<u8>,
+}
+
+impl fmt::Debug for QuantumKeyPair {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("QuantumKeyPair")
+			.field("public_key_len", &self.public_key.len())
+			.field("private_key", &"[redacted]")
+			.finish()
+	}
+}
+
+impl Drop for QuantumKeyPair {
+	fn drop(&mut self) {
+		zeroize_bytes(&mut self.private_key);
+	}
 }
 
 impl QuantumKeyPair {
@@ -186,12 +213,11 @@ impl QuantumKeyPair {
 	/// Convert to rusty-crystals Keypair
 	#[allow(dead_code)]
 	pub fn to_dilithium_keypair(&self) -> Result<Keypair> {
-		// TODO: Implement conversion from bytes back to Keypair
-		// For now, generate a new one as placeholder
-		// This function should properly reconstruct the Keypair from stored bytes
 		Ok(Keypair {
-			public: PublicKey::from_bytes(&self.public_key).expect("Failed to parse public key"),
-			secret: SecretKey::from_bytes(&self.private_key).expect("Failed to parse private key"),
+			public: PublicKey::from_bytes(&self.public_key)
+				.map_err(|_| crate::error::WalletError::KeyGeneration)?,
+			secret: SecretKey::from_bytes(&self.private_key)
+				.map_err(|_| crate::error::WalletError::KeyGeneration)?,
 		})
 	}
 
@@ -240,11 +266,10 @@ impl QuantumKeyPair {
 	}
 
 	#[allow(dead_code)]
-	pub fn ss58_to_account_id(s: &str) -> Vec<u8> {
-		// from_ss58check returns a Result, we unwrap it to panic on invalid input.
-		// We then convert the AccountId32 struct to a Vec<u8> to be compatible with Polkadart's
-		// typedef.
-		AsRef::<[u8]>::as_ref(&AccountId32::from_ss58check_with_version(s).unwrap().0).to_vec()
+	pub fn ss58_to_account_id(s: &str) -> Result<Vec<u8>> {
+		let account = AccountId32::from_ss58check_with_version(s)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?;
+		Ok(AsRef::<[u8]>::as_ref(&account.0).to_vec())
 	}
 }
 
@@ -266,13 +291,48 @@ pub struct EncryptedWallet {
 }
 
 /// Wallet data structure (before encryption)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct WalletData {
 	pub name: String,
 	pub keypair: QuantumKeyPair,
 	pub mnemonic: Option<String>,
 	pub derivation_path: String,
 	pub metadata: std::collections::HashMap<String, String>,
+}
+
+impl fmt::Debug for WalletData {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("WalletData")
+			.field("name", &self.name)
+			.field("keypair", &self.keypair)
+			.field("mnemonic", &self.mnemonic.as_ref().map(|_| "[redacted]"))
+			.field("derivation_path", &self.derivation_path)
+			.field("metadata", &self.metadata)
+			.finish()
+	}
+}
+
+impl Drop for WalletData {
+	fn drop(&mut self) {
+		if let Some(mnemonic) = &mut self.mnemonic {
+			zeroize_string(mnemonic);
+		}
+	}
+}
+
+impl WalletData {
+	/// Take the keypair out without moving other fields (compatible with `Drop`).
+	pub fn take_keypair(&mut self) -> QuantumKeyPair {
+		std::mem::replace(
+			&mut self.keypair,
+			QuantumKeyPair { public_key: Vec::new(), private_key: Vec::new() },
+		)
+	}
+
+	/// Take the mnemonic out without moving other fields (compatible with `Drop`).
+	pub fn take_mnemonic(&mut self) -> Option<String> {
+		self.mnemonic.take()
+	}
 }
 
 /// Keystore manager for handling encrypted wallet storage
@@ -498,15 +558,18 @@ impl Keystore {
 
 		// 3. Use password hash as AES-256 key (quantum-safe with 256-bit key)
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
-		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		let mut key_bytes = <[u8; 32]>::try_from(&hash_bytes[..32]).unwrap();
+		let aes_key = Key::<Aes256Gcm>::from(key_bytes);
+		zeroize_bytes(&mut key_bytes);
 		let cipher = Aes256Gcm::new(&aes_key);
 
 		// 4. Generate nonce and encrypt the wallet data
 		let nonce = Aes256Gcm::generate_nonce(&mut AesOsRng);
-		let serialized_data = serde_json::to_vec(data)?;
+		let mut serialized_data = serde_json::to_vec(data)?;
 		let encrypted_data = cipher
 			.encrypt(&nonce, serialized_data.as_ref())
 			.map_err(|e| WalletError::Encryption(e.to_string()))?;
+		zeroize_bytes(&mut serialized_data);
 
 		// 5. Store the Argon2 parameters WITHOUT the digest. The digest determines
 		// the AES key, so persisting it next to the ciphertext would let anyone
@@ -552,12 +615,14 @@ impl Keystore {
 		let nonce_bytes = <[u8; 12]>::try_from(&encrypted.aes_nonce[..])
 			.map_err(|_| WalletError::Decryption)?;
 		let nonce = Nonce::from(nonce_bytes);
-		let decrypted_data = cipher
+		let mut decrypted_data = cipher
 			.decrypt(&nonce, encrypted.encrypted_data.as_ref())
 			.map_err(|_| WalletError::InvalidPassword)?;
 
-		// 3. Deserialize the wallet data
-		let wallet_data: WalletData = serde_json::from_slice(&decrypted_data)?;
+		// 3. Deserialize the wallet data, then clear the plaintext buffer.
+		let wallet_data_result = serde_json::from_slice::<WalletData>(&decrypted_data);
+		zeroize_bytes(&mut decrypted_data);
+		let wallet_data: WalletData = wallet_data_result?;
 
 		// 4. The plaintext envelope address is not AEAD-authenticated, so it must
 		// match the address derived from the decrypted key material before the
@@ -612,7 +677,9 @@ impl Keystore {
 			.hash_password_into(password.as_bytes(), &encrypted.argon2_salt, &mut key)
 			.map_err(|_| WalletError::Decryption)?;
 
-		Ok(Key::<Aes256Gcm>::from(key))
+		let aes_key = Key::<Aes256Gcm>::from(key);
+		zeroize_bytes(&mut key);
+		Ok(aes_key)
 	}
 
 	/// Returns true if the wallet embeds the Argon2 digest in `argon2_params`
@@ -659,6 +726,47 @@ mod tests {
 	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
 	use sp_core::Pair;
 	use tempfile::TempDir;
+
+	#[test]
+	fn quantum_keypair_debug_redacts_private_key() {
+		let keypair = QuantumKeyPair {
+			public_key: vec![1, 2, 3],
+			private_key: vec![0xde, 0xad, 0xbe, 0xef],
+		};
+		let rendered = format!("{keypair:?}");
+		assert!(
+			rendered.contains("[redacted]"),
+			"private key must be redacted in Debug output, got: {rendered}"
+		);
+		assert!(
+			!rendered.contains("dead") && !rendered.contains("beef") && !rendered.contains("222"),
+			"Debug must not leak private key bytes: {rendered}"
+		);
+	}
+
+	#[test]
+	fn wallet_data_debug_redacts_mnemonic() {
+		let data = WalletData {
+			name: "test".to_string(),
+			keypair: QuantumKeyPair { public_key: vec![1], private_key: vec![2] },
+			mnemonic: Some("abandon ability able about above absent".to_string()),
+			derivation_path: "m/".to_string(),
+			metadata: Default::default(),
+		};
+		let rendered = format!("{data:?}");
+		assert!(rendered.contains("[redacted]"), "mnemonic must be redacted: {rendered}");
+		assert!(
+			!rendered.contains("abandon"),
+			"Debug must not leak mnemonic words: {rendered}"
+		);
+	}
+
+	#[test]
+	fn zeroize_bytes_clears_buffer() {
+		let mut secret = vec![1u8, 2, 3, 4, 5];
+		zeroize_bytes(&mut secret);
+		assert!(secret.iter().all(|&b| b == 0));
+	}
 
 	#[test]
 	fn test_quantum_keypair_from_dilithium_keypair() {
@@ -786,7 +894,8 @@ mod tests {
 
 		for ss58_address in test_cases {
 			// Convert SS58 to account ID bytes
-			let account_bytes = QuantumKeyPair::ss58_to_account_id(&ss58_address);
+			let account_bytes =
+				QuantumKeyPair::ss58_to_account_id(&ss58_address).expect("valid SS58");
 
 			// Verify length (AccountId32 should be 32 bytes)
 			assert_eq!(account_bytes.len(), 32, "Account ID should be 32 bytes");
@@ -863,7 +972,7 @@ mod tests {
 
 	#[test]
 	fn test_invalid_ss58_address_handling() {
-		// Test with invalid SS58 addresses
+		// #160783: invalid SS58 must return Err, not panic.
 		let invalid_addresses = vec![
 			"invalid",
 			"5",          // Too short
@@ -872,10 +981,38 @@ mod tests {
 		];
 
 		for invalid_addr in invalid_addresses {
-			let result =
-				std::panic::catch_unwind(|| QuantumKeyPair::ss58_to_account_id(invalid_addr));
-			assert!(result.is_err(), "Should panic on invalid address: {invalid_addr}");
+			let panicked = std::panic::catch_unwind(|| {
+				QuantumKeyPair::ss58_to_account_id(invalid_addr)
+			});
+			assert!(panicked.is_ok(), "Must not panic on invalid address: {invalid_addr}");
+			assert!(
+				matches!(
+					panicked.unwrap(),
+					Err(crate::error::QuantusError::Wallet(WalletError::KeyGeneration))
+				),
+				"Should return KeyGeneration for invalid address: {invalid_addr}"
+			);
 		}
+	}
+
+	#[test]
+	fn to_dilithium_keypair_rejects_malformed_key_bytes() {
+		// #160783: malformed key material must not panic.
+		let keypair = QuantumKeyPair {
+			public_key: vec![1, 2, 3],
+			private_key: vec![4, 5, 6],
+		};
+		let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			keypair.to_dilithium_keypair()
+		}));
+		assert!(panicked.is_ok(), "malformed keys must not panic");
+		assert!(
+			matches!(
+				panicked.unwrap(),
+				Err(crate::error::QuantusError::Wallet(WalletError::KeyGeneration))
+			),
+			"expected KeyGeneration error"
+		);
 	}
 
 	#[test]

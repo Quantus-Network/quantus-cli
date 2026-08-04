@@ -90,6 +90,7 @@ impl WalletManager {
 		rng().fill_bytes(&mut seed);
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		keystore::zeroize_bytes(&mut seed);
 		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, derivation_path)
 			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
@@ -176,7 +177,12 @@ impl WalletManager {
 
 		let wallet_data = self.load_wallet(name, &final_password)?;
 
-		wallet_data.mnemonic.ok_or_else(|| WalletError::MnemonicNotAvailable.into())
+		// Clone before Drop zeroizes the in-memory mnemonic on wallet_data drop.
+		wallet_data
+			.mnemonic
+			.as_ref()
+			.cloned()
+			.ok_or_else(|| WalletError::MnemonicNotAvailable.into())
 	}
 
 	/// List all wallets
@@ -198,7 +204,7 @@ impl WalletManager {
 			// envelope address for password-protected wallets.
 			let wallet_info = match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
 				Ok(wallet_data) => WalletInfo {
-					name: wallet_data.name,
+					name: wallet_data.name.clone(),
 					address: wallet_data.keypair.try_to_account_id_ss58check()?,
 					created_at: encrypted_wallet.created_at,
 					key_type: "Dilithium ML-DSA-87".to_string(),
@@ -250,6 +256,7 @@ impl WalletManager {
 		rng().fill_bytes(&mut seed);
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		keystore::zeroize_bytes(&mut seed);
 		let seed64 =
 			mnemonic_to_seed(mnemonic.clone(), None).map_err(|_| WalletError::KeyGeneration)?;
 		let dilithium_pair =
@@ -465,11 +472,11 @@ impl WalletManager {
 					Ok(wallet_data) => {
 						let address = wallet_data.keypair.try_to_account_id_ss58check()?;
 						Ok(Some(WalletInfo {
-							name: wallet_data.name,
+							name: wallet_data.name.clone(),
 							address,
 							created_at: encrypted_wallet.created_at,
 							key_type: "Dilithium ML-DSA-87".to_string(),
-							derivation_path: wallet_data.derivation_path,
+							derivation_path: wallet_data.derivation_path.clone(),
 						}))
 					},
 					Err(crate::error::QuantusError::Wallet(WalletError::InvalidPassword)) => {
@@ -489,7 +496,7 @@ impl WalletManager {
 					Ok(wallet_data) => {
 						let address = wallet_data.keypair.try_to_account_id_ss58check()?;
 						Ok(Some(WalletInfo {
-							name: wallet_data.name,
+							name: wallet_data.name.clone(),
 							address,
 							created_at: encrypted_wallet.created_at,
 							key_type: "Dilithium ML-DSA-87".to_string(),
@@ -574,9 +581,8 @@ pub fn load_keypair_from_wallet(
 ) -> Result<QuantumKeyPair> {
 	let wallet_manager = WalletManager::new()?;
 	let wallet_password = password::get_wallet_password(wallet_name, password, password_file)?;
-	let wallet_data = wallet_manager.load_wallet(wallet_name, &wallet_password)?;
-	let keypair = wallet_data.keypair;
-	Ok(keypair)
+	let mut wallet_data = wallet_manager.load_wallet(wallet_name, &wallet_password)?;
+	Ok(wallet_data.take_keypair())
 }
 
 #[cfg(test)]
@@ -784,7 +790,8 @@ mod tests {
 		assert!(ss58_address.len() >= 47, "SS58 address should be at least 47 characters");
 
 		// Test round-trip conversion
-		let converted_account_bytes = keystore::QuantumKeyPair::ss58_to_account_id(&ss58_address);
+		let converted_account_bytes = keystore::QuantumKeyPair::ss58_to_account_id(&ss58_address)
+			.expect("valid SS58 should decode");
 		let account_bytes: &[u8] = account_id.as_ref();
 		assert_eq!(converted_account_bytes, account_bytes);
 	}
