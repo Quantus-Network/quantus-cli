@@ -302,7 +302,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	// Calculate total available (only unspent)
 	let mut total_available: u128 = 0;
 	for t in &unspent_transfers {
-		total_available += parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
+		let amount = parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
+		total_available = checked_add_amount(total_available, amount, "total available transfers")?;
 	}
 
 	// Determine amount to withdraw
@@ -331,7 +332,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			break;
 		}
 		selected_transfers.push(t);
-		selected_total += amt;
+		selected_total = checked_add_amount(selected_total, amt, "selected transfers")?;
 	}
 
 	if config.dry_run {
@@ -496,8 +497,10 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		let (block_hash, tx_hash, transfer_events) =
 			submit_and_get_events(&quantus_client, aggregated_proof, bins_dir).await?;
 
-		let batch_amount: u128 = transfer_events.iter().map(|e| e.amount).sum();
-		total_withdrawn += batch_amount;
+		let batch_amount = transfer_events.iter().try_fold(0_u128, |acc, e| {
+			checked_add_amount(acc, e.amount, "batch withdrawal events")
+		})?;
+		total_withdrawn = checked_add_amount(total_withdrawn, batch_amount, "total withdrawn")?;
 
 		progress.on_batch_submitted(batch_idx + 1, batches.len(), batch_amount);
 
@@ -567,7 +570,7 @@ pub async fn query_pending_transfers(
 		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
 		let transfer_count = parse_transfer_count(&t.transfer_count, &ctx)?;
 
-		total_available += amount;
+		total_available = checked_add_amount(total_available, amount, "pending transfers")?;
 
 		pending.push(PendingTransfer {
 			block_height: t.block_height,
@@ -620,7 +623,7 @@ pub async fn query_pending_transfers_for_address(
 		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
 		let transfer_count = parse_transfer_count(&t.transfer_count, &ctx)?;
 
-		total_available += amount;
+		total_available = checked_add_amount(total_available, amount, "pending transfers")?;
 
 		pending.push(PendingTransfer {
 			block_height: t.block_height,
@@ -639,6 +642,15 @@ pub async fn query_pending_transfers_for_address(
 // ============================================================================
 // Internal Helper Functions
 // ============================================================================
+
+fn checked_add_amount(acc: u128, amount: u128, context: &str) -> Result<u128> {
+	acc.checked_add(amount).ok_or_else(|| {
+		CollectRewardsError::from(format!(
+			"Transfer amount overflow while accumulating {}",
+			context
+		))
+	})
+}
 
 /// Parse a transfer amount string to u128
 fn parse_transfer_amount(amount_str: &str, context: &str) -> Result<u128> {
@@ -1070,6 +1082,18 @@ mod tests {
 		let err = CollectRewardsError::from("test error".to_string());
 		assert_eq!(err.message, "test error");
 		assert_eq!(format!("{}", err), "test error");
+	}
+
+	#[test]
+	fn checked_add_amount_rejects_indexer_overflow() {
+		let err = checked_add_amount(u128::MAX, 2, "pending transfers")
+			.expect_err("untrusted transfer totals must not wrap on overflow");
+		assert!(
+			err.message.contains("overflow"),
+			"unexpected overflow error: {}",
+			err.message
+		);
+		assert_eq!(checked_add_amount(10, 5, "pending transfers").unwrap(), 15);
 	}
 
 	#[test]
