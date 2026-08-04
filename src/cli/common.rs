@@ -88,6 +88,22 @@ fn tx_status_watch_timeout_secs(target_stage: TransactionStage) -> u64 {
 	}
 }
 
+/// How long to wait for the next status update.
+///
+/// A short inactivity timeout detects stalled streams before inclusion. After a
+/// transaction is in a best block and we are waiting for PoW finalization, silent
+/// gaps can exceed that inactivity window, so only the overall watch deadline applies.
+fn next_status_wait_secs(remaining_watch_secs: u64, apply_inactivity_timeout: bool) -> u64 {
+	if remaining_watch_secs == 0 {
+		return 0;
+	}
+	if apply_inactivity_timeout {
+		remaining_watch_secs.min(TX_STATUS_INACTIVITY_TIMEOUT_SECS)
+	} else {
+		remaining_watch_secs
+	}
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum WatchedTxEvent {
 	Validated,
@@ -100,7 +116,10 @@ enum WatchedTxEvent {
 	Dropped(String),
 	StreamError(String),
 	StreamEnded,
-	StreamTimedOut,
+	/// No status updates within the short inactivity window.
+	InactivityTimedOut { timeout_secs: u64 },
+	/// Overall inclusion/finalization deadline elapsed.
+	WatchDeadlineTimedOut { elapsed_secs: u64 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,11 +157,16 @@ fn describe_watched_tx_event(
 			"Transaction status stream ended before the transaction was {}",
 			target_stage.status_label()
 		))),
-		WatchedTxEvent::StreamTimedOut => Err(crate::error::QuantusError::NetworkError(format!(
-			"Transaction status stream timed out after {} seconds without updates before the transaction was {}",
-			TX_STATUS_INACTIVITY_TIMEOUT_SECS,
-			target_stage.status_label()
-		))),
+		WatchedTxEvent::InactivityTimedOut { timeout_secs } =>
+			Err(crate::error::QuantusError::NetworkError(format!(
+				"Transaction status stream timed out after {timeout_secs} seconds without updates before the transaction was {}",
+				target_stage.status_label()
+			))),
+		WatchedTxEvent::WatchDeadlineTimedOut { elapsed_secs } =>
+			Err(crate::error::QuantusError::NetworkError(format!(
+				"Timed out after waiting {elapsed_secs} seconds for the transaction to be {}",
+				target_stage.status_label()
+			))),
 	}
 }
 
@@ -672,18 +696,23 @@ async fn wait_tx_inclusion(
 	};
 
 	let watch_timeout_secs = tx_status_watch_timeout_secs(target_stage);
+	// After best-block inclusion while targeting finalization, PoW can be silent for
+	// longer than the inactivity window; only the overall deadline should abort then.
+	let mut waiting_for_finalization = false;
 
 	loop {
 		let elapsed_before_wait = start_time.elapsed().as_secs();
 		let remaining_watch_secs = watch_timeout_secs.saturating_sub(elapsed_before_wait);
-		let (next_event, elapsed_secs) = if remaining_watch_secs == 0 {
-			(WatchedTxEvent::StreamTimedOut, elapsed_before_wait)
+		let apply_inactivity_timeout = !waiting_for_finalization;
+		let wait_secs = next_status_wait_secs(remaining_watch_secs, apply_inactivity_timeout);
+		let (next_event, elapsed_secs) = if wait_secs == 0 {
+			(
+				WatchedTxEvent::WatchDeadlineTimedOut { elapsed_secs: elapsed_before_wait },
+				elapsed_before_wait,
+			)
 		} else {
 			let next_status = tokio::time::timeout(
-				std::time::Duration::from_secs(std::cmp::min(
-					TX_STATUS_INACTIVITY_TIMEOUT_SECS,
-					remaining_watch_secs,
-				)),
+				std::time::Duration::from_secs(wait_secs),
 				tx_progress.next(),
 			)
 			.await;
@@ -709,6 +738,9 @@ async fn wait_tx_inclusion(
 						TxStatus::Broadcasted => WatchedTxEvent::Broadcasted,
 						TxStatus::NoLongerInBestBlock => {
 							execution_success_checked_for = None;
+							// Reorged out of best block; resume inactivity protection until
+							// we see inclusion again.
+							waiting_for_finalization = false;
 							WatchedTxEvent::NoLongerInBestBlock
 						},
 						TxStatus::InBestBlock(tx_in_block) => {
@@ -724,7 +756,12 @@ async fn wait_tx_inclusion(
 							)
 							.await
 							{
-								std::ops::ControlFlow::Continue(()) => continue,
+								std::ops::ControlFlow::Continue(()) => {
+									if target_stage == TransactionStage::Finalized {
+										waiting_for_finalization = true;
+									}
+									continue;
+								},
 								std::ops::ControlFlow::Break(result) => return result,
 							}
 						},
@@ -752,7 +789,18 @@ async fn wait_tx_inclusion(
 				},
 				Ok(Some(Err(err))) => WatchedTxEvent::StreamError(err.to_string()),
 				Ok(None) => WatchedTxEvent::StreamEnded,
-				Err(_) => WatchedTxEvent::StreamTimedOut,
+				Err(_) => {
+					if apply_inactivity_timeout &&
+						wait_secs == TX_STATUS_INACTIVITY_TIMEOUT_SECS &&
+						remaining_watch_secs > TX_STATUS_INACTIVITY_TIMEOUT_SECS
+					{
+						WatchedTxEvent::InactivityTimedOut {
+							timeout_secs: TX_STATUS_INACTIVITY_TIMEOUT_SECS,
+						}
+					} else {
+						WatchedTxEvent::WatchDeadlineTimedOut { elapsed_secs }
+					}
+				},
 			};
 			(next_event, elapsed_secs)
 		};
@@ -1008,12 +1056,32 @@ mod tests {
 			describe_watched_tx_event(WatchedTxEvent::StreamEnded, TransactionStage::Included,)
 				.is_err()
 		);
-		let timeout_err =
-			describe_watched_tx_event(WatchedTxEvent::StreamTimedOut, TransactionStage::Included)
-				.expect_err("silent subscription must time out instead of waiting forever");
+		let inactivity_err = describe_watched_tx_event(
+			WatchedTxEvent::InactivityTimedOut {
+				timeout_secs: TX_STATUS_INACTIVITY_TIMEOUT_SECS,
+			},
+			TransactionStage::Included,
+		)
+		.expect_err("silent subscription must time out instead of waiting forever");
 		assert!(
-			timeout_err.to_string().contains("timed out"),
-			"unexpected timeout error: {timeout_err}"
+			inactivity_err.to_string().contains("without updates") &&
+				inactivity_err
+					.to_string()
+					.contains(&TX_STATUS_INACTIVITY_TIMEOUT_SECS.to_string()),
+			"unexpected inactivity error: {inactivity_err}"
+		);
+
+		let deadline_err = describe_watched_tx_event(
+			WatchedTxEvent::WatchDeadlineTimedOut { elapsed_secs: TX_STATUS_FINALIZED_TIMEOUT_SECS },
+			TransactionStage::Finalized,
+		)
+		.expect_err("overall finalized deadline must be an error");
+		let deadline_msg = deadline_err.to_string();
+		assert!(
+			deadline_msg.contains("Timed out after waiting") &&
+				deadline_msg.contains(&TX_STATUS_FINALIZED_TIMEOUT_SECS.to_string()) &&
+				!deadline_msg.contains("without updates"),
+			"overall deadline must not be reported as the inactivity window: {deadline_msg}"
 		);
 	}
 
@@ -1032,6 +1100,23 @@ mod tests {
 			assert!(TX_STATUS_INACTIVITY_TIMEOUT_SECS > 0);
 			assert!(TX_STATUS_INCLUDED_TIMEOUT_SECS < TX_STATUS_FINALIZED_TIMEOUT_SECS);
 		}
+	}
+
+	#[test]
+	fn finalization_wait_does_not_use_short_inactivity_timeout() {
+		// Before inclusion, keep the short inactivity cap.
+		assert_eq!(
+			next_status_wait_secs(TX_STATUS_FINALIZED_TIMEOUT_SECS, true),
+			TX_STATUS_INACTIVITY_TIMEOUT_SECS
+		);
+		// After best-block inclusion while waiting for PoW finalization, allow the
+		// full remaining overall deadline so silent finality gaps do not abort early.
+		assert_eq!(
+			next_status_wait_secs(TX_STATUS_FINALIZED_TIMEOUT_SECS, false),
+			TX_STATUS_FINALIZED_TIMEOUT_SECS
+		);
+		assert_eq!(next_status_wait_secs(12, false), 12);
+		assert_eq!(next_status_wait_secs(0, false), 0);
 	}
 
 	#[test]
