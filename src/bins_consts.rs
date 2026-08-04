@@ -3,6 +3,10 @@
 /// Shared by `build.rs` and `crate::bins` via `include!`.
 const VERSION_MARKER: &str = ".quantus-cli-version";
 
+/// Filename of the manifest binding generated circuit artifacts to hashes and sizing.
+/// Shared by `build.rs` and `crate::bins` via `include!`.
+const MANIFEST_FILE: &str = "manifest.json";
+
 /// Number of leaf proofs aggregated into a single batch.
 ///
 /// 7 is optimal for mobile devices: fits in degree_bits=15 (~1.5 GB peak memory).
