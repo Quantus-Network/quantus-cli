@@ -341,7 +341,9 @@ pub async fn get_fresh_nonce_with_client(
 }
 
 /// Get incremented nonce for retry scenarios from the latest block using existing QuantusClient
-/// This is useful when a transaction fails but the chain doesn't update the nonce
+/// This is useful when a transaction fails but the chain doesn't update the nonce.
+/// Not used by `submit_transaction` (auto nonce-bump retry removed); kept for intentional callers.
+#[allow(dead_code)]
 pub async fn get_incremented_nonce_with_client(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
@@ -373,6 +375,30 @@ pub async fn get_incremented_nonce_with_client(
 	Ok(incremented_nonce)
 }
 
+/// Whether a formatted submission error may trigger automatic resubmit that bumps
+/// the nonce and re-signs the same call.
+///
+/// Always `false`. Matching English substrings from untrusted RPC text is imprecise,
+/// and bumping the nonce without proving the prior extrinsic was rejected can
+/// duplicate non-idempotent transactions. Bad-signature / Invalid Transaction /
+/// pool / ambiguous errors must not be auto-retried this way.
+#[cfg_attr(not(test), allow(dead_code))]
+fn is_retryable_submission_error(error_msg: &str) -> bool {
+	// Categories that were previously (incorrectly) treated as transient.
+	const UNSAFE_OR_AMBIGUOUS: &[&str] = &[
+		"Transaction has a bad signature",
+		"Invalid Transaction",
+		"Priority is too low",
+		"Transaction is outdated",
+		"Transaction is temporarily banned",
+	];
+	if UNSAFE_OR_AMBIGUOUS.iter().any(|needle| error_msg.contains(needle)) {
+		return false;
+	}
+	// Unknown / ambiguous formatted errors are also not safe for nonce-bump retry.
+	false
+}
+
 /// Submit transaction with optional finalization check
 ///
 /// By default, returns immediately after the node accepts the transaction submission.
@@ -392,151 +418,105 @@ where
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
 
-	// Retry logic with automatic nonce management
-	let mut attempt = 0;
-	let mut current_nonce = None;
+	// Get a fresh nonce from the best block. Do not automatically resubmit the same
+	// call with a different nonce after a submission error: without authoritative
+	// confirmation that the prior extrinsic was rejected, doing so can duplicate
+	// non-idempotent transactions.
+	let nonce = get_fresh_nonce_with_client(quantus_client, from_keypair).await?;
+	log_verbose!("🔢 Using fresh nonce from best block: {}", nonce);
 
-	loop {
-		attempt += 1;
-		// Get fresh nonce for each attempt, or increment if we have a previous nonce
-		let nonce = if let Some(prev_nonce) = current_nonce {
-			// After first failure, try with incremented nonce
-			let incremented_nonce =
-				get_incremented_nonce_with_client(quantus_client, from_keypair, prev_nonce).await?;
-			log_verbose!(
-				"🔢 Using incremented nonce from best block: {} (previous: {})",
-				incremented_nonce,
-				prev_nonce
-			);
-			incremented_nonce
-		} else {
-			// First attempt - get fresh nonce from best block
-			let fresh_nonce = get_fresh_nonce_with_client(quantus_client, from_keypair).await?;
-			log_verbose!("🔢 Using fresh nonce from best block: {}", fresh_nonce);
-			fresh_nonce
-		};
-		current_nonce = Some(nonce);
+	// Get current block for logging using latest block hash
+	let latest_block_hash = quantus_client.get_latest_block().await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {e:?}"))
+	})?;
 
-		// Get current block for logging using latest block hash
-		let latest_block_hash = quantus_client.get_latest_block().await.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Failed to get latest block: {e:?}"))
+	log_verbose!("🔗 Latest block hash: {:?}", latest_block_hash);
+
+	// Create custom params with fresh nonce and optional tip
+	use subxt::config::DefaultExtrinsicParamsBuilder;
+	let mut params_builder = DefaultExtrinsicParamsBuilder::new()
+		.mortal(256) // Value higher than our finalization - TODO: should come from config
+		.nonce(nonce);
+
+	if let Some(tip_amount) = tip {
+		params_builder = params_builder.tip(tip_amount);
+		log_verbose!("💰 Using tip: {} to increase priority", tip_amount);
+	} else {
+		log_verbose!("💰 No tip specified");
+	}
+
+	// Try to get chain parameters from the client
+	// let genesis_hash = quantus_client.get_genesis_hash().await?;
+	// let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
+
+	// log_verbose!("🔍 Chain parameters:");
+	// log_verbose!("   Genesis hash: {:?}", genesis_hash);
+	// log_verbose!("   Spec version: {}", spec_version);
+	// log_verbose!("   Transaction version: {}", transaction_version);
+
+	// For now, just use the default params
+	let params = params_builder.build();
+
+	// Log transaction parameters for debugging
+	log_verbose!("🔍 Transaction parameters:");
+	log_verbose!("   Nonce: {}", nonce);
+	log_verbose!("   Tip: {:?}", tip);
+	log_verbose!("   Latest block hash: {:?}", latest_block_hash);
+
+	// Get and log era information
+	log_verbose!("   Era: Using default era from SubXT");
+	log_verbose!("   Genesis hash: Using default from SubXT");
+	log_verbose!("   Spec version: Using default from SubXT");
+
+	// Log additional debugging info
+	log_verbose!("🔍 Additional debugging:");
+	log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
+
+	let metadata = quantus_client.client().metadata();
+	let encoded_call =
+		<_ as subxt::tx::Payload>::encode_call_data(&call, &metadata).map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!("Failed to encode call: {:?}", e))
 		})?;
+	crate::log_verbose!("📝 Encoded call: 0x{}", hex::encode(&encoded_call));
+	crate::log_print!("📝 Encoded call size: {} bytes", encoded_call.len());
 
-		log_verbose!("🔗 Latest block hash: {:?}", latest_block_hash);
+	if execution_mode.should_watch_transaction() {
+		match quantus_client
+			.client()
+			.tx()
+			.sign_and_submit_then_watch(&call, &signer, params)
+			.await
+		{
+			Ok(mut tx_progress) => {
+				crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
 
-		// Create custom params with fresh nonce and optional tip
-		use subxt::config::DefaultExtrinsicParamsBuilder;
-		let mut params_builder = DefaultExtrinsicParamsBuilder::new()
-			.mortal(256) // Value higher than our finalization - TODO: should come from config
-			.nonce(nonce);
+				let tx_hash = tx_progress.extrinsic_hash();
 
-		if let Some(tip_amount) = tip {
-			params_builder = params_builder.tip(tip_amount);
-			log_verbose!("💰 Using tip: {} to increase priority", tip_amount);
-		} else {
-			log_verbose!("💰 No tip specified");
+				wait_tx_inclusion(
+					&mut tx_progress,
+					quantus_client.client(),
+					&tx_hash,
+					execution_mode.transaction_stage(),
+				)
+				.await?;
+
+				Ok(tx_hash)
+			},
+			Err(e) => {
+				log_error!("❌ Failed to submit transaction: {e:?}");
+				Err(e.into())
+			},
 		}
-
-		// Try to get chain parameters from the client
-		// let genesis_hash = quantus_client.get_genesis_hash().await?;
-		// let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
-
-		// log_verbose!("🔍 Chain parameters:");
-		// log_verbose!("   Genesis hash: {:?}", genesis_hash);
-		// log_verbose!("   Spec version: {}", spec_version);
-		// log_verbose!("   Transaction version: {}", transaction_version);
-
-		// For now, just use the default params
-		let params = params_builder.build();
-
-		// Log transaction parameters for debugging
-		log_verbose!("🔍 Transaction parameters:");
-		log_verbose!("   Nonce: {}", nonce);
-		log_verbose!("   Tip: {:?}", tip);
-		log_verbose!("   Latest block hash: {:?}", latest_block_hash);
-
-		// Get and log era information
-		log_verbose!("   Era: Using default era from SubXT");
-		log_verbose!("   Genesis hash: Using default from SubXT");
-		log_verbose!("   Spec version: Using default from SubXT");
-
-		// Log additional debugging info
-		log_verbose!("🔍 Additional debugging:");
-		log_verbose!("   Call type: {:?}", std::any::type_name::<Call>());
-
-		let metadata = quantus_client.client().metadata();
-		let encoded_call =
-			<_ as subxt::tx::Payload>::encode_call_data(&call, &metadata).map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!("Failed to encode call: {:?}", e))
-			})?;
-		crate::log_verbose!("📝 Encoded call: 0x{}", hex::encode(&encoded_call));
-		crate::log_print!("📝 Encoded call size: {} bytes", encoded_call.len());
-
-		if execution_mode.should_watch_transaction() {
-			match quantus_client
-				.client()
-				.tx()
-				.sign_and_submit_then_watch(&call, &signer, params)
-				.await
-			{
-				Ok(mut tx_progress) => {
-					crate::log_verbose!("📋 Transaction submitted: {:?}", tx_progress);
-
-					let tx_hash = tx_progress.extrinsic_hash();
-
-					wait_tx_inclusion(
-						&mut tx_progress,
-						quantus_client.client(),
-						&tx_hash,
-						execution_mode.transaction_stage(),
-					)
-					.await?;
-
-					return Ok(tx_hash);
-				},
-				Err(e) => {
-					let error_msg = format!("{e:?}");
-
-					// Check if it's a retryable error
-					let is_retryable = error_msg.contains("Priority is too low") ||
-						error_msg.contains("Transaction is outdated") ||
-						error_msg.contains("Transaction is temporarily banned") ||
-						error_msg.contains("Transaction has a bad signature") ||
-						error_msg.contains("Invalid Transaction");
-
-					if is_retryable && attempt < 5 {
-						log_verbose!(
-							"⚠️  Transaction error detected (attempt {}/5): {}",
-							attempt,
-							error_msg
-						);
-
-						// Exponential backoff: 2s, 4s, 8s, 16s
-						let delay = std::cmp::min(2u64.pow(attempt as u32), 16);
-						log_verbose!("⏳ Waiting {} seconds before retry...", delay);
-						tokio::time::sleep(tokio::time::Duration::from_secs(delay)).await;
-						continue;
-					} else {
-						log_verbose!("❌ Final error after {} attempts: {}", attempt, error_msg);
-						return Err(crate::error::QuantusError::NetworkError(format!(
-							"Failed to submit transaction: {e:?}"
-						)));
-					}
-				},
-			}
-		} else {
-			match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
-				Ok(tx_hash) => {
-					crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
-					return Ok(tx_hash);
-				},
-				Err(e) => {
-					log_error!("❌ Failed to submit transaction: {e:?}");
-					return Err(crate::error::QuantusError::NetworkError(format!(
-						"Failed to submit transaction: {e:?}"
-					)));
-				},
-			}
+	} else {
+		match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
+			Ok(tx_hash) => {
+				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+				Ok(tx_hash)
+			},
+			Err(e) => {
+				log_error!("❌ Failed to submit transaction: {e:?}");
+				Err(e.into())
+			},
 		}
 	}
 }
@@ -602,9 +582,7 @@ where
 			},
 			Err(e) => {
 				log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
-				Err(crate::error::QuantusError::NetworkError(format!(
-					"Failed to submit transaction with nonce {nonce}: {e:?}"
-				)))
+				Err(e.into())
 			},
 		}
 	} else {
@@ -615,9 +593,7 @@ where
 			},
 			Err(e) => {
 				log_error!("❌ Failed to submit transaction: {e:?}");
-				Err(crate::error::QuantusError::NetworkError(format!(
-					"Failed to submit transaction: {e:?}"
-				)))
+				Err(e.into())
 			},
 		}
 	}
@@ -954,5 +930,28 @@ mod tests {
 		}
 
 		assert_eq!(require_extrinsic_index(Some(3)).unwrap(), 3);
+	}
+
+	#[test]
+	fn unsafe_submission_errors_are_not_retryable() {
+		assert!(!is_retryable_submission_error("Transaction has a bad signature"));
+		assert!(!is_retryable_submission_error(
+			"RpcError: Invalid Transaction: Transaction has a bad signature"
+		));
+		assert!(!is_retryable_submission_error("Invalid Transaction"));
+		assert!(!is_retryable_submission_error(
+			"Failed to submit transaction: Invalid Transaction"
+		));
+		assert!(!is_retryable_submission_error("Priority is too low"));
+		assert!(!is_retryable_submission_error("Transaction is outdated"));
+		assert!(!is_retryable_submission_error("Transaction is temporarily banned"));
+	}
+
+	#[test]
+	fn ambiguous_submission_errors_are_not_retryable() {
+		assert!(!is_retryable_submission_error("connection reset by peer"));
+		assert!(!is_retryable_submission_error("timeout waiting for response"));
+		assert!(!is_retryable_submission_error(""));
+		assert!(!is_retryable_submission_error("some unknown node error"));
 	}
 }
