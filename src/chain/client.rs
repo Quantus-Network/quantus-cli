@@ -52,14 +52,40 @@ pub struct QuantusClient {
 }
 
 impl QuantusClient {
+	/// Return a URL suitable for logs and user-facing diagnostics by removing credentials.
+	fn sanitize_url_for_diagnostics(url: &str) -> String {
+		let Some(scheme_end) = url.find("://") else {
+			return url.to_string();
+		};
+
+		let authority_start = scheme_end + 3;
+		let authority_end = url[authority_start..]
+			.find(|c| matches!(c, '/' | '?' | '#'))
+			.map(|offset| authority_start + offset)
+			.unwrap_or(url.len());
+		let authority = &url[authority_start..authority_end];
+
+		if let Some(userinfo_end) = authority.rfind('@') {
+			format!(
+				"{}{}{}",
+				&url[..authority_start],
+				&authority[userinfo_end + 1..],
+				&url[authority_end..]
+			)
+		} else {
+			url.to_string()
+		}
+	}
+
 	/// Create a new QuantusClient by connecting to the specified node URL
 	pub async fn new(node_url: &str) -> crate::error::Result<Self> {
-		log_verbose!("🔗 Connecting to Quantus node: {}", node_url);
+		let display_node_url = Self::sanitize_url_for_diagnostics(node_url);
+		log_verbose!("🔗 Connecting to Quantus node: {}", display_node_url);
 
 		// Validate URL format and provide helpful error messages
 		if !node_url.starts_with("ws://") && !node_url.starts_with("wss://") {
 			return Err(QuantusError::NetworkError(format!(
-                "Invalid WebSocket URL: '{node_url}'. URL must start with 'ws://' (unsecured) or 'wss://' (secured)"
+                "Invalid WebSocket URL: '{display_node_url}'. URL must start with 'ws://' (unsecured) or 'wss://' (secured)"
             )));
 		}
 
@@ -73,16 +99,16 @@ impl QuantusClient {
             .await
             .map_err(|e| {
                 // Provide more helpful error messages for common issues
-                let error_str = format!("{e:?}");
+                let error_str = format!("{e:?}").replace(node_url, &display_node_url);
                 let error_msg = if error_str.contains("TimedOut") || error_str.contains("timed out") {
                     if node_url.starts_with("ws://") {
                         format!(
                             "Connection timed out. Try using 'wss://{}' instead of '{}'",
-                            node_url.strip_prefix("ws://").unwrap_or(node_url),
-                            node_url
+                            display_node_url.strip_prefix("ws://").unwrap_or(&display_node_url),
+                            display_node_url
                         )
                     } else {
-                        format!("Connection timed out. Please check if the node is running and accessible at: {node_url}")
+                        format!("Connection timed out. Please check if the node is running and accessible at: {display_node_url}")
                     }
                 } else if error_str.contains("HTTP") {
                     format!("HTTP error: {error_str}. This might indicate the node doesn't support WebSocket connections")
@@ -113,7 +139,7 @@ impl QuantusClient {
 		crate::config::validate_runtime_version_value(&runtime_version).map_err(|e| {
 			match e {
 				QuantusError::NetworkError(msg) => QuantusError::NetworkError(format!(
-					"{msg} (from {node_url})"
+					"{msg} (from {display_node_url})"
 				)),
 				other => other,
 			}
@@ -291,5 +317,61 @@ impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::DilithiumPai
 				signer_payload,
 			);
 		qp_dilithium_crypto::types::DilithiumSignatureScheme::Dilithium(signature_with_public)
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[tokio::test]
+	async fn quantus_client_new_redacts_userinfo_in_invalid_url_error() {
+		let secret = format!(
+			"rpc-token-{}-{}",
+			std::process::id(),
+			std::time::SystemTime::now()
+				.duration_since(std::time::UNIX_EPOCH)
+				.expect("clock must be after unix epoch")
+				.as_nanos()
+		);
+		let attacker_controlled_url =
+			format!("https://api-user:{secret}@rpc.example.invalid/ws");
+
+		let error = match QuantusClient::new(&attacker_controlled_url).await {
+			Ok(_) => panic!("non-WebSocket scheme must fail"),
+			Err(error) => error,
+		};
+		let diagnostic = error.to_string();
+
+		assert!(
+			!diagnostic.contains(&secret),
+			"NetworkError must not expose URL userinfo; diagnostic was: {diagnostic}"
+		);
+		assert!(
+			!diagnostic.contains(&format!("api-user:{secret}")),
+			"NetworkError must not expose raw credentialed URL; diagnostic was: {diagnostic}"
+		);
+		assert!(
+			diagnostic.contains("rpc.example.invalid"),
+			"sanitized host should remain visible; diagnostic was: {diagnostic}"
+		);
+	}
+
+	#[test]
+	fn sanitize_url_for_diagnostics_strips_userinfo() {
+		assert_eq!(
+			QuantusClient::sanitize_url_for_diagnostics(
+				"wss://user:pass@rpc.example.com/path?q=1"
+			),
+			"wss://rpc.example.com/path?q=1"
+		);
+		assert_eq!(
+			QuantusClient::sanitize_url_for_diagnostics("ws://token@localhost:9944"),
+			"ws://localhost:9944"
+		);
+		assert_eq!(
+			QuantusClient::sanitize_url_for_diagnostics("wss://rpc.example.com"),
+			"wss://rpc.example.com"
+		);
 	}
 }
