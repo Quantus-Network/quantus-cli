@@ -18,7 +18,12 @@ use qp_zk_circuits_common::{
 	utils::{digest_to_bytes, BytesDigest},
 	zk_merkle::SIBLINGS_PER_LEVEL,
 };
-use std::path::Path;
+use std::{
+	mem::size_of,
+	path::Path,
+	ptr,
+	sync::atomic::{compiler_fence, Ordering},
+};
 
 /// Native asset id for QTU token
 pub const NATIVE_ASSET_ID: u32 = 0;
@@ -50,6 +55,30 @@ impl From<String> for WormholeLibError {
 	fn from(message: String) -> Self {
 		Self { message }
 	}
+}
+
+fn zeroize_bytes(bytes: &mut [u8]) {
+	for byte in bytes {
+		unsafe { ptr::write_volatile(byte, 0) };
+	}
+	compiler_fence(Ordering::SeqCst);
+}
+
+fn zeroize_bytes_digest(digest: &mut BytesDigest) {
+	let ptr = ptr::addr_of_mut!(*digest).cast::<u8>();
+	for offset in 0..size_of::<BytesDigest>() {
+		unsafe { ptr.add(offset).write_volatile(0) };
+	}
+	compiler_fence(Ordering::SeqCst);
+}
+
+#[allow(invalid_reference_casting)]
+fn zeroize_input_secret(input: &ProofGenerationInput) {
+	let ptr = ptr::addr_of!(input.secret).cast_mut().cast::<u8>();
+	for offset in 0..input.secret.len() {
+		unsafe { ptr.add(offset).write_volatile(0) };
+	}
+	compiler_fence(Ordering::SeqCst);
 }
 
 /// Input data for generating a wormhole proof.
@@ -189,7 +218,7 @@ pub fn generate_proof(
 	common_bin_path: &Path,
 ) -> Result<ProofGenerationOutput> {
 	// Convert secret to BytesDigest
-	let secret_digest: BytesDigest = input
+	let mut secret_digest: BytesDigest = input
 		.secret
 		.try_into()
 		.map_err(|e| WormholeLibError::from(format!("Invalid secret: {:?}", e)))?;
@@ -205,6 +234,8 @@ pub fn generate_proof(
 
 	// Verify the wormhole address matches what we computed from the secret
 	if *unspendable_bytes != input.wormhole_address {
+		zeroize_bytes_digest(&mut secret_digest);
+		zeroize_input_secret(input);
 		return Err(WormholeLibError::from(
 			"Wormhole address doesn't match the computed unspendable account from secret"
 				.to_string(),
@@ -243,6 +274,7 @@ pub fn generate_proof(
 		zk_merkle_siblings: input.zk_merkle_siblings.clone(),
 		zk_merkle_positions: input.zk_merkle_positions.clone(),
 	};
+	zeroize_bytes_digest(&mut secret_digest);
 
 	let public = PublicCircuitInputs {
 		asset_id: input.asset_id,
@@ -268,22 +300,30 @@ pub fn generate_proof(
 		block_number: input.block_number,
 	};
 
-	let circuit_inputs = CircuitInputs { public, private };
+	let mut circuit_inputs = CircuitInputs { public, private };
 
 	// Leaf prover is built from the canonical circuit config (no longer loads prover.bin).
 	// Paths are kept for API compatibility with callers that still pass bin locations.
 	let _ = (prover_bin_path, common_bin_path);
 	let prover = qp_wormhole_prover::build_fresh();
 
-	let prover_with_inputs = prover
-		.commit(&circuit_inputs)
-		.map_err(|e| WormholeLibError::from(format!("Failed to commit inputs: {}", e)))?;
+	let result = (|| -> Result<ProofGenerationOutput> {
+		let prover_with_inputs = prover
+			.commit(&circuit_inputs)
+			.map_err(|e| WormholeLibError::from(format!("Failed to commit inputs: {}", e)))?;
 
-	let proof = prover_with_inputs
-		.prove()
-		.map_err(|e| WormholeLibError::from(format!("Proof generation failed: {}", e)))?;
+		let proof = prover_with_inputs
+			.prove()
+			.map_err(|e| WormholeLibError::from(format!("Proof generation failed: {}", e)))?;
 
-	Ok(ProofGenerationOutput { proof_bytes: proof.to_bytes(), nullifier: *nullifier_bytes })
+		Ok(ProofGenerationOutput { proof_bytes: proof.to_bytes(), nullifier: *nullifier_bytes })
+	})();
+
+	zeroize_bytes_digest(&mut circuit_inputs.private.secret);
+	zeroize_bytes(&mut digest_padded);
+	zeroize_input_secret(input);
+
+	result
 }
 
 #[cfg(test)]
@@ -321,5 +361,56 @@ mod tests {
 		// Should be deterministic
 		let address2 = compute_wormhole_address(&secret).unwrap();
 		assert_eq!(address, address2);
+	}
+
+	fn decode_32(hex_str: &str) -> [u8; 32] {
+		let bytes = hex::decode(hex_str).expect("valid hex fixture");
+		bytes.try_into().expect("fixture is 32 bytes")
+	}
+
+	/// #160105: generate_proof must clear the caller-owned secret after use.
+	#[test]
+	fn secret_is_zeroized_after_successful_wormhole_proof_generation() {
+		let secret = decode_32("4c8587bd422e01d961acdc75e7d66f6761b7af7c9b1864a492f369c9d6724f05");
+		let transfer_count = 4u64;
+		let wormhole_address = compute_wormhole_address(&secret).expect("secret derives address");
+
+		let input = ProofGenerationInput {
+			secret,
+			transfer_count,
+			wormhole_address,
+			input_amount: 100,
+			block_hash: [0u8; 32],
+			block_number: 0,
+			parent_hash: [0u8; 32],
+			state_root: decode_32("ae6e4ff0dca1ef5ede9dccc84365cecfab4e431c6f3086216bc3b819cdf0a893"),
+			extrinsics_root: [0u8; 32],
+			digest: vec![
+				8, 6, 112, 111, 119, 95, 128, 233, 182, 183, 107, 158, 1, 115, 19, 219, 126, 253, 86,
+				30, 208, 176, 70, 21, 45, 180, 229, 9, 62, 91, 4, 6, 53, 245, 52, 48, 38, 123, 225,
+				5, 112, 111, 119, 95, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+				0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 18, 79, 226,
+			],
+			zk_tree_root: [0u8; 32],
+			zk_merkle_siblings: vec![],
+			zk_merkle_positions: vec![],
+			exit_account_1: [0u8; 32],
+			exit_account_2: [0u8; 32],
+			output_amount_1: 0,
+			output_amount_2: 0,
+			volume_fee_bps: VOLUME_FEE_BPS,
+			asset_id: NATIVE_ASSET_ID,
+		};
+
+		let output =
+			generate_proof(&input, Path::new("ignored-prover.bin"), Path::new("ignored-common.bin"))
+				.expect("real wormhole proof generation succeeds");
+
+		assert!(!output.proof_bytes.is_empty(), "the real prover produced a proof");
+		assert_eq!(
+			input.secret, [0u8; 32],
+			"generate_proof must zeroize the caller-owned secret before returning"
+		);
 	}
 }

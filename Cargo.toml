@@ -108,6 +108,7 @@ qp-zk-circuits-common = { version = "3.1.0", default-features = false, features 
 hex = "0.4"
 qp-poseidon-core = "3.0.2"
 qp-wormhole-circuit-builder = { version = "3.1.0" }
+sha2 = "0.10"
 
 [dev-dependencies]
 qp-poseidon-core = "3.0.2"
