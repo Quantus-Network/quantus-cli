@@ -446,9 +446,10 @@ pub fn predict_multisig_address(
 		})
 		.collect();
 
-	// Sort signers for deterministic address (same as runtime does)
+	// Sort and deduplicate signers for deterministic address (same as runtime does)
 	let mut sorted_signers = sp_signers;
 	sorted_signers.sort();
+	sorted_signers.dedup();
 
 	// Build data to hash: pallet_id || sorted_signers || threshold || nonce
 	// IMPORTANT: Must match runtime encoding exactly
@@ -1104,7 +1105,7 @@ async fn handle_create_multisig(
 	log_print!("🔐 {} Creating multisig...", "MULTISIG".bright_magenta().bold());
 
 	// Parse signers - convert to AccountId32
-	let signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
+	let mut signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
 		.split(',')
 		.map(|s| s.trim())
 		.map(|addr| {
@@ -1123,6 +1124,14 @@ async fn handle_create_multisig(
 			Ok(subxt::ext::subxt_core::utils::AccountId32::from(bytes))
 		})
 		.collect::<Result<Vec<_>, crate::error::QuantusError>>()?;
+	signer_addresses.sort_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
+	signer_addresses.dedup_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
 
 	log_verbose!("Signers: {} addresses", signer_addresses.len());
 	log_verbose!("Threshold: {}", threshold);
@@ -1263,7 +1272,7 @@ async fn handle_predict_address(
 	log_print!("");
 
 	// Parse signers - convert to AccountId32
-	let signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
+	let mut signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
 		.split(',')
 		.map(|s| s.trim())
 		.map(|addr| {
@@ -1282,6 +1291,14 @@ async fn handle_predict_address(
 			Ok(subxt::ext::subxt_core::utils::AccountId32::from(bytes))
 		})
 		.collect::<Result<Vec<_>, crate::error::QuantusError>>()?;
+	signer_addresses.sort_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
+	signer_addresses.dedup_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
 
 	// Validate inputs
 	if signer_addresses.is_empty() {
@@ -3156,6 +3173,40 @@ mod tests {
 		let addr_bytes: &[u8; 32] = account_id.as_ref();
 		let addr = SpAccountId32::from(*addr_bytes);
 		addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
+	}
+
+	#[test]
+	fn duplicate_signers_do_not_inflate_predicted_multisig_address() {
+		// #160052: prediction must hash the unique sorted signer set.
+		let signer = account(7);
+		let with_dup = predict_multisig_address(vec![signer.clone(), signer.clone()], 2, 0);
+		let unique = predict_multisig_address(vec![signer], 2, 0);
+		assert_eq!(
+			with_dup, unique,
+			"multisig address prediction must ignore duplicate signers"
+		);
+	}
+
+	#[tokio::test]
+	async fn duplicate_signers_threshold_rejected_after_dedup() {
+		// #160052: threshold validated against unique signers, not raw CSV length.
+		let signer_ss58 = ss58(&account(7));
+		let duplicate_csv = format!("{0},{0}", signer_ss58);
+		let result = handle_multisig_command(
+			MultisigCommands::PredictAddress {
+				signers: duplicate_csv,
+				threshold: 2,
+				nonce: 0,
+			},
+			"ws://127.0.0.1:9944",
+			ExecutionMode::default(),
+		)
+		.await;
+		assert!(
+			result.is_err(),
+			"duplicate-only signer sets with threshold 2 must fail local validation: {:?}",
+			result
+		);
 	}
 
 	#[test]
