@@ -4,7 +4,10 @@ use crate::{
 	cli::address_format::QuantusSS58,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
-	wallet::{password::get_mnemonic_from_user, WalletManager, DEFAULT_DERIVATION_PATH},
+	wallet::{
+		password::{get_mnemonic_from_user, reject_cli_password},
+		WalletManager, DEFAULT_DERIVATION_PATH,
+	},
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -286,21 +289,19 @@ pub async fn handle_wallet_command(
 		WalletCommands::Create { name, password, derivation_path, no_derivation } => {
 			log_print!("🔐 Creating new quantum wallet...");
 
+			reject_cli_password(&password)?;
+
 			let wallet_manager = WalletManager::new()?;
 
 			// Choose creation method based on flags
 			let result = if no_derivation {
 				// Use master seed directly (like quantus-node --no-derivation)
-				wallet_manager.create_wallet_no_derivation(&name, password.as_deref()).await
+				wallet_manager.create_wallet_no_derivation(&name, None).await
 			} else if derivation_path == DEFAULT_DERIVATION_PATH {
-				wallet_manager.create_wallet(&name, password.as_deref()).await
+				wallet_manager.create_wallet(&name, None).await
 			} else {
 				wallet_manager
-					.create_wallet_with_derivation_path(
-						&name,
-						password.as_deref(),
-						&derivation_path,
-					)
+					.create_wallet_with_derivation_path(&name, None, &derivation_path)
 					.await
 			};
 

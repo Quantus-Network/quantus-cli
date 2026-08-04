@@ -7,10 +7,13 @@ pub fn get_wallet_password(
 	password: Option<String>,
 	password_file: Option<String>,
 ) -> Result<String> {
-	// Option 1: Use CLI password flag if provided
-	if let Some(pwd) = password {
-		log_verbose!("🔑 Using password from --password flag");
-		return Ok(pwd);
+	// Raw passwords passed through command-line arguments are visible in process
+	// listings and command logs. Use --password-file, QUANTUS_WALLET_PASSWORD,
+	// wallet-specific environment variables, or the masked prompt instead.
+	if password.is_some() {
+		return Err(crate::error::QuantusError::Generic(
+			"Passing wallet passwords with --password/-p is not supported; use --password-file, QUANTUS_WALLET_PASSWORD, or the interactive prompt".to_string(),
+		));
 	}
 
 	// Option 2: Read password from file if provided
@@ -68,4 +71,39 @@ pub fn get_password_from_user(prompt: &str) -> Result<String> {
 		crate::error::QuantusError::Generic(format!("Failed to read password: {e}"))
 	})?;
 	Ok(password)
+}
+
+/// Reject raw `--password`/`-p` values for handlers that bypass [`get_wallet_password`].
+pub fn reject_cli_password(password: &Option<String>) -> Result<()> {
+	if password.is_some() {
+		return Err(crate::error::QuantusError::Generic(
+			"Passing wallet passwords with --password/-p is not supported; use an interactive prompt or a supported non-argv secret source".to_string(),
+		));
+	}
+	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn get_wallet_password_rejects_cli_password_flag() {
+		let err = get_wallet_password("w", Some("secret".into()), None).unwrap_err();
+		let msg = err.to_string();
+		assert!(
+			msg.contains("--password"),
+			"expected unsupported --password message, got: {msg}"
+		);
+	}
+
+	#[test]
+	fn wallet_create_rejects_cli_password() {
+		let err = reject_cli_password(&Some("secret".into())).unwrap_err();
+		let msg = err.to_string();
+		assert!(
+			msg.contains("--password"),
+			"expected unsupported --password message, got: {msg}"
+		);
+	}
 }
