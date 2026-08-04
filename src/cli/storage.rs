@@ -377,6 +377,44 @@ pub async fn show_storage_stats(
 	Ok(())
 }
 
+/// Accumulate a page of storage keys into `total_count` with overflow checks.
+fn accumulate_storage_key_count(total_count: u32, keys_len: usize) -> crate::error::Result<u32> {
+	let keys_count = u32::try_from(keys_len).map_err(|_| {
+		QuantusError::Generic("RPC returned too many storage keys in one page".to_string())
+	})?;
+	total_count.checked_add(keys_count).ok_or_else(|| {
+		QuantusError::Generic("Storage entry count exceeds u32::MAX".to_string())
+	})
+}
+
+/// Decide the next `state_getKeysPaged` start key, rejecting non-advancing cursors.
+///
+/// Returns `Ok(None)` when pagination is complete (short page).
+fn next_storage_pagination_key(
+	start_key: Option<&str>,
+	keys: &[String],
+	page_size: u32,
+) -> crate::error::Result<Option<String>> {
+	let keys_count = u32::try_from(keys.len()).map_err(|_| {
+		QuantusError::Generic("RPC returned too many storage keys in one page".to_string())
+	})?;
+	if keys_count < page_size {
+		return Ok(None);
+	}
+
+	let next_start_key = keys.last().cloned().ok_or_else(|| {
+		QuantusError::Generic("RPC returned an empty full storage key page".to_string())
+	})?;
+	if let Some(current_start_key) = start_key {
+		if next_start_key.as_str() <= current_start_key {
+			return Err(QuantusError::NetworkError(format!(
+				"Storage key pagination did not advance: start_key {current_start_key}, last key {next_start_key}"
+			)));
+		}
+	}
+	Ok(Some(next_start_key))
+}
+
 /// Count storage entries using RPC calls with pagination
 pub async fn count_storage_entries(
 	quantus_client: &crate::chain::client::QuantusClient,
@@ -418,20 +456,13 @@ pub async fn count_storage_entries(
 				))
 			})?;
 
-		let keys_count = keys.len() as u32;
-		total_count += keys_count;
+		total_count = accumulate_storage_key_count(total_count, keys.len())?;
 
-		log_verbose!("📊 Fetched {} keys (total: {})", keys_count, total_count);
+		log_verbose!("📊 Fetched {} keys (total: {})", keys.len(), total_count);
 
-		// If we got less than page_size keys, we're done
-		if keys_count < page_size {
-			break;
-		}
-
-		// Set start_key to the last key for next iteration
-		start_key = keys.last().cloned();
-		if start_key.is_none() {
-			break;
+		match next_storage_pagination_key(start_key.as_deref(), &keys, page_size)? {
+			Some(next) => start_key = Some(next),
+			None => break,
 		}
 	}
 
@@ -818,5 +849,48 @@ fn encode_storage_key(key_value: &str, key_type: &str) -> crate::error::Result<V
 		_ => Err(crate::error::QuantusError::Generic(format!(
 			"Unsupported key type: {key_type}. Supported types: accountid, u64, u128, u32, hex, raw"
 		))),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn accumulate_storage_key_count_rejects_u32_overflow() {
+		let err = accumulate_storage_key_count(u32::MAX, 1)
+			.expect_err("unchecked u32 accumulation must not wrap");
+		assert!(
+			err.to_string().contains("u32::MAX"),
+			"unexpected overflow error: {err}"
+		);
+	}
+
+	#[test]
+	fn next_storage_pagination_key_rejects_non_advancing_cursor() {
+		let page: Vec<String> = (0..1000).map(|i| format!("0x{:04x}", i % 2)).collect();
+		// Full page whose last key equals the prior start_key (malicious/stuck RPC).
+		let stuck_key = page.last().cloned().unwrap();
+		let err = next_storage_pagination_key(Some(&stuck_key), &page, 1000)
+			.expect_err("same-cursor pagination must fail closed");
+		assert!(
+			err.to_string().contains("did not advance"),
+			"unexpected pagination error: {err}"
+		);
+	}
+
+	#[test]
+	fn next_storage_pagination_key_completes_on_short_page() {
+		let page = vec!["0x01".to_string(), "0x02".to_string()];
+		assert_eq!(next_storage_pagination_key(None, &page, 1000).unwrap(), None);
+	}
+
+	#[test]
+	fn next_storage_pagination_key_advances_on_full_page() {
+		let page: Vec<String> = (0..1000).map(|i| format!("0x{i:04x}")).collect();
+		let next = next_storage_pagination_key(Some("0x0000"), &page, 1000)
+			.expect("advancing cursor must succeed")
+			.expect("full page must yield next start key");
+		assert_eq!(next, *page.last().unwrap());
 	}
 }
