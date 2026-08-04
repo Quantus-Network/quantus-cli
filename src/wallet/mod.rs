@@ -193,13 +193,27 @@ impl WalletManager {
 				continue;
 			};
 
-			// Create wallet info using stored public address
-			let wallet_info = WalletInfo {
-				name: encrypted_wallet.name,
-				address: encrypted_wallet.address, // Address is stored unencrypted
-				created_at: encrypted_wallet.created_at,
-				key_type: "Dilithium ML-DSA-87".to_string(),
-				derivation_path: "[Encrypted]".to_string(), // Derivation path is encrypted
+			// Only expose an address when it can be authenticated via empty-password
+			// decrypt (developer / no-password wallets). Never trust the plaintext
+			// envelope address for password-protected wallets.
+			let wallet_info = match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
+				Ok(wallet_data) => WalletInfo {
+					name: wallet_data.name,
+					address: wallet_data.keypair.to_account_id_ss58check(),
+					created_at: encrypted_wallet.created_at,
+					key_type: "Dilithium ML-DSA-87".to_string(),
+					derivation_path: "[Encrypted]".to_string(),
+				},
+				Err(crate::error::QuantusError::Wallet(
+					WalletError::InvalidPassword | WalletError::Integrity(_),
+				)) => WalletInfo {
+					name,
+					address: "[Encrypted]".to_string(),
+					created_at: encrypted_wallet.created_at,
+					key_type: "Dilithium ML-DSA-87".to_string(),
+					derivation_path: "[Encrypted]".to_string(),
+				},
+				Err(_) => continue,
 			};
 			wallets.push(wallet_info);
 		}
@@ -458,26 +472,41 @@ impl WalletManager {
 							derivation_path: wallet_data.derivation_path,
 						}))
 					},
-					Err(_) => {
-						// Wrong password, return basic info
+					Err(crate::error::QuantusError::Wallet(WalletError::InvalidPassword)) => {
+						// Wrong password, return basic info without trusting envelope metadata
 						Ok(Some(WalletInfo {
-							name: encrypted_wallet.name,
+							name: name.to_string(),
 							address: "[Wrong password]".to_string(),
 							created_at: encrypted_wallet.created_at,
 							key_type: "Dilithium ML-DSA-87".to_string(),
 							derivation_path: "[Wrong password]".to_string(),
 						}))
 					},
+					Err(e) => Err(e),
 				}
 			} else {
-				// No password provided, return basic info with public address
-				Ok(Some(WalletInfo {
-					name: encrypted_wallet.name,
-					address: encrypted_wallet.address, // Address is public
-					created_at: encrypted_wallet.created_at,
-					key_type: "Dilithium ML-DSA-87".to_string(),
-					derivation_path: "[Encrypted]".to_string(), // Derivation path is encrypted
-				}))
+				match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
+					Ok(wallet_data) => {
+						let address = wallet_data.keypair.to_account_id_ss58check();
+						Ok(Some(WalletInfo {
+							name: wallet_data.name,
+							address,
+							created_at: encrypted_wallet.created_at,
+							key_type: "Dilithium ML-DSA-87".to_string(),
+							derivation_path: "[Encrypted]".to_string(),
+						}))
+					},
+					Err(crate::error::QuantusError::Wallet(
+						WalletError::InvalidPassword | WalletError::Integrity(_),
+					)) => Ok(Some(WalletInfo {
+						name: name.to_string(),
+						address: "[Encrypted]".to_string(),
+						created_at: encrypted_wallet.created_at,
+						key_type: "Dilithium ML-DSA-87".to_string(),
+						derivation_path: "[Encrypted]".to_string(),
+					})),
+					Err(e) => Err(e),
+				}
 			}
 		} else {
 			Ok(None)
@@ -498,17 +527,11 @@ impl WalletManager {
 		// determines the AES key) in `argon2_params`. Re-encrypt without it on unlock.
 		// Note: once migrated, the file can no longer be opened by older CLI
 		// versions (they fail with "invalid password").
-		// A failed save is non-fatal: the wallet decrypted fine, so don't block
-		// access (e.g. read-only wallets dir).
+		// Fail closed on migration save failure: returning Ok would leave a
+		// password-bypassable wallet file on disk.
 		if Keystore::has_embedded_key_material(&encrypted_wallet) {
-			let migration = keystore
-				.encrypt_wallet_data(&wallet_data, password)
-				.and_then(|migrated| keystore.save_wallet(&migrated));
-			if let Err(e) = migration {
-				crate::log_print!(
-					"⚠️ Could not re-encrypt wallet '{name}' to remove embedded key material: {e}"
-				);
-			}
+			let migrated = keystore.encrypt_wallet_data(&wallet_data, password)?;
+			keystore.save_wallet(&migrated)?;
 		}
 
 		Ok(wallet_data)
@@ -520,13 +543,20 @@ impl WalletManager {
 		keystore.delete_wallet(name)
 	}
 
-	/// Find wallet by name and return its address
+	/// Find wallet by name and return its authenticated address when available without a password
 	pub fn find_wallet_address(&self, name: &str) -> Result<Option<String>> {
 		let keystore = Keystore::new(&self.wallets_dir);
 
 		if let Some(encrypted_wallet) = keystore.load_wallet(name)? {
-			// Return the stored address (it's stored unencrypted)
-			Ok(Some(encrypted_wallet.address))
+			// Wallet-name resolution must not trust the plaintext envelope address.
+			// Only empty-password wallets can be authenticated without prompting.
+			match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
+				Ok(wallet_data) => Ok(Some(wallet_data.keypair.to_account_id_ss58check())),
+				Err(crate::error::QuantusError::Wallet(
+					WalletError::InvalidPassword | WalletError::Integrity(_),
+				)) => Ok(None),
+				Err(e) => Err(e),
+			}
 		} else {
 			Ok(None)
 		}
@@ -979,10 +1009,15 @@ mod tests {
 		assert!(wallet_names.contains(&&"wallet-2".to_string()));
 		assert!(wallet_names.contains(&&"imported-wallet".to_string()));
 
-		// Check that addresses are real addresses (now stored unencrypted)
+		// Empty-password wallets expose authenticated addresses; password-protected
+		// wallets must not leak the unauthenticated envelope address.
 		for wallet in &wallets {
-			assert!(wallet.address.starts_with("qz")); // Real SS58 addresses start with 5
 			assert_eq!(wallet.key_type, "Dilithium ML-DSA-87");
+			if wallet.name == "wallet-2" {
+				assert!(wallet.address.starts_with("qz"));
+			} else {
+				assert_eq!(wallet.address, "[Encrypted]");
+			}
 		}
 
 		// Check sorting (newest first)
@@ -1000,14 +1035,14 @@ mod tests {
 			.await
 			.expect("Failed to create wallet");
 
-		// Test getting wallet without password
+		// Passwordless view must not trust the unauthenticated envelope address
 		let wallet_info = wallet_manager
 			.get_wallet("test-get-wallet", None)
 			.expect("Failed to get wallet")
 			.expect("Wallet should exist");
 
 		assert_eq!(wallet_info.name, "test-get-wallet");
-		assert_eq!(wallet_info.address, created_wallet.address); // Now returns real address
+		assert_eq!(wallet_info.address, "[Encrypted]");
 
 		// Test getting wallet with wrong password
 		// Now with real quantum-safe encryption, wrong password should be detected
@@ -1036,6 +1071,75 @@ mod tests {
 			.expect("Should not error on non-existent wallet");
 
 		assert!(result.is_none());
+	}
+
+	#[tokio::test]
+	async fn passwordless_paths_do_not_trust_tampered_envelope_address() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+
+		let victim = wallet_manager
+			.create_wallet("victim_alias", Some("correct horse battery staple"))
+			.await
+			.expect("victim wallet");
+		let attacker = wallet_manager
+			.create_wallet("attacker_wallet", Some("attacker password"))
+			.await
+			.expect("attacker wallet");
+		assert_ne!(victim.address, attacker.address);
+
+		let keystore = Keystore::new(&wallet_manager.wallets_dir);
+		let mut tampered = keystore
+			.load_wallet("victim_alias")
+			.expect("load")
+			.expect("victim exists");
+		tampered.address = attacker.address.clone();
+		keystore.save_wallet(&tampered).expect("persist tampered envelope");
+
+		let decrypt_result =
+			wallet_manager.load_wallet("victim_alias", "correct horse battery staple");
+		assert!(
+			matches!(
+				decrypt_result,
+				Err(crate::error::QuantusError::Wallet(WalletError::Integrity(_)))
+			),
+			"correct-password decrypt must reject envelope/keypair mismatch, got: {decrypt_result:?}"
+		);
+
+		let lookup = wallet_manager
+			.find_wallet_address("victim_alias")
+			.expect("passwordless resolution must not panic");
+		assert_eq!(
+			lookup, None,
+			"password-protected wallets must refuse unauthenticated wallet-name resolution"
+		);
+
+		let listed = wallet_manager
+			.list_wallets()
+			.expect("list")
+			.into_iter()
+			.find(|w| w.name == "victim_alias")
+			.expect("victim should still be listed");
+		assert_ne!(
+			listed.address, attacker.address,
+			"list_wallets must not display the attacker-substituted envelope address"
+		);
+		assert!(
+			listed.address.contains('['),
+			"password-protected wallets must use a placeholder without authenticated decrypt"
+		);
+
+		let viewed = wallet_manager
+			.get_wallet("victim_alias", None)
+			.expect("view")
+			.expect("victim exists");
+		assert_ne!(
+			viewed.address, attacker.address,
+			"passwordless get_wallet must not display the attacker-substituted envelope address"
+		);
+		assert!(
+			viewed.address.contains('['),
+			"passwordless view of a password-protected wallet must use a placeholder"
+		);
 	}
 
 	#[tokio::test]
@@ -1084,7 +1188,10 @@ mod tests {
 			"valid wallet must remain listable"
 		);
 		assert!(
-			listed_after.iter().all(|w| AccountId32::from_ss58check_with_version(&w.address).is_ok()),
+			listed_after.iter().all(|w| {
+				w.address == "[Encrypted]" ||
+					AccountId32::from_ss58check_with_version(&w.address).is_ok()
+			}),
 			"listing must not return addresses the SS58 parser rejects"
 		);
 		assert!(

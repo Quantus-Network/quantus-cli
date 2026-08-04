@@ -322,6 +322,17 @@ impl Keystore {
 		// 3. Deserialize the wallet data
 		let wallet_data: WalletData = serde_json::from_slice(&decrypted_data)?;
 
+		// 4. The plaintext envelope address is not AEAD-authenticated, so it must
+		// match the address derived from the decrypted key material before the
+		// wallet file is accepted as intact.
+		let derived_address = wallet_data.keypair.to_account_id_ss58check();
+		if encrypted.address != derived_address {
+			return Err(WalletError::Integrity(
+				"stored address does not match decrypted keypair".to_string(),
+			)
+			.into());
+		}
+
 		Ok(wallet_data)
 	}
 
@@ -901,6 +912,33 @@ mod tests {
 	}
 
 	#[test]
+	fn decrypt_rejects_tampered_envelope_address() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let victim = make_test_wallet_data("integrity-victim", 10);
+		let attacker = make_test_wallet_data("integrity-attacker", 11);
+
+		let mut encrypted = keystore
+			.encrypt_wallet_data(&victim, "correct-password")
+			.expect("Encryption should succeed");
+		let victim_address = encrypted.address.clone();
+		let attacker_address = attacker.keypair.to_account_id_ss58check();
+		assert_ne!(victim_address, attacker_address);
+
+		// Attacker rewrites only the plaintext envelope address; ciphertext is untouched.
+		encrypted.address = attacker_address;
+
+		let result = keystore.decrypt_wallet_data(&encrypted, "correct-password");
+		assert!(
+			matches!(
+				result,
+				Err(crate::error::QuantusError::Wallet(WalletError::Integrity(_)))
+			),
+			"tampered envelope address must fail integrity after authenticated decrypt, got: {result:?}"
+		);
+	}
+
+	#[test]
 	fn test_legacy_wallet_decrypt_and_migration() {
 		let temp_dir = TempDir::new().expect("Failed to create temp directory");
 		let keystore = Keystore::new(temp_dir.path());
@@ -946,5 +984,51 @@ mod tests {
 			.expect("Migrated wallet should decrypt");
 		assert_eq!(decrypted.name, data.name);
 		assert_eq!(decrypted.keypair.private_key, data.keypair.private_key);
+	}
+
+	/// When migration cannot persist the re-encrypted wallet, load_wallet must
+	/// fail closed rather than returning Ok while leaving password-bypassable
+	/// key material on disk.
+	#[cfg(unix)]
+	#[test]
+	fn test_legacy_migration_save_failure_fails_closed() {
+		use std::fs;
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("legacy-ro-wallet", 12);
+
+		let legacy = encrypt_legacy(&data, "pw");
+		assert!(Keystore::has_embedded_key_material(&legacy));
+		keystore.save_wallet(&legacy).expect("Save should succeed");
+
+		// Force migration save to fail (cannot create .json.tmp in read-only dir).
+		let mut perms = fs::metadata(temp_dir.path()).unwrap().permissions();
+		perms.set_mode(0o555);
+		fs::set_permissions(temp_dir.path(), perms).unwrap();
+
+		use crate::wallet::WalletManager;
+		let wallet_manager = WalletManager { wallets_dir: temp_dir.path().to_path_buf() };
+		let result = wallet_manager.load_wallet("legacy-ro-wallet", "pw");
+
+		// Restore writability so TempDir cleanup and assertions can proceed.
+		let mut perms = fs::metadata(temp_dir.path()).unwrap().permissions();
+		perms.set_mode(0o755);
+		fs::set_permissions(temp_dir.path(), perms).unwrap();
+
+		assert!(
+			result.is_err(),
+			"load_wallet must Err when migration cannot save, got: {result:?}"
+		);
+
+		let reloaded = keystore
+			.load_wallet("legacy-ro-wallet")
+			.expect("Load should succeed")
+			.expect("Wallet should exist");
+		assert!(
+			Keystore::has_embedded_key_material(&reloaded),
+			"failed migration must leave legacy file with embedded digest"
+		);
 	}
 }

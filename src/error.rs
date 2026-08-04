@@ -67,6 +67,9 @@ pub enum WalletError {
 
 	#[error("Decryption failed. Check your password.")]
 	Decryption,
+
+	#[error("Wallet integrity check failed: {0}")]
+	Integrity(String),
 }
 
 /// Type alias for Results using QuantusError
