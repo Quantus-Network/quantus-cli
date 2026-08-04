@@ -248,6 +248,15 @@ pub fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32], String> {
 		.map_err(|_| "Failed to convert secret to 32-byte array".to_string())
 }
 
+/// Read a hex-encoded secret from a file and validate that it is exactly 32 bytes.
+fn read_secret_hex_file(path: &str) -> Result<String, String> {
+	let secret_hex = std::fs::read_to_string(path)
+		.map_err(|e| format!("Failed to read secret file: {}", e))?;
+	let secret_hex = secret_hex.trim().to_string();
+	parse_secret_hex(&secret_hex)?;
+	Ok(secret_hex)
+}
+
 /// Parse an exit account from either hex or SS58 format
 pub fn parse_exit_account(exit_account_str: &str) -> Result<[u8; 32], String> {
 	if let Some(hex_str) = exit_account_str.strip_prefix("0x") {
@@ -502,6 +511,32 @@ pub struct VerificationResult {
 	pub error_message: Option<String>,
 }
 
+/// Apply ProofVerified evidence with failure-dominant semantics.
+fn apply_proof_verified_to_result(result: &mut VerificationResult, exit_amount: u128) {
+	result.exit_amount = Some(exit_amount);
+	if result.error_message.is_none() {
+		result.success = true;
+	}
+}
+
+/// Apply ExtrinsicFailed evidence; dispatch failure always clears success.
+fn apply_extrinsic_failed_to_result(result: &mut VerificationResult, error_msg: String) {
+	result.success = false;
+	result.error_message = Some(error_msg);
+}
+
+/// Finalize SDK event collection: any ExtrinsicFailed dominates ProofVerified.
+fn finalize_wormhole_event_collection(
+	found_proof_verified: bool,
+	dispatch_error_message: Option<String>,
+	transfer_events: Vec<wormhole::events::NativeTransferred>,
+) -> crate::error::Result<(bool, Vec<wormhole::events::NativeTransferred>)> {
+	if let Some(error_msg) = dispatch_error_message {
+		return Err(crate::error::QuantusError::Generic(error_msg));
+	}
+	Ok((found_proof_verified, transfer_events))
+}
+
 /// Check for proof verification events in a transaction
 /// Returns whether ProofVerified event was found and the exit amount
 async fn check_proof_verification_events(
@@ -574,17 +609,19 @@ async fn check_proof_verification_events(
 				if let Ok(Some(proof_verified)) =
 					event.as_event::<wormhole::events::ProofVerified>()
 				{
-					verification_result.success = true;
-					verification_result.exit_amount = Some(proof_verified.exit_amount);
+					apply_proof_verified_to_result(
+						&mut verification_result,
+						proof_verified.exit_amount,
+					);
 				}
 
-				// Check for ExtrinsicFailed event
+				// Check for ExtrinsicFailed event. Dispatch failure dominates any
+				// ProofVerified event regardless of event ordering.
 				if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
 					event.as_event::<ExtrinsicFailed>()
 				{
 					let error_msg = format_dispatch_error(&dispatch_error, &metadata);
-					verification_result.success = false;
-					verification_result.error_message = Some(error_msg);
+					apply_extrinsic_failed_to_result(&mut verification_result, error_msg);
 				}
 			}
 		}
@@ -635,17 +672,17 @@ fn format_dispatch_error(
 
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
-	/// Derive the unspendable wormhole address from a secret
+	/// Derive the unspendable wormhole address from a secret file
 	Address {
-		/// Secret (32-byte hex string) - used to derive the unspendable account
+		/// File containing the secret (32-byte hex string) used to derive the unspendable account
 		#[arg(long)]
-		secret: String,
+		secret_file: String,
 	},
 	/// Generate a wormhole proof from an existing transfer
 	Prove {
-		/// Secret (32-byte hex string) used for the transfer
+		/// File containing the secret (32-byte hex string) used for the transfer
 		#[arg(long)]
-		secret: String,
+		secret_file: String,
 
 		/// Funding amount that was transferred
 		#[arg(long)]
@@ -834,19 +871,19 @@ pub enum WormholeCommands {
 	/// It mirrors the withdrawal flow used by the miner app.
 	CollectRewards {
 		/// Wallet name (used for HD derivation of wormhole secret and exit address)
-		/// Either --wallet, --mnemonic, or --secret must be provided.
-		#[arg(short, long, required_unless_present_any = ["mnemonic", "secret"], conflicts_with_all = ["mnemonic", "secret"])]
+		/// Either --wallet, --mnemonic, or --secret-file must be provided.
+		#[arg(short, long, required_unless_present_any = ["mnemonic", "secret_file"], conflicts_with_all = ["mnemonic", "secret_file"])]
 		wallet: Option<String>,
 
 		/// Mnemonic phrase for HD derivation (alternative to --wallet)
 		/// Use this to derive wormhole secrets without a stored wallet.
-		#[arg(short = 'm', long, required_unless_present_any = ["wallet", "secret"], conflicts_with_all = ["wallet", "secret"])]
+		#[arg(short = 'm', long, required_unless_present_any = ["wallet", "secret_file"], conflicts_with_all = ["wallet", "secret_file"])]
 		mnemonic: Option<String>,
 
-		/// Direct wormhole secret (32-byte hex string, alternative to --wallet or --mnemonic)
+		/// File containing the direct wormhole secret (32-byte hex string, alternative to --wallet or --mnemonic)
 		/// Use this with a secret generated by `quantus-node key quantus --scheme wormhole`
 		#[arg(long, required_unless_present_any = ["wallet", "mnemonic"], conflicts_with_all = ["wallet", "mnemonic"])]
-		secret: Option<String>,
+		secret_file: Option<String>,
 
 		/// Password for the wallet (only used with --wallet)
 		#[arg(short, long)]
@@ -860,7 +897,7 @@ pub enum WormholeCommands {
 		#[arg(short, long)]
 		amount: Option<f64>,
 
-		/// Destination address for withdrawn funds (required when using --mnemonic or --secret)
+		/// Destination address for withdrawn funds (required when using --mnemonic or --secret-file)
 		#[arg(long)]
 		destination: Option<String>,
 
@@ -868,7 +905,7 @@ pub enum WormholeCommands {
 		#[arg(long, default_value = "https://sub2.quantus.com/v1/graphql")]
 		subsquid_url: String,
 
-		/// Wormhole address index for HD derivation (default: 0, ignored when using --secret)
+		/// Wormhole address index for HD derivation (default: 0, ignored when using --secret-file)
 		#[arg(long, default_value = "0")]
 		wormhole_index: usize,
 
@@ -885,14 +922,14 @@ pub enum WormholeCommands {
 	/// Given a secret (or wallet) and transfer count(s), computes the nullifier(s) and checks
 	/// if they exist in Subsquid (meaning the corresponding transfer has been withdrawn).
 	CheckNullifier {
-		/// Secret (32-byte hex string) - the wormhole secret.
-		/// Either --secret or --wallet must be provided.
+		/// File containing the secret (32-byte hex string) for the wormhole secret.
+		/// Either --secret-file or --wallet must be provided.
 		#[arg(long, required_unless_present = "wallet")]
-		secret: Option<String>,
+		secret_file: Option<String>,
 
 		/// Wallet name (used for HD derivation of wormhole secret).
-		/// Either --secret or --wallet must be provided.
-		#[arg(short, long, required_unless_present = "secret")]
+		/// Either --secret-file or --wallet must be provided.
+		#[arg(short, long, required_unless_present = "secret_file")]
 		wallet: Option<String>,
 
 		/// Password for the wallet (only used with --wallet)
@@ -922,9 +959,9 @@ pub async fn handle_wormhole_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WormholeCommands::Address { secret } => show_wormhole_address(secret),
+		WormholeCommands::Address { secret_file } => show_wormhole_address(secret_file),
 		WormholeCommands::Prove {
-			secret,
+			secret_file,
 			amount,
 			exit_account,
 			block,
@@ -955,6 +992,9 @@ pub async fn handle_wormhole_command(
 				output_amount_2: 0,
 				exit_account_2: [0u8; 32],
 			};
+
+			let secret =
+				read_secret_hex_file(&secret_file).map_err(crate::error::QuantusError::Generic)?;
 
 			let prove_start = std::time::Instant::now();
 			generate_proof(
@@ -1050,7 +1090,7 @@ pub async fn handle_wormhole_command(
 		WormholeCommands::CollectRewards {
 			wallet,
 			mnemonic,
-			secret,
+			secret_file,
 			password,
 			password_file,
 			amount,
@@ -1063,7 +1103,7 @@ pub async fn handle_wormhole_command(
 			run_collect_rewards(
 				wallet,
 				mnemonic,
-				secret,
+				secret_file,
 				password,
 				password_file,
 				amount,
@@ -1076,7 +1116,7 @@ pub async fn handle_wormhole_command(
 			)
 			.await,
 		WormholeCommands::CheckNullifier {
-			secret,
+			secret_file,
 			wallet,
 			password,
 			password_file,
@@ -1085,7 +1125,7 @@ pub async fn handle_wormhole_command(
 			subsquid_url,
 		} =>
 			run_check_nullifier(
-				secret,
+				secret_file,
 				wallet,
 				password,
 				password_file,
@@ -1104,9 +1144,11 @@ pub async fn handle_wormhole_command(
 
 /// Derive and display the unspendable wormhole address from a secret.
 /// Users can then send funds to this address using `quantus send`.
-fn show_wormhole_address(secret_hex: String) -> crate::error::Result<()> {
+fn show_wormhole_address(secret_file: String) -> crate::error::Result<()> {
 	use colored::Colorize;
 
+	let secret_hex =
+		read_secret_hex_file(&secret_file).map_err(crate::error::QuantusError::Generic)?;
 	let secret_array =
 		parse_secret_hex(&secret_hex).map_err(crate::error::QuantusError::Generic)?;
 	let secret: BytesDigest = secret_array.try_into().map_err(|e| {
@@ -1585,6 +1627,7 @@ async fn collect_wormhole_events_for_extrinsic(
 
 	let mut transfer_events = Vec::new();
 	let mut found_proof_verified = false;
+	let mut dispatch_error_message = None;
 
 	log_verbose!("  Events for our extrinsic (idx={}):", our_ext_idx);
 
@@ -1604,6 +1647,7 @@ async fn collect_wormhole_events_for_extrinsic(
 					let metadata = quantus_client.client().metadata();
 					let error_msg = format_dispatch_error(&dispatch_error, &metadata);
 					log_print!("    DispatchError: {}", error_msg);
+					dispatch_error_message = Some(error_msg);
 				}
 
 				if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>() {
@@ -1618,7 +1662,11 @@ async fn collect_wormhole_events_for_extrinsic(
 		}
 	}
 
-	Ok((found_proof_verified, transfer_events))
+	finalize_wormhole_event_collection(
+		found_proof_verified,
+		dispatch_error_message,
+		transfer_events,
+	)
 }
 
 async fn verify_private_batch(proof_file: String, node_url: &str) -> crate::error::Result<()> {
@@ -1995,7 +2043,7 @@ fn load_multiround_wallet(
 	// Require a persisted mnemonic for deterministic wormhole HD derivation.
 	let mnemonic = wallet_data.mnemonic.ok_or_else(|| {
 		crate::error::QuantusError::Generic(
-			"Wallet does not contain a mnemonic. Use a wallet created from a mnemonic, or supply --mnemonic/--secret where supported.".to_string(),
+			"Wallet does not contain a mnemonic. Use a wallet created from a mnemonic, or supply --mnemonic/--secret-file where supported.".to_string(),
 		)
 	})?;
 	log_verbose!("Using wallet mnemonic for HD derivation");
@@ -3696,7 +3744,7 @@ async fn run_dissolve(
 async fn run_collect_rewards(
 	wallet_name: Option<String>,
 	mnemonic_arg: Option<String>,
-	secret_arg: Option<String>,
+	secret_file_arg: Option<String>,
 	password: Option<String>,
 	password_file: Option<String>,
 	amount: Option<f64>,
@@ -3718,7 +3766,7 @@ async fn run_collect_rewards(
 	log_print!("==================================================");
 	log_print!("");
 
-	// Get credential and wallet address from wallet, mnemonic, or secret
+	// Get credential and wallet address from wallet, mnemonic, or secret file
 	let (credential, wallet_address) = if let Some(wallet_name) = wallet_name {
 		// Load from stored wallet
 		let wallet = load_multiround_wallet(&wallet_name, password, password_file)?;
@@ -3729,23 +3777,25 @@ async fn run_collect_rewards(
 	} else if let Some(mnemonic) = mnemonic_arg {
 		// Use provided mnemonic directly
 		(WormholeCredential::Mnemonic { phrase: mnemonic, wormhole_index }, None)
-	} else if let Some(secret) = secret_arg {
-		// Use provided secret directly (no HD derivation)
+	} else if let Some(secret_file) = secret_file_arg {
+		// Use provided secret file directly (no HD derivation)
+		let secret =
+			read_secret_hex_file(&secret_file).map_err(crate::error::QuantusError::Generic)?;
 		(WormholeCredential::Secret { hex: secret }, None)
 	} else {
 		return Err(crate::error::QuantusError::Generic(
-			"Either --wallet, --mnemonic, or --secret must be provided".to_string(),
+			"Either --wallet, --mnemonic, or --secret-file must be provided".to_string(),
 		));
 	};
 
-	// Destination address - required when using mnemonic or secret directly
+	// Destination address - required when using mnemonic or secret file directly
 	let destination_address = if let Some(dest) = &destination {
 		dest.clone()
 	} else if let Some(addr) = wallet_address.as_ref() {
 		addr.clone()
 	} else {
 		return Err(crate::error::QuantusError::Generic(
-			"--destination is required when using --mnemonic or --secret".to_string(),
+			"--destination is required when using --mnemonic or --secret-file".to_string(),
 		));
 	};
 
@@ -3931,7 +3981,7 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 /// Given a secret (or wallet) and transfer count(s), computes the nullifier(s) and checks
 /// if they exist in the indexer (meaning the transfer was already withdrawn).
 async fn run_check_nullifier(
-	secret_hex: Option<String>,
+	secret_file: Option<String>,
 	wallet_name: Option<String>,
 	password: Option<String>,
 	password_file: Option<String>,
@@ -3942,8 +3992,9 @@ async fn run_check_nullifier(
 	use crate::subsquid::{compute_address_hash, SubsquidClient};
 	use colored::Colorize;
 
-	// Get secret either directly or from wallet
-	let secret = if let Some(hex) = secret_hex {
+	// Get secret either directly from a file or from wallet
+	let secret = if let Some(path) = secret_file {
+		let hex = read_secret_hex_file(&path).map_err(crate::error::QuantusError::Generic)?;
 		parse_secret_hex(&hex).map_err(crate::error::QuantusError::Generic)?
 	} else if let Some(wallet) = wallet_name {
 		// Load wallet and derive wormhole secret
@@ -3953,7 +4004,7 @@ async fn run_check_nullifier(
 
 		let mnemonic = wallet_data.mnemonic.ok_or_else(|| {
 			crate::error::QuantusError::Generic(
-				"Wallet does not contain a mnemonic. Use --secret instead.".to_string(),
+				"Wallet does not contain a mnemonic. Use --secret-file instead.".to_string(),
 			)
 		})?;
 
@@ -3968,7 +4019,7 @@ async fn run_check_nullifier(
 		secret
 	} else {
 		return Err(crate::error::QuantusError::Generic(
-			"Either --secret or --wallet must be provided".to_string(),
+			"Either --secret-file or --wallet must be provided".to_string(),
 		));
 	};
 
@@ -4597,7 +4648,7 @@ mod tests {
 		let err = try_parse_collect_rewards(&[]).unwrap_err();
 		let s = err.to_string();
 		assert!(
-			s.contains("--wallet") || s.contains("--mnemonic") || s.contains("--secret"),
+			s.contains("--wallet") || s.contains("--mnemonic") || s.contains("--secret-file"),
 			"expected missing-credential error, got: {s}"
 		);
 	}
@@ -4606,19 +4657,15 @@ mod tests {
 	fn collect_rewards_accepts_each_credential_alone() {
 		assert!(try_parse_collect_rewards(&["--wallet", "w"]).is_ok());
 		assert!(try_parse_collect_rewards(&["--mnemonic", "word ".repeat(24).trim()]).is_ok());
-		assert!(try_parse_collect_rewards(&[
-			"--secret",
-			"0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
-		])
-		.is_ok());
+		assert!(try_parse_collect_rewards(&["--secret-file", "secret.hex"]).is_ok());
 	}
 
 	#[test]
 	fn collect_rewards_credentials_mutually_exclusive() {
 		let pairs: &[(&str, &str, &str, &str)] = &[
 			("--wallet", "w", "--mnemonic", "m"),
-			("--wallet", "w", "--secret", "s"),
-			("--mnemonic", "m", "--secret", "s"),
+			("--wallet", "w", "--secret-file", "s"),
+			("--mnemonic", "m", "--secret-file", "s"),
 		];
 		for (a, av, b, bv) in pairs {
 			let err = try_parse_collect_rewards(&[a, av, b, bv]).unwrap_err().to_string();
@@ -4629,8 +4676,103 @@ mod tests {
 		}
 	}
 
+	/// #160103: wormhole secrets must not be accepted on argv (use --secret-file).
+	#[test]
+	fn wormhole_rejects_secret_cli_argument() {
+		use clap::Parser;
+
+		#[derive(Parser, Debug)]
+		#[command(name = "quantus")]
+		struct TestCli {
+			#[command(subcommand)]
+			command: crate::cli::Commands,
+		}
+
+		let secret = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+		for args in [
+			vec!["quantus", "wormhole", "address", "--secret", secret],
+			vec![
+				"quantus",
+				"wormhole",
+				"prove",
+				"--secret",
+				secret,
+				"--amount",
+				"1",
+				"--exit-account",
+				"0x1111111111111111111111111111111111111111111111111111111111111111",
+				"--block",
+				"0x2222222222222222222222222222222222222222222222222222222222222222",
+				"--transfer-count",
+				"0",
+				"--leaf-index",
+				"0",
+				"--funding-account",
+				"0x3333333333333333333333333333333333333333333333333333333333333333",
+			],
+			vec!["quantus", "wormhole", "collect-rewards", "--secret", secret],
+			vec![
+				"quantus",
+				"wormhole",
+				"check-nullifier",
+				"--secret",
+				secret,
+				"--transfer-counts",
+				"0",
+			],
+		] {
+			let result = TestCli::try_parse_from(args.clone());
+			assert!(
+				result.is_err(),
+				"wormhole must not accept --secret on argv; args={args:?}"
+			);
+		}
+	}
+
 	fn acct(seed: u8) -> SubxtAccountId {
 		SubxtAccountId([seed; 32])
+	}
+
+	#[test]
+	fn proof_verified_after_extrinsic_failed_stays_unsuccessful() {
+		// Vulnerable order-dependent parser set success=true when ProofVerified
+		// arrived after ExtrinsicFailed.
+		let mut result =
+			VerificationResult { success: false, exit_amount: None, error_message: None };
+		apply_extrinsic_failed_to_result(&mut result, "Wormhole::InvalidProof".to_string());
+		apply_proof_verified_to_result(&mut result, 42);
+		assert!(!result.success, "ExtrinsicFailed must dominate later ProofVerified");
+		assert_eq!(result.exit_amount, Some(42));
+		assert_eq!(result.error_message.as_deref(), Some("Wormhole::InvalidProof"));
+	}
+
+	#[test]
+	fn extrinsic_failed_after_proof_verified_clears_success() {
+		let mut result =
+			VerificationResult { success: false, exit_amount: None, error_message: None };
+		apply_proof_verified_to_result(&mut result, 99);
+		assert!(result.success);
+		apply_extrinsic_failed_to_result(&mut result, "dispatch failed".to_string());
+		assert!(!result.success, "later ExtrinsicFailed must clear success");
+		assert!(result.error_message.is_some());
+	}
+
+	#[test]
+	fn sdk_event_collection_errors_when_extrinsic_failed_even_if_proof_verified() {
+		let transfers = vec![wormhole::events::NativeTransferred {
+			from: acct(1),
+			to: acct(2),
+			amount: 10,
+			transfer_count: 1,
+			leaf_index: 1,
+		}];
+		let err = finalize_wormhole_event_collection(
+			true,
+			Some("Wormhole::InvalidProof".to_string()),
+			transfers,
+		)
+		.expect_err("SDK helpers must not treat failed extrinsics as verified");
+		assert!(err.to_string().contains("InvalidProof"));
 	}
 
 	#[test]
