@@ -12,6 +12,8 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 use std::io::{self, Write};
 
 /// Wallet management commands
@@ -60,6 +62,10 @@ pub enum WalletCommands {
 		/// Export format: mnemonic, private-key
 		#[arg(short, long, default_value = "mnemonic")]
 		format: String,
+
+		/// Write the mnemonic to this file instead of printing it (created with owner-only permissions)
+		#[arg(short, long)]
+		output: Option<std::path::PathBuf>,
 	},
 
 	/// Import wallet from mnemonic phrase
@@ -278,6 +284,30 @@ async fn fetch_pending_transfers_for_guardian(
 		per_account.push((ss58.clone(), count));
 	}
 	Ok((total, per_account))
+}
+
+fn write_mnemonic_to_protected_file(
+	path: &std::path::Path,
+	mnemonic: &str,
+) -> crate::error::Result<()> {
+	let mut options = std::fs::OpenOptions::new();
+	options.write(true).create_new(true);
+	#[cfg(unix)]
+	options.mode(0o600);
+
+	let mut file = options.open(path).map_err(|e| {
+		QuantusError::Generic(format!("Failed to create mnemonic export file: {e}"))
+	})?;
+	file.write_all(mnemonic.as_bytes()).map_err(|e| {
+		QuantusError::Generic(format!("Failed to write mnemonic export file: {e}"))
+	})?;
+	file.write_all(b"\n").map_err(|e| {
+		QuantusError::Generic(format!("Failed to write mnemonic export file: {e}"))
+	})?;
+	file.sync_all().map_err(|e| {
+		QuantusError::Generic(format!("Failed to sync mnemonic export file: {e}"))
+	})?;
+	Ok(())
 }
 
 /// Handle wallet commands
@@ -515,7 +545,7 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Export { name, password, format } => {
+		WalletCommands::Export { name, password, format, output } => {
 			log_print!("📤 Exporting wallet...");
 
 			if format.to_lowercase() != "mnemonic" {
@@ -525,20 +555,30 @@ pub async fn handle_wallet_command(
 				));
 			}
 
+			let Some(output_path) = output else {
+				log_error!(
+					"Refusing to print the mnemonic to stdout. Use --output <file> to create a protected export file."
+				);
+				return Err(crate::error::QuantusError::Generic(
+					"Mnemonic export requires --output".to_string(),
+				));
+			};
+
 			let wallet_manager = WalletManager::new()?;
 
 			match wallet_manager.export_mnemonic(&name, password.as_deref()) {
 				Ok(mnemonic) => {
+					write_mnemonic_to_protected_file(&output_path, &mnemonic)?;
 					log_success!("✅ Wallet exported successfully!");
-					log_print!("\nYour secret mnemonic phrase:");
-					log_print!("{}", "--------------------------------------------------".dimmed());
-					log_print!("{}", mnemonic.bright_yellow());
-					log_print!("{}", "--------------------------------------------------".dimmed());
 					log_print!(
-                        "\n{}",
-                        "⚠️  Keep this phrase safe and secret. Anyone with this phrase can access your funds."
-                            .bright_red()
-                    );
+						"Mnemonic written to: {}",
+						output_path.display().to_string().bright_cyan()
+					);
+					log_print!(
+						"{}",
+						"⚠️  Keep this file safe and secret. Anyone with this phrase can access your funds."
+							.bright_red()
+					);
 				},
 				Err(e) => {
 					log_error!("{}", format!("❌ Failed to export wallet: {e}").red());
@@ -809,13 +849,92 @@ pub async fn handle_wallet_command(
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use clap::Parser;
+	use serial_test::serial;
+	use tempfile::TempDir;
 
 	#[derive(Parser, Debug)]
 	#[command(name = "quantus")]
 	struct TestCli {
 		#[command(subcommand)]
 		command: crate::cli::Commands,
+	}
+
+	#[tokio::test]
+	#[serial]
+	async fn wallet_export_without_output_refuses_stdout_mnemonic() {
+		// #159469: export must not emit the recovery secret via log_print/stdout.
+		let home = TempDir::new().expect("temp HOME");
+		std::env::set_var("HOME", home.path());
+		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
+
+		let manager = WalletManager::new().expect("wallet manager");
+		manager
+			.create_wallet("export-leak", Some(""))
+			.await
+			.expect("create wallet");
+
+		let result = handle_wallet_command(
+			WalletCommands::Export {
+				name: "export-leak".to_string(),
+				password: None,
+				format: "mnemonic".to_string(),
+				output: None,
+			},
+			"ws://127.0.0.1:9944",
+		)
+		.await;
+
+		assert!(
+			result.is_err(),
+			"export without --output must refuse stdout mnemonic emission"
+		);
+		assert!(
+			result.unwrap_err().to_string().contains("requires --output"),
+			"error should mention --output"
+		);
+	}
+
+	#[tokio::test]
+	#[serial]
+	async fn wallet_export_writes_mnemonic_to_protected_file_not_stdout_path() {
+		let home = TempDir::new().expect("temp HOME");
+		std::env::set_var("HOME", home.path());
+		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD");
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD_EXPORT_FILE");
+
+		let manager = WalletManager::new().expect("wallet manager");
+		manager
+			.create_wallet("export-file", Some(""))
+			.await
+			.expect("create wallet");
+		let mnemonic = manager
+			.export_mnemonic("export-file", None)
+			.expect("export mnemonic for fixture");
+
+		let out = home.path().join("mnemonic.txt");
+		handle_wallet_command(
+			WalletCommands::Export {
+				name: "export-file".to_string(),
+				password: None,
+				format: "mnemonic".to_string(),
+				output: Some(out.clone()),
+			},
+			"ws://127.0.0.1:9944",
+		)
+		.await
+		.expect("export with --output must succeed");
+
+		let written = std::fs::read_to_string(&out).expect("export file");
+		assert_eq!(written.trim(), mnemonic.trim());
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			let mode = std::fs::metadata(&out).unwrap().permissions().mode() & 0o777;
+			assert_eq!(mode, 0o600, "export file must be owner-read/write only");
+		}
 	}
 
 	#[test]
