@@ -1,6 +1,9 @@
 use crate::{
 	chain::quantus_subxt,
-	cli::{address_format::QuantusSS58, common::resolve_address},
+	cli::{
+		address_format::QuantusSS58,
+		common::{delay_blocks_to_u32, delay_seconds_to_millis, resolve_address},
+	},
 	error::Result,
 	log_info, log_print, log_verbose,
 };
@@ -211,10 +214,11 @@ pub async fn schedule_transfer_with_delay(
 
 	// Convert delay to proper BlockNumberOrTimestamp
 	let delay_value = if unit_blocks {
-		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::BlockNumber(delay as u32)
+		let blocks = delay_blocks_to_u32(delay)?;
+		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::BlockNumber(blocks)
 	} else {
-		// Convert seconds to milliseconds for the runtime
-		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::Timestamp(delay * 1000)
+		let millis = delay_seconds_to_millis(delay)?;
+		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::Timestamp(millis)
 	};
 
 	log_verbose!("✍️  Creating schedule_transfer_with_delay extrinsic...");

@@ -10,6 +10,7 @@ use subxt::{
 
 pub type SubxtAccountId32 = subxt::ext::subxt_core::utils::AccountId32;
 
+const MILLIS_PER_SECOND: u64 = 1_000;
 const TX_STATUS_INACTIVITY_TIMEOUT_SECS: u64 = 30;
 const TX_STATUS_INCLUDED_TIMEOUT_SECS: u64 = 5 * 60;
 const TX_STATUS_FINALIZED_TIMEOUT_SECS: u64 = 30 * 60;
@@ -59,6 +60,24 @@ impl TransactionStage {
 			Self::Finalized => "finalized in a block",
 		}
 	}
+}
+
+pub(crate) fn delay_blocks_to_u32(blocks: u64) -> Result<u32> {
+	u32::try_from(blocks).map_err(|_| {
+		crate::error::QuantusError::Generic(format!(
+			"Delay in blocks ({blocks}) exceeds the maximum supported block delay ({})",
+			u32::MAX
+		))
+	})
+}
+
+pub(crate) fn delay_seconds_to_millis(seconds: u64) -> Result<u64> {
+	seconds.checked_mul(MILLIS_PER_SECOND).ok_or_else(|| {
+		crate::error::QuantusError::Generic(format!(
+			"Delay in seconds ({seconds}) exceeds the maximum supported timestamp delay ({})",
+			u64::MAX / MILLIS_PER_SECOND
+		))
+	})
 }
 
 fn tx_status_watch_timeout_secs(target_stage: TransactionStage) -> u64 {
@@ -791,6 +810,45 @@ pub(crate) fn format_dispatch_error(
 	}
 }
 
+async fn verify_preimage_on_chain(
+	quantus_client: &crate::chain::client::QuantusClient,
+	expected_preimage: &[u8],
+) -> Result<()> {
+	use sp_runtime::traits::{BlakeTwo256, Hash};
+
+	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(expected_preimage);
+	let preimage_len = u32::try_from(expected_preimage.len()).map_err(|_| {
+		crate::error::QuantusError::Generic(format!(
+			"Preimage is too large to address: {} bytes",
+			expected_preimage.len()
+		))
+	})?;
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+	let preimage_addr = crate::chain::quantus_subxt::api::storage()
+		.preimage()
+		.preimage_for((preimage_hash, preimage_len));
+
+	match storage_at.fetch(&preimage_addr).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!(
+			"Failed to fetch preimage {:?} ({} bytes): {e:?}",
+			preimage_hash, preimage_len
+		))
+	})? {
+		Some(stored_preimage) if stored_preimage.0.as_slice() == expected_preimage => Ok(()),
+		Some(stored_preimage) => Err(crate::error::QuantusError::Generic(format!(
+			"On-chain preimage mismatch for {:?}: expected {} bytes, found {} bytes",
+			preimage_hash,
+			preimage_len,
+			stored_preimage.0.len()
+		))),
+		None => Err(crate::error::QuantusError::Generic(format!(
+			"Expected preimage {:?} ({} bytes) is not present on-chain",
+			preimage_hash, preimage_len
+		))),
+	}
+}
+
 pub async fn submit_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	keypair: &crate::wallet::QuantumKeyPair,
@@ -799,7 +857,7 @@ pub async fn submit_preimage(
 ) -> Result<()> {
 	type PreimageBytes =
 		crate::chain::quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes = encoded_call;
+	let bounded_bytes: PreimageBytes = encoded_call.clone();
 
 	crate::log_print!("📝 Submitting preimage...");
 	let note_preimage_tx =
@@ -808,15 +866,22 @@ pub async fn submit_preimage(
 
 	match submit_transaction(quantus_client, keypair, note_preimage_tx, None, wait_mode).await {
 		Ok(_) => {
+			verify_preimage_on_chain(quantus_client, &encoded_call).await?;
 			crate::log_success!("Preimage submitted");
 		},
-		Err(e) if e.to_string().contains("AlreadyNoted") => {
+		Err(e) => {
+			// Do not trust formatted error substrings (e.g. "AlreadyNoted"). Only
+			// continue when the expected preimage bytes are present on-chain.
+			verify_preimage_on_chain(quantus_client, &encoded_call).await.map_err(|verify_err| {
+				crate::error::QuantusError::Generic(format!(
+					"Preimage submission failed ({e}); on-chain verification also failed ({verify_err})"
+				))
+			})?;
 			crate::log_print!(
-				"✅ {} Preimage already exists on-chain, continuing",
+				"✅ {} Expected preimage already exists on-chain, continuing",
 				"OK".bright_green().bold()
 			);
 		},
-		Err(e) => return Err(e),
 	}
 	Ok(())
 }
@@ -876,6 +941,28 @@ pub(crate) async fn check_execution_success(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn delay_blocks_to_u32_rejects_values_above_u32_max() {
+		let too_large = u32::MAX as u64 + 7200;
+		let err = delay_blocks_to_u32(too_large).unwrap_err();
+		assert!(
+			err.to_string().contains("exceeds the maximum supported block delay"),
+			"unexpected error: {err}"
+		);
+		assert_eq!(delay_blocks_to_u32(u32::MAX as u64).unwrap(), u32::MAX);
+	}
+
+	#[test]
+	fn delay_seconds_to_millis_rejects_overflow() {
+		let too_large = (u64::MAX / MILLIS_PER_SECOND) + 1;
+		let err = delay_seconds_to_millis(too_large).unwrap_err();
+		assert!(
+			err.to_string().contains("exceeds the maximum supported timestamp delay"),
+			"unexpected error: {err}"
+		);
+		assert_eq!(delay_seconds_to_millis(1).unwrap(), 1_000);
+	}
 
 	#[test]
 	fn finalized_mode_implies_waiting_for_finalization() {
@@ -1014,5 +1101,21 @@ mod tests {
 		assert!(!is_retryable_submission_error("timeout waiting for response"));
 		assert!(!is_retryable_submission_error(""));
 		assert!(!is_retryable_submission_error("some unknown node error"));
+	}
+
+	#[test]
+	fn submit_preimage_does_not_classify_already_noted_by_substring() {
+		// #160718: control flow must not branch on the literal "AlreadyNoted" in
+		// formatted errors; success after a submit failure requires on-chain
+		// preimage verification instead.
+		let source = include_str!("common.rs");
+		assert!(
+			!source.contains("contains(\"AlreadyNoted\")"),
+			"submit_preimage must not accept errors based on AlreadyNoted substrings"
+		);
+		assert!(
+			source.contains("verify_preimage_on_chain"),
+			"submit_preimage must verify expected preimage bytes on-chain"
+		);
 	}
 }

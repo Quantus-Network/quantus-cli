@@ -254,15 +254,25 @@ async fn submit_tech_collective_remove_member(
 	args: &[Value],
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
-	if args.len() != 1 {
+	if args.len() != 2 {
 		return Err(QuantusError::Generic(
-			"TechCollective remove_member requires 1 argument: [member_address]".to_string(),
+			"TechCollective remove_member requires 2 arguments: [member_address, min_rank]"
+				.to_string(),
 		));
 	}
 
 	let member_address = args[0].as_str().ok_or_else(|| {
-		QuantusError::Generic("Argument must be a string (member_address)".to_string())
+		QuantusError::Generic("First argument must be a string (member_address)".to_string())
 	})?;
+
+	let min_rank = args[1]
+		.as_u64()
+		.or_else(|| args[1].as_str().and_then(|rank| rank.parse::<u64>().ok()))
+		.ok_or_else(|| {
+			QuantusError::Generic("Second argument must be a number (min_rank)".to_string())
+		})?;
+	let min_rank = u16::try_from(min_rank)
+		.map_err(|_| QuantusError::Generic("min_rank must fit in u16".to_string()))?;
 
 	let (member_account_id, _) = AccountId32::from_ss58check_with_version(member_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid member_address: {e:?}")))?;
@@ -274,7 +284,7 @@ async fn submit_tech_collective_remove_member(
 
 	let call = quantus_subxt::api::tx().tech_collective().remove_member(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id_subxt),
-		0u16, // Default rank
+		min_rank,
 	);
 
 	crate::cli::common::submit_transaction(quantus_client, from_keypair, call, None, execution_mode)

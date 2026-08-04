@@ -1,6 +1,7 @@
 use crate::{
-	chain::quantus_subxt, cli::address_format::QuantusSS58, log_error, log_print, log_success,
-	log_verbose,
+	chain::quantus_subxt,
+	cli::{address_format::QuantusSS58, common::delay_seconds_to_millis},
+	log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -147,8 +148,7 @@ pub async fn handle_high_security_command(
 			use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay as HsDelay;
 			let delay_value = match (delay_blocks, delay_seconds) {
 				(Some(blocks), None) => HsDelay::BlockNumber(blocks),
-				(None, Some(seconds)) => HsDelay::Timestamp(seconds * 1000), /* Convert seconds */
-				// to milliseconds
+				(None, Some(seconds)) => HsDelay::Timestamp(delay_seconds_to_millis(seconds)?),
 				(None, None) => {
 					log_error!("❌ You must specify either --delay-blocks or --delay-seconds");
 					return Err(crate::error::QuantusError::Generic(

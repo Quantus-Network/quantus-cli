@@ -2,6 +2,7 @@
 ///
 /// This module provides unified functions for formatting addresses in the Quantus
 /// SS58 format (version 189).
+use crate::error::{QuantusError, Result};
 use sp_core::crypto::{Ss58AddressFormat, Ss58Codec};
 
 /// Returns the Quantus SS58 address format (version 189)
@@ -36,8 +37,24 @@ pub fn bytes_to_quantus_ss58(bytes: &[u8; 32]) -> String {
 	sp_account_id.to_ss58check_with_version(quantus_ss58_format())
 }
 
-/// Convert a byte slice to Quantus SS58 format (panics if not 32 bytes)
-pub fn slice_to_quantus_ss58(bytes: &[u8]) -> String {
-	let arr: [u8; 32] = bytes.try_into().expect("account must be 32 bytes");
-	bytes_to_quantus_ss58(&arr)
+/// Convert a byte slice to Quantus SS58 format.
+pub fn slice_to_quantus_ss58(bytes: &[u8]) -> Result<String> {
+	let arr: [u8; 32] = bytes
+		.try_into()
+		.map_err(|_| QuantusError::Generic("account must be 32 bytes".to_string()))?;
+	Ok(bytes_to_quantus_ss58(&arr))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn slice_to_quantus_ss58_rejects_non_32_byte_input() {
+		// #160783: malformed address buffers must not panic.
+		let err = slice_to_quantus_ss58(&[0u8; 16]).expect_err("short slice must error");
+		assert!(err.to_string().contains("32 bytes"), "unexpected error: {err}");
+		let ok = slice_to_quantus_ss58(&[0u8; 32]).expect("32-byte slice must succeed");
+		assert!(ok.starts_with("qz"));
+	}
 }

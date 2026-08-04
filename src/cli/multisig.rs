@@ -1,6 +1,6 @@
 use crate::{
 	chain::quantus_subxt::{self},
-	cli::common::ExecutionMode,
+	cli::common::{delay_seconds_to_millis, ExecutionMode},
 	log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
@@ -3034,7 +3034,7 @@ async fn handle_high_security_set(
 	let delay_value = if let Some(blocks) = delay_blocks {
 		HsDelay::BlockNumber(blocks)
 	} else if let Some(seconds) = delay_seconds {
-		HsDelay::Timestamp(seconds * 1000) // Convert seconds to milliseconds
+		HsDelay::Timestamp(delay_seconds_to_millis(seconds)?)
 	} else {
 		return Err(crate::error::QuantusError::Generic("Missing delay parameter".to_string()));
 	};

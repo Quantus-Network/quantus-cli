@@ -369,7 +369,7 @@ pub async fn execute_command(
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
 		Commands::Transfers(transfers_cmd) =>
-			transfers::handle_transfers_command(transfers_cmd).await,
+			transfers::handle_transfers_command(transfers_cmd, node_url).await,
 		Commands::Runtime(runtime_cmd) =>
 			runtime::handle_runtime_command(runtime_cmd, node_url, execution_mode).await,
 		Commands::Call {

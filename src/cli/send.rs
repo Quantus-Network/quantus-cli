@@ -87,7 +87,9 @@ pub fn format_balance(amount: u128, decimals: u8) -> String {
 		return amount.to_string();
 	}
 
-	let divisor = 10_u128.pow(decimals as u32);
+	let Some(divisor) = 10_u128.checked_pow(decimals as u32) else {
+		return format!("<unsupported decimals: {decimals}>");
+	};
 	let whole_part = amount / divisor;
 	let fractional_part = amount % divisor;
 
@@ -735,8 +737,8 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 #[cfg(test)]
 mod tests {
 	use super::{
-		build_batch_transfer_call, effective_tip_amount, limits_from_batched_calls_limit,
-		parse_amount_with_decimals,
+		build_batch_transfer_call, effective_tip_amount, format_balance,
+		limits_from_batched_calls_limit, parse_amount_with_decimals,
 	};
 	use subxt::tx::Payload;
 
@@ -808,6 +810,18 @@ mod tests {
 		assert_eq!(recommended, 40, "recommended must be Utility::batched_calls_limit");
 		assert_eq!(safe, 20, "safe limit is half the runtime call-count limit");
 		assert_ne!(recommended, 1000, "must not use the hard-coded heuristic fallback");
+	}
+
+	#[test]
+	fn format_balance_rejects_unsupported_decimals_without_panic() {
+		let formatted = std::panic::catch_unwind(|| format_balance(u128::MAX, 39))
+			.expect("format_balance must not panic on unsupported decimals");
+		assert!(
+			formatted.contains("unsupported decimals"),
+			"expected unsupported-decimals marker, got: {formatted}"
+		);
+		assert_eq!(format_balance(1_500_000_000_000, 12), "1.5");
+		assert_eq!(format_balance(42, 0), "42");
 	}
 
 	#[test]
