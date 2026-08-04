@@ -52,37 +52,82 @@ pub type Hash256 = [u8; 32];
 ///
 /// This is the client-side representation of the proof returned by `zkTree_getMerkleProof`.
 /// Siblings are unsorted - the client computes position hints by sorting siblings + current hash.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone)]
 #[allow(dead_code)] // Fields used for deserialization and future use when ZK trie is deployed
 pub struct ZkMerkleProofRpc {
 	/// Index of the leaf
 	pub leaf_index: u64,
 	/// The leaf data (SCALE-encoded ZkLeaf)
-	#[serde(with = "byte_array")]
 	pub leaf_data: Vec<u8>,
 	/// Leaf hash
-	#[serde(with = "hash_array")]
 	pub leaf_hash: Hash256,
 	/// Sibling hashes at each level (3 siblings per level for 4-ary tree).
 	/// These are unsorted - client sorts and computes positions.
-	#[serde(with = "siblings_format")]
 	pub siblings: Vec<[Hash256; 3]>,
 	/// Current tree root
-	#[serde(with = "hash_array")]
 	pub root: Hash256,
 	/// Current tree depth
 	pub depth: u8,
+}
+
+impl<'de> serde::Deserialize<'de> for ZkMerkleProofRpc {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		#[derive(serde::Deserialize)]
+		struct RawZkMerkleProofRpc {
+			leaf_index: u64,
+			#[serde(with = "byte_array")]
+			leaf_data: Vec<u8>,
+			#[serde(with = "hash_array")]
+			leaf_hash: Hash256,
+			#[serde(with = "siblings_format")]
+			siblings: Vec<[Hash256; 3]>,
+			#[serde(with = "hash_array")]
+			root: Hash256,
+			depth: u8,
+		}
+
+		let raw = <RawZkMerkleProofRpc as serde::Deserialize>::deserialize(deserializer)?;
+		if raw.depth as usize != raw.siblings.len() {
+			return Err(serde::de::Error::custom(format!(
+				"depth {} does not match siblings length {}",
+				raw.depth,
+				raw.siblings.len()
+			)));
+		}
+
+		Ok(Self {
+			leaf_index: raw.leaf_index,
+			leaf_data: raw.leaf_data,
+			leaf_hash: raw.leaf_hash,
+			siblings: raw.siblings,
+			root: raw.root,
+			depth: raw.depth,
+		})
+	}
 }
 
 /// Helper module for deserializing byte arrays (chain sends as array of numbers)
 mod byte_array {
 	use serde::{Deserialize, Deserializer};
 
+	const ZK_LEAF_DATA_LEN: usize = 60;
+
 	pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<u8>, D::Error>
 	where
 		D: Deserializer<'de>,
 	{
-		Vec::<u8>::deserialize(deserializer)
+		let bytes = Vec::<u8>::deserialize(deserializer)?;
+		if bytes.len() != ZK_LEAF_DATA_LEN {
+			return Err(serde::de::Error::custom(format!(
+				"expected {} bytes, got {}",
+				ZK_LEAF_DATA_LEN,
+				bytes.len()
+			)));
+		}
+		Ok(bytes)
 	}
 }
 
@@ -103,6 +148,7 @@ mod hash_array {
 
 /// Helper module for deserializing siblings array (chain sends as array of arrays of numbers)
 mod siblings_format {
+	use qp_zk_circuits_common::zk_merkle::MAX_DEPTH;
 	use serde::{Deserialize, Deserializer};
 
 	pub fn deserialize<'de, D>(deserializer: D) -> Result<Vec<[[u8; 32]; 3]>, D::Error>
@@ -111,6 +157,13 @@ mod siblings_format {
 	{
 		// Chain sends: Vec<[[u8; 32]; 3]> serialized as array of arrays of arrays of numbers
 		let levels: Vec<Vec<Vec<u8>>> = Deserialize::deserialize(deserializer)?;
+		if levels.len() > MAX_DEPTH {
+			return Err(serde::de::Error::custom(format!(
+				"proof depth {} exceeds max {}",
+				levels.len(),
+				MAX_DEPTH
+			)));
+		}
 		levels
 			.into_iter()
 			.map(|level| {
@@ -1179,6 +1232,31 @@ fn show_wormhole_address(secret_file: String) -> crate::error::Result<()> {
 	Ok(())
 }
 
+/// Fetch the latest finalized block as a fully materialised subxt `Block`.
+///
+/// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
+/// of the SDK surface. Network/decoding failures are wrapped in
+/// [`crate::error::QuantusError::NetworkError`].
+pub async fn at_finalized_block(
+	quantus_client: &QuantusClient,
+) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
+	let finalized_block: subxt::utils::H256 = quantus_client
+		.rpc_client()
+		.request("chain_getFinalizedHead", rpc_params![])
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Failed to fetch finalized block hash: {e:?}"
+			))
+		})?;
+	let block = quantus_client.client().blocks().at(finalized_block).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!(
+			"Failed to fetch finalized block {finalized_block:?}: {e:?}"
+		))
+	})?;
+	Ok(block)
+}
+
 /// Fetch the latest (best) block as a fully materialised subxt `Block`.
 ///
 /// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
@@ -1306,7 +1384,7 @@ pub async fn aggregate_proofs(
 			// De-quantize to show actual amount that will be minted
 			let dequantized_amount =
 				(account_data.summed_output_amount as u128) * SCALE_DOWN_FACTOR;
-			let ss58_address = slice_to_quantus_ss58(exit_bytes);
+			let ss58_address = slice_to_quantus_ss58(exit_bytes)?;
 			log_print!(
 				"    [{}] {} -> {} quantized ({} planck = {})",
 				idx,
@@ -1377,7 +1455,10 @@ pub async fn aggregate_public_batch(
 			e
 		))
 	})?;
-	log_print!("  Aggregator (fee rebate recipient): {}", slice_to_quantus_ss58(&aggregator_bytes));
+	log_print!(
+		"  Aggregator (fee rebate recipient): {}",
+		slice_to_quantus_ss58(&aggregator_bytes)?
+	);
 
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 	let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
@@ -1488,7 +1569,7 @@ pub async fn aggregate_public_batch(
 			log_print!(
 				"    [{}] {} -> {}",
 				idx,
-				slice_to_quantus_ss58(exit_bytes),
+				slice_to_quantus_ss58(exit_bytes)?,
 				format_balance(dequantized_amount)
 			);
 		}
@@ -2036,12 +2117,12 @@ fn load_multiround_wallet(
 ) -> crate::error::Result<MultiroundWalletContext> {
 	let wallet_manager = WalletManager::new()?;
 	let wallet_password = password::get_wallet_password(wallet_name, password, password_file)?;
-	let wallet_data = wallet_manager.load_wallet(wallet_name, &wallet_password)?;
+	let mut wallet_data = wallet_manager.load_wallet(wallet_name, &wallet_password)?;
 	let wallet_address = wallet_data.keypair.to_account_id_ss58check();
 	let wallet_account_id = SubxtAccountId(wallet_data.keypair.to_account_id_32().into());
 
 	// Require a persisted mnemonic for deterministic wormhole HD derivation.
-	let mnemonic = wallet_data.mnemonic.ok_or_else(|| {
+	let mnemonic = wallet_data.take_mnemonic().ok_or_else(|| {
 		crate::error::QuantusError::Generic(
 			"Wallet does not contain a mnemonic. Use a wallet created from a mnemonic, or supply --mnemonic/--secret-file where supported.".to_string(),
 		)
@@ -2052,7 +2133,7 @@ fn load_multiround_wallet(
 		wallet_name: wallet_name.to_string(),
 		wallet_address,
 		wallet_account_id,
-		keypair: wallet_data.keypair,
+		keypair: wallet_data.take_keypair(),
 		mnemonic,
 	})
 }
@@ -2146,16 +2227,21 @@ async fn execute_initial_transfers(
 	// The transfer_count used in the proof is the count at the time of transfer,
 	// which equals the count before the transfer (since it increments after).
 	let client = quantus_client.client();
+	let finalized_block_hash = at_finalized_block(quantus_client)
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to get finalized block for transfer counts: {}",
+				e
+			))
+		})?
+		.hash();
 	let mut transfer_counts_before: Vec<u64> = Vec::with_capacity(num_proofs);
 	for secret in secrets.iter() {
 		let wormhole_address = SubxtAccountId(secret.address);
 		let count = client
 			.storage()
-			.at_latest()
-			.await
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to get storage: {}", e))
-			})?
+			.at(finalized_block_hash)
 			.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address))
 			.await
 			.map_err(|e| {
@@ -2179,8 +2265,8 @@ async fn execute_initial_transfers(
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Batch transfer failed: {}", e)))?;
 
-	// Inclusion waited for finalization; read events from the current best tip.
-	let block = at_best_block(quantus_client)
+	// Inclusion waited for finalization; read events from the finalized tip.
+	let block = at_finalized_block(quantus_client)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
 	let block_hash = block.hash();
@@ -2232,8 +2318,8 @@ async fn generate_round_proofs(
 
 	log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
 
-	// All proofs in an aggregation batch must use the same block for storage proofs.
-	let proof_block = at_best_block(quantus_client)
+	// All proofs in an aggregation batch must use the same finalized block for storage proofs.
+	let proof_block = at_finalized_block(quantus_client)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
 	let proof_block_hash = proof_block.hash();
@@ -3208,7 +3294,7 @@ async fn parse_proof_file(
 				log_print!(
 					"Aggregator: 0x{} ({})",
 					hex::encode(inputs.aggregator_address.as_ref()),
-					slice_to_quantus_ss58(inputs.aggregator_address.as_ref())
+					slice_to_quantus_ss58(inputs.aggregator_address.as_ref())?
 				);
 				log_print!("Asset ID: {}", inputs.asset_id);
 				log_print!("Volume Fee BPS: {}", inputs.volume_fee_bps);
@@ -3474,12 +3560,19 @@ async fn run_dissolve(
 	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
 	let wormhole_address = SubxtAccountId(initial_secret.address);
 
+	let finalized_block_hash = at_finalized_block(&quantus_client)
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to get finalized block for dissolve transfer count: {}",
+				e
+			))
+		})?
+		.hash();
 	let transfer_count_before = quantus_client
 		.client()
 		.storage()
-		.at_latest()
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get storage: {}", e)))?
+		.at(finalized_block_hash)
 		.fetch(
 			&quantus_node::api::storage()
 				.wormhole()
@@ -3515,7 +3608,7 @@ async fn run_dissolve(
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Initial transfer failed: {}", e)))?;
 
-	let block = at_best_block(&quantus_client)
+	let block = at_finalized_block(&quantus_client)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
 	let block_hash = block.hash();
@@ -4000,9 +4093,9 @@ async fn run_check_nullifier(
 		// Load wallet and derive wormhole secret
 		let wallet_manager = WalletManager::new()?;
 		let wallet_password = password::get_wallet_password(&wallet, password, password_file)?;
-		let wallet_data = wallet_manager.load_wallet(&wallet, &wallet_password)?;
+		let mut wallet_data = wallet_manager.load_wallet(&wallet, &wallet_password)?;
 
-		let mnemonic = wallet_data.mnemonic.ok_or_else(|| {
+		let mnemonic = wallet_data.take_mnemonic().ok_or_else(|| {
 			crate::error::QuantusError::Generic(
 				"Wallet does not contain a mnemonic. Use --secret-file instead.".to_string(),
 			)
@@ -4121,8 +4214,80 @@ async fn run_check_nullifier(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use qp_zk_circuits_common::zk_merkle::MAX_DEPTH;
+	use serde_json::json;
 	use std::collections::HashSet;
 	use tempfile::NamedTempFile;
+
+	fn hash_bytes(seed: u16) -> Vec<u8> {
+		let mut out = vec![0u8; 32];
+		for (i, byte) in out.iter_mut().enumerate() {
+			*byte = seed.wrapping_add(i as u16) as u8;
+		}
+		out
+	}
+
+	/// #160110: oversized/mismatched Merkle proof RPC payloads must fail deserialization.
+	#[test]
+	fn malicious_zk_merkle_rpc_rejects_oversized_mismatched_depth() {
+		let sibling_levels: Vec<_> = (0..=u8::MAX as u16)
+			.map(|level| {
+				vec![
+					hash_bytes(level.wrapping_mul(3)),
+					hash_bytes(level.wrapping_mul(3).wrapping_add(1)),
+					hash_bytes(level.wrapping_mul(3).wrapping_add(2)),
+				]
+			})
+			.collect();
+
+		let malicious_rpc_response = json!({
+			"leaf_index": 7_u64,
+			"leaf_data": [42_u8],
+			"leaf_hash": hash_bytes(900),
+			"siblings": sibling_levels,
+			"root": hash_bytes(901),
+			"depth": 1_u8
+		});
+
+		let err = serde_json::from_value::<ZkMerkleProofRpc>(malicious_rpc_response)
+			.expect_err("oversized mismatched Merkle proof must be rejected");
+		let message = err.to_string();
+		assert!(
+			message.contains("exceeds max")
+				|| message.contains("expected 60 bytes")
+				|| message.contains("does not match siblings length"),
+			"unexpected rejection reason: {message}"
+		);
+		assert!(
+			MAX_DEPTH < u8::MAX as usize,
+			"test assumes circuit MAX_DEPTH is below attacker-supplied depth"
+		);
+	}
+
+	#[test]
+	fn zk_merkle_rpc_rejects_depth_sibling_mismatch() {
+		let siblings = vec![vec![hash_bytes(1), hash_bytes(2), hash_bytes(3)]];
+		let response = json!({
+			"leaf_index": 1_u64,
+			"leaf_data": vec![0_u8; 60],
+			"leaf_hash": hash_bytes(10),
+			"siblings": siblings,
+			"root": hash_bytes(11),
+			"depth": 2_u8
+		});
+		let err = serde_json::from_value::<ZkMerkleProofRpc>(response)
+			.expect_err("depth must match siblings length");
+		assert!(err.to_string().contains("does not match siblings length"));
+	}
+
+	#[test]
+	fn recursive_flows_prefer_finalized_inclusion() {
+		// Unsigned verify paths return only Finalized; Best remains for API
+		// compatibility but recursive snapshot/proof code uses at_finalized_block.
+		assert_eq!(IncludedAt::Finalized.label(), "finalized block");
+		assert_ne!(IncludedAt::Best.label(), IncludedAt::Finalized.label());
+		let _: *const () = at_finalized_block as *const ();
+	}
 
 	#[test]
 	fn test_compute_output_amount() {
