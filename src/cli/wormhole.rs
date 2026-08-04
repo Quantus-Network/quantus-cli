@@ -1528,13 +1528,7 @@ pub async fn submit_unsigned_verify_private_batch(
 
 	while let Some(Ok(status)) = tx_progress.next().await {
 		match status {
-			TxStatus::InBestBlock(tx_in_block) => {
-				return Ok((
-					IncludedAt::Best,
-					tx_in_block.block_hash(),
-					tx_in_block.extrinsic_hash(),
-				));
-			},
+			TxStatus::InBestBlock(_) => continue,
 			TxStatus::InFinalizedBlock(tx_in_block) => {
 				return Ok((
 					IncludedAt::Finalized,
@@ -1693,13 +1687,7 @@ pub async fn submit_unsigned_verify_public_batch(
 
 	while let Some(Ok(status)) = tx_progress.next().await {
 		match status {
-			TxStatus::InBestBlock(tx_in_block) => {
-				return Ok((
-					IncludedAt::Best,
-					tx_in_block.block_hash(),
-					tx_in_block.extrinsic_hash(),
-				));
-			},
+			TxStatus::InBestBlock(_) => continue,
 			TxStatus::InFinalizedBlock(tx_in_block) => {
 				return Ok((
 					IncludedAt::Finalized,
@@ -1794,6 +1782,103 @@ pub struct TransferInfo {
 	pub leaf_index: u64,
 }
 
+/// Expected attributes used to uniquely bind a `NativeTransferred` event.
+///
+/// Optional fields are wildcards when `None`. Call sites that know the intended
+/// funding account / amount / transfer_count should set them so a same-block
+/// transfer to the same destination cannot be selected by destination alone.
+#[derive(Debug, Clone)]
+struct ExpectedTransferEvent {
+	wormhole_address: SubxtAccountId,
+	funding_account: Option<SubxtAccountId>,
+	amount: Option<u128>,
+	transfer_count: Option<u64>,
+	leaf_index: Option<u64>,
+}
+
+struct RoundProofGeneration {
+	proof_files: Vec<String>,
+	expected_transfers: Vec<ExpectedTransferEvent>,
+}
+
+fn push_expected_transfer(
+	expected: &mut Vec<ExpectedTransferEvent>,
+	wormhole_address: SubxtAccountId,
+	funding_account: SubxtAccountId,
+	amount: u128,
+	transfer_count: Option<u64>,
+	leaf_index: Option<u64>,
+) {
+	if let Some(existing) = expected.iter_mut().find(|e| {
+		e.wormhole_address == wormhole_address &&
+			e.funding_account.as_ref() == Some(&funding_account) &&
+			e.transfer_count == transfer_count &&
+			e.leaf_index == leaf_index
+	}) {
+		let current = existing.amount.unwrap_or(0);
+		existing.amount = Some(current.saturating_add(amount));
+	} else {
+		expected.push(ExpectedTransferEvent {
+			wormhole_address,
+			funding_account: Some(funding_account),
+			amount: Some(amount),
+			transfer_count,
+			leaf_index,
+		});
+	}
+}
+
+fn event_matches_expected(
+	event: &wormhole::events::NativeTransferred,
+	expected: &ExpectedTransferEvent,
+) -> bool {
+	event.to == expected.wormhole_address &&
+		expected.funding_account.as_ref().map_or(true, |from| &event.from == from) &&
+		expected.amount.map_or(true, |amount| event.amount == amount) &&
+		expected.transfer_count.map_or(true, |count| event.transfer_count == count) &&
+		expected.leaf_index.map_or(true, |leaf| event.leaf_index == leaf)
+}
+
+fn parse_expected_transfer_events(
+	events: &[wormhole::events::NativeTransferred],
+	expected_transfers: &[ExpectedTransferEvent],
+	block_hash: subxt::utils::H256,
+) -> Result<Vec<TransferInfo>, crate::error::QuantusError> {
+	let mut transfer_infos = Vec::with_capacity(expected_transfers.len());
+
+	for expected in expected_transfers {
+		let matches: Vec<&wormhole::events::NativeTransferred> =
+			events.iter().filter(|event| event_matches_expected(event, expected)).collect();
+
+		let matching_event = match matches.as_slice() {
+			[event] => *event,
+			[] => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"No transfer event found matching expected attributes for address {:?}",
+					expected.wormhole_address
+				)));
+			},
+			_ => {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Ambiguous transfer events matching expected attributes for address {:?}",
+					expected.wormhole_address
+				)));
+			},
+		};
+
+		transfer_infos.push(TransferInfo {
+			block_hash,
+			transfer_count: matching_event.transfer_count,
+			amount: matching_event.amount,
+			wormhole_address: expected.wormhole_address.clone(),
+			funding_account: matching_event.from.clone(),
+			leaf_index: matching_event.leaf_index,
+		});
+	}
+
+	Ok(transfer_infos)
+}
+
 /// Derive a wormhole secret using HD derivation
 /// Path: m/44'/189189189'/0'/round'/index'
 fn derive_wormhole_secret(
@@ -1831,34 +1916,29 @@ async fn get_minting_account(
 }
 
 /// Parse transfer info from NativeTransferred events in a block and updates block hash for all
-/// transfers
+/// transfers.
+///
+/// Destination-only matching rejects ambiguous duplicate destinations instead of
+/// accepting the first event. Internal call sites that know intended
+/// from/amount/transfer_count bind those attributes before accepting an event.
 pub fn parse_transfer_events(
 	events: &[wormhole::events::NativeTransferred],
 	expected_addresses: &[SubxtAccountId],
 	block_hash: subxt::utils::H256,
 ) -> Result<Vec<TransferInfo>, crate::error::QuantusError> {
-	let mut transfer_infos = Vec::new();
+	let expected_transfers: Vec<ExpectedTransferEvent> = expected_addresses
+		.iter()
+		.cloned()
+		.map(|wormhole_address| ExpectedTransferEvent {
+			wormhole_address,
+			funding_account: None,
+			amount: None,
+			transfer_count: None,
+			leaf_index: None,
+		})
+		.collect();
 
-	for expected_addr in expected_addresses {
-		// Find the event matching this address
-		let matching_event = events.iter().find(|e| &e.to == expected_addr).ok_or_else(|| {
-			crate::error::QuantusError::Generic(format!(
-				"No transfer event found for address {:?}",
-				expected_addr
-			))
-		})?;
-
-		transfer_infos.push(TransferInfo {
-			block_hash,
-			transfer_count: matching_event.transfer_count,
-			amount: matching_event.amount,
-			wormhole_address: expected_addr.clone(),
-			funding_account: matching_event.from.clone(),
-			leaf_index: matching_event.leaf_index,
-		});
-	}
-
-	Ok(transfer_infos)
+	parse_expected_transfer_events(events, &expected_transfers, block_hash)
 }
 
 /// Configuration for multiround execution
@@ -2046,63 +2126,43 @@ async fn execute_initial_transfers(
 		&quantum_keypair,
 		batch_tx,
 		None,
-		ExecutionMode { finalized: false, wait_for_transaction: true },
+		ExecutionMode { finalized: true, wait_for_transaction: true },
 	)
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Batch transfer failed: {}", e)))?;
 
-	// Get the block hash for the transfer info
+	// Inclusion waited for finalization; read events from the current best tip.
 	let block = at_best_block(quantus_client)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
 	let block_hash = block.hash();
 
-	// Fetch events from the block to get leaf_index values
 	let events_api =
 		quantus_client.client().events().at(block_hash).await.map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
 		})?;
+	let transfer_events: Vec<wormhole::events::NativeTransferred> = events_api
+		.find::<wormhole::events::NativeTransferred>()
+		.filter_map(|e| e.ok())
+		.collect();
 
-	// Build transfer info using the transfer counts we captured before the batch
-	// and leaf_index from events
 	let funding_account: SubxtAccountId = SubxtAccountId(wallet.keypair.to_account_id_32().into());
-	let mut transfers = Vec::with_capacity(num_proofs);
-
-	for (i, secret) in secrets.iter().enumerate() {
-		let wormhole_address = SubxtAccountId(secret.address);
-
-		// Find the matching event to get leaf_index
-		let event = events_api
-			.find::<wormhole::events::NativeTransferred>()
-			.find(|e| {
-				if let Ok(evt) = e {
-					evt.to == wormhole_address && evt.transfer_count == transfer_counts_before[i]
-				} else {
-					false
-				}
-			})
-			.ok_or_else(|| {
-				crate::error::QuantusError::Generic(format!(
-					"No transfer event found for address {}",
-					hex::encode(secret.address)
-				))
-			})?
-			.map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Event decode error: {}", e))
-			})?;
-
-		transfers.push(TransferInfo {
-			block_hash,
-			transfer_count: transfer_counts_before[i],
-			amount: partition_amounts[i],
-			wormhole_address,
-			funding_account: funding_account.clone(),
-			leaf_index: event.leaf_index,
-		});
-	}
+	let expected_transfers: Vec<ExpectedTransferEvent> = secrets
+		.iter()
+		.enumerate()
+		.map(|(i, secret)| ExpectedTransferEvent {
+			wormhole_address: SubxtAccountId(secret.address),
+			funding_account: Some(funding_account.clone()),
+			amount: Some(partition_amounts[i]),
+			transfer_count: Some(transfer_counts_before[i]),
+			leaf_index: None,
+		})
+		.collect();
+	let transfers =
+		parse_expected_transfer_events(&transfer_events, &expected_transfers, block_hash)?;
 
 	log_success!(
-		"  {} transfers submitted in a single batch (block {})",
+		"  {} transfers submitted in a single finalized batch (block {})",
 		num_proofs,
 		hex::encode(block_hash.0)
 	);
@@ -2116,9 +2176,10 @@ async fn generate_round_proofs(
 	secrets: &[WormholePair],
 	transfers: &[TransferInfo],
 	exit_accounts: &[SubxtAccountId],
+	minting_account: &SubxtAccountId,
 	round_dir: &str,
 	num_proofs: usize,
-) -> crate::error::Result<Vec<String>> {
+) -> crate::error::Result<RoundProofGeneration> {
 	use colored::Colorize;
 
 	log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
@@ -2141,12 +2202,31 @@ async fn generate_round_proofs(
 
 	// Log the random partition
 	log_print!("  Random output partition:");
+	let mut expected_transfers = Vec::new();
 	for (i, assignment) in output_assignments.iter().enumerate() {
 		let amt1_planck = (assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR;
 		let ss58_1 = bytes_to_quantus_ss58(&assignment.exit_account_1);
+		if assignment.output_amount_1 > 0 {
+			push_expected_transfer(
+				&mut expected_transfers,
+				SubxtAccountId(assignment.exit_account_1),
+				minting_account.clone(),
+				amt1_planck,
+				None,
+				None,
+			);
+		}
 		if assignment.output_amount_2 > 0 {
 			let amt2_planck = (assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR;
 			let ss58_2 = bytes_to_quantus_ss58(&assignment.exit_account_2);
+			push_expected_transfer(
+				&mut expected_transfers,
+				SubxtAccountId(assignment.exit_account_2),
+				minting_account.clone(),
+				amt2_planck,
+				None,
+				None,
+			);
 			log_print!(
 				"    Proof {}: {} ({}) -> {}, {} ({}) -> {}",
 				i + 1,
@@ -2217,7 +2297,7 @@ async fn generate_round_proofs(
 		proof_gen_elapsed.as_secs_f64() / num_proofs as f64,
 	);
 
-	Ok(proof_files)
+	Ok(RoundProofGeneration { proof_files, expected_transfers })
 }
 
 /// Derive wormhole secrets for a round
@@ -2459,11 +2539,12 @@ async fn run_multiround(
 		}
 
 		// Step 2: Generate proofs with random output partitioning
-		let proof_files = generate_round_proofs(
+		let RoundProofGeneration { proof_files, expected_transfers } = generate_round_proofs(
 			&quantus_client,
 			&secrets,
 			&current_transfers,
 			&exit_accounts,
+			&minting_account,
 			&round_dir,
 			num_proofs,
 		)
@@ -2507,7 +2588,7 @@ async fn run_multiround(
 		if !is_final {
 			log_print!("{}", "Step 5: Capturing transfer info for next round...".bright_yellow());
 
-			// Parse events to get transfer info for next round's wormhole addresses
+			// Reorder expected transfers to match next-round secret indices.
 			let next_round_addresses: Vec<SubxtAccountId> = (1..=num_proofs)
 				.map(|i| {
 					let next_secret =
@@ -2515,9 +2596,27 @@ async fn run_multiround(
 					SubxtAccountId(next_secret.address)
 				})
 				.collect();
+			let expected_ordered: Vec<ExpectedTransferEvent> = next_round_addresses
+				.iter()
+				.map(|addr| {
+					expected_transfers
+						.iter()
+						.find(|e| &e.wormhole_address == addr)
+						.cloned()
+						.ok_or_else(|| {
+							crate::error::QuantusError::Generic(format!(
+								"No expected transfer for next-round address {:?}",
+								addr
+							))
+						})
+				})
+				.collect::<Result<_, _>>()?;
 
-			current_transfers =
-				parse_transfer_events(&transfer_events, &next_round_addresses, verification_block)?;
+			current_transfers = parse_expected_transfer_events(
+				&transfer_events,
+				&expected_ordered,
+				verification_block,
+			)?;
 
 			log_print!(
 				"  Captured {} transfer(s) for round {}",
@@ -3306,6 +3405,7 @@ async fn run_dissolve(
 	let quantus_client = QuantusClient::new(node_url)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to connect: {}", e)))?;
+	let minting_account = get_minting_account(quantus_client.client()).await?;
 
 	// Create output directory
 	std::fs::create_dir_all(&output_dir).map_err(|e| {
@@ -3326,6 +3426,26 @@ async fn run_dissolve(
 	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
 	let wormhole_address = SubxtAccountId(initial_secret.address);
 
+	let transfer_count_before = quantus_client
+		.client()
+		.storage()
+		.at_latest()
+		.await
+		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get storage: {}", e)))?
+		.fetch(
+			&quantus_node::api::storage()
+				.wormhole()
+				.transfer_count(wormhole_address.clone()),
+		)
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to fetch transfer count for initial dissolve address: {}",
+				e
+			))
+		})?
+		.unwrap_or(0);
+
 	// Transfer to the wormhole address
 	let transfer_tx = quantus_node::api::tx().balances().transfer_allow_death(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address.clone()),
@@ -3342,12 +3462,11 @@ async fn run_dissolve(
 		&quantum_keypair,
 		transfer_tx,
 		None,
-		ExecutionMode { finalized: false, wait_for_transaction: true },
+		ExecutionMode { finalized: true, wait_for_transaction: true },
 	)
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Initial transfer failed: {}", e)))?;
 
-	// Get block and event
 	let block = at_best_block(&quantus_client)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
@@ -3356,19 +3475,32 @@ async fn run_dissolve(
 		quantus_client.client().events().at(block_hash).await.map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
 		})?;
-	let event = events_api
+	let transfer_events: Vec<wormhole::events::NativeTransferred> = events_api
 		.find::<wormhole::events::NativeTransferred>()
-		.find(|e| if let Ok(evt) = e { evt.to.0 == initial_secret.address } else { false })
-		.ok_or_else(|| crate::error::QuantusError::Generic("No transfer event found".to_string()))?
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Event decode error: {}", e)))?;
+		.filter_map(|e| e.ok())
+		.collect();
+	let expected_initial = [ExpectedTransferEvent {
+		wormhole_address: wormhole_address.clone(),
+		funding_account: Some(funding_account.clone()),
+		amount: Some(amount),
+		transfer_count: Some(transfer_count_before),
+		leaf_index: None,
+	}];
+	let initial_transfer =
+		parse_expected_transfer_events(&transfer_events, &expected_initial, block_hash)?
+			.into_iter()
+			.next()
+			.ok_or_else(|| {
+				crate::error::QuantusError::Generic("No initial transfer event found".to_string())
+			})?;
 
 	let mut current_outputs = vec![DissolveOutput {
 		secret: *initial_secret.secret.as_bytes(),
-		amount,
-		transfer_count: event.transfer_count,
-		funding_account: funding_account.clone(),
+		amount: initial_transfer.amount,
+		transfer_count: initial_transfer.transfer_count,
+		funding_account: initial_transfer.funding_account,
 		proof_block_hash: block_hash,
-		leaf_index: event.leaf_index,
+		leaf_index: initial_transfer.leaf_index,
 	}];
 
 	log_success!("  Funded 1 wormhole address with {}", format_balance(amount));
@@ -3419,6 +3551,7 @@ async fn run_dissolve(
 			// Use the proof_block_hash from the first input (all inputs in a batch
 			// were created in the same verification block from the previous layer).
 			let batch_proof_block_hash = batch_inputs[0].proof_block_hash;
+			let mut expected_child_outputs: Vec<([u8; 32], ExpectedTransferEvent)> = Vec::new();
 
 			for (i, input) in batch_inputs.iter().enumerate() {
 				let global_idx = batch_start + i;
@@ -3437,6 +3570,26 @@ async fn run_dissolve(
 					output_amount_2: output_2.max(1),
 					exit_account_2: next_secrets[exit_2_idx].address,
 				};
+				expected_child_outputs.push((
+					*next_secrets[exit_1_idx].secret.as_bytes(),
+					ExpectedTransferEvent {
+						wormhole_address: SubxtAccountId(next_secrets[exit_1_idx].address),
+						funding_account: Some(minting_account.clone()),
+						amount: Some((assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR),
+						transfer_count: None,
+						leaf_index: None,
+					},
+				));
+				expected_child_outputs.push((
+					*next_secrets[exit_2_idx].secret.as_bytes(),
+					ExpectedTransferEvent {
+						wormhole_address: SubxtAccountId(next_secrets[exit_2_idx].address),
+						funding_account: Some(minting_account.clone()),
+						amount: Some((assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR),
+						transfer_count: None,
+						leaf_index: None,
+					},
+				));
 
 				let proof_file = format!("{}/batch{}_proof{}.hex", layer_dir, batch_idx, i);
 
@@ -3475,36 +3628,27 @@ async fn run_dissolve(
 
 			log_success!("    Verified in block 0x{}", hex::encode(verification_block.0));
 
-			// Collect next layer's outputs from the transfer events
-			// Use the verification_block as the proof_block_hash for the next layer
-			for (i, _input) in batch_inputs.iter().enumerate() {
-				let global_idx = batch_start + i;
-				let exit_1_idx = global_idx * 2;
-				let exit_2_idx = global_idx * 2 + 1;
+			// Collect next layer's outputs from the transfer events.
+			// Use the verification_block as the proof_block_hash for the next layer.
+			let expected_events: Vec<ExpectedTransferEvent> =
+				expected_child_outputs.iter().map(|(_, expected)| expected.clone()).collect();
+			let parsed_outputs = parse_expected_transfer_events(
+				&transfer_events,
+				&expected_events,
+				verification_block,
+			)?;
 
-				for (secret_idx, target_address) in [
-					(exit_1_idx, &next_secrets[exit_1_idx]),
-					(exit_2_idx, &next_secrets[exit_2_idx]),
-				] {
-					let event = transfer_events
-						.iter()
-						.find(|e| e.to.0 == target_address.address)
-						.ok_or_else(|| {
-						crate::error::QuantusError::Generic(format!(
-							"No transfer event for output {} at layer {}",
-							secret_idx, layer
-						))
-					})?;
-
-					all_next_outputs.push(DissolveOutput {
-						secret: *target_address.secret.as_bytes(),
-						amount: event.amount,
-						transfer_count: event.transfer_count,
-						funding_account: event.from.clone(),
-						proof_block_hash: verification_block,
-						leaf_index: event.leaf_index,
-					});
-				}
+			for ((secret, _expected), transfer) in
+				expected_child_outputs.into_iter().zip(parsed_outputs.into_iter())
+			{
+				all_next_outputs.push(DissolveOutput {
+					secret,
+					amount: transfer.amount,
+					transfer_count: transfer.transfer_count,
+					funding_account: transfer.funding_account,
+					proof_block_hash: verification_block,
+					leaf_index: transfer.leaf_index,
+				});
 			}
 		}
 
@@ -4483,6 +4627,87 @@ mod tests {
 				"expected conflict error for {a} + {b}, got: {err}"
 			);
 		}
+	}
+
+	fn acct(seed: u8) -> SubxtAccountId {
+		SubxtAccountId([seed; 32])
+	}
+
+	#[test]
+	fn parse_expected_transfer_events_binds_by_from_and_amount_not_destination_alone() {
+		let shared_to = acct(0x42);
+		let attacker_from = acct(0xA1);
+		let intended_from = acct(0xB2);
+		let block_hash = subxt::utils::H256([0xCC; 32]);
+
+		let attacker_event = wormhole::events::NativeTransferred {
+			from: attacker_from.clone(),
+			to: shared_to.clone(),
+			amount: 111,
+			transfer_count: 7,
+			leaf_index: 70,
+		};
+		let intended_event = wormhole::events::NativeTransferred {
+			from: intended_from.clone(),
+			to: shared_to.clone(),
+			amount: 999_000,
+			transfer_count: 42,
+			leaf_index: 420,
+		};
+
+		// Destination-only first-match would pick the attacker event. With expected
+		// from/amount/transfer_count the intended transfer must be selected instead.
+		let expected = [ExpectedTransferEvent {
+			wormhole_address: shared_to.clone(),
+			funding_account: Some(intended_from.clone()),
+			amount: Some(999_000),
+			transfer_count: Some(42),
+			leaf_index: None,
+		}];
+		let parsed = parse_expected_transfer_events(
+			&[
+				wormhole::events::NativeTransferred {
+					from: attacker_from.clone(),
+					to: shared_to.clone(),
+					amount: 111,
+					transfer_count: 7,
+					leaf_index: 70,
+				},
+				intended_event,
+			],
+			&expected,
+			block_hash,
+		)
+		.expect("expected attributes uniquely identify the intended transfer");
+
+		assert_eq!(parsed.len(), 1);
+		assert_eq!(parsed[0].funding_account, intended_from);
+		assert_eq!(parsed[0].amount, 999_000);
+		assert_eq!(parsed[0].transfer_count, 42);
+		assert_eq!(parsed[0].leaf_index, 420);
+		assert_ne!(parsed[0].funding_account, attacker_from);
+		assert_ne!(parsed[0].amount, attacker_event.amount);
+
+		// Destination-only public helper must refuse ambiguous duplicates.
+		let ambiguous = parse_transfer_events(
+			&[attacker_event, wormhole::events::NativeTransferred {
+				from: intended_from,
+				to: shared_to.clone(),
+				amount: 999_000,
+				transfer_count: 42,
+				leaf_index: 420,
+			}],
+			&[shared_to],
+			block_hash,
+		);
+		assert!(
+			ambiguous.is_err(),
+			"destination-only parse must not accept first-match among duplicate destinations"
+		);
+		assert!(
+			ambiguous.unwrap_err().to_string().contains("Ambiguous"),
+			"expected ambiguous-match error"
+		);
 	}
 
 	#[tokio::test]
