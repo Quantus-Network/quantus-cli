@@ -65,10 +65,6 @@ pub enum WalletCommands {
 		#[arg(short, long)]
 		name: String,
 
-		/// Mnemonic phrase (24 words, will prompt if not provided)
-		#[arg(short, long)]
-		mnemonic: Option<String>,
-
 		/// Password to encrypt the wallet (optional, will prompt if not provided)
 		#[arg(short, long)]
 		password: Option<String>,
@@ -87,10 +83,6 @@ pub enum WalletCommands {
 		/// Wallet name
 		#[arg(short, long)]
 		name: String,
-
-		/// 32-byte seed in hex format (64 hex characters)
-		#[arg(short, long)]
-		seed: String,
 
 		/// Password to encrypt the wallet (optional, will prompt if not provided)
 		#[arg(short, long)]
@@ -556,14 +548,13 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Import { name, mnemonic, password, derivation_path, no_derivation } => {
+		WalletCommands::Import { name, password, derivation_path, no_derivation } => {
 			log_print!("📥 Importing wallet...");
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Get mnemonic from user if not provided
-			let mnemonic_phrase =
-				if let Some(mnemonic) = mnemonic { mnemonic } else { get_mnemonic_from_user()? };
+			// Always read mnemonic from a hidden prompt so it never appears in process argv.
+			let mnemonic_phrase = get_mnemonic_from_user()?;
 
 			// Get password from user if not provided
 			let final_password =
@@ -614,10 +605,16 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::FromSeed { name, seed, password } => {
+		WalletCommands::FromSeed { name, password } => {
 			log_print!("🌱 Creating wallet from seed...");
 
 			let wallet_manager = WalletManager::new()?;
+
+			// Always read seed from a hidden prompt so it never appears in process argv.
+			log_print!("Enter 32-byte seed in hex format (64 hex characters):");
+			let seed = rpassword::read_password()
+				.map_err(|e| QuantusError::Generic(format!("Failed to read seed: {e}")))?;
+			let seed = seed.trim().to_string();
 
 			// Get password from user if not provided
 			let final_password =
@@ -806,5 +803,51 @@ pub async fn handle_wallet_command(
 
 			Ok(())
 		},
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use clap::Parser;
+
+	#[derive(Parser, Debug)]
+	#[command(name = "quantus")]
+	struct TestCli {
+		#[command(subcommand)]
+		command: crate::cli::Commands,
+	}
+
+	#[test]
+	fn wallet_import_rejects_mnemonic_cli_argument() {
+		let result = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"import",
+			"--name",
+			"poc",
+			"--mnemonic",
+			"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+		]);
+		assert!(
+			result.is_err(),
+			"wallet import must not accept --mnemonic on the command line"
+		);
+	}
+
+	#[test]
+	fn wallet_from_seed_rejects_seed_cli_argument() {
+		let result = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"from-seed",
+			"--name",
+			"poc",
+			"--seed",
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		]);
+		assert!(
+			result.is_err(),
+			"wallet from-seed must not accept --seed on the command line"
+		);
 	}
 }
