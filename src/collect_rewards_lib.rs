@@ -561,10 +561,15 @@ pub async fn query_pending_transfers(
 	let incoming_transfers: Vec<_> =
 		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
 
+	let secret_bytes: [u8; 32] = *wormhole_secret.secret.as_bytes();
+	let unspent_transfers =
+		filter_unspent_transfers_by_indexer(&incoming_transfers, &secret_bytes, &subsquid_client)
+			.await?;
+
 	let mut total_available: u128 = 0;
 	let mut pending = Vec::new();
 
-	for t in &incoming_transfers {
+	for t in &unspent_transfers {
 		let ctx = format!("transfer {}", t.id);
 		let amount = parse_transfer_amount(&t.amount, &ctx)?;
 		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
@@ -590,6 +595,10 @@ pub async fn query_pending_transfers(
 ///
 /// Use this when you already have the wormhole address and don't need to derive it.
 ///
+/// Address-only discovery cannot reconcile spent nullifiers. When any incoming
+/// transfers are present, this returns an error directing callers to use a
+/// secret-bearing API (`query_pending_transfers` / `collect_rewards`).
+///
 /// # Arguments
 /// * `wormhole_address_bytes` - The 32-byte wormhole address
 /// * `subsquid_url` - The Subsquid GraphQL endpoint URL
@@ -614,29 +623,18 @@ pub async fn query_pending_transfers_for_address(
 	let incoming_transfers: Vec<_> =
 		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
 
-	let mut total_available: u128 = 0;
-	let mut pending = Vec::new();
-
-	for t in &incoming_transfers {
-		let ctx = format!("transfer {}", t.id);
-		let amount = parse_transfer_amount(&t.amount, &ctx)?;
-		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
-		let transfer_count = parse_transfer_count(&t.transfer_count, &ctx)?;
-
-		total_available = checked_add_amount(total_available, amount, "pending transfers")?;
-
-		pending.push(PendingTransfer {
-			block_height: t.block_height,
-			block_hash: t.block_id.clone(),
-			amount,
-			leaf_index,
-			transfer_count,
-			wormhole_address: wormhole_address.clone(),
-			funding_account: t.from_id.clone(),
-		});
+	if !incoming_transfers.is_empty() {
+		return Err(CollectRewardsError::from(
+			"Cannot determine available withdrawals for an address without the wormhole secret; use query_pending_transfers or collect_rewards so spent nullifiers can be reconciled"
+				.to_string(),
+		));
 	}
 
-	Ok(QueryPendingTransfersResult { wormhole_address, transfers: pending, total_available })
+	Ok(QueryPendingTransfersResult {
+		wormhole_address,
+		transfers: vec![],
+		total_available: 0,
+	})
 }
 
 // ============================================================================
@@ -1027,6 +1025,48 @@ fn validate_pre_submission_nullifier_count(count: usize) -> Result<()> {
 	Ok(())
 }
 
+/// Filter transfers against spent nullifiers reported by the indexer.
+async fn filter_unspent_transfers_by_indexer(
+	transfers: &[Transfer],
+	secret_bytes: &[u8; 32],
+	subsquid_client: &SubsquidClient,
+) -> Result<Vec<Transfer>> {
+	if transfers.is_empty() {
+		return Ok(vec![]);
+	}
+
+	let mut seen_nullifiers = std::collections::HashSet::new();
+	let mut transfers_with_nullifiers = Vec::new();
+	let mut nullifier_pairs = Vec::new();
+
+	for transfer in transfers {
+		let ctx = format!("transfer {}", transfer.id);
+		let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
+		let nullifier =
+			wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
+				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
+			})?;
+
+		if !seen_nullifiers.insert(nullifier) {
+			continue;
+		}
+
+		let nullifier_hex = hex::encode(nullifier);
+		let nullifier_hash = compute_address_hash(&nullifier);
+		nullifier_pairs.push((nullifier_hex.clone(), nullifier_hash));
+		transfers_with_nullifiers.push((transfer.clone(), nullifier_hex));
+	}
+
+	let spent = subsquid_client.check_nullifiers_spent(&nullifier_pairs, 8).await?;
+
+	Ok(transfers_with_nullifiers
+		.into_iter()
+		.filter_map(|(transfer, nullifier_hex)| {
+			(!spent.contains(&nullifier_hex)).then_some(transfer)
+		})
+		.collect())
+}
+
 /// Filter transfers against `UsedNullifiers` at one pinned best-chain snapshot.
 async fn filter_unspent_transfers_onchain(
 	transfers: &[Transfer],
@@ -1225,5 +1265,208 @@ mod tests {
 		assert_eq!(m_address, s_address);
 		assert_eq!(m_address_bytes, s_address_bytes);
 		assert_eq!(m_secret_bytes, s_secret_bytes);
+	}
+
+	fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+		use std::io::Read;
+		use std::time::Duration;
+
+		stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+		let mut buf = Vec::new();
+		let mut tmp = [0u8; 1024];
+		let mut header_end = None;
+		let mut content_len = 0usize;
+
+		loop {
+			let n = stream.read(&mut tmp).unwrap();
+			assert_ne!(n, 0, "mock indexer connection closed before request was complete");
+			buf.extend_from_slice(&tmp[..n]);
+
+			if header_end.is_none() {
+				if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+					header_end = Some(pos + 4);
+					let headers = String::from_utf8_lossy(&buf[..pos]);
+					for line in headers.lines() {
+						if let Some((name, value)) = line.split_once(':') {
+							if name.eq_ignore_ascii_case("content-length") {
+								content_len = value.trim().parse().unwrap();
+							}
+						}
+					}
+				}
+			}
+
+			if let Some(end) = header_end {
+				if buf.len() >= end + content_len {
+					break;
+				}
+			}
+		}
+
+		String::from_utf8(buf).unwrap()
+	}
+
+	fn write_json_response(stream: &mut std::net::TcpStream, body: serde_json::Value) {
+		use std::io::Write;
+		let body = body.to_string();
+		write!(
+			stream,
+			"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+			body.len(),
+			body
+		)
+		.unwrap();
+	}
+
+	/// #159890: address-only queries must not report availability without secret reconciliation.
+	#[tokio::test]
+	async fn pending_transfer_query_for_address_refuses_without_secret() {
+		use serde_json::json;
+		use std::net::TcpListener;
+		use std::thread;
+
+		let secret = [7u8; 32];
+		let wormhole_address = wormhole_lib::compute_wormhole_address(&secret).unwrap();
+		let address_hash = compute_address_hash(&wormhole_address);
+
+		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+		let mock_url = format!("http://{}", listener.local_addr().unwrap());
+		thread::spawn(move || {
+			let (mut stream, _) = listener.accept().unwrap();
+			let _ = read_http_request(&mut stream);
+			write_json_response(
+				&mut stream,
+				json!({
+					"data": {
+						"transfers": [{
+							"id": "spent-transfer",
+							"block_id": "0xspentblock",
+							"block": { "height": 11 },
+							"timestamp": "2026-01-01T00:00:00Z",
+							"extrinsic_id": "0xspentextrinsic",
+							"from_id": "miner-a",
+							"to_id": "wormhole",
+							"amount": "100",
+							"fee": "0",
+							"from_hash": "from-hash-a",
+							"to_hash": address_hash,
+							"leaf_index": "40",
+							"transfer_count": "5"
+						}],
+						"meta": { "aggregate": { "count": 1 } }
+					}
+				}),
+			);
+		});
+
+		let err = query_pending_transfers_for_address(&wormhole_address, &mock_url)
+			.await
+			.expect_err("address-only query must refuse when transfers exist");
+		assert!(
+			err.message.contains("without the wormhole secret"),
+			"unexpected error: {}",
+			err.message
+		);
+	}
+
+	/// #159890: mnemonic pending-transfer query excludes spent nullifiers via indexer.
+	#[tokio::test]
+	async fn query_pending_transfers_excludes_spent_nullifiers() {
+		use serde_json::json;
+		use std::net::TcpListener;
+		use std::thread;
+
+		let path = format!("m/44'/{}/0'/1'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
+		let wormhole_secret = derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path).unwrap();
+		let secret_bytes: [u8; 32] = *wormhole_secret.secret.as_bytes();
+		let address_hash = compute_address_hash(&wormhole_secret.address);
+
+		let spent_transfer_count = 5u64;
+		let spent_nullifier =
+			wormhole_lib::compute_nullifier(&secret_bytes, spent_transfer_count).unwrap();
+		let spent_nullifier_hex = hex::encode(spent_nullifier);
+		let spent_nullifier_hash = compute_address_hash(&spent_nullifier);
+
+		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+		let mock_url = format!("http://{}", listener.local_addr().unwrap());
+		let address_hash_for_server = address_hash.clone();
+		let spent_hex_for_server = spent_nullifier_hex.clone();
+		let spent_hash_for_server = spent_nullifier_hash.clone();
+
+		thread::spawn(move || {
+			for _ in 0..2 {
+				let (mut stream, _) = listener.accept().unwrap();
+				let request = read_http_request(&mut stream);
+				let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+				if body.contains("TransfersByHashPrefix") {
+					write_json_response(
+						&mut stream,
+						json!({
+							"data": {
+								"transfers": [
+									{
+										"id": "spent-transfer",
+										"block_id": "0xspentblock",
+										"block": { "height": 11 },
+										"timestamp": "2026-01-01T00:00:00Z",
+										"extrinsic_id": "0xspentextrinsic",
+										"from_id": "miner-a",
+										"to_id": "wormhole",
+										"amount": "100",
+										"fee": "0",
+										"from_hash": "from-hash-a",
+										"to_hash": address_hash_for_server,
+										"leaf_index": "40",
+										"transfer_count": "5"
+									},
+									{
+										"id": "unspent-transfer",
+										"block_id": "0xunspentblock",
+										"block": { "height": 12 },
+										"timestamp": "2026-01-01T00:00:01Z",
+										"extrinsic_id": "0xunspentextrinsic",
+										"from_id": "miner-b",
+										"to_id": "wormhole",
+										"amount": "7",
+										"fee": "0",
+										"from_hash": "from-hash-b",
+										"to_hash": address_hash_for_server,
+										"leaf_index": "41",
+										"transfer_count": "6"
+									}
+								],
+								"meta": { "aggregate": { "count": 2 } }
+							}
+						}),
+					);
+				} else if body.contains("NullifiersByPrefix") {
+					write_json_response(
+						&mut stream,
+						json!({
+							"data": {
+								"nullifiers": [{
+									"nullifier": spent_hex_for_server,
+									"nullifier_hash": spent_hash_for_server,
+									"block": { "height": 20 },
+									"timestamp": "2026-01-01T00:00:02Z",
+									"wormholeExtrinsic": { "extrinsic_id": "0xwithdrawal" }
+								}]
+							}
+						}),
+					);
+				} else {
+					panic!("unexpected GraphQL request body: {body}");
+				}
+			}
+		});
+
+		let reported = query_pending_transfers(TEST_MNEMONIC, 0, &mock_url)
+			.await
+			.expect("mnemonic pending query should reconcile nullifiers");
+
+		assert_eq!(reported.transfers.len(), 1);
+		assert_eq!(reported.transfers[0].transfer_count, 6);
+		assert_eq!(reported.total_available, 7);
+		assert!(!reported.transfers.iter().any(|t| t.transfer_count == spent_transfer_count));
 	}
 }
