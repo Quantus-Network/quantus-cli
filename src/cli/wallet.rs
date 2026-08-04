@@ -5,7 +5,7 @@ use crate::{
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 	wallet::{
-		password::{get_mnemonic_from_user, reject_cli_password},
+		password::{get_mnemonic_from_user, get_new_wallet_password},
 		WalletManager, DEFAULT_DERIVATION_PATH,
 	},
 };
@@ -25,9 +25,17 @@ pub enum WalletCommands {
 		#[arg(short, long)]
 		name: String,
 
-		/// Password to encrypt the wallet (optional, will prompt if not provided)
+		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
 		#[arg(short, long)]
 		password: Option<String>,
+
+		/// Read encryption password from file (owner-only on Unix)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Allow creating a wallet with an empty password (development only)
+		#[arg(long)]
+		allow_empty_password: bool,
 
 		/// Derivation path (default: m/44'/189189'/0'/0/0)
 		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
@@ -325,22 +333,36 @@ pub async fn handle_wallet_command(
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WalletCommands::Create { name, password, derivation_path, no_derivation } => {
+		WalletCommands::Create {
+			name,
+			password,
+			password_file,
+			allow_empty_password,
+			derivation_path,
+			no_derivation,
+		} => {
 			log_print!("🔐 Creating new quantum wallet...");
 
-			reject_cli_password(&password)?;
+			let final_password =
+				get_new_wallet_password(&name, password, password_file, allow_empty_password)?;
 
 			let wallet_manager = WalletManager::new()?;
 
 			// Choose creation method based on flags
 			let result = if no_derivation {
 				// Use master seed directly (like quantus-node --no-derivation)
-				wallet_manager.create_wallet_no_derivation(&name, None).await
+				wallet_manager
+					.create_wallet_no_derivation(&name, Some(&final_password))
+					.await
 			} else if derivation_path == DEFAULT_DERIVATION_PATH {
-				wallet_manager.create_wallet(&name, None).await
+				wallet_manager.create_wallet(&name, Some(&final_password)).await
 			} else {
 				wallet_manager
-					.create_wallet_with_derivation_path(&name, None, &derivation_path)
+					.create_wallet_with_derivation_path(
+						&name,
+						Some(&final_password),
+						&derivation_path,
+					)
 					.await
 			};
 
