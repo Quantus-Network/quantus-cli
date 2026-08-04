@@ -186,6 +186,17 @@ impl QuantusClient {
 		Ok(latest_hash)
 	}
 
+	/// Interpret a System::Account nonce lookup without collapsing absence into a silent zero.
+	///
+	/// Returns `(nonce, account_exists)`. Missing accounts use nonce `0` (correct for the first
+	/// extrinsic) but callers can log the absence explicitly.
+	pub(crate) fn interpret_account_nonce(fetched_nonce: Option<u32>) -> (u32, bool) {
+		match fetched_nonce {
+			Some(nonce) => (nonce, true),
+			None => (0, false),
+		}
+	}
+
 	/// Get account nonce from the best block (latest) using direct RPC call
 	/// This bypasses SubXT's default behavior of using finalized blocks
 	pub async fn get_account_nonce_from_best_block(
@@ -208,10 +219,16 @@ impl QuantusClient {
 
 		let storage_at = self.client.storage().at(latest_block_hash);
 
-		let account_info = storage_at.fetch_or_default(&storage_addr).await?;
-
-		log_verbose!("✅ Nonce from best block: {}", account_info.nonce);
-		Ok(account_info.nonce as u64)
+		let account_info = storage_at.fetch(&storage_addr).await?;
+		let (nonce, exists) = Self::interpret_account_nonce(account_info.map(|info| info.nonce));
+		if exists {
+			log_verbose!("✅ Nonce from best block: {}", nonce);
+		} else {
+			log_verbose!(
+				"⚠️  Account has no on-chain entry at best block; using nonce 0 for first extrinsic"
+			);
+		}
+		Ok(nonce as u64)
 	}
 
 	/// Get genesis hash using RPC call
@@ -370,5 +387,13 @@ mod tests {
 			QuantusClient::sanitize_url_for_diagnostics("wss://rpc.example.com"),
 			"wss://rpc.example.com"
 		);
+	}
+
+	#[test]
+	fn interpret_account_nonce_distinguishes_absent_account() {
+		// #159454/#159455: absence must not be indistinguishable from a real nonce-0 account.
+		assert_eq!(QuantusClient::interpret_account_nonce(None), (0, false));
+		assert_eq!(QuantusClient::interpret_account_nonce(Some(0)), (0, true));
+		assert_eq!(QuantusClient::interpret_account_nonce(Some(7)), (7, true));
 	}
 }

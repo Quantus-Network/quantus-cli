@@ -469,6 +469,24 @@ pub async fn count_storage_entries(
 	Ok(total_count)
 }
 
+/// Maximum entries `quantus storage iterate --limit` will request in one RPC call.
+pub(crate) const MAX_STORAGE_ITERATE_LIMIT: u32 = 1000;
+
+/// Cap/validate the storage iterate `--limit` before forwarding to RPC.
+///
+/// `0` means count-only and is always accepted.
+pub(crate) fn validate_storage_iterate_limit(limit: u32) -> crate::error::Result<u32> {
+	if limit == 0 {
+		return Ok(0);
+	}
+	if limit > MAX_STORAGE_ITERATE_LIMIT {
+		return Err(QuantusError::Generic(format!(
+			"Storage iterate --limit {limit} exceeds maximum of {MAX_STORAGE_ITERATE_LIMIT}"
+		)));
+	}
+	Ok(limit)
+}
+
 /// Iterate through storage map entries with real RPC calls
 pub async fn iterate_storage_entries(
 	quantus_client: &crate::chain::client::QuantusClient,
@@ -478,6 +496,7 @@ pub async fn iterate_storage_entries(
 	decode_as: Option<String>,
 	block_identifier: Option<String>,
 ) -> crate::error::Result<()> {
+	let limit = validate_storage_iterate_limit(limit)?;
 	log_print!(
 		"🔄 Iterating storage {}::{} (limit: {})",
 		pallet_name.bright_green(),
@@ -892,5 +911,24 @@ mod tests {
 			.expect("advancing cursor must succeed")
 			.expect("full page must yield next start key");
 		assert_eq!(next, *page.last().unwrap());
+	}
+
+	#[test]
+	fn validate_storage_iterate_limit_rejects_above_max() {
+		let err = validate_storage_iterate_limit(MAX_STORAGE_ITERATE_LIMIT + 1)
+			.expect_err("limit above max must fail");
+		assert!(
+			err.to_string().contains("exceeds maximum"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn validate_storage_iterate_limit_allows_count_only_and_max() {
+		assert_eq!(validate_storage_iterate_limit(0).unwrap(), 0);
+		assert_eq!(
+			validate_storage_iterate_limit(MAX_STORAGE_ITERATE_LIMIT).unwrap(),
+			MAX_STORAGE_ITERATE_LIMIT
+		);
 	}
 }

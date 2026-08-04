@@ -578,6 +578,19 @@ fn apply_extrinsic_failed_to_result(result: &mut VerificationResult, error_msg: 
 	result.error_message = Some(error_msg);
 }
 
+/// Require the submitted extrinsic hash to be present in the included block.
+///
+/// Missing hash is an explicit error (reorg / wrong block), not a verification failure.
+fn require_proof_verification_extrinsic_index(
+	our_extrinsic_index: Option<usize>,
+) -> crate::error::Result<usize> {
+	our_extrinsic_index.ok_or_else(|| {
+		crate::error::QuantusError::Generic(
+			"Could not find submitted extrinsic in included block".to_string(),
+		)
+	})
+}
+
 /// Finalize SDK event collection: any ExtrinsicFailed dominates ProofVerified.
 fn finalize_wormhole_event_collection(
 	found_proof_verified: bool,
@@ -609,12 +622,13 @@ async fn check_proof_verification_events(
 		crate::error::QuantusError::NetworkError(format!("Failed to get extrinsics: {e:?}"))
 	})?;
 
-	// Find our extrinsic index
+	// Find our extrinsic index — fail closed if the hash is absent from this block.
 	let our_extrinsic_index = extrinsics
 		.iter()
 		.enumerate()
 		.find(|(_, ext)| ext.hash() == *tx_hash)
 		.map(|(idx, _)| idx);
+	let ext_idx = require_proof_verification_extrinsic_index(our_extrinsic_index)?;
 
 	let events = block.events().await.map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to fetch events: {e:?}"))
@@ -630,52 +644,50 @@ async fn check_proof_verification_events(
 		log_print!("📋 Transaction Events:");
 	}
 
-	if let Some(ext_idx) = our_extrinsic_index {
-		for event_result in events.iter() {
-			let event = event_result.map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
-			})?;
+	for event_result in events.iter() {
+		let event = event_result.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
+		})?;
 
-			// Only process events for our extrinsic
-			if let subxt::events::Phase::ApplyExtrinsic(event_ext_idx) = event.phase() {
-				if event_ext_idx != ext_idx as u32 {
-					continue;
-				}
+		// Only process events for our extrinsic
+		if let subxt::events::Phase::ApplyExtrinsic(event_ext_idx) = event.phase() {
+			if event_ext_idx != ext_idx as u32 {
+				continue;
+			}
 
-				// Display event in verbose mode
-				if verbose {
-					log_print!(
-						"  📌 {}.{}",
-						event.pallet_name().bright_cyan(),
-						event.variant_name().bright_yellow()
-					);
+			// Display event in verbose mode
+			if verbose {
+				log_print!(
+					"  📌 {}.{}",
+					event.pallet_name().bright_cyan(),
+					event.variant_name().bright_yellow()
+				);
 
-					// Try to decode and display event details
-					if let Ok(typed_event) =
-						event.as_root_event::<crate::chain::quantus_subxt::api::Event>()
-					{
-						log_print!("     📝 {:?}", typed_event);
-					}
-				}
-
-				// Check for ProofVerified event
-				if let Ok(Some(proof_verified)) =
-					event.as_event::<wormhole::events::ProofVerified>()
+				// Try to decode and display event details
+				if let Ok(typed_event) =
+					event.as_root_event::<crate::chain::quantus_subxt::api::Event>()
 				{
-					apply_proof_verified_to_result(
-						&mut verification_result,
-						proof_verified.exit_amount,
-					);
+					log_print!("     📝 {:?}", typed_event);
 				}
+			}
 
-				// Check for ExtrinsicFailed event. Dispatch failure dominates any
-				// ProofVerified event regardless of event ordering.
-				if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
-					event.as_event::<ExtrinsicFailed>()
-				{
-					let error_msg = format_dispatch_error(&dispatch_error, &metadata);
-					apply_extrinsic_failed_to_result(&mut verification_result, error_msg);
-				}
+			// Check for ProofVerified event
+			if let Ok(Some(proof_verified)) =
+				event.as_event::<wormhole::events::ProofVerified>()
+			{
+				apply_proof_verified_to_result(
+					&mut verification_result,
+					proof_verified.exit_amount,
+				);
+			}
+
+			// Check for ExtrinsicFailed event. Dispatch failure dominates any
+			// ProofVerified event regardless of event ordering.
+			if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
+				event.as_event::<ExtrinsicFailed>()
+			{
+				let error_msg = format_dispatch_error(&dispatch_error, &metadata);
+				apply_extrinsic_failed_to_result(&mut verification_result, error_msg);
 			}
 		}
 	}
@@ -4896,6 +4908,18 @@ mod tests {
 
 	fn acct(seed: u8) -> SubxtAccountId {
 		SubxtAccountId([seed; 32])
+	}
+
+	#[test]
+	fn missing_extrinsic_in_proof_verification_block_is_error() {
+		// #160033: absent hash must not collapse to success=false / "no ProofVerified".
+		let err = require_proof_verification_extrinsic_index(None)
+			.expect_err("missing extrinsic must error");
+		assert!(
+			err.to_string().contains("Could not find submitted extrinsic"),
+			"unexpected error: {err}"
+		);
+		assert_eq!(require_proof_verification_extrinsic_index(Some(2)).unwrap(), 2);
 	}
 
 	#[test]

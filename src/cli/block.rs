@@ -790,6 +790,37 @@ async fn get_account_nonce_at_block(
 	Ok(account_info.nonce)
 }
 
+/// Maximum number of blocks `quantus block list` will process in one invocation.
+pub(crate) const MAX_BLOCK_LIST_COUNT: u32 = 10_000;
+
+/// Validate block-list range bounds before any RPC work.
+///
+/// Rejects inverted ranges, zero step, and ranges that would issue more than
+/// [`MAX_BLOCK_LIST_COUNT`] RPC iterations.
+pub(crate) fn validate_block_list_range(
+	start: u32,
+	end: u32,
+	step: u32,
+) -> crate::error::Result<u32> {
+	if step == 0 {
+		return Err(QuantusError::Generic(
+			"Block list --step must be greater than 0".to_string(),
+		));
+	}
+	if start > end {
+		return Err(QuantusError::Generic(format!(
+			"Invalid block list range: start ({start}) must be <= end ({end})"
+		)));
+	}
+	let block_count = (end - start) / step + 1;
+	if block_count > MAX_BLOCK_LIST_COUNT {
+		return Err(QuantusError::Generic(format!(
+			"Block list range too large: {block_count} blocks exceeds maximum of {MAX_BLOCK_LIST_COUNT}. Narrow --start/--end or increase --step"
+		)));
+	}
+	Ok(block_count)
+}
+
 /// Handle block list command
 pub async fn handle_block_list_command(
 	start: u32,
@@ -804,12 +835,13 @@ pub async fn handle_block_list_command(
 	);
 
 	let step = step.unwrap_or(1);
+	let block_count = validate_block_list_range(start, end, step)?;
 	if step > 1 {
 		log_print!("📏 Step: {}", step.to_string().bright_cyan());
 	}
 
 	let quantus_client = QuantusClient::new(node_url).await?;
-	list_blocks_in_range(&quantus_client, start, end, step).await
+	list_blocks_in_range(&quantus_client, start, end, step, block_count).await
 }
 
 /// List blocks in range with summary information
@@ -818,6 +850,7 @@ async fn list_blocks_in_range(
 	start: u32,
 	end: u32,
 	step: u32,
+	expected_count: u32,
 ) -> crate::error::Result<()> {
 	use jsonrpsee::core::client::ClientT;
 
@@ -831,7 +864,7 @@ async fn list_blocks_in_range(
 	let mut previous_timestamp: Option<u64> = None;
 
 	// Progress indicator
-	log_print!("📊 Processing {} blocks...", ((end - start) / step + 1).to_string().bright_cyan());
+	log_print!("📊 Processing {} blocks...", expected_count.to_string().bright_cyan());
 
 	// Print table header
 	log_print!("");
@@ -1026,3 +1059,43 @@ async fn list_blocks_in_range(
 
 	Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn validate_block_list_range_rejects_inverted_bounds() {
+		let err = validate_block_list_range(100, 50, 1)
+			.expect_err("start > end must fail before underflow");
+		assert!(
+			err.to_string().contains("must be <= end"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn validate_block_list_range_rejects_zero_step() {
+		let err = validate_block_list_range(1, 10, 0).expect_err("step 0 must fail");
+		assert!(err.to_string().contains("step"), "unexpected error: {err}");
+	}
+
+	#[test]
+	fn validate_block_list_range_rejects_unbounded_span() {
+		let err = validate_block_list_range(0, MAX_BLOCK_LIST_COUNT, 1)
+			.expect_err("span above MAX_BLOCK_LIST_COUNT must fail");
+		assert!(
+			err.to_string().contains("too large"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn validate_block_list_range_accepts_max_span() {
+		assert_eq!(
+			validate_block_list_range(0, MAX_BLOCK_LIST_COUNT - 1, 1).unwrap(),
+			MAX_BLOCK_LIST_COUNT
+		);
+	}
+}
+

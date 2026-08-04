@@ -18,9 +18,23 @@ use crate::{
 use colored::Colorize;
 use rand::{seq::SliceRandom, Rng};
 use std::{
+	collections::HashSet,
 	fs,
 	io::{self, Write},
 };
+
+/// Reject duplicate resolved recipient addresses before amount distribution.
+pub(crate) fn ensure_unique_recipients(addresses: &[String]) -> Result<()> {
+	let mut seen = HashSet::with_capacity(addresses.len());
+	for addr in addresses {
+		if !seen.insert(addr.as_str()) {
+			return Err(QuantusError::Generic(format!(
+				"Duplicate recipient address in multisend list: {addr}"
+			)));
+		}
+	}
+	Ok(())
+}
 
 /// Generate a random distribution of amounts across n recipients.
 ///
@@ -179,6 +193,7 @@ pub async fn handle_multisend_command(
 		let resolved = resolve_address(addr)?;
 		resolved_addresses.push(resolved);
 	}
+	ensure_unique_recipients(&resolved_addresses)?;
 
 	let n = resolved_addresses.len();
 	log_verbose!("Resolved {} addresses", n);
@@ -389,5 +404,25 @@ mod tests {
 		// With 5 recipients and a decent range, we should see some variety
 		// (though this isn't guaranteed - it's probabilistic)
 		assert!(seen_distributions.len() > 1, "Expected multiple different distributions");
+	}
+
+	#[test]
+	fn ensure_unique_recipients_rejects_duplicates() {
+		let addrs = vec![
+			"qzAddrA".to_string(),
+			"qzAddrB".to_string(),
+			"qzAddrA".to_string(),
+		];
+		let err = ensure_unique_recipients(&addrs).expect_err("duplicates must fail");
+		assert!(
+			err.to_string().contains("Duplicate recipient"),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn ensure_unique_recipients_accepts_distinct() {
+		let addrs = vec!["qzAddrA".to_string(), "qzAddrB".to_string()];
+		ensure_unique_recipients(&addrs).expect("distinct recipients must succeed");
 	}
 }

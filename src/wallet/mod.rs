@@ -158,7 +158,9 @@ impl WalletManager {
 			metadata,
 		};
 
-		// Encrypt and save the wallet with empty password for test wallets
+		// Empty password is intentional for crystal_* developer wallets: these are
+		// well-known genesis test keys for local development, not custody material.
+		// File permissions remain owner-only (0600) via Keystore::save_new_wallet.
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, "")?;
 		keystore.save_new_wallet(&encrypted_wallet)?;
 
@@ -696,6 +698,29 @@ mod tests {
 			result,
 			Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))
 		));
+	}
+
+	#[tokio::test]
+	#[cfg(unix)]
+	async fn developer_wallet_empty_password_is_intentional_and_owner_only() {
+		// #159457: empty password remains intentional for crystal_*; world-readable
+		// file perms are not — save path must enforce 0600.
+		use std::os::unix::fs::PermissionsExt;
+
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		wallet_manager
+			.create_developer_wallet("crystal_bob")
+			.await
+			.expect("create developer wallet");
+
+		wallet_manager
+			.load_wallet("crystal_bob", "")
+			.expect("empty password must unlock crystal_* developer wallets");
+
+		let wallet_file = wallet_manager.wallets_dir.join("crystal_bob.json");
+		let mode =
+			fs::metadata(&wallet_file).expect("stat wallet").permissions().mode() & 0o777;
+		assert_eq!(mode, 0o600, "developer wallet file must be owner-read/write only");
 	}
 
 	#[tokio::test]

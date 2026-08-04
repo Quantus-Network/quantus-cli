@@ -157,14 +157,23 @@ pub async fn get_account_nonce(
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
 	let account_info = storage_at
-		.fetch_or_default(&storage_addr)
+		.fetch(&storage_addr)
 		.await
 		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}")))?;
 
-	log_verbose!("✅ Account info retrieved with storage query!");
-	log_verbose!("🔢 Nonce: {}", account_info.nonce);
+	let (nonce, exists) = crate::chain::client::QuantusClient::interpret_account_nonce(
+		account_info.map(|info| info.nonce),
+	);
+	if exists {
+		log_verbose!("✅ Account info retrieved with storage query!");
+	} else {
+		log_print!(
+			"⚠️  Account has no on-chain System::Account entry; reporting nonce 0 (new/unused account)"
+		);
+	}
+	log_verbose!("🔢 Nonce: {} (exists={})", nonce, exists);
 
-	Ok(account_info.nonce)
+	Ok(nonce)
 }
 
 /// Fetch high-security status from chain for an account (SS58). Returns None if disabled or on

@@ -7,6 +7,52 @@ use colored::Colorize;
 use serde_json::Value;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 
+/// Parse a JSON value as `u128`, accepting string or number forms.
+///
+/// Rejects non-numeric types instead of silently coercing them to zero.
+pub(crate) fn parse_json_u128(value: &Value, label: &str) -> crate::error::Result<u128> {
+	if let Some(s) = value.as_str() {
+		return s.parse::<u128>().map_err(|_| {
+			QuantusError::Generic(format!("{label} must be a number (got string '{s}')"))
+		});
+	}
+	if let Some(n) = value.as_u64() {
+		return Ok(u128::from(n));
+	}
+	if let Some(n) = value.as_number() {
+		return n.to_string().parse::<u128>().map_err(|_| {
+			QuantusError::Generic(format!("{label} must be a non-negative integer"))
+		});
+	}
+	Err(QuantusError::Generic(format!(
+		"{label} must be a JSON string or number (got {value})"
+	)))
+}
+
+/// Parse a JSON value as `u32`, accepting number or numeric string forms.
+pub(crate) fn parse_json_u32(value: &Value, label: &str) -> crate::error::Result<u32> {
+	if let Some(n) = value.as_u64() {
+		return u32::try_from(n).map_err(|_| {
+			QuantusError::Generic(format!("{label} exceeds u32::MAX"))
+		});
+	}
+	if let Some(s) = value.as_str() {
+		return s.parse::<u32>().map_err(|_| {
+			QuantusError::Generic(format!("{label} must be a u32 (got string '{s}')"))
+		});
+	}
+	Err(QuantusError::Generic(format!(
+		"{label} must be a JSON number or numeric string (got {value})"
+	)))
+}
+
+/// Parse a JSON boolean without silently defaulting missing/wrong types to false.
+pub(crate) fn parse_json_bool(value: &Value, label: &str) -> crate::error::Result<bool> {
+	value.as_bool().ok_or_else(|| {
+		QuantusError::Generic(format!("{label} must be a JSON boolean (got {value})"))
+	})
+}
+
 /// Execute a generic call to any pallet
 pub async fn execute_generic_call(
 	quantus_client: &crate::chain::client::QuantusClient,
@@ -142,9 +188,7 @@ async fn submit_balance_transfer(
 		QuantusError::Generic("First argument must be a string (to_address)".to_string())
 	})?;
 
-	let amount: u128 = args[1].as_str().unwrap_or("0").parse().map_err(|_| {
-		QuantusError::Generic("Second argument must be a number (amount)".to_string())
-	})?;
+	let amount = parse_json_u128(&args[1], "Second argument (amount)")?;
 
 	// Convert to AccountId32
 	let (to_account_id, _) = AccountId32::from_ss58check_with_version(to_address)
@@ -304,8 +348,8 @@ async fn submit_tech_collective_vote(
 		));
 	}
 
-	let referendum_index: u32 = args[0].as_u64().unwrap_or(0) as u32;
-	let aye = args[1].as_bool().unwrap_or(false);
+	let referendum_index = parse_json_u32(&args[0], "First argument (referendum_index)")?;
+	let aye = parse_json_bool(&args[1], "Second argument (aye)")?;
 
 	let vote_call = quantus_subxt::api::tx().tech_collective().vote(referendum_index, aye);
 
@@ -337,9 +381,7 @@ async fn submit_reversible_transfer(
 		QuantusError::Generic("First argument must be a string (to_address)".to_string())
 	})?;
 
-	let amount: u128 = args[1].as_str().unwrap_or("0").parse().map_err(|_| {
-		QuantusError::Generic("Second argument must be a number (amount)".to_string())
-	})?;
+	let amount = parse_json_u128(&args[1], "Second argument (amount)")?;
 
 	let (to_account_id, _) = AccountId32::from_ss58check_with_version(to_address)
 		.map_err(|e| QuantusError::Generic(format!("Invalid to_address: {e:?}")))?;
@@ -380,4 +422,49 @@ pub async fn handle_generic_call(
 	execute_generic_call(&quantus_client, pallet, call, args, keypair, tip, execution_mode).await?;
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use serde_json::json;
+
+	#[test]
+	fn parse_json_u128_accepts_string_and_number() {
+		assert_eq!(parse_json_u128(&json!("1000"), "amount").unwrap(), 1000);
+		assert_eq!(parse_json_u128(&json!(1000), "amount").unwrap(), 1000);
+		assert_eq!(
+			parse_json_u128(&json!(1_000_000_000_000u64), "amount").unwrap(),
+			1_000_000_000_000
+		);
+	}
+
+	#[test]
+	fn parse_json_u128_rejects_non_numeric_without_zero_default() {
+		let err = parse_json_u128(&json!(true), "amount").expect_err("bool must not become 0");
+		assert!(err.to_string().contains("must be a JSON string or number"), "unexpected: {err}");
+		let err = parse_json_u128(&json!(null), "amount").expect_err("null must not become 0");
+		assert!(err.to_string().contains("must be a JSON string or number"), "unexpected: {err}");
+	}
+
+	#[test]
+	fn parse_json_u32_rejects_missing_number_without_zero_default() {
+		let err = parse_json_u32(&json!("not-a-number"), "referendum_index")
+			.expect_err("invalid string must fail");
+		assert!(err.to_string().contains("must be a u32"), "unexpected: {err}");
+		let err = parse_json_u32(&json!(true), "referendum_index")
+			.expect_err("bool must not become referendum 0");
+		assert!(
+			err.to_string().contains("must be a JSON number"),
+			"unexpected: {err}"
+		);
+		assert_eq!(parse_json_u32(&json!(7), "referendum_index").unwrap(), 7);
+	}
+
+	#[test]
+	fn parse_json_bool_rejects_non_bool() {
+		let err = parse_json_bool(&json!(1), "aye").expect_err("number must not become false");
+		assert!(err.to_string().contains("boolean"), "unexpected: {err}");
+		assert!(parse_json_bool(&json!(true), "aye").unwrap());
+	}
 }
