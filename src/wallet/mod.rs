@@ -35,6 +35,16 @@ pub struct WalletManager {
 	wallets_dir: std::path::PathBuf,
 }
 
+#[cfg(unix)]
+fn ensure_dir_owner_only(path: &std::path::Path) -> Result<()> {
+	use std::os::unix::fs::PermissionsExt;
+
+	let mut perms = std::fs::metadata(path)?.permissions();
+	perms.set_mode(0o700);
+	std::fs::set_permissions(path, perms)?;
+	Ok(())
+}
+
 impl WalletManager {
 	/// Create a new wallet manager
 	pub fn new() -> Result<Self> {
@@ -43,8 +53,15 @@ impl WalletManager {
 			.join(".quantus")
 			.join("wallets");
 
+		Self::from_wallets_dir(wallets_dir)
+	}
+
+	/// Create a wallet manager rooted at `wallets_dir`, creating it if needed.
+	fn from_wallets_dir(wallets_dir: std::path::PathBuf) -> Result<Self> {
 		// Create directory if it doesn't exist
 		std::fs::create_dir_all(&wallets_dir)?;
+		#[cfg(unix)]
+		ensure_dir_owner_only(&wallets_dir)?;
 
 		Ok(Self { wallets_dir })
 	}
@@ -537,11 +554,54 @@ mod tests {
 	async fn create_test_wallet_manager() -> (WalletManager, TempDir) {
 		let temp_dir = TempDir::new().expect("Failed to create temp directory");
 		let wallets_dir = temp_dir.path().join("wallets");
-		fs::create_dir_all(&wallets_dir).expect("Failed to create wallets directory");
-
-		let wallet_manager = WalletManager { wallets_dir };
+		let wallet_manager = WalletManager::from_wallets_dir(wallets_dir)
+			.expect("Failed to create wallets directory");
 
 		(wallet_manager, temp_dir)
+	}
+
+	#[cfg(unix)]
+	#[test]
+	fn test_wallet_storage_uses_owner_only_permissions() {
+		use std::os::unix::fs::PermissionsExt;
+
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let wallets_dir = temp_dir.path().join("wallets");
+
+		// Exercise WalletManager::new's directory creation path
+		let wallet_manager = WalletManager::from_wallets_dir(wallets_dir)
+			.expect("Failed to create wallets directory");
+
+		let dir_mode = fs::metadata(&wallet_manager.wallets_dir)
+			.expect("stat wallets dir")
+			.permissions()
+			.mode() &
+			0o777;
+		assert_eq!(dir_mode, 0o700, "wallets directory must be owner-only (0700)");
+
+
+		let keystore = Keystore::new(&wallet_manager.wallets_dir);
+		let mut entropy = [9u8; 32];
+		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
+			qp_rusty_crystals_hdwallet::SensitiveBytes32::from(&mut entropy),
+		);
+		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
+		let wallet_data = WalletData {
+			name: "perm-test-wallet".to_string(),
+			keypair: quantum_keypair,
+			mnemonic: None,
+			derivation_path: DEFAULT_DERIVATION_PATH.to_string(),
+			metadata: std::collections::HashMap::new(),
+		};
+		let encrypted = keystore
+			.encrypt_wallet_data(&wallet_data, "perm-test-password")
+			.expect("encrypt wallet");
+		keystore.save_wallet(&encrypted).expect("save wallet");
+
+		let wallet_file = wallet_manager.wallets_dir.join("perm-test-wallet.json");
+		let file_mode =
+			fs::metadata(&wallet_file).expect("stat wallet file").permissions().mode() & 0o777;
+		assert_eq!(file_mode, 0o600, "wallet file must be owner-read/write (0600)");
 	}
 
 	#[tokio::test]

@@ -28,6 +28,43 @@ use std::path::Path;
 use qp_dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
 use sp_runtime::traits::IdentifyAccount;
 
+/// Atomically persist wallet JSON via temp file + rename.
+#[cfg(unix)]
+fn write_wallet_file_atomically(tmp: &Path, final_path: &Path, data: &[u8]) -> Result<()> {
+	use std::io::Write;
+	use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+
+	// Create the temp file with 0600 before any ciphertext hits disk.
+	let mut file = std::fs::OpenOptions::new()
+		.write(true)
+		.create(true)
+		.truncate(true)
+		.mode(0o600)
+		.open(tmp)?;
+	// mode() only applies on create; force 0600 if a leftover tmp existed.
+	let mut perms = file.metadata()?.permissions();
+	perms.set_mode(0o600);
+	std::fs::set_permissions(tmp, perms)?;
+	file.write_all(data)?;
+	file.sync_all()?;
+	drop(file);
+
+	std::fs::rename(tmp, final_path)?;
+
+	// Belt-and-suspenders: enforce owner-only on the final path too.
+	let mut perms = std::fs::metadata(final_path)?.permissions();
+	perms.set_mode(0o600);
+	std::fs::set_permissions(final_path, perms)?;
+	Ok(())
+}
+
+#[cfg(not(unix))]
+fn write_wallet_file_atomically(tmp: &Path, final_path: &Path, data: &[u8]) -> Result<()> {
+	std::fs::write(tmp, data)?;
+	std::fs::rename(tmp, final_path)?;
+	Ok(())
+}
+
 /// Quantum-safe key pair using Dilithium post-quantum signatures
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QuantumKeyPair {
@@ -146,8 +183,7 @@ impl Keystore {
 		let wallet_json = serde_json::to_string_pretty(wallet)?;
 		// Write to a temp file and rename so a crash mid-write can never leave a
 		// truncated file behind - it may hold the only copy of the key material.
-		std::fs::write(&tmp_file, wallet_json)?;
-		std::fs::rename(&tmp_file, wallet_file)?;
+		write_wallet_file_atomically(&tmp_file, &wallet_file, wallet_json.as_bytes())?;
 		Ok(())
 	}
 
