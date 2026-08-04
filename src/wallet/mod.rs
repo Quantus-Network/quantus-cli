@@ -98,7 +98,7 @@ impl WalletManager {
 		metadata.insert("version".to_string(), "1.0.0".to_string());
 		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
 		metadata.insert("derivation_path".to_string(), derivation_path.to_string());
-		let address = quantum_keypair.to_account_id_ss58check();
+		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
@@ -147,7 +147,7 @@ impl WalletManager {
 		metadata.insert("test_wallet".to_string(), "true".to_string());
 
 		// Generate address from public key
-		let address = quantum_keypair.to_account_id_ss58check();
+		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
@@ -199,7 +199,7 @@ impl WalletManager {
 			let wallet_info = match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
 				Ok(wallet_data) => WalletInfo {
 					name: wallet_data.name,
-					address: wallet_data.keypair.to_account_id_ss58check(),
+					address: wallet_data.keypair.try_to_account_id_ss58check()?,
 					created_at: encrypted_wallet.created_at,
 					key_type: "Dilithium ML-DSA-87".to_string(),
 					derivation_path: "[Encrypted]".to_string(),
@@ -263,7 +263,7 @@ impl WalletManager {
 		metadata.insert("no_derivation".to_string(), "true".to_string());
 
 		// Generate address from public key
-		let address = quantum_keypair.to_account_id_ss58check();
+		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
@@ -315,7 +315,7 @@ impl WalletManager {
 		metadata.insert("no_derivation".to_string(), "true".to_string());
 
 		// Generate address from public key
-		let address = quantum_keypair.to_account_id_ss58check();
+		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
@@ -365,7 +365,7 @@ impl WalletManager {
 		metadata.insert("derivation_path".to_string(), derivation_path.to_string());
 
 		// Generate address from public key
-		let address = quantum_keypair.to_account_id_ss58check();
+		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
@@ -430,7 +430,7 @@ impl WalletManager {
 		metadata.insert("from_seed".to_string(), "true".to_string());
 
 		// Generate address from public key
-		let address = quantum_keypair.to_account_id_ss58check();
+		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
@@ -463,7 +463,7 @@ impl WalletManager {
 				// Decrypt and show full details
 				match keystore.decrypt_wallet_data(&encrypted_wallet, pwd) {
 					Ok(wallet_data) => {
-						let address = wallet_data.keypair.to_account_id_ss58check();
+						let address = wallet_data.keypair.try_to_account_id_ss58check()?;
 						Ok(Some(WalletInfo {
 							name: wallet_data.name,
 							address,
@@ -487,7 +487,7 @@ impl WalletManager {
 			} else {
 				match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
 					Ok(wallet_data) => {
-						let address = wallet_data.keypair.to_account_id_ss58check();
+						let address = wallet_data.keypair.try_to_account_id_ss58check()?;
 						Ok(Some(WalletInfo {
 							name: wallet_data.name,
 							address,
@@ -555,7 +555,7 @@ impl WalletManager {
 			// Wallet-name resolution must not trust the plaintext envelope address.
 			// Only empty-password wallets can be authenticated without prompting.
 			match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
-				Ok(wallet_data) => Ok(Some(wallet_data.keypair.to_account_id_ss58check())),
+				Ok(wallet_data) => Ok(Some(wallet_data.keypair.try_to_account_id_ss58check()?)),
 				Err(crate::error::QuantusError::Wallet(
 					WalletError::InvalidPassword | WalletError::Integrity(_),
 				)) => Ok(None),

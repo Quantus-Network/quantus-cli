@@ -65,6 +65,9 @@ pub enum WalletError {
 	#[error("Key generation failed")]
 	KeyGeneration,
 
+	#[error("Invalid public key")]
+	InvalidPublicKey,
+
 	#[error("Encryption failed: {0}")]
 	Encryption(String),
 
