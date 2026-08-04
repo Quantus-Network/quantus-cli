@@ -271,7 +271,9 @@ pub(crate) fn build_batch_transfer_call(
 		}));
 	}
 
-	Ok(quantus_subxt::api::tx().utility().batch(calls))
+	// batch_all is atomic: any child call failure aborts and reverts the whole batch.
+	// utility.batch() can partially apply earlier calls and still return Ok.
+	Ok(quantus_subxt::api::tx().utility().batch_all(calls))
 }
 
 pub async fn estimate_transaction_partial_fee<Call>(
@@ -745,7 +747,22 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 
 #[cfg(test)]
 mod tests {
-	use super::{effective_tip_amount, parse_amount_with_decimals};
+	use super::{build_batch_transfer_call, effective_tip_amount, parse_amount_with_decimals};
+	use subxt::tx::Payload;
+
+	/// Substrate Alice (valid SS58); used only to construct a call for metadata checks.
+	const TEST_DEST: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+
+	#[test]
+	fn batch_transfer_call_uses_atomic_batch_all() {
+		let call = build_batch_transfer_call(&[(TEST_DEST.to_string(), 1)]).unwrap();
+		let details = call.validation_details().expect("static payload exposes call metadata");
+		assert_eq!(details.pallet_name, "Utility");
+		assert_eq!(
+			details.call_name, "batch_all",
+			"user-facing batch transfers must be atomic (utility.batch_all), not utility.batch"
+		);
+	}
 
 	#[test]
 	fn parses_exact_decimal_amounts() {
