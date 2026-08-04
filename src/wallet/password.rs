@@ -1,6 +1,51 @@
 use crate::{error::Result, log_print, log_verbose, wallet::WalletManager};
 use colored::Colorize;
 
+/// Ensure a password file is a regular file owned by the current user with
+/// no group/other access bits set before reading its contents.
+#[cfg(unix)]
+fn validate_password_file_permissions(file_path: &str) -> Result<()> {
+	use std::os::unix::fs::MetadataExt;
+
+	unsafe extern "C" {
+		fn geteuid() -> u32;
+	}
+
+	let metadata = std::fs::metadata(file_path).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to inspect password file '{file_path}': {e}"
+		))
+	})?;
+
+	if !metadata.is_file() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Password file '{file_path}' is not a regular file"
+		)));
+	}
+
+	// SAFETY: geteuid is a POSIX libc function with no preconditions.
+	let effective_uid = unsafe { geteuid() };
+	if metadata.uid() != effective_uid {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Password file '{file_path}' must be owned by the current user"
+		)));
+	}
+
+	let mode = metadata.mode() & 0o777;
+	if mode & 0o077 != 0 {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Password file '{file_path}' must not be accessible by group or other users (mode {mode:o})"
+		)));
+	}
+
+	Ok(())
+}
+
+#[cfg(not(unix))]
+fn validate_password_file_permissions(_file_path: &str) -> Result<()> {
+	Ok(())
+}
+
 /// Get wallet password with convenience options
 pub fn get_wallet_password(
 	wallet_name: &str,
@@ -19,6 +64,7 @@ pub fn get_wallet_password(
 	// Option 2: Read password from file if provided
 	if let Some(file_path) = password_file {
 		log_verbose!("🔑 Reading password from file: {}", file_path);
+		validate_password_file_permissions(&file_path)?;
 		let pwd = std::fs::read_to_string(&file_path)
 			.map_err(|e| {
 				crate::error::QuantusError::Generic(format!(
@@ -105,5 +151,40 @@ mod tests {
 			msg.contains("--password"),
 			"expected unsupported --password message, got: {msg}"
 		);
+	}
+
+	#[cfg(unix)]
+	mod password_file_permissions {
+		use super::*;
+		use std::fs;
+		use std::os::unix::fs::PermissionsExt;
+
+		fn write_password_file(mode: u32) -> (tempfile::TempDir, String) {
+			let dir = tempfile::tempdir().expect("temp dir");
+			let path = dir.path().join("wallet-password.txt");
+			fs::write(&path, "correct horse battery staple\n").expect("write password file");
+			fs::set_permissions(&path, fs::Permissions::from_mode(mode))
+				.expect("set password file mode");
+			let path_str = path.to_string_lossy().into_owned();
+			(dir, path_str)
+		}
+
+		#[test]
+		fn rejects_group_or_world_readable_password_file() {
+			let (_dir, path) = write_password_file(0o644);
+			let err = validate_password_file_permissions(&path).unwrap_err();
+			let msg = err.to_string();
+			assert!(
+				msg.contains("must not be accessible by group or other"),
+				"expected restrictive-mode rejection, got: {msg}"
+			);
+		}
+
+		#[test]
+		fn accepts_owner_only_password_file() {
+			let (_dir, path) = write_password_file(0o600);
+			validate_password_file_permissions(&path)
+				.expect("owner-only password file owned by self should be accepted");
+		}
 	}
 }
