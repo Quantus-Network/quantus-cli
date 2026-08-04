@@ -15,8 +15,7 @@ use clap::Subcommand;
 use indicatif::{ProgressBar, ProgressStyle};
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use qp_rusty_crystals_hdwallet::{
-	derive_wormhole_from_mnemonic, generate_mnemonic, SensitiveBytes32, WormholePair,
-	QUANTUS_WORMHOLE_CHAIN_ID,
+	derive_wormhole_from_mnemonic, WormholePair, QUANTUS_WORMHOLE_CHAIN_ID,
 };
 use qp_wormhole_aggregator::config::CircuitBinsConfig;
 use qp_wormhole_circuit::inputs::ParsePrivateBatchPublicInputs;
@@ -25,7 +24,6 @@ use qp_zk_circuits_common::{
 	circuit::{C, D, F},
 	utils::BytesDigest,
 };
-use rand::RngCore;
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use subxt::{
 	blocks::Block,
@@ -1914,23 +1912,13 @@ fn load_multiround_wallet(
 	let wallet_address = wallet_data.keypair.to_account_id_ss58check();
 	let wallet_account_id = SubxtAccountId(wallet_data.keypair.to_account_id_32().into());
 
-	// Get or generate mnemonic for HD derivation
-	let mnemonic = match wallet_data.mnemonic {
-		Some(m) => {
-			log_verbose!("Using wallet mnemonic for HD derivation");
-			m
-		},
-		None => {
-			log_print!("Wallet has no mnemonic - generating random mnemonic for wormhole secrets");
-			let mut entropy = [0u8; 32];
-			rand::rng().fill_bytes(&mut entropy);
-			let sensitive_entropy = SensitiveBytes32::from(&mut entropy);
-			let m = generate_mnemonic(sensitive_entropy).map_err(|e| {
-				crate::error::QuantusError::Generic(format!("Failed to generate mnemonic: {:?}", e))
-			})?;
-			m
-		},
-	};
+	// Require a persisted mnemonic for deterministic wormhole HD derivation.
+	let mnemonic = wallet_data.mnemonic.ok_or_else(|| {
+		crate::error::QuantusError::Generic(
+			"Wallet does not contain a mnemonic. Use a wallet created from a mnemonic, or supply --mnemonic/--secret where supported.".to_string(),
+		)
+	})?;
+	log_verbose!("Using wallet mnemonic for HD derivation");
 
 	Ok(MultiroundWalletContext {
 		wallet_name: wallet_name.to_string(),
@@ -4494,6 +4482,34 @@ mod tests {
 				err.contains("cannot be used with"),
 				"expected conflict error for {a} + {b}, got: {err}"
 			);
+		}
+	}
+
+	#[tokio::test]
+	#[serial_test::serial]
+	async fn load_multiround_wallet_errors_when_wallet_has_no_mnemonic() {
+		let home = tempfile::tempdir().unwrap();
+		std::env::set_var("HOME", home.path());
+
+		let wallet_manager = WalletManager::new().unwrap();
+		wallet_manager.create_developer_wallet("crystal_alice").await.unwrap();
+		let stored = wallet_manager.load_wallet("crystal_alice", "").unwrap();
+		assert!(
+			stored.mnemonic.is_none(),
+			"developer wallet must exercise the no-mnemonic secret path"
+		);
+
+		match load_multiround_wallet("crystal_alice", None, None) {
+			Ok(_) => panic!(
+				"wallet without mnemonic must error instead of generating an ephemeral one"
+			),
+			Err(err) => {
+				let msg = err.to_string();
+				assert!(
+					msg.contains("does not contain a mnemonic"),
+					"expected mnemonic-required error, got: {msg}"
+				);
+			},
 		}
 	}
 }
