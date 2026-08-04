@@ -4,7 +4,7 @@
 /// - Quantum-safe encrypting and storing wallet data using Argon2 + AES-256-GCM
 /// - Loading and decrypting wallet data with post-quantum cryptography
 /// - Managing wallet files on disk with quantum-resistant security
-use crate::error::{Result, WalletError};
+use crate::error::{QuantusError, Result, WalletError};
 use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
 #[cfg(test)]
 use qp_rusty_crystals_hdwallet::SensitiveBytes32;
@@ -23,46 +23,148 @@ use aes_gcm::{
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, Version};
 use rand::{rng, RngCore};
 
-use std::path::Path;
+use std::{
+	collections::HashSet,
+	fs::{self, File, OpenOptions},
+	io::{ErrorKind, Read, Write},
+	path::{Path, PathBuf},
+	sync::{Condvar, Mutex, OnceLock},
+};
 
 use qp_dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
 use sp_runtime::traits::IdentifyAccount;
 
-/// Atomically persist wallet JSON via temp file + rename.
-#[cfg(unix)]
-fn write_wallet_file_atomically(tmp: &Path, final_path: &Path, data: &[u8]) -> Result<()> {
-	use std::io::Write;
-	use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+fn keystore_lock() -> &'static Mutex<()> {
+	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+	LOCK.get_or_init(|| Mutex::new(()))
+}
 
-	// Create the temp file with 0600 before any ciphertext hits disk.
-	let mut file = std::fs::OpenOptions::new()
-		.write(true)
-		.create(true)
-		.truncate(true)
-		.mode(0o600)
-		.open(tmp)?;
-	// mode() only applies on create; force 0600 if a leftover tmp existed.
-	let mut perms = file.metadata()?.permissions();
-	perms.set_mode(0o600);
-	std::fs::set_permissions(tmp, perms)?;
-	file.write_all(data)?;
-	file.sync_all()?;
+fn wallet_filename(name: &str) -> Result<String> {
+	if name.is_empty() ||
+		name.contains('/') ||
+		name.contains('\\') ||
+		name == "." ||
+		name == ".."
+	{
+		return Err(WalletError::InvalidName.into());
+	}
+	Ok(format!("{name}.json"))
+}
+
+#[cfg(any(target_os = "linux", target_os = "android"))]
+fn set_no_follow(options: &mut OpenOptions) {
+	use std::os::unix::fs::OpenOptionsExt;
+	const O_NOFOLLOW: i32 = 0o400000;
+	options.custom_flags(O_NOFOLLOW);
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "android")))]
+fn set_no_follow(_options: &mut OpenOptions) {}
+
+fn open_wallet_for_read(path: &Path) -> std::io::Result<File> {
+	let mut options = OpenOptions::new();
+	options.read(true);
+	set_no_follow(&mut options);
+	options.open(path)
+}
+
+/// Exclusively create a random temporary file in the wallet directory.
+/// `create_new` / O_EXCL refuses an existing path (including a pre-positioned symlink).
+fn create_unique_temp(storage_path: &Path, name: &str) -> std::io::Result<(PathBuf, File)> {
+	for _ in 0..32 {
+		let mut nonce = [0u8; 16];
+		rng().fill_bytes(&mut nonce);
+		let tmp_path = storage_path.join(format!(".{name}.{}.tmp", hex::encode(nonce)));
+		let mut options = OpenOptions::new();
+		options.write(true).create_new(true);
+		set_no_follow(&mut options);
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::OpenOptionsExt;
+			options.mode(0o600);
+		}
+		match options.open(&tmp_path) {
+			Ok(file) => return Ok((tmp_path, file)),
+			Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+			Err(e) => return Err(e),
+		}
+	}
+	Err(std::io::Error::new(
+		ErrorKind::AlreadyExists,
+		"could not create unique wallet temporary file",
+	))
+}
+
+fn write_temp_wallet_bytes(storage_path: &Path, name: &str, data: &[u8]) -> Result<PathBuf> {
+	let (tmp_path, mut file) = create_unique_temp(storage_path, name)?;
+	let result = (|| -> Result<()> {
+		file.write_all(data)?;
+		file.sync_all()?;
+		Ok(())
+	})();
+	if let Err(e) = result {
+		let _ = fs::remove_file(&tmp_path);
+		return Err(e);
+	}
 	drop(file);
 
-	std::fs::rename(tmp, final_path)?;
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		let mut perms = fs::metadata(&tmp_path)?.permissions();
+		perms.set_mode(0o600);
+		fs::set_permissions(&tmp_path, perms)?;
+	}
 
-	// Belt-and-suspenders: enforce owner-only on the final path too.
-	let mut perms = std::fs::metadata(final_path)?.permissions();
-	perms.set_mode(0o600);
-	std::fs::set_permissions(final_path, perms)?;
-	Ok(())
+	Ok(tmp_path)
+}
+
+#[cfg(unix)]
+fn same_file_metadata(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+	use std::os::unix::fs::MetadataExt;
+	a.dev() == b.dev() && a.ino() == b.ino()
 }
 
 #[cfg(not(unix))]
-fn write_wallet_file_atomically(tmp: &Path, final_path: &Path, data: &[u8]) -> Result<()> {
-	std::fs::write(tmp, data)?;
-	std::fs::rename(tmp, final_path)?;
-	Ok(())
+fn same_file_metadata(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+	a.len() == b.len() && a.modified().ok() == b.modified().ok()
+}
+
+struct WalletCreateLocks {
+	active: Mutex<HashSet<PathBuf>>,
+	available: Condvar,
+}
+
+static WALLET_CREATE_LOCKS: OnceLock<WalletCreateLocks> = OnceLock::new();
+
+pub(crate) struct WalletCreateGuard {
+	path: PathBuf,
+	locks: &'static WalletCreateLocks,
+}
+
+impl WalletCreateLocks {
+	fn lock(path: PathBuf) -> WalletCreateGuard {
+		let locks = WALLET_CREATE_LOCKS.get_or_init(|| WalletCreateLocks {
+			active: Mutex::new(HashSet::new()),
+			available: Condvar::new(),
+		});
+		let mut active = locks.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+		while active.contains(&path) {
+			active =
+				locks.available.wait(active).unwrap_or_else(|poisoned| poisoned.into_inner());
+		}
+		active.insert(path.clone());
+		WalletCreateGuard { path, locks }
+	}
+}
+
+impl Drop for WalletCreateGuard {
+	fn drop(&mut self) {
+		let mut active =
+			self.locks.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+		active.remove(&self.path);
+		self.locks.available.notify_all();
+	}
 }
 
 /// Quantum-safe key pair using Dilithium post-quantum signatures
@@ -139,7 +241,7 @@ impl QuantumKeyPair {
 }
 
 /// Quantum-safe encrypted wallet data structure
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct EncryptedWallet {
 	pub name: String,
 	pub address: String, // SS58-encoded address (public, not encrypted)
@@ -176,26 +278,118 @@ impl Keystore {
 		Self { storage_path: storage_path.as_ref().to_path_buf() }
 	}
 
-	/// Save an encrypted wallet to disk
+	/// Acquire the per-wallet-name create lock for check-then-save creation flows.
+	pub(crate) fn lock_wallet_create(&self, name: &str) -> Result<WalletCreateGuard> {
+		let file_name = wallet_filename(name)?;
+		Ok(WalletCreateLocks::lock(self.storage_path.join(file_name)))
+	}
+
+	/// Save an encrypted wallet to disk (may replace an existing wallet file).
 	pub fn save_wallet(&self, wallet: &EncryptedWallet) -> Result<()> {
-		let wallet_file = self.storage_path.join(format!("{}.json", wallet.name));
-		let tmp_file = self.storage_path.join(format!("{}.json.tmp", wallet.name));
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		self.save_wallet_unlocked(wallet)
+	}
+
+	/// Save a newly-created wallet only if no wallet with this name exists.
+	pub fn save_new_wallet(&self, wallet: &EncryptedWallet) -> Result<()> {
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		let file_name = wallet_filename(&wallet.name)?;
+		let wallet_file = self.storage_path.join(&file_name);
 		let wallet_json = serde_json::to_string_pretty(wallet)?;
-		// Write to a temp file and rename so a crash mid-write can never leave a
-		// truncated file behind - it may hold the only copy of the key material.
-		write_wallet_file_atomically(&tmp_file, &wallet_file, wallet_json.as_bytes())?;
-		Ok(())
+		let tmp_file = write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
+
+		// Atomically create the destination without replacing an existing wallet.
+		// hard_link fails with AlreadyExists when the final name is taken.
+		match fs::hard_link(&tmp_file, &wallet_file) {
+			Ok(()) => {
+				let _ = fs::remove_file(&tmp_file);
+				#[cfg(unix)]
+				{
+					use std::os::unix::fs::PermissionsExt;
+					let mut perms = fs::metadata(&wallet_file)?.permissions();
+					perms.set_mode(0o600);
+					fs::set_permissions(&wallet_file, perms)?;
+				}
+				Ok(())
+			},
+			Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+				let _ = fs::remove_file(&tmp_file);
+				Err(WalletError::AlreadyExists.into())
+			},
+			Err(e) => {
+				let _ = fs::remove_file(&tmp_file);
+				Err(e.into())
+			},
+		}
+	}
+
+	/// Save a replacement only if the stored wallet still matches the caller's snapshot.
+	pub fn save_wallet_if_current(
+		&self,
+		wallet: &EncryptedWallet,
+		expected: &EncryptedWallet,
+	) -> Result<bool> {
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		match self.load_wallet_unlocked(&expected.name)? {
+			Some(current) if current == *expected => {
+				self.save_wallet_unlocked(wallet)?;
+				Ok(true)
+			},
+			_ => Ok(false),
+		}
+	}
+
+	fn save_wallet_unlocked(&self, wallet: &EncryptedWallet) -> Result<()> {
+		let file_name = wallet_filename(&wallet.name)?;
+		let wallet_file = self.storage_path.join(&file_name);
+		let wallet_json = serde_json::to_string_pretty(wallet)?;
+		// Unpredictable, exclusively-created temp so attackers cannot pre-position a
+		// symlink at a deterministic path. rename replaces the directory entry only.
+		let tmp_file = write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
+		match fs::rename(&tmp_file, &wallet_file) {
+			Ok(()) => {
+				#[cfg(unix)]
+				{
+					use std::os::unix::fs::PermissionsExt;
+					let mut perms = fs::metadata(&wallet_file)?.permissions();
+					perms.set_mode(0o600);
+					fs::set_permissions(&wallet_file, perms)?;
+				}
+				Ok(())
+			},
+			Err(e) => {
+				let _ = fs::remove_file(&tmp_file);
+				Err(e.into())
+			},
+		}
 	}
 
 	/// Load an encrypted wallet from disk
 	pub fn load_wallet(&self, name: &str) -> Result<Option<EncryptedWallet>> {
-		let wallet_file = self.storage_path.join(format!("{name}.json"));
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		self.load_wallet_unlocked(name)
+	}
 
-		if !wallet_file.exists() {
-			return Ok(None);
+	fn load_wallet_unlocked(&self, name: &str) -> Result<Option<EncryptedWallet>> {
+		let wallet_file = self.storage_path.join(wallet_filename(name)?);
+		let mut file = match open_wallet_for_read(&wallet_file) {
+			Ok(file) => file,
+			Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+			Err(e) => return Err(e.into()),
+		};
+		if !file.metadata()?.file_type().is_file() {
+			return Err(QuantusError::Generic("wallet path is not a regular file".to_string()));
 		}
-
-		let wallet_json = std::fs::read_to_string(wallet_file)?;
+		let mut wallet_json = String::new();
+		file.read_to_string(&mut wallet_json)?;
 		let wallet: EncryptedWallet = serde_json::from_str(&wallet_json)?;
 		Self::validate_wallet_address(&wallet.address)?;
 		Ok(Some(wallet))
@@ -228,7 +422,9 @@ impl Keystore {
 
 			if path.extension().and_then(|s| s.to_str()) == Some("json") {
 				if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-					wallets.push(name.to_string());
+					if wallet_filename(name).is_ok() {
+						wallets.push(name.to_string());
+					}
 				}
 			}
 		}
@@ -238,14 +434,37 @@ impl Keystore {
 
 	/// Delete a wallet file
 	pub fn delete_wallet(&self, name: &str) -> Result<bool> {
-		let wallet_file = self.storage_path.join(format!("{name}.json"));
-
-		if wallet_file.exists() {
-			std::fs::remove_file(wallet_file)?;
-			Ok(true)
-		} else {
-			Ok(false)
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		let wallet_file = self.storage_path.join(wallet_filename(name)?);
+		let before = match fs::symlink_metadata(&wallet_file) {
+			Ok(metadata) => metadata,
+			Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+			Err(e) => return Err(e.into()),
+		};
+		if !before.file_type().is_file() {
+			return Err(QuantusError::Generic(
+				"refusing to delete non-regular wallet file".to_string(),
+			));
 		}
+
+		let (tombstone, tombstone_file) = create_unique_temp(&self.storage_path, name)?;
+		drop(tombstone_file);
+		fs::remove_file(&tombstone)?;
+		match fs::rename(&wallet_file, &tombstone) {
+			Ok(()) => {},
+			Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+			Err(e) => return Err(e.into()),
+		}
+
+		let after = fs::symlink_metadata(&tombstone)?;
+		if !after.file_type().is_file() || !same_file_metadata(&before, &after) {
+			let _ = fs::rename(&tombstone, &wallet_file);
+			return Err(QuantusError::Generic("wallet changed during delete".to_string()));
+		}
+		fs::remove_file(tombstone)?;
+		Ok(true)
 	}
 
 	/// Encrypt wallet data using quantum-safe Argon2 + AES-256-GCM
@@ -1030,5 +1249,111 @@ mod tests {
 			Keystore::has_embedded_key_material(&reloaded),
 			"failed migration must leave legacy file with embedded digest"
 		);
+	}
+
+	/// #160598: a predictable `{name}.json.tmp` symlink must not be followed or
+	/// cause an outside file to be overwritten when saving a wallet.
+	#[cfg(unix)]
+	#[test]
+	fn save_wallet_does_not_follow_predictable_tmp_symlink() {
+		use std::fs;
+		use std::os::unix::fs::symlink;
+
+		let temp = TempDir::new().expect("temp dir");
+		let wallets_dir = temp.path().join("wallets");
+		let outside_dir = temp.path().join("outside");
+		fs::create_dir_all(&wallets_dir).expect("wallet dir");
+		fs::create_dir_all(&outside_dir).expect("outside dir");
+
+		let victim = outside_dir.join("outside_component_state.txt");
+		let original = b"owned by another local component\n";
+		fs::write(&victim, original).expect("seed victim");
+
+		let wallet_name = "raceable-wallet";
+		let predictable_tmp = wallets_dir.join(format!("{wallet_name}.json.tmp"));
+		symlink(&victim, &predictable_tmp).expect("attacker symlink at predictable tmp");
+
+		let keystore = Keystore::new(&wallets_dir);
+		let data = make_test_wallet_data(wallet_name, 21);
+		let encrypted = keystore
+			.encrypt_wallet_data(&data, "password chosen by wallet owner")
+			.expect("encrypt");
+
+		keystore.save_wallet(&encrypted).expect("save must succeed without following symlink");
+
+		assert_eq!(
+			fs::read(&victim).expect("read victim"),
+			original,
+			"outside file must not be overwritten via predictable tmp symlink"
+		);
+		let final_path = wallets_dir.join(format!("{wallet_name}.json"));
+		assert!(final_path.is_file(), "final wallet must be a regular file");
+		assert!(
+			fs::symlink_metadata(&final_path).expect("stat").file_type().is_file(),
+			"final wallet entry must not be a symlink"
+		);
+	}
+
+	/// #160737: exclusive create must refuse to replace an existing wallet file.
+	#[test]
+	fn save_new_wallet_does_not_replace_existing() {
+		let temp = TempDir::new().expect("temp dir");
+		let keystore = Keystore::new(temp.path());
+
+		let original = make_test_wallet_data("exclusive-wallet", 22);
+		let first = keystore.encrypt_wallet_data(&original, "pw").expect("encrypt first");
+		keystore.save_new_wallet(&first).expect("first create must succeed");
+
+		let replacement = make_test_wallet_data("exclusive-wallet", 23);
+		let second = keystore.encrypt_wallet_data(&replacement, "pw").expect("encrypt second");
+		let result = keystore.save_new_wallet(&second);
+		assert!(
+			matches!(result, Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))),
+			"second create must fail with AlreadyExists, got: {result:?}"
+		);
+
+		let loaded = keystore
+			.load_wallet("exclusive-wallet")
+			.expect("load")
+			.expect("wallet present");
+		assert_eq!(
+			loaded.address, first.address,
+			"existing wallet key material must not be replaced"
+		);
+		assert_ne!(loaded.address, second.address);
+	}
+
+	/// #160598 / #160737: path separators and traversal names are rejected.
+	#[test]
+	fn rejects_wallet_names_with_path_separators() {
+		let temp = TempDir::new().expect("temp dir");
+		let keystore = Keystore::new(temp.path());
+		let data = make_test_wallet_data("safe-name", 24);
+		let mut encrypted =
+			keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+
+		for bad_name in ["../evil", "foo/bar", "foo\\bar", ".", "..", ""] {
+			encrypted.name = bad_name.to_string();
+			let save = keystore.save_wallet(&encrypted);
+			assert!(
+				matches!(save, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"save_wallet must reject {bad_name:?}, got: {save:?}"
+			);
+			let create = keystore.save_new_wallet(&encrypted);
+			assert!(
+				matches!(create, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"save_new_wallet must reject {bad_name:?}, got: {create:?}"
+			);
+			let load = keystore.load_wallet(bad_name);
+			assert!(
+				matches!(load, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"load_wallet must reject {bad_name:?}, got: {load:?}"
+			);
+			let delete = keystore.delete_wallet(bad_name);
+			assert!(
+				matches!(delete, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"delete_wallet must reject {bad_name:?}, got: {delete:?}"
+			);
+		}
 	}
 }

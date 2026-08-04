@@ -59,6 +59,9 @@ pub enum WalletError {
 	#[error("Invalid wallet address")]
 	InvalidAddress,
 
+	#[error("Invalid wallet name")]
+	InvalidName,
+
 	#[error("Key generation failed")]
 	KeyGeneration,
 

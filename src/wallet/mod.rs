@@ -8,7 +8,7 @@
 pub mod keystore;
 pub mod password;
 
-use crate::error::{Result, WalletError};
+use crate::error::{QuantusError, Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
 use qp_dilithium_crypto::DilithiumPair;
 use qp_rusty_crystals_hdwallet::{
@@ -79,8 +79,8 @@ impl WalletManager {
 		password: Option<&str>,
 		derivation_path: &str,
 	) -> Result<WalletInfo> {
-		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
@@ -111,7 +111,7 @@ impl WalletManager {
 		// Encrypt and save the wallet
 		let password = password.unwrap_or(""); // Use empty password if none provided
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
-		keystore.save_wallet(&encrypted_wallet)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {
 			name: name.to_string(),
@@ -124,8 +124,8 @@ impl WalletManager {
 
 	/// Create a new developer wallet
 	pub async fn create_developer_wallet(&self, name: &str) -> Result<WalletInfo> {
-		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
@@ -159,7 +159,7 @@ impl WalletManager {
 
 		// Encrypt and save the wallet with empty password for test wallets
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, "")?;
-		keystore.save_wallet(&encrypted_wallet)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {
 			name: name.to_string(),
@@ -240,8 +240,8 @@ impl WalletManager {
 		name: &str,
 		password: Option<&str>,
 	) -> Result<WalletInfo> {
-		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
@@ -276,7 +276,7 @@ impl WalletManager {
 		// Encrypt and save the wallet
 		let password = password.unwrap_or(""); // Use empty password if none provided
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
-		keystore.save_wallet(&encrypted_wallet)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {
 			name: name.to_string(),
@@ -294,8 +294,8 @@ impl WalletManager {
 		mnemonic: &str,
 		password: Option<&str>,
 	) -> Result<WalletInfo> {
-		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
@@ -328,7 +328,7 @@ impl WalletManager {
 		// Encrypt and save the wallet
 		let password = password.unwrap_or(""); // Use empty password if none provided
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
-		keystore.save_wallet(&encrypted_wallet)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {
 			name: name.to_string(),
@@ -347,8 +347,8 @@ impl WalletManager {
 		password: Option<&str>,
 		derivation_path: &str,
 	) -> Result<WalletInfo> {
-		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
@@ -378,7 +378,7 @@ impl WalletManager {
 		// Encrypt and save the wallet
 		let password = password.unwrap_or(""); // Use empty password if none provided
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
-		keystore.save_wallet(&encrypted_wallet)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {
 			name: name.to_string(),
@@ -396,8 +396,8 @@ impl WalletManager {
 		seed: &str,
 		password: Option<&str>,
 	) -> Result<WalletInfo> {
-		// Check if wallet already exists
 		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
@@ -443,7 +443,7 @@ impl WalletManager {
 		// Encrypt and save the wallet
 		let password = password.unwrap_or(""); // Use empty password if none provided
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
-		keystore.save_wallet(&encrypted_wallet)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {
 			name: name.to_string(),
@@ -531,7 +531,11 @@ impl WalletManager {
 		// password-bypassable wallet file on disk.
 		if Keystore::has_embedded_key_material(&encrypted_wallet) {
 			let migrated = keystore.encrypt_wallet_data(&wallet_data, password)?;
-			keystore.save_wallet(&migrated)?;
+			if !keystore.save_wallet_if_current(&migrated, &encrypted_wallet)? {
+				return Err(QuantusError::Generic(
+					"wallet changed during legacy migration".to_string(),
+				));
+			}
 		}
 
 		Ok(wallet_data)
