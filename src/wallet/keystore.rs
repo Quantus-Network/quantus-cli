@@ -52,12 +52,7 @@ fn keystore_lock() -> &'static Mutex<()> {
 }
 
 fn wallet_filename(name: &str) -> Result<String> {
-	if name.is_empty() ||
-		name.contains('/') ||
-		name.contains('\\') ||
-		name == "." ||
-		name == ".."
-	{
+	if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
 		return Err(WalletError::InvalidName.into());
 	}
 	Ok(format!("{name}.json"))
@@ -162,8 +157,7 @@ impl WalletCreateLocks {
 		});
 		let mut active = locks.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 		while active.contains(&path) {
-			active =
-				locks.available.wait(active).unwrap_or_else(|poisoned| poisoned.into_inner());
+			active = locks.available.wait(active).unwrap_or_else(|poisoned| poisoned.into_inner());
 		}
 		active.insert(path.clone());
 		WalletCreateGuard { path, locks }
@@ -172,8 +166,7 @@ impl WalletCreateLocks {
 
 impl Drop for WalletCreateGuard {
 	fn drop(&mut self) {
-		let mut active =
-			self.locks.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+		let mut active = self.locks.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
 		active.remove(&self.path);
 		self.locks.available.notify_all();
 	}
@@ -353,6 +346,8 @@ impl Keystore {
 	}
 
 	/// Save an encrypted wallet to disk (may replace an existing wallet file).
+	// Public keystore API; migration/create paths use specialized helpers.
+	#[allow(dead_code)]
 	pub fn save_wallet(&self, wallet: &EncryptedWallet) -> Result<()> {
 		let _guard = keystore_lock()
 			.lock()
@@ -369,7 +364,8 @@ impl Keystore {
 		let file_name = wallet_filename(&wallet.name)?;
 		let wallet_file = self.storage_path.join(&file_name);
 		let wallet_json = serde_json::to_string_pretty(wallet)?;
-		let tmp_file = write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
+		let tmp_file =
+			write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
 
 		// Atomically create the destination without replacing an existing wallet.
 		// hard_link fails with AlreadyExists when the final name is taken.
@@ -421,7 +417,8 @@ impl Keystore {
 		let wallet_json = serde_json::to_string_pretty(wallet)?;
 		// Unpredictable, exclusively-created temp so attackers cannot pre-position a
 		// symlink at a deterministic path. rename replaces the directory entry only.
-		let tmp_file = write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
+		let tmp_file =
+			write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
 		match fs::rename(&tmp_file, &wallet_file) {
 			Ok(()) => {
 				#[cfg(unix)]
@@ -470,8 +467,8 @@ impl Keystore {
 
 		let (account_id, format) = AccountId32::from_ss58check_with_version(address)
 			.map_err(|_| WalletError::InvalidAddress)?;
-		if format != quantus_ss58_format()
-			|| account_id.to_ss58check_with_version(quantus_ss58_format()) != address
+		if format != quantus_ss58_format() ||
+			account_id.to_ss58check_with_version(quantus_ss58_format()) != address
 		{
 			return Err(WalletError::InvalidAddress.into());
 		}
@@ -612,8 +609,8 @@ impl Keystore {
 
 		// 2. Decrypt the data. An AES-GCM authentication failure means the password
 		// was wrong (or the file was tampered with) - this is the password check.
-		let nonce_bytes = <[u8; 12]>::try_from(&encrypted.aes_nonce[..])
-			.map_err(|_| WalletError::Decryption)?;
+		let nonce_bytes =
+			<[u8; 12]>::try_from(&encrypted.aes_nonce[..]).map_err(|_| WalletError::Decryption)?;
 		let nonce = Nonce::from(nonce_bytes);
 		let mut decrypted_data = cipher
 			.decrypt(&nonce, encrypted.encrypted_data.as_ref())
@@ -729,10 +726,8 @@ mod tests {
 
 	#[test]
 	fn quantum_keypair_debug_redacts_private_key() {
-		let keypair = QuantumKeyPair {
-			public_key: vec![1, 2, 3],
-			private_key: vec![0xde, 0xad, 0xbe, 0xef],
-		};
+		let keypair =
+			QuantumKeyPair { public_key: vec![1, 2, 3], private_key: vec![0xde, 0xad, 0xbe, 0xef] };
 		let rendered = format!("{keypair:?}");
 		assert!(
 			rendered.contains("[redacted]"),
@@ -755,10 +750,7 @@ mod tests {
 		};
 		let rendered = format!("{data:?}");
 		assert!(rendered.contains("[redacted]"), "mnemonic must be redacted: {rendered}");
-		assert!(
-			!rendered.contains("abandon"),
-			"Debug must not leak mnemonic words: {rendered}"
-		);
+		assert!(!rendered.contains("abandon"), "Debug must not leak mnemonic words: {rendered}");
 	}
 
 	#[test]
@@ -981,9 +973,8 @@ mod tests {
 		];
 
 		for invalid_addr in invalid_addresses {
-			let panicked = std::panic::catch_unwind(|| {
-				QuantumKeyPair::ss58_to_account_id(invalid_addr)
-			});
+			let panicked =
+				std::panic::catch_unwind(|| QuantumKeyPair::ss58_to_account_id(invalid_addr));
 			assert!(panicked.is_ok(), "Must not panic on invalid address: {invalid_addr}");
 			assert!(
 				matches!(
@@ -998,10 +989,7 @@ mod tests {
 	#[test]
 	fn to_dilithium_keypair_rejects_malformed_key_bytes() {
 		// #160783: malformed key material must not panic.
-		let keypair = QuantumKeyPair {
-			public_key: vec![1, 2, 3],
-			private_key: vec![4, 5, 6],
-		};
+		let keypair = QuantumKeyPair { public_key: vec![1, 2, 3], private_key: vec![4, 5, 6] };
 		let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			keypair.to_dilithium_keypair()
 		}));
@@ -1358,11 +1346,11 @@ mod tests {
 		argon2
 			.hash_password_into(password.as_bytes(), &salt, &mut derived)
 			.expect("derive key");
-		let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&derived));
+		let aes_key = Key::<Aes256Gcm>::from(derived);
+		let cipher = Aes256Gcm::new(&aes_key);
+		let nonce = Nonce::from(nonce_bytes);
 		let plaintext = serde_json::to_vec(data).expect("serialize");
-		let encrypted_data = cipher
-			.encrypt(Nonce::from_slice(&nonce_bytes), plaintext.as_ref())
-			.expect("encrypt");
+		let encrypted_data = cipher.encrypt(&nonce, plaintext.as_ref()).expect("encrypt");
 		EncryptedWallet {
 			name: data.name.clone(),
 			address: data.keypair.to_account_id_ss58check(),
@@ -1397,10 +1385,7 @@ mod tests {
 	#[test]
 	fn malformed_public_key_returns_error_instead_of_panicking() {
 		// #160640: address derivation must not unwind on garbage public keys.
-		let keypair = QuantumKeyPair {
-			public_key: vec![0x41],
-			private_key: vec![0x42; 32],
-		};
+		let keypair = QuantumKeyPair { public_key: vec![0x41], private_key: vec![0x42; 32] };
 		let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
 			let _ = keypair.to_account_id_ss58check();
 		}));
@@ -1426,10 +1411,7 @@ mod tests {
 		assert!(Keystore::has_embedded_key_material(&legacy));
 
 		let err = keystore.save_wallet(&legacy).expect_err("must refuse digest-bearing wallets");
-		assert!(
-			err.to_string().contains("embeds Argon2 digest"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("embeds Argon2 digest"), "unexpected error: {err}");
 		assert!(
 			!temp_dir.path().join("legacy-refuse.json").exists(),
 			"digest-bearing wallet must not be written"
@@ -1445,9 +1427,7 @@ mod tests {
 		// Save a wallet in the legacy format (digest embedded in argon2_params)
 		let legacy = encrypt_legacy(&data, "pw");
 		assert!(Keystore::has_embedded_key_material(&legacy));
-		keystore
-			.save_wallet_unchecked_for_tests(&legacy)
-			.expect("Save should succeed");
+		keystore.save_wallet_unchecked_for_tests(&legacy).expect("Save should succeed");
 
 		// Legacy files must still decrypt with the correct password...
 		let decrypted = keystore
@@ -1492,8 +1472,7 @@ mod tests {
 	#[cfg(unix)]
 	#[test]
 	fn test_legacy_migration_save_failure_fails_closed() {
-		use std::fs;
-		use std::os::unix::fs::PermissionsExt;
+		use std::{fs, os::unix::fs::PermissionsExt};
 
 		let temp_dir = TempDir::new().expect("Failed to create temp directory");
 		let keystore = Keystore::new(temp_dir.path());
@@ -1501,9 +1480,7 @@ mod tests {
 
 		let legacy = encrypt_legacy(&data, "pw");
 		assert!(Keystore::has_embedded_key_material(&legacy));
-		keystore
-			.save_wallet_unchecked_for_tests(&legacy)
-			.expect("Save should succeed");
+		keystore.save_wallet_unchecked_for_tests(&legacy).expect("Save should succeed");
 
 		// Force migration save to fail (cannot create .json.tmp in read-only dir).
 		let mut perms = fs::metadata(temp_dir.path()).unwrap().permissions();
@@ -1539,8 +1516,7 @@ mod tests {
 	#[cfg(unix)]
 	#[test]
 	fn save_wallet_does_not_follow_predictable_tmp_symlink() {
-		use std::fs;
-		use std::os::unix::fs::symlink;
+		use std::{fs, os::unix::fs::symlink};
 
 		let temp = TempDir::new().expect("temp dir");
 		let wallets_dir = temp.path().join("wallets");
@@ -1562,7 +1538,9 @@ mod tests {
 			.encrypt_wallet_data(&data, "password chosen by wallet owner")
 			.expect("encrypt");
 
-		keystore.save_wallet(&encrypted).expect("save must succeed without following symlink");
+		keystore
+			.save_wallet(&encrypted)
+			.expect("save must succeed without following symlink");
 
 		assert_eq!(
 			fs::read(&victim).expect("read victim"),
@@ -1595,10 +1573,8 @@ mod tests {
 			"second create must fail with AlreadyExists, got: {result:?}"
 		);
 
-		let loaded = keystore
-			.load_wallet("exclusive-wallet")
-			.expect("load")
-			.expect("wallet present");
+		let loaded =
+			keystore.load_wallet("exclusive-wallet").expect("load").expect("wallet present");
 		assert_eq!(
 			loaded.address, first.address,
 			"existing wallet key material must not be replaced"
@@ -1612,8 +1588,7 @@ mod tests {
 		let temp_dir = TempDir::new().expect("Failed to create temp directory");
 		let keystore = Keystore::new(temp_dir.path());
 		let data = make_test_wallet_data("bad-version", 25);
-		let mut encrypted =
-			keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+		let mut encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
 		assert_eq!(encrypted.encryption_version, 2);
 		encrypted.encryption_version = u32::MAX;
 
@@ -1630,8 +1605,7 @@ mod tests {
 		let temp_dir = TempDir::new().expect("Failed to create temp directory");
 		let keystore = Keystore::new(temp_dir.path());
 		let data = make_test_wallet_data("bad-nonce", 26);
-		let mut encrypted =
-			keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+		let mut encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
 		assert_eq!(encrypted.aes_nonce.len(), 12);
 		encrypted.aes_nonce.truncate(1);
 
@@ -1651,8 +1625,7 @@ mod tests {
 		let temp = TempDir::new().expect("temp dir");
 		let keystore = Keystore::new(temp.path());
 		let data = make_test_wallet_data("safe-name", 24);
-		let mut encrypted =
-			keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+		let mut encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
 
 		for bad_name in ["../evil", "foo/bar", "foo\\bar", ".", "..", ""] {
 			encrypted.name = bad_name.to_string();

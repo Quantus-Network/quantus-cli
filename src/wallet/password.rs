@@ -97,9 +97,7 @@ pub fn ensure_password_allowed(password: String, allow_empty: bool) -> Result<St
 /// Confirm that two newly entered passwords match.
 pub fn confirm_new_password(first: &str, second: &str) -> Result<String> {
 	if first != second {
-		return Err(crate::error::QuantusError::Generic(
-			"Passwords do not match".to_string(),
-		));
+		return Err(crate::error::QuantusError::Generic("Passwords do not match".to_string()));
 	}
 	Ok(first.to_string())
 }
@@ -186,16 +184,6 @@ pub fn get_password_from_user(prompt: &str) -> Result<String> {
 	Ok(password)
 }
 
-/// Reject raw `--password`/`-p` values for handlers that bypass [`get_wallet_password`].
-pub fn reject_cli_password(password: &Option<String>) -> Result<()> {
-	if password.is_some() {
-		return Err(crate::error::QuantusError::Generic(
-			"Passing wallet passwords with --password/-p is not supported; use an interactive prompt or a supported non-argv secret source".to_string(),
-		));
-	}
-	Ok(())
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -205,20 +193,7 @@ mod tests {
 	fn get_wallet_password_rejects_cli_password_flag() {
 		let err = get_wallet_password("w", Some("secret".into()), None).unwrap_err();
 		let msg = err.to_string();
-		assert!(
-			msg.contains("--password"),
-			"expected unsupported --password message, got: {msg}"
-		);
-	}
-
-	#[test]
-	fn wallet_create_rejects_cli_password() {
-		let err = reject_cli_password(&Some("secret".into())).unwrap_err();
-		let msg = err.to_string();
-		assert!(
-			msg.contains("--password"),
-			"expected unsupported --password message, got: {msg}"
-		);
+		assert!(msg.contains("--password"), "expected unsupported --password message, got: {msg}");
 	}
 
 	#[test]
@@ -276,8 +251,7 @@ mod tests {
 	#[cfg(unix)]
 	mod password_file_permissions {
 		use super::*;
-		use std::fs;
-		use std::os::unix::fs::PermissionsExt;
+		use std::{fs, os::unix::fs::PermissionsExt};
 
 		fn write_password_file(mode: u32) -> (tempfile::TempDir, String) {
 			let dir = tempfile::tempdir().expect("temp dir");

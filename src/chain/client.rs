@@ -60,7 +60,7 @@ impl QuantusClient {
 
 		let authority_start = scheme_end + 3;
 		let authority_end = url[authority_start..]
-			.find(|c| matches!(c, '/' | '?' | '#'))
+			.find(['/', '?', '#'])
 			.map(|offset| authority_start + offset)
 			.unwrap_or(url.len());
 		let authority = &url[authority_start..authority_end];
@@ -136,13 +136,10 @@ impl QuantusClient {
 			.map_err(|e| {
 				QuantusError::NetworkError(format!("Failed to fetch runtime version: {e:?}"))
 			})?;
-		crate::config::validate_runtime_version_value(&runtime_version).map_err(|e| {
-			match e {
-				QuantusError::NetworkError(msg) => QuantusError::NetworkError(format!(
-					"{msg} (from {display_node_url})"
-				)),
-				other => other,
-			}
+		crate::config::validate_runtime_version_value(&runtime_version).map_err(|e| match e {
+			QuantusError::NetworkError(msg) =>
+				QuantusError::NetworkError(format!("{msg} (from {display_node_url})")),
+			other => other,
 		})?;
 
 		log_verbose!("✅ Connected to Quantus node successfully!");
@@ -348,8 +345,7 @@ mod tests {
 				.expect("clock must be after unix epoch")
 				.as_nanos()
 		);
-		let attacker_controlled_url =
-			format!("https://api-user:{secret}@rpc.example.invalid/ws");
+		let attacker_controlled_url = format!("https://api-user:{secret}@rpc.example.invalid/ws");
 
 		let error = match QuantusClient::new(&attacker_controlled_url).await {
 			Ok(_) => panic!("non-WebSocket scheme must fail"),
@@ -374,9 +370,7 @@ mod tests {
 	#[test]
 	fn sanitize_url_for_diagnostics_strips_userinfo() {
 		assert_eq!(
-			QuantusClient::sanitize_url_for_diagnostics(
-				"wss://user:pass@rpc.example.com/path?q=1"
-			),
+			QuantusClient::sanitize_url_for_diagnostics("wss://user:pass@rpc.example.com/path?q=1"),
 			"wss://rpc.example.com/path?q=1"
 		);
 		assert_eq!(

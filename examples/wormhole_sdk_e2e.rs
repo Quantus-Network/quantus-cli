@@ -149,8 +149,8 @@ async fn main() -> Result<()> {
 
 	// 1. wallet ----------------------------------------------------------------
 	let wm = WalletManager::new()?;
-	let wallet = wm.load_wallet(&args.funder, &args.password)?;
-	let funder_kp = wallet.keypair;
+	let mut wallet = wm.load_wallet(&args.funder, &args.password)?;
+	let funder_kp = wallet.take_keypair();
 	let funder_ss58 = funder_kp.to_account_id_ss58check();
 	println!("  wallet  : {funder_ss58}");
 

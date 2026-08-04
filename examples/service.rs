@@ -77,7 +77,7 @@ impl WalletService {
 		let balance = self.get_wallet_balance(name, password).await?;
 
 		Ok(WalletInfo {
-			name: wallet_data.name,
+			name: wallet_data.name.clone(),
 			address: wallet_data.keypair.to_account_id_ss58check(),
 			balance,
 			created_at: chrono::Utc::now().to_rfc3339(), // Could be stored in wallet data
@@ -152,9 +152,9 @@ impl WalletService {
 	/// Private method to perform transfer
 	async fn perform_transfer(&self, request: &TransferRequest) -> Result<subxt::utils::H256> {
 		// Load sender wallet
-		let wallet_data =
+		let mut wallet_data =
 			self.wallet_manager.load_wallet(&request.from_wallet, &request.password)?;
-		let keypair = wallet_data.keypair;
+		let keypair = wallet_data.take_keypair();
 
 		// Parse recipient address
 		let to_account_id = AccountId32::from_ss58check(&request.to_address)

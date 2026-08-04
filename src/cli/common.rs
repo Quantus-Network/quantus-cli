@@ -872,11 +872,13 @@ pub async fn submit_preimage(
 		Err(e) => {
 			// Do not trust formatted error substrings (e.g. "AlreadyNoted"). Only
 			// continue when the expected preimage bytes are present on-chain.
-			verify_preimage_on_chain(quantus_client, &encoded_call).await.map_err(|verify_err| {
-				crate::error::QuantusError::Generic(format!(
+			verify_preimage_on_chain(quantus_client, &encoded_call).await.map_err(
+				|verify_err| {
+					crate::error::QuantusError::Generic(format!(
 					"Preimage submission failed ({e}); on-chain verification also failed ({verify_err})"
 				))
-			})?;
+				},
+			)?;
 			crate::log_print!(
 				"✅ {} Expected preimage already exists on-chain, continuing",
 				"OK".bright_green().bold()
@@ -1006,11 +1008,9 @@ mod tests {
 			describe_watched_tx_event(WatchedTxEvent::StreamEnded, TransactionStage::Included,)
 				.is_err()
 		);
-		let timeout_err = describe_watched_tx_event(
-			WatchedTxEvent::StreamTimedOut,
-			TransactionStage::Included,
-		)
-		.expect_err("silent subscription must time out instead of waiting forever");
+		let timeout_err =
+			describe_watched_tx_event(WatchedTxEvent::StreamTimedOut, TransactionStage::Included)
+				.expect_err("silent subscription must time out instead of waiting forever");
 		assert!(
 			timeout_err.to_string().contains("timed out"),
 			"unexpected timeout error: {timeout_err}"
@@ -1028,8 +1028,10 @@ mod tests {
 			tx_status_watch_timeout_secs(TransactionStage::Finalized),
 			TX_STATUS_FINALIZED_TIMEOUT_SECS
 		);
-		assert!(TX_STATUS_INACTIVITY_TIMEOUT_SECS > 0);
-		assert!(TX_STATUS_INCLUDED_TIMEOUT_SECS < TX_STATUS_FINALIZED_TIMEOUT_SECS);
+		const {
+			assert!(TX_STATUS_INACTIVITY_TIMEOUT_SECS > 0);
+			assert!(TX_STATUS_INCLUDED_TIMEOUT_SECS < TX_STATUS_FINALIZED_TIMEOUT_SECS);
+		}
 	}
 
 	#[test]

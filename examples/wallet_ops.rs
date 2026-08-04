@@ -72,8 +72,8 @@ impl QuantusApp {
 		amount: u128,
 	) -> Result<String> {
 		// Load sender wallet
-		let wallet_data = self.wallet_manager.load_wallet(from_wallet, from_password)?;
-		let keypair = wallet_data.keypair;
+		let mut wallet_data = self.wallet_manager.load_wallet(from_wallet, from_password)?;
+		let keypair = wallet_data.take_keypair();
 
 		// Parse recipient address
 		let (to_account_id, _) = AccountId32::from_ss58check_with_version(to_address)
