@@ -11,7 +11,13 @@ use subxt::{
 pub type SubxtAccountId32 = subxt::ext::subxt_core::utils::AccountId32;
 
 const MILLIS_PER_SECOND: u64 = 1_000;
-const TX_STATUS_INACTIVITY_TIMEOUT_SECS: u64 = 30;
+/// Pre-inclusion inactivity window. The status stream is legitimately silent
+/// between Broadcasted and InBestBlock for a full PoW block interval, and block
+/// intervals are roughly exponential around the ~10s target: a 30s window
+/// aborted ~1 in 20 valid transactions (e^-3), inviting duplicate-submission
+/// retries. Twelve target intervals make a spurious abort negligible (~e^-12)
+/// while still catching genuinely dead streams well inside the overall deadline.
+const TX_STATUS_INACTIVITY_TIMEOUT_SECS: u64 = 120;
 const TX_STATUS_INCLUDED_TIMEOUT_SECS: u64 = 5 * 60;
 pub(crate) const TX_STATUS_FINALIZED_TIMEOUT_SECS: u64 = 30 * 60;
 
@@ -163,12 +169,12 @@ fn describe_watched_tx_event(
 		))),
 		WatchedTxEvent::InactivityTimedOut { timeout_secs } =>
 			Err(crate::error::QuantusError::NetworkError(format!(
-				"Transaction status stream timed out after {timeout_secs} seconds without updates before the transaction was {}",
+				"Transaction status stream timed out after {timeout_secs} seconds without updates before the transaction was {}. The transaction may still be in the pool and execute later; verify its status on chain before resubmitting, or you may duplicate it",
 				target_stage.status_label()
 			))),
 		WatchedTxEvent::WatchDeadlineTimedOut { elapsed_secs } =>
 			Err(crate::error::QuantusError::NetworkError(format!(
-				"Timed out after waiting {elapsed_secs} seconds for the transaction to be {}",
+				"Timed out after waiting {elapsed_secs} seconds for the transaction to be {}. The transaction may still be in the pool and execute later; verify its status on chain before resubmitting, or you may duplicate it",
 				target_stage.status_label()
 			))),
 	}
@@ -1128,6 +1134,11 @@ mod tests {
 		);
 		const {
 			assert!(TX_STATUS_INACTIVITY_TIMEOUT_SECS > 0);
+			// Must cover many ~10s PoW block intervals: the stream is silent
+			// between Broadcasted and InBestBlock, and aborting a valid pending
+			// transaction invites duplicate-submission retries (#160612).
+			assert!(TX_STATUS_INACTIVITY_TIMEOUT_SECS >= 120);
+			assert!(TX_STATUS_INACTIVITY_TIMEOUT_SECS < TX_STATUS_INCLUDED_TIMEOUT_SECS);
 			assert!(TX_STATUS_INCLUDED_TIMEOUT_SECS < TX_STATUS_FINALIZED_TIMEOUT_SECS);
 		}
 	}
