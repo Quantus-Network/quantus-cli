@@ -52,7 +52,18 @@ fn keystore_lock() -> &'static Mutex<()> {
 }
 
 fn wallet_filename(name: &str) -> Result<String> {
-	if name.is_empty() || name.contains('/') || name.contains('\\') || name == "." || name == ".." {
+	// Reject path separators and traversal, plus Windows-specific escapes:
+	// ':' makes "C:evil.json" resolve outside the keystore (drive-relative
+	// path) and "foo:bar" create an NTFS alternate data stream. The remaining
+	// characters are reserved in Windows filenames; control characters are
+	// rejected everywhere.
+	const FORBIDDEN: &[char] = &['/', '\\', ':', '<', '>', '"', '|', '?', '*'];
+	if name.is_empty() ||
+		name == "." ||
+		name == ".." ||
+		name.contains(FORBIDDEN) ||
+		name.chars().any(|c| c.is_control())
+	{
 		return Err(WalletError::InvalidName.into());
 	}
 	Ok(format!("{name}.json"))
@@ -1627,7 +1638,27 @@ mod tests {
 		let data = make_test_wallet_data("safe-name", 24);
 		let mut encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
 
-		for bad_name in ["../evil", "foo/bar", "foo\\bar", ".", "..", ""] {
+		// ':' escapes the keystore on Windows ("C:evil.json" is drive-relative,
+		// "foo:bar" creates an NTFS alternate data stream); the remaining
+		// characters are Windows-reserved or control characters.
+		for bad_name in [
+			"../evil",
+			"foo/bar",
+			"foo\\bar",
+			".",
+			"..",
+			"",
+			"C:evil",
+			"foo:bar",
+			"foo<bar",
+			"foo>bar",
+			"foo\"bar",
+			"foo|bar",
+			"foo?bar",
+			"foo*bar",
+			"foo\nbar",
+			"foo\0bar",
+		] {
 			encrypted.name = bad_name.to_string();
 			let save = keystore.save_wallet(&encrypted);
 			assert!(
