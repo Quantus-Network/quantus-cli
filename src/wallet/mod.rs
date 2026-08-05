@@ -1130,6 +1130,25 @@ mod tests {
 		assert!(result.is_none());
 	}
 
+	/// Corrupt wallet files must remain deletable: delete works on the file
+	/// itself and must not require the JSON to parse.
+	#[tokio::test]
+	async fn delete_wallet_removes_corrupt_wallet_file() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+
+		wallet_manager.create_wallet("corrupt_me", None).await.expect("create wallet");
+		let wallet_file = wallet_manager.wallets_dir.join("corrupt_me.json");
+		fs::write(&wallet_file, b"{ not valid json").expect("corrupt the file");
+
+		// The pre-check path fails to parse it...
+		assert!(wallet_manager.get_wallet("corrupt_me", None).is_err());
+
+		// ...but deletion must still succeed.
+		let deleted = wallet_manager.delete_wallet("corrupt_me").expect("delete must not error");
+		assert!(deleted, "corrupt wallet file must be deleted");
+		assert!(!wallet_file.exists());
+	}
+
 	/// find_wallet_address must distinguish "no such wallet" from "wallet exists
 	/// but needs its password", so callers can report an honest error or unlock.
 	#[tokio::test]
