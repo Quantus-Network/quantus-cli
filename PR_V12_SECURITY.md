@@ -37,7 +37,7 @@ This PR remediates **all 20 High and 30 Medium** Unreviewed findings (with red�
 | #160737 | Wallet creation not atomic | Fixed — exclusive create / hard_link |
 | #160748 | Ephemeral mnemonic strands funds | Fixed — require persisted mnemonic |
 | #160754 | Transfer events unbound | Fixed — match from/amount/count |
-| #160773 | Self-update without integrity check | Fixed — verify published SHA-256 |
+| #160773 | Self-update without integrity check | Fixed — same-origin SHA-256 integrity (not signing; see update note) |
 | #160791 | Unvalidated RPC token properties | Fixed — fail-closed decimals/symbol/ss58 |
 
 ## Medium (30/30 addressed)
@@ -100,6 +100,18 @@ Some Invalid Lows were still tightened while adjacent to High/Medium work (e.g. 
 ## Info (2 Unreviewed)
 - #160685 Bind deposits/votes to confirmed referendum index — informational
 - #160730 Non-native leaves represented as native assets — informational
+
+## Self-update integrity scope note (#160773)
+
+The self-update SHA-256 check is same-origin integrity, not authenticity: the
+expected hash is a sibling asset of the same GitHub release fetched over the
+same TLS channel. It stops corruption and single-object substitution; it does
+not stop an attacker who can write release assets or MITM TLS, since they
+control both files. Upgrading to real authenticity means signing release
+archives (e.g. `self_update`'s zipsign/ed25519 `signatures` feature with the
+public key embedded in the binary), which requires release-pipeline changes
+and is left as follow-up. The claim in the table above should not be read as
+release signing.
 
 ## Zeroization scope note (#160105 / #160591)
 

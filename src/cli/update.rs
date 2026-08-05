@@ -7,6 +7,15 @@
 //!
 //! Before installing, the downloaded archive is verified against the sibling
 //! `sha256sums-*.txt` asset published by the release workflow.
+//!
+//! Threat model: this is same-origin integrity, not authenticity. The checksum
+//! is a sibling asset of the same GitHub release fetched over the same TLS
+//! channel, so it defends against corruption and single-object substitution,
+//! but not against an attacker who can write release assets or MITM TLS (they
+//! control both files). Cryptographic release signing (e.g. the `self_update`
+//! crate's zipsign/ed25519 `signatures` feature, with the public key embedded
+//! here) would be required for that, and needs the release pipeline to sign
+//! assets first.
 
 use crate::{error::QuantusError, log_print, log_success};
 use colored::Colorize;
