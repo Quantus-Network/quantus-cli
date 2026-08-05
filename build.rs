@@ -42,21 +42,6 @@ fn print_bin_hash(dir: &Path, filename: &str) {
 	}
 }
 
-const MANIFESTED_FILES: &[&str] = &[
-	"verifier.bin",
-	"common.bin",
-	"private_batch_prover.bin",
-	"private_batch_verifier.bin",
-	"private_batch_common.bin",
-	"public_batch_prover.bin",
-	"public_batch_verifier.bin",
-	"public_batch_common.bin",
-	"dummy_proof.bin",
-	"dummy_private_batch_proof.bin",
-	"config.json",
-	VERSION_MARKER,
-];
-
 fn file_sha256_hex(dir: &Path, filename: &str) -> String {
 	let data =
 		std::fs::read(dir.join(filename)).expect("Failed to read generated artifact for manifest");

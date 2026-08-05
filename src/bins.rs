@@ -54,21 +54,6 @@ const REQUIRED_FILES: &[&str] = &[
 	"config.json",
 ];
 
-const MANIFESTED_FILES: &[&str] = &[
-	"verifier.bin",
-	"common.bin",
-	"private_batch_prover.bin",
-	"private_batch_verifier.bin",
-	"private_batch_common.bin",
-	"public_batch_prover.bin",
-	"public_batch_verifier.bin",
-	"public_batch_common.bin",
-	"dummy_proof.bin",
-	"dummy_private_batch_proof.bin",
-	"config.json",
-	VERSION_MARKER,
-];
-
 #[derive(serde::Deserialize, serde::Serialize)]
 struct ArtifactManifest {
 	manifest_version: u32,
