@@ -3600,7 +3600,7 @@ async fn run_dissolve(
 		private_key: wallet.keypair.private_key.clone(),
 	};
 
-	submit_transaction(
+	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		&quantus_client,
 		&quantum_keypair,
 		transfer_tx,
@@ -3610,10 +3610,13 @@ async fn run_dissolve(
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Initial transfer failed: {}", e)))?;
 
-	let block = at_finalized_block(&quantus_client)
-		.await
-		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
-	let block_hash = block.hash();
+	// Read events from the transaction's own finalized inclusion block; the
+	// finalized tip may already have moved past it.
+	let block_hash = included_in.ok_or_else(|| {
+		crate::error::QuantusError::Generic(
+			"Initial transfer watch returned no inclusion block".to_string(),
+		)
+	})?;
 	let events_api =
 		quantus_client.client().events().at(block_hash).await.map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to get events: {}", e))
