@@ -58,14 +58,13 @@ fn reject_raw_cli_password(password: &Option<String>) -> Result<()> {
 fn read_password_file(file_path: &str) -> Result<String> {
 	log_verbose!("🔑 Reading password from file: {}", file_path);
 	validate_password_file_permissions(file_path)?;
-	let pwd = std::fs::read_to_string(file_path)
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to read password file '{file_path}': {e}"
-			))
-		})?
-		.trim()
-		.to_string();
+	let mut raw = std::fs::read_to_string(file_path).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to read password file '{file_path}': {e}"
+		))
+	})?;
+	let pwd = raw.trim().to_string();
+	crate::wallet::keystore::zeroize_string(&mut raw);
 	Ok(pwd)
 }
 

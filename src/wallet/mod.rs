@@ -259,10 +259,11 @@ impl WalletManager {
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
 		keystore::zeroize_bytes(&mut seed);
-		let seed64 =
+		let mut seed64 =
 			mnemonic_to_seed(mnemonic.clone(), None).map_err(|_| WalletError::KeyGeneration)?;
-		let dilithium_pair =
-			DilithiumPair::from_seed(&seed64).map_err(|_| WalletError::KeyGeneration)?;
+		let dilithium_pair = DilithiumPair::from_seed(&seed64);
+		keystore::zeroize_bytes(&mut seed64);
+		let dilithium_pair = dilithium_pair.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
 
 		// Create wallet data
@@ -417,17 +418,20 @@ impl WalletManager {
 		}
 
 		// Convert hex to bytes
-		let seed_bytes = hex::decode(seed).map_err(|_| WalletError::InvalidMnemonic)?;
+		let mut seed_bytes = hex::decode(seed).map_err(|_| WalletError::InvalidMnemonic)?;
 		if seed_bytes.len() != 32 {
+			keystore::zeroize_bytes(&mut seed_bytes);
 			return Err(WalletError::InvalidMnemonic.into());
 		}
 
-		// Create DilithiumPair from seed
-		let seed_bytes_32: [u8; 32] =
-			seed_bytes.try_into().map_err(|_| WalletError::InvalidMnemonic)?;
+		// Create DilithiumPair from seed; wipe both copies of the seed after use.
+		let mut seed_bytes_32: [u8; 32] =
+			seed_bytes.as_slice().try_into().map_err(|_| WalletError::InvalidMnemonic)?;
+		keystore::zeroize_bytes(&mut seed_bytes);
 
-		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_bytes_32)
-			.map_err(|_| WalletError::InvalidMnemonic)?;
+		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_bytes_32);
+		keystore::zeroize_bytes(&mut seed_bytes_32);
+		let dilithium_pair = dilithium_pair.map_err(|_| WalletError::InvalidMnemonic)?;
 
 		// Convert to QuantumKeyPair
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);

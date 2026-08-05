@@ -645,7 +645,7 @@ pub async fn handle_wallet_command(
 			let wallet_manager = WalletManager::new()?;
 
 			// Always read mnemonic from a hidden prompt so it never appears in process argv.
-			let mnemonic_phrase = get_mnemonic_from_user()?;
+			let mut mnemonic_phrase = get_mnemonic_from_user()?;
 
 			// New-wallet password policy: confirmed prompt, no silent empty default.
 			let final_password = crate::wallet::password::get_new_wallet_password(
@@ -675,6 +675,7 @@ pub async fn handle_wallet_command(
 					)
 					.await
 			};
+			crate::wallet::keystore::zeroize_string(&mut mnemonic_phrase);
 
 			match result {
 				Ok(wallet_info) => {
@@ -707,9 +708,10 @@ pub async fn handle_wallet_command(
 
 			// Always read seed from a hidden prompt so it never appears in process argv.
 			log_print!("Enter 32-byte seed in hex format (64 hex characters):");
-			let seed = rpassword::read_password()
+			let mut seed_raw = rpassword::read_password()
 				.map_err(|e| QuantusError::Generic(format!("Failed to read seed: {e}")))?;
-			let seed = seed.trim().to_string();
+			let mut seed = seed_raw.trim().to_string();
+			crate::wallet::keystore::zeroize_string(&mut seed_raw);
 
 			// New-wallet password policy: confirmed prompt, no silent empty default.
 			let final_password = crate::wallet::password::get_new_wallet_password(
@@ -719,10 +721,12 @@ pub async fn handle_wallet_command(
 				allow_empty_password,
 			)?;
 
-			match wallet_manager
+			let result = wallet_manager
 				.create_wallet_from_seed(&name, &seed, Some(&final_password))
-				.await
-			{
+				.await;
+			crate::wallet::keystore::zeroize_string(&mut seed);
+
+			match result {
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());

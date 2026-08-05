@@ -2407,9 +2407,11 @@ async fn generate_round_proofs(
 
 		let single_start = std::time::Instant::now();
 
-		// Generate proof with dual output assignment
-		generate_proof(
-			&hex::encode(secret.secret.as_bytes()),
+		// Generate proof with dual output assignment. Bind the hex-encoded
+		// secret so it can be wiped instead of dropping as a temporary.
+		let mut secret_hex = hex::encode(secret.secret.as_bytes());
+		let proof_result = generate_proof(
+			&secret_hex,
 			transfer.amount, // Use actual transfer amount for storage key
 			&output_assignments[i],
 			&format!("0x{}", hex::encode(proof_block_hash.0)),
@@ -2419,7 +2421,9 @@ async fn generate_round_proofs(
 			&proof_file,
 			quantus_client,
 		)
-		.await?;
+		.await;
+		crate::wallet::keystore::zeroize_string(&mut secret_hex);
+		proof_result?;
 
 		let single_elapsed = single_start.elapsed();
 		log_verbose!("  Proof {} generated in {:.2}s", i + 1, single_elapsed.as_secs_f64());
@@ -2821,7 +2825,7 @@ async fn generate_proof(
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<()> {
 	// Parse inputs
-	let secret = parse_secret_hex(secret_hex).map_err(crate::error::QuantusError::Generic)?;
+	let mut secret = parse_secret_hex(secret_hex).map_err(crate::error::QuantusError::Generic)?;
 
 	let block_hash_bytes: [u8; 32] = hex::decode(block_hash_str.trim_start_matches("0x"))
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid block hash: {}", e)))?
@@ -2886,7 +2890,8 @@ async fn generate_proof(
 		compute_merkle_positions(&zk_proof.siblings, zk_proof.leaf_hash);
 
 	// Build ProofGenerationInput using wormhole_lib types with ZK Merkle proof.
-	// generate_proof zeroizes input.secret before returning.
+	// generate_proof zeroizes input.secret before returning; wipe the local
+	// copy as soon as it has been moved into the input struct.
 	let mut input = wormhole_lib::ProofGenerationInput {
 		secret,
 		transfer_count,
@@ -2908,6 +2913,7 @@ async fn generate_proof(
 		volume_fee_bps: VOLUME_FEE_BPS,
 		asset_id: NATIVE_ASSET_ID,
 	};
+	crate::wallet::keystore::zeroize_bytes(&mut secret);
 
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 	let result = wormhole_lib::generate_proof(
@@ -3467,7 +3473,7 @@ async fn parse_proof_file(
 }
 
 /// A pending wormhole output that can be used as input for the next dissolve layer.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct DissolveOutput {
 	/// The secret used to derive the wormhole address
 	secret: [u8; 32],
@@ -3481,6 +3487,25 @@ struct DissolveOutput {
 	proof_block_hash: subxt::utils::H256,
 	/// ZK trie leaf index for Merkle proof lookup
 	leaf_index: u64,
+}
+
+impl Drop for DissolveOutput {
+	fn drop(&mut self) {
+		crate::wallet::keystore::zeroize_bytes(&mut self.secret);
+	}
+}
+
+impl std::fmt::Debug for DissolveOutput {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("DissolveOutput")
+			.field("secret", &"<redacted>")
+			.field("amount", &self.amount)
+			.field("transfer_count", &self.transfer_count)
+			.field("funding_account", &self.funding_account)
+			.field("proof_block_hash", &self.proof_block_hash)
+			.field("leaf_index", &self.leaf_index)
+			.finish()
+	}
 }
 
 /// Dissolve a large wormhole deposit into many small outputs for better privacy.
@@ -3739,8 +3764,11 @@ async fn run_dissolve(
 
 				let proof_file = format!("{}/batch{}_proof{}.hex", layer_dir, batch_idx, i);
 
-				generate_proof(
-					&hex::encode(input.secret),
+				// Bind the hex-encoded secret so it can be wiped instead of
+				// dropping as a temporary.
+				let mut secret_hex = hex::encode(input.secret);
+				let proof_result = generate_proof(
+					&secret_hex,
 					input.amount,
 					&assignment,
 					&format!("0x{}", hex::encode(batch_proof_block_hash.0)),
@@ -3750,7 +3778,9 @@ async fn run_dissolve(
 					&proof_file,
 					&quantus_client,
 				)
-				.await?;
+				.await;
+				crate::wallet::keystore::zeroize_string(&mut secret_hex);
+				proof_result?;
 
 				proof_files.push(proof_file);
 			}

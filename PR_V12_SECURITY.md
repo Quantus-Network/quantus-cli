@@ -51,9 +51,9 @@ This PR remediates **all 20 High and 30 Medium** Unreviewed findings (with red�
 | #159916 | Single-block over-limit abort | Fixed — offset pagination |
 | #160052 | Duplicate signers | Fixed — sort+dedup |
 | #160103 | Wormhole `--secret` argv | Fixed — `--secret-file` |
-| #160105 | Secrets not zeroized after proof | Fixed |
+| #160105 | Secrets not zeroized after proof | Partially fixed — see zeroization scope note |
 | #160110 | Unbounded Merkle depth | Fixed |
-| #160591 | Wallet secrets retained | Fixed — Drop/zeroize/redacted Debug |
+| #160591 | Wallet secrets retained | Partially fixed — see zeroization scope note |
 | #160595 | Wallet name path escape | Fixed (with #160598 name validation) |
 | #160625 | Unbounded tx-status waits | Fixed — deadlines |
 | #160640 | Malformed pubkey panic | Fixed — `InvalidPublicKey` |
@@ -100,6 +100,25 @@ Some Invalid Lows were still tightened while adjacent to High/Medium work (e.g. 
 ## Info (2 Unreviewed)
 - #160685 Bind deposits/votes to confirmed referendum index — informational
 - #160730 Non-native leaves represented as native assets — informational
+
+## Zeroization scope note (#160105 / #160591)
+
+Zeroization is enforced at the library boundary (`wormhole_lib::generate_proof`
+wipes `input.secret` on all paths via drop guards; wallet decrypt buffers,
+`WalletData`, and derived AES keys are wiped) and at the caller sites that were
+tractable: hex-encoded secret strings in the multiround/dissolve flows,
+`DissolveOutput` secrets (zeroize-on-drop, redacted `Debug`), prompted
+mnemonics/seeds in `wallet import`/`from-seed`, seed copies inside
+`WalletManager`, and password-file reads.
+
+These items are still not *fully* closed, and cannot be with the current type
+shapes: secrets are `Copy` arrays (`[u8; 32]`) and plain `String`s, so every
+pass-by-value and reallocation can leave untracked copies on the stack or in
+freed heap blocks (e.g. the expected-event tuples in the dissolve flow, and
+`String` reallocations inside prompt libraries). Fully closing them would mean
+migrating to non-`Copy` zeroize-on-drop wrapper types end to end, which is out
+of scope for this PR. Treat the residual risk as: secrets may persist in
+process memory until overwritten; they are never persisted or printed.
 
 ## CodeQL workflow removal
 
