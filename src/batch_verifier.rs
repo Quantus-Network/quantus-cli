@@ -127,6 +127,7 @@ fn load_batch_verifier_from_files(
 /// Load the private-batch verifier from `bins_dir`, applying batch profile checks
 /// (not the leaf keccak256 pin).
 pub fn load_private_batch_verifier(bins_dir: &Path) -> Result<WormholeVerifier> {
+	crate::bins::verify_manifest(bins_dir)?;
 	let config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
 		QuantusError::Generic(format!(
 			"Failed to load circuit bins config from {}: {e}",
@@ -145,6 +146,7 @@ pub fn load_private_batch_verifier(bins_dir: &Path) -> Result<WormholeVerifier> 
 /// Load the public-batch verifier from `bins_dir`, applying batch profile checks
 /// (not the leaf keccak256 pin).
 pub fn load_public_batch_verifier(bins_dir: &Path) -> Result<WormholeVerifier> {
+	crate::bins::verify_manifest(bins_dir)?;
 	let config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
 		QuantusError::Generic(format!(
 			"Failed to load circuit bins config from {}: {e}",

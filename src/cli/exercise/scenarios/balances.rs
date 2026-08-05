@@ -21,7 +21,7 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 
 async fn single_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?;
-	let recipient_ss58 = recipient.to_account_id_ss58check();
+	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
 	let amount = ctx.unit;
 
 	let sender = ctx.eph[0].clone();
@@ -48,7 +48,7 @@ async fn batch_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let n = 3usize;
 	let mut recipients = Vec::with_capacity(n);
 	for _ in 0..n {
-		recipients.push(ctx.fresh_keypair()?.to_account_id_ss58check());
+		recipients.push(ctx.fresh_keypair()?.try_to_account_id_ss58check()?);
 	}
 	let amount = ctx.unit / 2;
 	let transfers: Vec<(String, u128)> = recipients.iter().map(|r| (r.clone(), amount)).collect();
@@ -69,7 +69,7 @@ async fn batch_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn transfer_with_tip(ctx: &mut ExerciseCtx) -> Result<String> {
-	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
+	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
 	let amount = ctx.unit;
 	let tip = ctx.unit / 10;
 	let sender = ctx.eph[1].clone();
@@ -93,9 +93,9 @@ async fn transfer_with_tip(ctx: &mut ExerciseCtx) -> Result<String> {
 
 async fn transfer_manual_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[1].clone();
-	let account = sender.to_account_id_32();
+	let account = sender.try_to_account_id_32()?;
 	let nonce = ctx.client.get_account_nonce_from_best_block(&account).await?;
-	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
+	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
 	crate::cli::send::transfer_with_nonce(
 		&ctx.client,
 		&sender,

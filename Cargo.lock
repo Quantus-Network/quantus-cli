@@ -3974,6 +3974,7 @@ dependencies = [
  "hex",
  "indicatif",
  "jsonrpsee",
+ "libc",
  "parity-scale-codec",
  "qp-dilithium-crypto",
  "qp-plonky2",

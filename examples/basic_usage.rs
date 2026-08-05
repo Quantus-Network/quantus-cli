@@ -35,11 +35,11 @@ async fn main() -> Result<()> {
 	println!("🔗 Connected to Quantus node");
 
 	// 4. Load the wallet for transactions
-	let wallet_data = wallet_manager.load_wallet("lib_example_wallet", "example_password")?;
-	let keypair = wallet_data.keypair;
+	let mut wallet_data = wallet_manager.load_wallet("lib_example_wallet", "example_password")?;
+	let keypair = wallet_data.take_keypair();
 
 	// 5. Get account balance
-	let account_id = keypair.to_account_id_32();
+	let account_id = keypair.try_to_account_id_32()?;
 	let balance = get_account_balance(&client, &account_id).await?;
 	println!("💰 Balance: {balance} DEV");
 

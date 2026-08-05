@@ -1,6 +1,9 @@
 use crate::{
 	chain::quantus_subxt,
-	cli::{address_format::QuantusSS58, common::resolve_address},
+	cli::{
+		address_format::QuantusSS58,
+		common::{delay_blocks_to_u32, delay_seconds_to_millis, resolve_address},
+	},
 	error::Result,
 	log_info, log_print, log_verbose,
 };
@@ -27,7 +30,7 @@ pub enum ReversibleCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -58,7 +61,7 @@ pub enum ReversibleCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -77,7 +80,7 @@ pub enum ReversibleCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -96,7 +99,7 @@ pub enum ReversibleCommands {
 		from: Option<String>,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -114,7 +117,7 @@ pub async fn schedule_transfer(
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🔄 Creating reversible transfer...");
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 
@@ -197,7 +200,7 @@ pub async fn schedule_transfer_with_delay(
 ) -> Result<subxt::utils::H256> {
 	let unit_str = if unit_blocks { "blocks" } else { "seconds" };
 	log_verbose!("🔄 Creating reversible transfer with custom delay ...");
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 	log_verbose!("   Delay: {} {}", delay, unit_str);
@@ -211,10 +214,11 @@ pub async fn schedule_transfer_with_delay(
 
 	// Convert delay to proper BlockNumberOrTimestamp
 	let delay_value = if unit_blocks {
-		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::BlockNumber(delay as u32)
+		let blocks = delay_blocks_to_u32(delay)?;
+		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::BlockNumber(blocks)
 	} else {
-		// Convert seconds to milliseconds for the runtime
-		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::Timestamp(delay * 1000)
+		let millis = delay_seconds_to_millis(delay)?;
+		quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay::Timestamp(millis)
 	};
 
 	log_verbose!("✍️  Creating schedule_transfer_with_delay extrinsic...");
@@ -399,7 +403,7 @@ async fn list_pending_transactions(
 			// Load wallet and get its address
 			let keypair =
 				crate::wallet::load_keypair_from_wallet(&wallet, password, password_file)?;
-			keypair.to_account_id_ss58check()
+			keypair.try_to_account_id_ss58check()?
 		},
 		(None, None) => {
 			return Err(crate::error::QuantusError::Generic(

@@ -56,14 +56,26 @@ pub enum WalletError {
 	#[error("Invalid password (or corrupted wallet file)")]
 	InvalidPassword,
 
+	#[error("Invalid wallet address")]
+	InvalidAddress,
+
+	#[error("Invalid wallet name")]
+	InvalidName,
+
 	#[error("Key generation failed")]
 	KeyGeneration,
+
+	#[error("Invalid public key")]
+	InvalidPublicKey,
 
 	#[error("Encryption failed: {0}")]
 	Encryption(String),
 
 	#[error("Decryption failed. Check your password.")]
 	Decryption,
+
+	#[error("Wallet integrity check failed: {0}")]
+	Integrity(String),
 }
 
 /// Type alias for Results using QuantusError

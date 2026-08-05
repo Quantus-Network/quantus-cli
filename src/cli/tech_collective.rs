@@ -29,7 +29,7 @@ pub enum TechCollectiveCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -43,12 +43,16 @@ pub enum TechCollectiveCommands {
 		#[arg(short, long)]
 		who: String,
 
+		/// Minimum rank required for removal (must be the member's rank or greater)
+		#[arg(long)]
+		min_rank: u16,
+
 		/// Wallet name to sign with (must have root permissions)
 		#[arg(short, long)]
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -71,7 +75,7 @@ pub enum TechCollectiveCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -143,10 +147,12 @@ pub async fn remove_member(
 	quantus_client: &crate::chain::client::QuantusClient,
 	from_keypair: &crate::wallet::QuantumKeyPair,
 	who_address: &str,
+	min_rank: u16,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	log_verbose!("🏛️  Removing member from Tech Collective...");
 	log_verbose!("   Member: {}", who_address.bright_cyan());
+	log_verbose!("   Minimum rank: {}", min_rank);
 
 	// Parse the member address
 	let (member_account_sp, _) = AccountId32::from_ss58check_with_version(who_address)
@@ -160,7 +166,7 @@ pub async fn remove_member(
 
 	let remove_member_call = quantus_subxt::api::tx().tech_collective().remove_member(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(member_account_id),
-		0u16, // Use rank 0 as default
+		min_rank,
 	);
 
 	let tx_hash = crate::cli::common::submit_transaction(
@@ -339,16 +345,18 @@ pub async fn handle_tech_collective_command(
 			);
 		},
 
-		TechCollectiveCommands::RemoveMember { who, from, password, password_file } => {
+		TechCollectiveCommands::RemoveMember { who, min_rank, from, password, password_file } => {
 			log_print!("🏛️  Removing member from Tech Collective ");
 			log_print!("   👤 Member: {}", who.bright_cyan());
+			log_print!("   🎖️  Minimum rank: {}", min_rank);
 			log_print!("   🔑 Signed by: {}", from.bright_yellow());
 
 			// Load wallet
 			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
 
 			// Submit transaction
-			let tx_hash = remove_member(&quantus_client, &keypair, &who, execution_mode).await?;
+			let tx_hash =
+				remove_member(&quantus_client, &keypair, &who, min_rank, execution_mode).await?;
 
 			log_print!(
 				"✅ {} Remove member transaction submitted! Hash: {:?}",
@@ -473,4 +481,50 @@ pub async fn handle_tech_collective_command(
 	};
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use clap::Parser;
+
+	#[derive(Debug, Parser)]
+	struct TestCli {
+		#[command(subcommand)]
+		command: TechCollectiveCommands,
+	}
+
+	#[test]
+	fn remove_member_requires_min_rank_argument() {
+		let err = TestCli::try_parse_from([
+			"tech-collective",
+			"remove-member",
+			"--who",
+			"qzAddress",
+			"--from",
+			"operator",
+		])
+		.unwrap_err();
+		let rendered = err.to_string();
+		assert!(
+			rendered.contains("min-rank") || rendered.contains("required"),
+			"expected missing --min-rank to fail clap parse, got: {rendered}"
+		);
+
+		let parsed = TestCli::try_parse_from([
+			"tech-collective",
+			"remove-member",
+			"--who",
+			"qzAddress",
+			"--min-rank",
+			"1",
+			"--from",
+			"operator",
+		])
+		.expect("--min-rank must be accepted");
+		match parsed.command {
+			TechCollectiveCommands::RemoveMember { min_rank, .. } => assert_eq!(min_rank, 1),
+			other => panic!("expected RemoveMember, got {other:?}"),
+		}
+	}
 }

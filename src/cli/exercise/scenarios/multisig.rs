@@ -21,7 +21,7 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	let signer_b = ctx.eph[1].clone();
 	let signer_c = ctx.eph[2].clone();
 	let signers =
-		vec![account_id_of(&signer_a), account_id_of(&signer_b), account_id_of(&signer_c)];
+		vec![account_id_of(&signer_a)?, account_id_of(&signer_b)?, account_id_of(&signer_c)?];
 	let threshold = 2u32;
 	let nonce: u64 = rand::Rng::random(&mut ctx.rng);
 
@@ -58,10 +58,10 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	.await?;
 
 	let recipient = ctx.fresh_keypair()?;
-	let recipient_ss58 = recipient.to_account_id_ss58check();
+	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
 	let amount = 2 * ctx.unit;
 	let inner = quantus_subxt::api::tx().balances().transfer_allow_death(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)),
+		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)?),
 		amount,
 	);
 	let call_data = inner

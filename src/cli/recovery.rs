@@ -22,7 +22,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		lost: String,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file (for scripting)
 		#[arg(long)]
@@ -41,7 +41,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		rescuer: String,
 		/// Password for friend wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -57,7 +57,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		lost: String,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -73,7 +73,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		rescuer: String,
 		/// Password for lost wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -89,7 +89,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		lost: String,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -135,7 +135,7 @@ pub enum RecoveryCommands {
 		#[arg(long, default_value_t = true)]
 		keep_alive: bool,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -160,7 +160,7 @@ pub enum RecoveryCommands {
 		#[arg(long, default_value_t = true)]
 		keep_alive: bool,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -179,7 +179,7 @@ pub async fn handle_recovery_command(
 		RecoveryCommands::Initiate { rescuer, lost, password, password_file } => {
 			let rescuer_key =
 				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
-			let rescuer_addr = rescuer_key.to_account_id_ss58check();
+			let rescuer_addr = rescuer_key.try_to_account_id_ss58check()?;
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 			let lost_id = resolve_to_subxt_account_id(&lost)?;
@@ -264,7 +264,7 @@ pub async fn handle_recovery_command(
 
 			let rescuer_key =
 				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
-			let rescuer_addr = rescuer_key.to_account_id_ss58check();
+			let rescuer_addr = rescuer_key.try_to_account_id_ss58check()?;
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 
@@ -364,7 +364,7 @@ pub async fn handle_recovery_command(
 			let rescuer_key =
 				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
 
-			let rescuer_addr = rescuer_key.to_account_id_ss58check();
+			let rescuer_addr = rescuer_key.try_to_account_id_ss58check()?;
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 

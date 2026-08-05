@@ -33,13 +33,16 @@ async fn main() -> Result<()> {
 	// Get addresses
 	let alice_addr = wallet_manager
 		.find_wallet_address("crystal_alice")?
-		.expect("Alice wallet not found");
+		.address()
+		.expect("Alice wallet not found or password-protected");
 	let bob_addr = wallet_manager
 		.find_wallet_address("crystal_bob")?
-		.expect("Bob wallet not found");
+		.address()
+		.expect("Bob wallet not found or password-protected");
 	let charlie_addr = wallet_manager
 		.find_wallet_address("crystal_charlie")?
-		.expect("Charlie wallet not found");
+		.address()
+		.expect("Charlie wallet not found or password-protected");
 
 	println!("   Alice: {}", alice_addr);
 	println!("   Bob: {}", bob_addr);

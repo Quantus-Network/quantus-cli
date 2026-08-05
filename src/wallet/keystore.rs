@@ -4,7 +4,7 @@
 /// - Quantum-safe encrypting and storing wallet data using Argon2 + AES-256-GCM
 /// - Loading and decrypting wallet data with post-quantum cryptography
 /// - Managing wallet files on disk with quantum-resistant security
-use crate::error::{Result, WalletError};
+use crate::error::{QuantusError, Result, WalletError};
 use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
 #[cfg(test)]
 use qp_rusty_crystals_hdwallet::SensitiveBytes32;
@@ -23,16 +23,208 @@ use aes_gcm::{
 use argon2::{Algorithm, Argon2, Params, PasswordHash, PasswordHasher, Version};
 use rand::{rng, RngCore};
 
-use std::path::Path;
+use std::{
+	collections::HashSet,
+	fmt,
+	fs::{self, File, OpenOptions},
+	io::{ErrorKind, Read, Write},
+	path::{Path, PathBuf},
+	sync::{Condvar, Mutex, OnceLock},
+};
 
 use qp_dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
 use sp_runtime::traits::IdentifyAccount;
 
+pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
+	for byte in bytes {
+		unsafe { std::ptr::write_volatile(byte, 0) };
+	}
+	std::sync::atomic::compiler_fence(std::sync::atomic::Ordering::SeqCst);
+}
+
+pub(crate) fn zeroize_string(value: &mut String) {
+	unsafe { zeroize_bytes(value.as_mut_vec()) };
+}
+
+fn keystore_lock() -> &'static Mutex<()> {
+	static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+	LOCK.get_or_init(|| Mutex::new(()))
+}
+
+/// Frozen Argon2id wallet-format profile (memory KiB, iterations, parallelism).
+///
+/// Deliberately literals rather than `argon2::Params::DEFAULT_*`: the crate's
+/// defaults are crate properties and already changed between argon2 0.4 and
+/// 0.5. If encrypt/decrypt tracked them, a future dependency bump would
+/// silently write a new profile and reject every wallet already on disk with a
+/// bare Decryption error (while self-consistent roundtrip tests stayed green).
+const WALLET_ARGON2_M_COST: u32 = 19_456;
+const WALLET_ARGON2_T_COST: u32 = 2;
+const WALLET_ARGON2_P_COST: u32 = 1;
+
+/// Argon2 instance for the frozen wallet profile, used by both encrypt and
+/// decrypt so the written and accepted profiles cannot drift apart.
+fn wallet_argon2() -> Argon2<'static> {
+	let params =
+		Params::new(WALLET_ARGON2_M_COST, WALLET_ARGON2_T_COST, WALLET_ARGON2_P_COST, None)
+			.expect("frozen Argon2 wallet profile is valid");
+	Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
+}
+
+fn wallet_filename(name: &str) -> Result<String> {
+	// Reject path separators and traversal, plus Windows-specific escapes:
+	// ':' makes "C:evil.json" resolve outside the keystore (drive-relative
+	// path) and "foo:bar" create an NTFS alternate data stream. The remaining
+	// characters are reserved in Windows filenames; control characters are
+	// rejected everywhere.
+	const FORBIDDEN: &[char] = &['/', '\\', ':', '<', '>', '"', '|', '?', '*'];
+	if name.is_empty() ||
+		name == "." ||
+		name == ".." ||
+		name.contains(FORBIDDEN) ||
+		name.chars().any(|c| c.is_control())
+	{
+		return Err(WalletError::InvalidName.into());
+	}
+	Ok(format!("{name}.json"))
+}
+
+#[cfg(unix)]
+fn set_no_follow(options: &mut OpenOptions) {
+	use std::os::unix::fs::OpenOptionsExt;
+	// libc::O_NOFOLLOW carries the per-platform value; the previously
+	// hardcoded Linux constant (0o400000) was a silent no-op on macOS,
+	// where O_NOFOLLOW is 0x0100.
+	options.custom_flags(libc::O_NOFOLLOW);
+}
+
+#[cfg(not(unix))]
+fn set_no_follow(_options: &mut OpenOptions) {}
+
+fn open_wallet_for_read(path: &Path) -> std::io::Result<File> {
+	let mut options = OpenOptions::new();
+	options.read(true);
+	set_no_follow(&mut options);
+	options.open(path)
+}
+
+/// Exclusively create a random temporary file in the wallet directory.
+/// `create_new` / O_EXCL refuses an existing path (including a pre-positioned symlink).
+fn create_unique_temp(storage_path: &Path, name: &str) -> std::io::Result<(PathBuf, File)> {
+	for _ in 0..32 {
+		let mut nonce = [0u8; 16];
+		rng().fill_bytes(&mut nonce);
+		let tmp_path = storage_path.join(format!(".{name}.{}.tmp", hex::encode(nonce)));
+		let mut options = OpenOptions::new();
+		options.write(true).create_new(true);
+		set_no_follow(&mut options);
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::OpenOptionsExt;
+			options.mode(0o600);
+		}
+		match options.open(&tmp_path) {
+			Ok(file) => return Ok((tmp_path, file)),
+			Err(e) if e.kind() == ErrorKind::AlreadyExists => continue,
+			Err(e) => return Err(e),
+		}
+	}
+	Err(std::io::Error::new(
+		ErrorKind::AlreadyExists,
+		"could not create unique wallet temporary file",
+	))
+}
+
+fn write_temp_wallet_bytes(storage_path: &Path, name: &str, data: &[u8]) -> Result<PathBuf> {
+	let (tmp_path, mut file) = create_unique_temp(storage_path, name)?;
+	let result = (|| -> Result<()> {
+		file.write_all(data)?;
+		file.sync_all()?;
+		Ok(())
+	})();
+	if let Err(e) = result {
+		let _ = fs::remove_file(&tmp_path);
+		return Err(e);
+	}
+	drop(file);
+
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::PermissionsExt;
+		let mut perms = fs::metadata(&tmp_path)?.permissions();
+		perms.set_mode(0o600);
+		fs::set_permissions(&tmp_path, perms)?;
+	}
+
+	Ok(tmp_path)
+}
+
+#[cfg(unix)]
+fn same_file_metadata(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+	use std::os::unix::fs::MetadataExt;
+	a.dev() == b.dev() && a.ino() == b.ino()
+}
+
+#[cfg(not(unix))]
+fn same_file_metadata(a: &std::fs::Metadata, b: &std::fs::Metadata) -> bool {
+	a.len() == b.len() && a.modified().ok() == b.modified().ok()
+}
+
+struct WalletCreateLocks {
+	active: Mutex<HashSet<PathBuf>>,
+	available: Condvar,
+}
+
+static WALLET_CREATE_LOCKS: OnceLock<WalletCreateLocks> = OnceLock::new();
+
+pub(crate) struct WalletCreateGuard {
+	path: PathBuf,
+	locks: &'static WalletCreateLocks,
+}
+
+impl WalletCreateLocks {
+	fn lock(path: PathBuf) -> WalletCreateGuard {
+		let locks = WALLET_CREATE_LOCKS.get_or_init(|| WalletCreateLocks {
+			active: Mutex::new(HashSet::new()),
+			available: Condvar::new(),
+		});
+		let mut active = locks.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+		while active.contains(&path) {
+			active = locks.available.wait(active).unwrap_or_else(|poisoned| poisoned.into_inner());
+		}
+		active.insert(path.clone());
+		WalletCreateGuard { path, locks }
+	}
+}
+
+impl Drop for WalletCreateGuard {
+	fn drop(&mut self) {
+		let mut active = self.locks.active.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+		active.remove(&self.path);
+		self.locks.available.notify_all();
+	}
+}
+
 /// Quantum-safe key pair using Dilithium post-quantum signatures
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct QuantumKeyPair {
 	pub public_key: Vec<u8>,
 	pub private_key: Vec<u8>,
+}
+
+impl fmt::Debug for QuantumKeyPair {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("QuantumKeyPair")
+			.field("public_key_len", &self.public_key.len())
+			.field("private_key", &"[redacted]")
+			.finish()
+	}
+}
+
+impl Drop for QuantumKeyPair {
+	fn drop(&mut self) {
+		zeroize_bytes(&mut self.private_key);
+	}
 }
 
 impl QuantumKeyPair {
@@ -47,12 +239,11 @@ impl QuantumKeyPair {
 	/// Convert to rusty-crystals Keypair
 	#[allow(dead_code)]
 	pub fn to_dilithium_keypair(&self) -> Result<Keypair> {
-		// TODO: Implement conversion from bytes back to Keypair
-		// For now, generate a new one as placeholder
-		// This function should properly reconstruct the Keypair from stored bytes
 		Ok(Keypair {
-			public: PublicKey::from_bytes(&self.public_key).expect("Failed to parse public key"),
-			secret: SecretKey::from_bytes(&self.private_key).expect("Failed to parse private key"),
+			public: PublicKey::from_bytes(&self.public_key)
+				.map_err(|_| crate::error::WalletError::KeyGeneration)?,
+			secret: SecretKey::from_bytes(&self.private_key)
+				.map_err(|_| crate::error::WalletError::KeyGeneration)?,
 		})
 	}
 
@@ -71,17 +262,22 @@ impl QuantumKeyPair {
 		}
 	}
 
-	pub fn to_account_id_32(&self) -> AccountId32 {
+	pub fn try_to_account_id_32(&self) -> Result<AccountId32> {
 		// Use the DilithiumPublic's into_account method for correct address generation
-		let resonance_public =
-			DilithiumPublic::from_slice(&self.public_key).expect("Invalid public key");
-		resonance_public.into_account()
+		let resonance_public = DilithiumPublic::from_slice(&self.public_key)
+			.map_err(|_| crate::error::WalletError::InvalidPublicKey)?;
+		Ok(resonance_public.into_account())
 	}
 
-	pub fn to_account_id_ss58check(&self) -> String {
+	// Note: there are deliberately no infallible to_account_id_* variants. The
+	// old ones fell back to the all-zero account / empty string on malformed
+	// keys, turning a detectable error into a silent wrong answer that callers
+	// could send funds to.
+
+	pub fn try_to_account_id_ss58check(&self) -> Result<String> {
 		use crate::cli::address_format::quantus_ss58_format;
-		let account = self.to_account_id_32();
-		account.to_ss58check_with_version(quantus_ss58_format())
+		let account = self.try_to_account_id_32()?;
+		Ok(account.to_ss58check_with_version(quantus_ss58_format()))
 	}
 
 	/// Convert to subxt Signer for use
@@ -93,16 +289,15 @@ impl QuantumKeyPair {
 	}
 
 	#[allow(dead_code)]
-	pub fn ss58_to_account_id(s: &str) -> Vec<u8> {
-		// from_ss58check returns a Result, we unwrap it to panic on invalid input.
-		// We then convert the AccountId32 struct to a Vec<u8> to be compatible with Polkadart's
-		// typedef.
-		AsRef::<[u8]>::as_ref(&AccountId32::from_ss58check_with_version(s).unwrap().0).to_vec()
+	pub fn ss58_to_account_id(s: &str) -> Result<Vec<u8>> {
+		let account = AccountId32::from_ss58check_with_version(s)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?;
+		Ok(AsRef::<[u8]>::as_ref(&account.0).to_vec())
 	}
 }
 
 /// Quantum-safe encrypted wallet data structure
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct EncryptedWallet {
 	pub name: String,
 	pub address: String, // SS58-encoded address (public, not encrypted)
@@ -119,13 +314,48 @@ pub struct EncryptedWallet {
 }
 
 /// Wallet data structure (before encryption)
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub struct WalletData {
 	pub name: String,
 	pub keypair: QuantumKeyPair,
 	pub mnemonic: Option<String>,
 	pub derivation_path: String,
 	pub metadata: std::collections::HashMap<String, String>,
+}
+
+impl fmt::Debug for WalletData {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("WalletData")
+			.field("name", &self.name)
+			.field("keypair", &self.keypair)
+			.field("mnemonic", &self.mnemonic.as_ref().map(|_| "[redacted]"))
+			.field("derivation_path", &self.derivation_path)
+			.field("metadata", &self.metadata)
+			.finish()
+	}
+}
+
+impl Drop for WalletData {
+	fn drop(&mut self) {
+		if let Some(mnemonic) = &mut self.mnemonic {
+			zeroize_string(mnemonic);
+		}
+	}
+}
+
+impl WalletData {
+	/// Take the keypair out without moving other fields (compatible with `Drop`).
+	pub fn take_keypair(&mut self) -> QuantumKeyPair {
+		std::mem::replace(
+			&mut self.keypair,
+			QuantumKeyPair { public_key: Vec::new(), private_key: Vec::new() },
+		)
+	}
+
+	/// Take the mnemonic out without moving other fields (compatible with `Drop`).
+	pub fn take_mnemonic(&mut self) -> Option<String> {
+		self.mnemonic.take()
+	}
 }
 
 /// Keystore manager for handling encrypted wallet storage
@@ -139,29 +369,140 @@ impl Keystore {
 		Self { storage_path: storage_path.as_ref().to_path_buf() }
 	}
 
-	/// Save an encrypted wallet to disk
+	/// Acquire the per-wallet-name create lock for check-then-save creation flows.
+	pub(crate) fn lock_wallet_create(&self, name: &str) -> Result<WalletCreateGuard> {
+		let file_name = wallet_filename(name)?;
+		Ok(WalletCreateLocks::lock(self.storage_path.join(file_name)))
+	}
+
+	/// Save an encrypted wallet to disk (may replace an existing wallet file).
+	// Public keystore API; migration/create paths use specialized helpers.
+	#[allow(dead_code)]
 	pub fn save_wallet(&self, wallet: &EncryptedWallet) -> Result<()> {
-		let wallet_file = self.storage_path.join(format!("{}.json", wallet.name));
-		let tmp_file = self.storage_path.join(format!("{}.json.tmp", wallet.name));
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		self.save_wallet_unlocked(wallet)
+	}
+
+	/// Save a newly-created wallet only if no wallet with this name exists.
+	pub fn save_new_wallet(&self, wallet: &EncryptedWallet) -> Result<()> {
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		Self::ensure_no_embedded_key_material(wallet)?;
+		let file_name = wallet_filename(&wallet.name)?;
+		let wallet_file = self.storage_path.join(&file_name);
 		let wallet_json = serde_json::to_string_pretty(wallet)?;
-		// Write to a temp file and rename so a crash mid-write can never leave a
-		// truncated file behind - it may hold the only copy of the key material.
-		std::fs::write(&tmp_file, wallet_json)?;
-		std::fs::rename(&tmp_file, wallet_file)?;
-		Ok(())
+		let tmp_file =
+			write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
+
+		// Atomically create the destination without replacing an existing wallet.
+		// hard_link fails with AlreadyExists when the final name is taken.
+		match fs::hard_link(&tmp_file, &wallet_file) {
+			Ok(()) => {
+				let _ = fs::remove_file(&tmp_file);
+				#[cfg(unix)]
+				{
+					use std::os::unix::fs::PermissionsExt;
+					let mut perms = fs::metadata(&wallet_file)?.permissions();
+					perms.set_mode(0o600);
+					fs::set_permissions(&wallet_file, perms)?;
+				}
+				Ok(())
+			},
+			Err(e) if e.kind() == ErrorKind::AlreadyExists => {
+				let _ = fs::remove_file(&tmp_file);
+				Err(WalletError::AlreadyExists.into())
+			},
+			Err(e) => {
+				let _ = fs::remove_file(&tmp_file);
+				Err(e.into())
+			},
+		}
+	}
+
+	/// Save a replacement only if the stored wallet still matches the caller's snapshot.
+	pub fn save_wallet_if_current(
+		&self,
+		wallet: &EncryptedWallet,
+		expected: &EncryptedWallet,
+	) -> Result<bool> {
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		match self.load_wallet_unlocked(&expected.name)? {
+			Some(current) if current == *expected => {
+				self.save_wallet_unlocked(wallet)?;
+				Ok(true)
+			},
+			_ => Ok(false),
+		}
+	}
+
+	fn save_wallet_unlocked(&self, wallet: &EncryptedWallet) -> Result<()> {
+		Self::ensure_no_embedded_key_material(wallet)?;
+		let file_name = wallet_filename(&wallet.name)?;
+		let wallet_file = self.storage_path.join(&file_name);
+		let wallet_json = serde_json::to_string_pretty(wallet)?;
+		// Unpredictable, exclusively-created temp so attackers cannot pre-position a
+		// symlink at a deterministic path. rename replaces the directory entry only.
+		let tmp_file =
+			write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
+		match fs::rename(&tmp_file, &wallet_file) {
+			Ok(()) => {
+				#[cfg(unix)]
+				{
+					use std::os::unix::fs::PermissionsExt;
+					let mut perms = fs::metadata(&wallet_file)?.permissions();
+					perms.set_mode(0o600);
+					fs::set_permissions(&wallet_file, perms)?;
+				}
+				Ok(())
+			},
+			Err(e) => {
+				let _ = fs::remove_file(&tmp_file);
+				Err(e.into())
+			},
+		}
 	}
 
 	/// Load an encrypted wallet from disk
 	pub fn load_wallet(&self, name: &str) -> Result<Option<EncryptedWallet>> {
-		let wallet_file = self.storage_path.join(format!("{name}.json"));
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		self.load_wallet_unlocked(name)
+	}
 
-		if !wallet_file.exists() {
-			return Ok(None);
+	fn load_wallet_unlocked(&self, name: &str) -> Result<Option<EncryptedWallet>> {
+		let wallet_file = self.storage_path.join(wallet_filename(name)?);
+		let mut file = match open_wallet_for_read(&wallet_file) {
+			Ok(file) => file,
+			Err(e) if e.kind() == ErrorKind::NotFound => return Ok(None),
+			Err(e) => return Err(e.into()),
+		};
+		if !file.metadata()?.file_type().is_file() {
+			return Err(QuantusError::Generic("wallet path is not a regular file".to_string()));
 		}
-
-		let wallet_json = std::fs::read_to_string(wallet_file)?;
+		let mut wallet_json = String::new();
+		file.read_to_string(&mut wallet_json)?;
 		let wallet: EncryptedWallet = serde_json::from_str(&wallet_json)?;
+		Self::validate_wallet_address(&wallet.address)?;
 		Ok(Some(wallet))
+	}
+
+	fn validate_wallet_address(address: &str) -> Result<()> {
+		use crate::cli::address_format::quantus_ss58_format;
+
+		let (account_id, format) = AccountId32::from_ss58check_with_version(address)
+			.map_err(|_| WalletError::InvalidAddress)?;
+		if format != quantus_ss58_format() ||
+			account_id.to_ss58check_with_version(quantus_ss58_format()) != address
+		{
+			return Err(WalletError::InvalidAddress.into());
+		}
+		Ok(())
 	}
 
 	/// List all wallet files
@@ -178,7 +519,9 @@ impl Keystore {
 
 			if path.extension().and_then(|s| s.to_str()) == Some("json") {
 				if let Some(name) = path.file_stem().and_then(|s| s.to_str()) {
-					wallets.push(name.to_string());
+					if wallet_filename(name).is_ok() {
+						wallets.push(name.to_string());
+					}
 				}
 			}
 		}
@@ -188,14 +531,37 @@ impl Keystore {
 
 	/// Delete a wallet file
 	pub fn delete_wallet(&self, name: &str) -> Result<bool> {
-		let wallet_file = self.storage_path.join(format!("{name}.json"));
-
-		if wallet_file.exists() {
-			std::fs::remove_file(wallet_file)?;
-			Ok(true)
-		} else {
-			Ok(false)
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		let wallet_file = self.storage_path.join(wallet_filename(name)?);
+		let before = match fs::symlink_metadata(&wallet_file) {
+			Ok(metadata) => metadata,
+			Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+			Err(e) => return Err(e.into()),
+		};
+		if !before.file_type().is_file() {
+			return Err(QuantusError::Generic(
+				"refusing to delete non-regular wallet file".to_string(),
+			));
 		}
+
+		let (tombstone, tombstone_file) = create_unique_temp(&self.storage_path, name)?;
+		drop(tombstone_file);
+		fs::remove_file(&tombstone)?;
+		match fs::rename(&wallet_file, &tombstone) {
+			Ok(()) => {},
+			Err(e) if e.kind() == ErrorKind::NotFound => return Ok(false),
+			Err(e) => return Err(e.into()),
+		}
+
+		let after = fs::symlink_metadata(&tombstone)?;
+		if !after.file_type().is_file() || !same_file_metadata(&before, &after) {
+			let _ = fs::rename(&tombstone, &wallet_file);
+			return Err(QuantusError::Generic("wallet changed during delete".to_string()));
+		}
+		fs::remove_file(tombstone)?;
+		Ok(true)
 	}
 
 	/// Encrypt wallet data using quantum-safe Argon2 + AES-256-GCM
@@ -209,8 +575,8 @@ impl Keystore {
 		let mut argon2_salt = [0u8; 16];
 		rng().fill_bytes(&mut argon2_salt);
 
-		// 2. Derive encryption key from password using Argon2 (quantum-safe)
-		let argon2 = Argon2::default();
+		// 2. Derive encryption key from password using the frozen Argon2 profile
+		let argon2 = wallet_argon2();
 		let salt_string = argon2::password_hash::SaltString::encode_b64(&argon2_salt)
 			.map_err(|e| WalletError::Encryption(e.to_string()))?;
 		let password_hash = argon2
@@ -219,15 +585,18 @@ impl Keystore {
 
 		// 3. Use password hash as AES-256 key (quantum-safe with 256-bit key)
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
-		let aes_key = Key::<Aes256Gcm>::from(<[u8; 32]>::try_from(&hash_bytes[..32]).unwrap());
+		let mut key_bytes = <[u8; 32]>::try_from(&hash_bytes[..32]).unwrap();
+		let aes_key = Key::<Aes256Gcm>::from(key_bytes);
+		zeroize_bytes(&mut key_bytes);
 		let cipher = Aes256Gcm::new(&aes_key);
 
 		// 4. Generate nonce and encrypt the wallet data
 		let nonce = Aes256Gcm::generate_nonce(&mut AesOsRng);
-		let serialized_data = serde_json::to_vec(data)?;
+		let mut serialized_data = serde_json::to_vec(data)?;
 		let encrypted_data = cipher
 			.encrypt(&nonce, serialized_data.as_ref())
 			.map_err(|e| WalletError::Encryption(e.to_string()))?;
+		zeroize_bytes(&mut serialized_data);
 
 		// 5. Store the Argon2 parameters WITHOUT the digest. The digest determines
 		// the AES key, so persisting it next to the ciphertext would let anyone
@@ -239,7 +608,7 @@ impl Keystore {
 
 		Ok(EncryptedWallet {
 			name: data.name.clone(),
-			address: data.keypair.to_account_id_ss58check(), // Store public address
+			address: data.keypair.try_to_account_id_ss58check()?, // Store public address
 			encrypted_data,
 			kyber_ciphertext: vec![], // Reserved for future ML-KEM implementation
 			kyber_public_key: vec![], // Reserved for future ML-KEM implementation
@@ -257,6 +626,12 @@ impl Keystore {
 		encrypted: &EncryptedWallet,
 		password: &str,
 	) -> Result<WalletData> {
+		// Only known wallet encryption formats may be decrypted with these rules.
+		match encrypted.encryption_version {
+			1 | 2 => {},
+			_ => return Err(WalletError::Decryption.into()),
+		}
+
 		// 1. Re-derive the AES key from the password and the stored salt + params.
 		// The key itself is never stored in the wallet file.
 		let aes_key = Self::derive_aes_key(encrypted, password)?;
@@ -264,13 +639,28 @@ impl Keystore {
 
 		// 2. Decrypt the data. An AES-GCM authentication failure means the password
 		// was wrong (or the file was tampered with) - this is the password check.
-		let nonce = Nonce::from(<[u8; 12]>::try_from(&encrypted.aes_nonce[..]).unwrap());
-		let decrypted_data = cipher
+		let nonce_bytes =
+			<[u8; 12]>::try_from(&encrypted.aes_nonce[..]).map_err(|_| WalletError::Decryption)?;
+		let nonce = Nonce::from(nonce_bytes);
+		let mut decrypted_data = cipher
 			.decrypt(&nonce, encrypted.encrypted_data.as_ref())
 			.map_err(|_| WalletError::InvalidPassword)?;
 
-		// 3. Deserialize the wallet data
-		let wallet_data: WalletData = serde_json::from_slice(&decrypted_data)?;
+		// 3. Deserialize the wallet data, then clear the plaintext buffer.
+		let wallet_data_result = serde_json::from_slice::<WalletData>(&decrypted_data);
+		zeroize_bytes(&mut decrypted_data);
+		let wallet_data: WalletData = wallet_data_result?;
+
+		// 4. The plaintext envelope address is not AEAD-authenticated, so it must
+		// match the address derived from the decrypted key material before the
+		// wallet file is accepted as intact.
+		let derived_address = wallet_data.keypair.try_to_account_id_ss58check()?;
+		if encrypted.address != derived_address {
+			return Err(WalletError::Integrity(
+				"stored address does not match decrypted keypair".to_string(),
+			)
+			.into());
+		}
 
 		Ok(wallet_data)
 	}
@@ -279,37 +669,43 @@ impl Keystore {
 	/// and parameters. Works for both the current format (params only) and legacy
 	/// files (params + digest); the embedded digest of legacy files is ignored.
 	fn derive_aes_key(encrypted: &EncryptedWallet, password: &str) -> Result<Key<Aes256Gcm>> {
-		// The cost parameters come from the wallet file, so cap them: a crafted
-		// file could otherwise request an enormous m_cost and force a huge
-		// allocation. Limits are far above anything we ever write (defaults are
-		// m=19456 KiB, t=2, p=1).
-		const MAX_M_COST: u32 = 1 << 20; // 1 GiB (in KiB)
-		const MAX_T_COST: u32 = 64;
-		const MAX_P_COST: u32 = 16;
-
+		// The cost parameters come from the wallet file. Treat them as an
+		// untrusted wallet-format profile, not as caller-selectable work factors:
+		// generated wallets use Argon2id v=19 with the frozen profile
+		// (m=19456 KiB, t=2, p=1), and accepting higher values lets a crafted
+		// file force expensive memory/CPU work before password validation.
 		let parsed =
 			PasswordHash::new(&encrypted.argon2_params).map_err(|_| WalletError::Decryption)?;
 
-		let algorithm =
-			Algorithm::new(parsed.algorithm.as_str()).map_err(|_| WalletError::Decryption)?;
+		if parsed.algorithm.as_str() != "argon2id" {
+			return Err(WalletError::Decryption.into());
+		}
 		let version = Version::try_from(parsed.version.unwrap_or(Version::V0x13 as u32))
 			.map_err(|_| WalletError::Decryption)?;
-		let m_cost = parsed.params.get_decimal("m").unwrap_or(Params::DEFAULT_M_COST);
-		let t_cost = parsed.params.get_decimal("t").unwrap_or(Params::DEFAULT_T_COST);
-		let p_cost = parsed.params.get_decimal("p").unwrap_or(Params::DEFAULT_P_COST);
-		if m_cost > MAX_M_COST || t_cost > MAX_T_COST || p_cost > MAX_P_COST {
+		if version != Version::V0x13 {
+			return Err(WalletError::Decryption.into());
+		}
+		let m_cost = parsed.params.get_decimal("m").unwrap_or(WALLET_ARGON2_M_COST);
+		let t_cost = parsed.params.get_decimal("t").unwrap_or(WALLET_ARGON2_T_COST);
+		let p_cost = parsed.params.get_decimal("p").unwrap_or(WALLET_ARGON2_P_COST);
+		if m_cost != WALLET_ARGON2_M_COST ||
+			t_cost != WALLET_ARGON2_T_COST ||
+			p_cost != WALLET_ARGON2_P_COST
+		{
 			return Err(WalletError::Decryption.into());
 		}
 		let params =
 			Params::new(m_cost, t_cost, p_cost, None).map_err(|_| WalletError::Decryption)?;
-		let argon2 = Argon2::new(algorithm, version, params);
+		let argon2 = Argon2::new(Algorithm::Argon2id, version, params);
 
 		let mut key = [0u8; 32];
 		argon2
 			.hash_password_into(password.as_bytes(), &encrypted.argon2_salt, &mut key)
 			.map_err(|_| WalletError::Decryption)?;
 
-		Ok(Key::<Aes256Gcm>::from(key))
+		let aes_key = Key::<Aes256Gcm>::from(key);
+		zeroize_bytes(&mut key);
+		Ok(aes_key)
 	}
 
 	/// Returns true if the wallet embeds the Argon2 digest in `argon2_params`
@@ -321,6 +717,32 @@ impl Keystore {
 			.map(|h| h.hash.is_some())
 			.unwrap_or(false)
 	}
+
+	/// Refuse to persist wallets that still embed the Argon2 digest (AES key material).
+	fn ensure_no_embedded_key_material(wallet: &EncryptedWallet) -> Result<()> {
+		if Self::has_embedded_key_material(wallet) {
+			return Err(QuantusError::Generic(
+				"Refusing to persist wallet that embeds Argon2 digest key material; unlock to migrate first"
+					.to_string(),
+			));
+		}
+		Ok(())
+	}
+
+	/// Test-only helper to plant a legacy on-disk wallet that embeds key material.
+	#[cfg(test)]
+	pub(crate) fn save_wallet_unchecked_for_tests(&self, wallet: &EncryptedWallet) -> Result<()> {
+		let _guard = keystore_lock()
+			.lock()
+			.map_err(|_| QuantusError::Generic("keystore lock poisoned".to_string()))?;
+		let file_name = wallet_filename(&wallet.name)?;
+		let wallet_file = self.storage_path.join(&file_name);
+		let wallet_json = serde_json::to_string_pretty(wallet)?;
+		let tmp_file =
+			write_temp_wallet_bytes(&self.storage_path, &wallet.name, wallet_json.as_bytes())?;
+		fs::rename(&tmp_file, &wallet_file)?;
+		Ok(())
+	}
 }
 
 #[cfg(test)]
@@ -330,6 +752,42 @@ mod tests {
 	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
 	use sp_core::Pair;
 	use tempfile::TempDir;
+
+	#[test]
+	fn quantum_keypair_debug_redacts_private_key() {
+		let keypair =
+			QuantumKeyPair { public_key: vec![1, 2, 3], private_key: vec![0xde, 0xad, 0xbe, 0xef] };
+		let rendered = format!("{keypair:?}");
+		assert!(
+			rendered.contains("[redacted]"),
+			"private key must be redacted in Debug output, got: {rendered}"
+		);
+		assert!(
+			!rendered.contains("dead") && !rendered.contains("beef") && !rendered.contains("222"),
+			"Debug must not leak private key bytes: {rendered}"
+		);
+	}
+
+	#[test]
+	fn wallet_data_debug_redacts_mnemonic() {
+		let data = WalletData {
+			name: "test".to_string(),
+			keypair: QuantumKeyPair { public_key: vec![1], private_key: vec![2] },
+			mnemonic: Some("abandon ability able about above absent".to_string()),
+			derivation_path: "m/".to_string(),
+			metadata: Default::default(),
+		};
+		let rendered = format!("{data:?}");
+		assert!(rendered.contains("[redacted]"), "mnemonic must be redacted: {rendered}");
+		assert!(!rendered.contains("abandon"), "Debug must not leak mnemonic words: {rendered}");
+	}
+
+	#[test]
+	fn zeroize_bytes_clears_buffer() {
+		let mut secret = vec![1u8, 2, 3, 4, 5];
+		zeroize_bytes(&mut secret);
+		assert!(secret.iter().all(|&b| b == 0));
+	}
 
 	#[test]
 	fn test_quantum_keypair_from_dilithium_keypair() {
@@ -401,8 +859,9 @@ mod tests {
 			let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
 
 			// Generate address using both methods
-			let account_id = quantum_keypair.to_account_id_32();
-			let ss58_address = quantum_keypair.to_account_id_ss58check();
+			let account_id = quantum_keypair.try_to_account_id_32().expect("valid keypair");
+			let ss58_address =
+				quantum_keypair.try_to_account_id_ss58check().expect("valid keypair");
 
 			// Verify address format (Quantus SS58 prefix 189 = "qz")
 			assert!(
@@ -457,7 +916,8 @@ mod tests {
 
 		for ss58_address in test_cases {
 			// Convert SS58 to account ID bytes
-			let account_bytes = QuantumKeyPair::ss58_to_account_id(&ss58_address);
+			let account_bytes =
+				QuantumKeyPair::ss58_to_account_id(&ss58_address).expect("valid SS58");
 
 			// Verify length (AccountId32 should be 32 bytes)
 			assert_eq!(account_bytes.len(), 32, "Account ID should be 32 bytes");
@@ -489,8 +949,8 @@ mod tests {
 		let quantum_from_resonance = QuantumKeyPair::from_resonance_pair(&resonance_from_quantum);
 
 		// All should generate the same address
-		let addr1 = quantum_from_dilithium.to_account_id_ss58check();
-		let addr2 = quantum_from_resonance.to_account_id_ss58check();
+		let addr1 = quantum_from_dilithium.try_to_account_id_ss58check().expect("valid keypair");
+		let addr2 = quantum_from_resonance.try_to_account_id_ss58check().expect("valid keypair");
 		let addr3 = resonance_from_quantum
 			.public()
 			.into_account()
@@ -512,9 +972,9 @@ mod tests {
 		let bob_quantum = QuantumKeyPair::from_resonance_pair(&bob_pair);
 		let charlie_quantum = QuantumKeyPair::from_resonance_pair(&charlie_pair);
 
-		let alice_addr = alice_quantum.to_account_id_ss58check();
-		let bob_addr = bob_quantum.to_account_id_ss58check();
-		let charlie_addr = charlie_quantum.to_account_id_ss58check();
+		let alice_addr = alice_quantum.try_to_account_id_ss58check().expect("valid keypair");
+		let bob_addr = bob_quantum.try_to_account_id_ss58check().expect("valid keypair");
+		let charlie_addr = charlie_quantum.try_to_account_id_ss58check().expect("valid keypair");
 
 		// Addresses should be different
 		assert_ne!(alice_addr, bob_addr, "Alice and Bob should have different addresses");
@@ -534,7 +994,7 @@ mod tests {
 
 	#[test]
 	fn test_invalid_ss58_address_handling() {
-		// Test with invalid SS58 addresses
+		// #160783: invalid SS58 must return Err, not panic.
 		let invalid_addresses = vec![
 			"invalid",
 			"5",          // Too short
@@ -543,10 +1003,34 @@ mod tests {
 		];
 
 		for invalid_addr in invalid_addresses {
-			let result =
+			let panicked =
 				std::panic::catch_unwind(|| QuantumKeyPair::ss58_to_account_id(invalid_addr));
-			assert!(result.is_err(), "Should panic on invalid address: {invalid_addr}");
+			assert!(panicked.is_ok(), "Must not panic on invalid address: {invalid_addr}");
+			assert!(
+				matches!(
+					panicked.unwrap(),
+					Err(crate::error::QuantusError::Wallet(WalletError::KeyGeneration))
+				),
+				"Should return KeyGeneration for invalid address: {invalid_addr}"
+			);
 		}
+	}
+
+	#[test]
+	fn to_dilithium_keypair_rejects_malformed_key_bytes() {
+		// #160783: malformed key material must not panic.
+		let keypair = QuantumKeyPair { public_key: vec![1, 2, 3], private_key: vec![4, 5, 6] };
+		let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			keypair.to_dilithium_keypair()
+		}));
+		assert!(panicked.is_ok(), "malformed keys must not panic");
+		assert!(
+			matches!(
+				panicked.unwrap(),
+				Err(crate::error::QuantusError::Wallet(WalletError::KeyGeneration))
+			),
+			"expected KeyGeneration error"
+		);
 	}
 
 	#[test]
@@ -575,22 +1059,15 @@ mod tests {
 		};
 
 		// Test that we can generate address from the stored keypair
-		let result = std::panic::catch_unwind(|| wallet_data.keypair.to_account_id_ss58check());
-
-		match result {
-			Ok(address) => {
-				println!("✅ Address generation successful: {address}");
-				// Verify it matches the expected address
-				let expected = alice_pair
-					.public()
-					.into_account()
-					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
-				assert_eq!(address, expected, "Stored wallet should generate correct address");
-			},
-			Err(_) => {
-				panic!("❌ Address generation failed - this is the bug we need to fix!");
-			},
-		}
+		let address = wallet_data
+			.keypair
+			.try_to_account_id_ss58check()
+			.expect("stored wallet keypair should generate an address");
+		let expected = alice_pair
+			.public()
+			.into_account()
+			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
+		assert_eq!(address, expected, "Stored wallet should generate correct address");
 	}
 
 	#[test]
@@ -636,22 +1113,15 @@ mod tests {
 			.expect("Decryption should succeed");
 
 		// Test that we can generate address from the decrypted keypair
-		let result = std::panic::catch_unwind(|| decrypted_data.keypair.to_account_id_ss58check());
-
-		match result {
-			Ok(address) => {
-				println!("✅ Encrypted wallet address generation successful: {address}");
-				// Verify it matches the expected address
-				let expected = alice_pair
-					.public()
-					.into_account()
-					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
-				assert_eq!(address, expected, "Decrypted wallet should generate correct address");
-			},
-			Err(_) => {
-				panic!("❌ Encrypted wallet address generation failed - this reproduces the send command bug!");
-			},
-		}
+		let address = decrypted_data
+			.keypair
+			.try_to_account_id_ss58check()
+			.expect("decrypted wallet keypair should generate an address");
+		let expected = alice_pair
+			.public()
+			.into_account()
+			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
+		assert_eq!(address, expected, "Decrypted wallet should generate correct address");
 	}
 
 	#[test]
@@ -694,29 +1164,15 @@ mod tests {
 			wallet_manager.load_wallet("crystal_alice", "").expect("Should load wallet");
 
 		// 2. Try to generate address from the loaded keypair (should work now)
-		let result = std::panic::catch_unwind(|| {
-			// The keypair is already decrypted, so we can use it directly
-			loaded_wallet_data.keypair.to_account_id_ss58check()
-		});
-
-		match result {
-			Ok(address) => {
-				println!("✅ Send command flow works: {address}");
-				// If this passes, the bug is fixed
-				let expected = alice_pair
-					.public()
-					.into_account()
-					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
-				assert_eq!(address, expected, "Loaded wallet should generate correct address");
-			},
-			Err(_) => {
-				println!("❌ Send command flow failed - this reproduces the bug!");
-				// This test should fail initially, proving we found the bug
-				panic!(
-					"This test reproduces the send command bug - load_wallet returns dummy data!"
-				);
-			},
-		}
+		let address = loaded_wallet_data
+			.keypair
+			.try_to_account_id_ss58check()
+			.expect("loaded wallet keypair should generate an address");
+		let expected = alice_pair
+			.public()
+			.into_account()
+			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
+		assert_eq!(address, expected, "Loaded wallet should generate correct address");
 	}
 
 	#[test]
@@ -775,7 +1231,8 @@ mod tests {
 	fn encrypt_legacy(data: &WalletData, password: &str) -> EncryptedWallet {
 		let mut argon2_salt = [0u8; 16];
 		rng().fill_bytes(&mut argon2_salt);
-		let argon2 = Argon2::default();
+		// Legacy files in the wild were produced with the same frozen profile.
+		let argon2 = wallet_argon2();
 		let salt_string = argon2::password_hash::SaltString::encode_b64(&argon2_salt).unwrap();
 		let password_hash = argon2.hash_password(password.as_bytes(), &salt_string).unwrap();
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
@@ -787,7 +1244,7 @@ mod tests {
 
 		EncryptedWallet {
 			name: data.name.clone(),
-			address: data.keypair.to_account_id_ss58check(),
+			address: data.keypair.try_to_account_id_ss58check().expect("valid keypair"),
 			encrypted_data,
 			kyber_ciphertext: vec![],
 			kyber_public_key: vec![],
@@ -817,7 +1274,7 @@ mod tests {
 		assert!(!Keystore::has_embedded_key_material(&encrypted));
 
 		// The serialized wallet file must not contain the base64 digest anywhere.
-		let argon2 = Argon2::default();
+		let argon2 = wallet_argon2();
 		let salt_string =
 			argon2::password_hash::SaltString::encode_b64(&encrypted.argon2_salt).unwrap();
 		let full_phc = argon2.hash_password(b"hunter2", &salt_string).unwrap().to_string();
@@ -851,6 +1308,139 @@ mod tests {
 	}
 
 	#[test]
+	fn decrypt_rejects_tampered_envelope_address() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let victim = make_test_wallet_data("integrity-victim", 10);
+		let attacker = make_test_wallet_data("integrity-attacker", 11);
+
+		let mut encrypted = keystore
+			.encrypt_wallet_data(&victim, "correct-password")
+			.expect("Encryption should succeed");
+		let victim_address = encrypted.address.clone();
+		let attacker_address =
+			attacker.keypair.try_to_account_id_ss58check().expect("valid keypair");
+		assert_ne!(victim_address, attacker_address);
+
+		// Attacker rewrites only the plaintext envelope address; ciphertext is untouched.
+		encrypted.address = attacker_address;
+
+		let result = keystore.decrypt_wallet_data(&encrypted, "correct-password");
+		assert!(
+			matches!(
+				result,
+				Err(crate::error::QuantusError::Wallet(WalletError::Integrity(_)))
+			),
+			"tampered envelope address must fail integrity after authenticated decrypt, got: {result:?}"
+		);
+	}
+
+	fn craft_wallet_with_argon2_costs(
+		data: &WalletData,
+		password: &str,
+		m_cost: u32,
+		t_cost: u32,
+		p_cost: u32,
+	) -> EncryptedWallet {
+		let salt = vec![0x42; 16];
+		let nonce_bytes = [0x24; 12];
+		let params = Params::new(m_cost, t_cost, p_cost, None).expect("valid Argon2 params");
+		let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
+		let mut derived = [0u8; 32];
+		argon2
+			.hash_password_into(password.as_bytes(), &salt, &mut derived)
+			.expect("derive key");
+		let aes_key = Key::<Aes256Gcm>::from(derived);
+		let cipher = Aes256Gcm::new(&aes_key);
+		let nonce = Nonce::from(nonce_bytes);
+		let plaintext = serde_json::to_vec(data).expect("serialize");
+		let encrypted_data = cipher.encrypt(&nonce, plaintext.as_ref()).expect("encrypt");
+		EncryptedWallet {
+			name: data.name.clone(),
+			address: data.keypair.try_to_account_id_ss58check().expect("valid keypair"),
+			encrypted_data,
+			kyber_ciphertext: vec![],
+			kyber_public_key: vec![],
+			argon2_salt: salt,
+			argon2_params: format!("$argon2id$v=19$m={m_cost},t={t_cost},p={p_cost}"),
+			aes_nonce: nonce_bytes.to_vec(),
+			encryption_version: 2,
+			created_at: chrono::Utc::now(),
+		}
+	}
+
+	/// The written profile is pinned to literals: a future argon2 crate bump
+	/// changing `Params::DEFAULT_*` must not silently change what we write
+	/// (and thereby brick every wallet already on disk at decrypt time).
+	#[test]
+	fn encrypt_writes_the_frozen_argon2_profile() {
+		let temp_dir = TempDir::new().expect("temp dir");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("frozen-profile", 13);
+		let encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+
+		let parsed = PasswordHash::new(&encrypted.argon2_params).expect("PHC parses");
+		assert_eq!(parsed.params.get_decimal("m"), Some(19_456), "m cost must stay frozen");
+		assert_eq!(parsed.params.get_decimal("t"), Some(2), "t cost must stay frozen");
+		assert_eq!(parsed.params.get_decimal("p"), Some(1), "p cost must stay frozen");
+	}
+
+	#[test]
+	fn above_profile_argon2_params_are_rejected_on_decrypt() {
+		// #160715: costs above the generated-wallet profile must be rejected before
+		// Argon2 runs (the frozen profile is m=19456, t=2, p=1).
+		let temp_dir = TempDir::new().expect("temp dir");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("high-cost", 11);
+		let crafted = craft_wallet_with_argon2_costs(&data, "", 32_768, 3, 1);
+		let err = keystore
+			.decrypt_wallet_data(&crafted, "")
+			.expect_err("above-profile Argon2 metadata must be rejected");
+		assert!(
+			matches!(err, crate::error::QuantusError::Wallet(WalletError::Decryption)),
+			"unexpected error: {err}"
+		);
+	}
+
+	#[test]
+	fn malformed_public_key_returns_error_instead_of_panicking() {
+		// #160640: address derivation must not unwind on garbage public keys,
+		// and must report an error rather than a silent fallback value (the
+		// removed infallible variants returned the all-zero account).
+		let keypair = QuantumKeyPair { public_key: vec![0x41], private_key: vec![0x42; 32] };
+		assert!(
+			matches!(
+				keypair.try_to_account_id_ss58check(),
+				Err(crate::error::QuantusError::Wallet(WalletError::InvalidPublicKey))
+			),
+			"fallible conversion must report InvalidPublicKey"
+		);
+		assert!(
+			matches!(
+				keypair.try_to_account_id_32(),
+				Err(crate::error::QuantusError::Wallet(WalletError::InvalidPublicKey))
+			),
+			"fallible conversion must report InvalidPublicKey"
+		);
+	}
+
+	#[test]
+	fn save_wallet_refuses_embedded_key_material() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("legacy-refuse", 10);
+		let legacy = encrypt_legacy(&data, "pw");
+		assert!(Keystore::has_embedded_key_material(&legacy));
+
+		let err = keystore.save_wallet(&legacy).expect_err("must refuse digest-bearing wallets");
+		assert!(err.to_string().contains("embeds Argon2 digest"), "unexpected error: {err}");
+		assert!(
+			!temp_dir.path().join("legacy-refuse.json").exists(),
+			"digest-bearing wallet must not be written"
+		);
+	}
+
+	#[test]
 	fn test_legacy_wallet_decrypt_and_migration() {
 		let temp_dir = TempDir::new().expect("Failed to create temp directory");
 		let keystore = Keystore::new(temp_dir.path());
@@ -859,7 +1449,7 @@ mod tests {
 		// Save a wallet in the legacy format (digest embedded in argon2_params)
 		let legacy = encrypt_legacy(&data, "pw");
 		assert!(Keystore::has_embedded_key_material(&legacy));
-		keystore.save_wallet(&legacy).expect("Save should succeed");
+		keystore.save_wallet_unchecked_for_tests(&legacy).expect("Save should succeed");
 
 		// Legacy files must still decrypt with the correct password...
 		let decrypted = keystore
@@ -896,5 +1486,227 @@ mod tests {
 			.expect("Migrated wallet should decrypt");
 		assert_eq!(decrypted.name, data.name);
 		assert_eq!(decrypted.keypair.private_key, data.keypair.private_key);
+	}
+
+	/// When migration cannot persist the re-encrypted wallet, load_wallet must
+	/// fail closed rather than returning Ok while leaving password-bypassable
+	/// key material on disk.
+	#[cfg(unix)]
+	#[test]
+	fn test_legacy_migration_save_failure_fails_closed() {
+		use std::{fs, os::unix::fs::PermissionsExt};
+
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("legacy-ro-wallet", 12);
+
+		let legacy = encrypt_legacy(&data, "pw");
+		assert!(Keystore::has_embedded_key_material(&legacy));
+		keystore.save_wallet_unchecked_for_tests(&legacy).expect("Save should succeed");
+
+		// Force migration save to fail (cannot create .json.tmp in read-only dir).
+		let mut perms = fs::metadata(temp_dir.path()).unwrap().permissions();
+		perms.set_mode(0o555);
+		fs::set_permissions(temp_dir.path(), perms).unwrap();
+
+		use crate::wallet::WalletManager;
+		let wallet_manager = WalletManager { wallets_dir: temp_dir.path().to_path_buf() };
+		let result = wallet_manager.load_wallet("legacy-ro-wallet", "pw");
+
+		// Restore writability so TempDir cleanup and assertions can proceed.
+		let mut perms = fs::metadata(temp_dir.path()).unwrap().permissions();
+		perms.set_mode(0o755);
+		fs::set_permissions(temp_dir.path(), perms).unwrap();
+
+		assert!(
+			result.is_err(),
+			"load_wallet must Err when migration cannot save, got: {result:?}"
+		);
+
+		let reloaded = keystore
+			.load_wallet("legacy-ro-wallet")
+			.expect("Load should succeed")
+			.expect("Wallet should exist");
+		assert!(
+			Keystore::has_embedded_key_material(&reloaded),
+			"failed migration must leave legacy file with embedded digest"
+		);
+	}
+
+	/// #160598: a predictable `{name}.json.tmp` symlink must not be followed or
+	/// cause an outside file to be overwritten when saving a wallet.
+	#[cfg(unix)]
+	#[test]
+	fn save_wallet_does_not_follow_predictable_tmp_symlink() {
+		use std::{fs, os::unix::fs::symlink};
+
+		let temp = TempDir::new().expect("temp dir");
+		let wallets_dir = temp.path().join("wallets");
+		let outside_dir = temp.path().join("outside");
+		fs::create_dir_all(&wallets_dir).expect("wallet dir");
+		fs::create_dir_all(&outside_dir).expect("outside dir");
+
+		let victim = outside_dir.join("outside_component_state.txt");
+		let original = b"owned by another local component\n";
+		fs::write(&victim, original).expect("seed victim");
+
+		let wallet_name = "raceable-wallet";
+		let predictable_tmp = wallets_dir.join(format!("{wallet_name}.json.tmp"));
+		symlink(&victim, &predictable_tmp).expect("attacker symlink at predictable tmp");
+
+		let keystore = Keystore::new(&wallets_dir);
+		let data = make_test_wallet_data(wallet_name, 21);
+		let encrypted = keystore
+			.encrypt_wallet_data(&data, "password chosen by wallet owner")
+			.expect("encrypt");
+
+		keystore
+			.save_wallet(&encrypted)
+			.expect("save must succeed without following symlink");
+
+		assert_eq!(
+			fs::read(&victim).expect("read victim"),
+			original,
+			"outside file must not be overwritten via predictable tmp symlink"
+		);
+		let final_path = wallets_dir.join(format!("{wallet_name}.json"));
+		assert!(final_path.is_file(), "final wallet must be a regular file");
+		assert!(
+			fs::symlink_metadata(&final_path).expect("stat").file_type().is_file(),
+			"final wallet entry must not be a symlink"
+		);
+	}
+
+	/// Read-side O_NOFOLLOW must refuse a wallet path that is a symlink on all
+	/// Unix platforms (the flag was previously a hardcoded Linux constant and
+	/// a silent no-op on macOS).
+	#[cfg(unix)]
+	#[test]
+	fn load_wallet_refuses_symlinked_wallet_file() {
+		use std::os::unix::fs::symlink;
+
+		let temp = TempDir::new().expect("temp dir");
+		let wallets_dir = temp.path().join("wallets");
+		let outside_dir = temp.path().join("outside");
+		fs::create_dir_all(&wallets_dir).expect("wallet dir");
+		fs::create_dir_all(&outside_dir).expect("outside dir");
+
+		// A real, valid wallet file living outside the keystore.
+		let outside_keystore = Keystore::new(&outside_dir);
+		let data = make_test_wallet_data("linked", 22);
+		let encrypted = outside_keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+		outside_keystore.save_wallet(&encrypted).expect("save outside wallet");
+
+		// Symlink it into the keystore under the queried name.
+		let link = wallets_dir.join("linked.json");
+		symlink(outside_dir.join("linked.json"), &link).expect("plant symlink");
+
+		let keystore = Keystore::new(&wallets_dir);
+		keystore
+			.load_wallet("linked")
+			.expect_err("loading a wallet through a symlink must fail");
+	}
+
+	/// #160737: exclusive create must refuse to replace an existing wallet file.
+	#[test]
+	fn save_new_wallet_does_not_replace_existing() {
+		let temp = TempDir::new().expect("temp dir");
+		let keystore = Keystore::new(temp.path());
+
+		let original = make_test_wallet_data("exclusive-wallet", 22);
+		let first = keystore.encrypt_wallet_data(&original, "pw").expect("encrypt first");
+		keystore.save_new_wallet(&first).expect("first create must succeed");
+
+		let replacement = make_test_wallet_data("exclusive-wallet", 23);
+		let second = keystore.encrypt_wallet_data(&replacement, "pw").expect("encrypt second");
+		let result = keystore.save_new_wallet(&second);
+		assert!(
+			matches!(result, Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))),
+			"second create must fail with AlreadyExists, got: {result:?}"
+		);
+
+		let loaded =
+			keystore.load_wallet("exclusive-wallet").expect("load").expect("wallet present");
+		assert_eq!(
+			loaded.address, first.address,
+			"existing wallet key material must not be replaced"
+		);
+		assert_ne!(loaded.address, second.address);
+	}
+
+	/// #159340: unsupported encryption_version must be rejected before decrypt.
+	#[test]
+	fn decrypt_rejects_unsupported_encryption_version() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("bad-version", 25);
+		let mut encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+		assert_eq!(encrypted.encryption_version, 2);
+		encrypted.encryption_version = u32::MAX;
+
+		let result = keystore.decrypt_wallet_data(&encrypted, "pw");
+		assert!(
+			matches!(result, Err(crate::error::QuantusError::Wallet(WalletError::Decryption))),
+			"unsupported encryption_version must be rejected, got: {result:?}"
+		);
+	}
+
+	/// #159340: malformed AES-GCM nonce length must return Decryption, not panic.
+	#[test]
+	fn decrypt_rejects_malformed_aes_nonce_length() {
+		let temp_dir = TempDir::new().expect("Failed to create temp directory");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("bad-nonce", 26);
+		let mut encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+		assert_eq!(encrypted.aes_nonce.len(), 12);
+		encrypted.aes_nonce.truncate(1);
+
+		let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+			keystore.decrypt_wallet_data(&encrypted, "pw")
+		}));
+		match result {
+			Ok(Err(crate::error::QuantusError::Wallet(WalletError::Decryption))) => {},
+			Ok(other) => panic!("expected Decryption error, got: {other:?}"),
+			Err(_) => panic!("malformed AES-GCM nonce length must not panic"),
+		}
+	}
+
+	/// #160598 / #160737: path separators and traversal names are rejected.
+	#[test]
+	fn rejects_wallet_names_with_path_separators() {
+		let temp = TempDir::new().expect("temp dir");
+		let keystore = Keystore::new(temp.path());
+		let data = make_test_wallet_data("safe-name", 24);
+		let mut encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+
+		// ':' escapes the keystore on Windows ("C:evil.json" is drive-relative,
+		// "foo:bar" creates an NTFS alternate data stream); the remaining
+		// characters are Windows-reserved or control characters.
+		for bad_name in [
+			"../evil", "foo/bar", "foo\\bar", ".", "..", "", "C:evil", "foo:bar", "foo<bar",
+			"foo>bar", "foo\"bar", "foo|bar", "foo?bar", "foo*bar", "foo\nbar", "foo\0bar",
+		] {
+			encrypted.name = bad_name.to_string();
+			let save = keystore.save_wallet(&encrypted);
+			assert!(
+				matches!(save, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"save_wallet must reject {bad_name:?}, got: {save:?}"
+			);
+			let create = keystore.save_new_wallet(&encrypted);
+			assert!(
+				matches!(create, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"save_new_wallet must reject {bad_name:?}, got: {create:?}"
+			);
+			let load = keystore.load_wallet(bad_name);
+			assert!(
+				matches!(load, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"load_wallet must reject {bad_name:?}, got: {load:?}"
+			);
+			let delete = keystore.delete_wallet(bad_name);
+			assert!(
+				matches!(delete, Err(crate::error::QuantusError::Wallet(WalletError::InvalidName))),
+				"delete_wallet must reject {bad_name:?}, got: {delete:?}"
+			);
+		}
 	}
 }
