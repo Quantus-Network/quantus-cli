@@ -322,19 +322,63 @@ pub fn resolve_address(address_or_wallet_name: &str) -> Result<String> {
 
 	// If not a valid SS58 address, try to find it as a wallet name
 	let wallet_manager = crate::wallet::WalletManager::new()?;
-	if let Some(wallet_address) = wallet_manager.find_wallet_address(address_or_wallet_name)? {
-		log_verbose!(
-			"🔍 Found wallet '{}' with address: {}",
-			address_or_wallet_name.bright_cyan(),
-			wallet_address.bright_green()
-		);
-		return Ok(wallet_address);
+	match wallet_manager.find_wallet_address(address_or_wallet_name)? {
+		crate::wallet::WalletAddressLookup::Address(wallet_address) => {
+			log_verbose!(
+				"🔍 Found wallet '{}' with address: {}",
+				address_or_wallet_name.bright_cyan(),
+				wallet_address.bright_green()
+			);
+			Ok(wallet_address)
+		},
+		crate::wallet::WalletAddressLookup::Protected =>
+			resolve_protected_wallet_address(&wallet_manager, address_or_wallet_name),
+		crate::wallet::WalletAddressLookup::NotFound => Err(crate::error::QuantusError::Generic(
+			format!(
+				"Invalid destination: '{address_or_wallet_name}' is neither a valid SS58 address nor a known wallet name"
+			),
+		)),
 	}
+}
 
-	// Neither a valid SS58 address nor a wallet name
-	Err(crate::error::QuantusError::Generic(format!(
-		"Invalid destination: '{address_or_wallet_name}' is neither a valid SS58 address nor a known wallet name"
-	)))
+/// Unlock path for resolving a password-protected wallet's address by name.
+///
+/// Uses the wallet's environment-variable password when set (works in
+/// scripts), prompts when running on a terminal, and otherwise fails with an
+/// error naming the wallet instead of pretending it does not exist.
+fn resolve_protected_wallet_address(
+	wallet_manager: &crate::wallet::WalletManager,
+	wallet_name: &str,
+) -> Result<String> {
+	use std::io::IsTerminal;
+
+	let password = if let Some(env_password) =
+		crate::wallet::password::env_wallet_password(wallet_name)
+	{
+		env_password
+	} else if std::io::stdin().is_terminal() {
+		crate::log_print!(
+			"🔒 Wallet '{}' is password-protected; enter its password to resolve its address",
+			wallet_name.bright_cyan()
+		);
+		crate::wallet::password::get_password_from_user(&format!(
+			"Enter password for wallet '{wallet_name}'"
+		))?
+	} else {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Wallet '{wallet_name}' exists but is password-protected and no password source is available non-interactively. Pass the SS58 address directly, or set QUANTUS_WALLET_PASSWORD_{} to unlock it",
+			wallet_name.to_uppercase()
+		)));
+	};
+
+	let wallet_data = wallet_manager.load_wallet(wallet_name, &password)?;
+	let address = wallet_data.keypair.try_to_account_id_ss58check()?;
+	log_verbose!(
+		"🔍 Unlocked wallet '{}' with address: {}",
+		wallet_name.bright_cyan(),
+		address.bright_green()
+	);
+	Ok(address)
 }
 
 /// Resolve a wallet name or SS58 address and convert it into the AccountId32 type used by SubXT.

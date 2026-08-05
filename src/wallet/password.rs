@@ -69,6 +69,11 @@ fn read_password_file(file_path: &str) -> Result<String> {
 	Ok(pwd)
 }
 
+/// Look up a wallet password from the environment without prompting.
+pub fn env_wallet_password(wallet_name: &str) -> Option<String> {
+	password_from_env(wallet_name)
+}
+
 fn password_from_env(wallet_name: &str) -> Option<String> {
 	if let Ok(env_password) = std::env::var("QUANTUS_WALLET_PASSWORD") {
 		log_verbose!("🔑 Using password from QUANTUS_WALLET_PASSWORD environment variable");

@@ -557,21 +557,45 @@ impl WalletManager {
 	}
 
 	/// Find wallet by name and return its authenticated address when available without a password
-	pub fn find_wallet_address(&self, name: &str) -> Result<Option<String>> {
+	pub fn find_wallet_address(&self, name: &str) -> Result<WalletAddressLookup> {
 		let keystore = Keystore::new(&self.wallets_dir);
 
 		if let Some(encrypted_wallet) = keystore.load_wallet(name)? {
 			// Wallet-name resolution must not trust the plaintext envelope address.
 			// Only empty-password wallets can be authenticated without prompting.
 			match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
-				Ok(wallet_data) => Ok(Some(wallet_data.keypair.try_to_account_id_ss58check()?)),
+				Ok(wallet_data) => Ok(WalletAddressLookup::Address(
+					wallet_data.keypair.try_to_account_id_ss58check()?,
+				)),
 				Err(crate::error::QuantusError::Wallet(
 					WalletError::InvalidPassword | WalletError::Integrity(_),
-				)) => Ok(None),
+				)) => Ok(WalletAddressLookup::Protected),
 				Err(e) => Err(e),
 			}
 		} else {
-			Ok(None)
+			Ok(WalletAddressLookup::NotFound)
+		}
+	}
+}
+
+/// Result of resolving a wallet name to an address without a password.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WalletAddressLookup {
+	/// No wallet with that name exists.
+	NotFound,
+	/// The wallet exists but its address cannot be authenticated without its password.
+	Protected,
+	/// The wallet's authenticated address.
+	Address(String),
+}
+
+impl WalletAddressLookup {
+	/// The authenticated address, if one was resolved without a password.
+	#[allow(dead_code)] // SDK/examples convenience; unused by the CLI binary
+	pub fn address(self) -> Option<String> {
+		match self {
+			WalletAddressLookup::Address(address) => Some(address),
+			_ => None,
 		}
 	}
 }
@@ -1106,6 +1130,33 @@ mod tests {
 		assert!(result.is_none());
 	}
 
+	/// find_wallet_address must distinguish "no such wallet" from "wallet exists
+	/// but needs its password", so callers can report an honest error or unlock.
+	#[tokio::test]
+	async fn find_wallet_address_distinguishes_missing_protected_and_open_wallets() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+
+		assert_eq!(
+			wallet_manager.find_wallet_address("nope").unwrap(),
+			WalletAddressLookup::NotFound
+		);
+
+		let open = wallet_manager.create_wallet("open_wallet", None).await.expect("open wallet");
+		assert_eq!(
+			wallet_manager.find_wallet_address("open_wallet").unwrap(),
+			WalletAddressLookup::Address(open.address)
+		);
+
+		wallet_manager
+			.create_wallet("locked_wallet", Some("hunter2 but longer"))
+			.await
+			.expect("locked wallet");
+		assert_eq!(
+			wallet_manager.find_wallet_address("locked_wallet").unwrap(),
+			WalletAddressLookup::Protected
+		);
+	}
+
 	#[tokio::test]
 	async fn passwordless_paths_do_not_trust_tampered_envelope_address() {
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
@@ -1140,7 +1191,8 @@ mod tests {
 			.find_wallet_address("victim_alias")
 			.expect("passwordless resolution must not panic");
 		assert_eq!(
-			lookup, None,
+			lookup,
+			WalletAddressLookup::Protected,
 			"password-protected wallets must refuse unauthenticated wallet-name resolution"
 		);
 
