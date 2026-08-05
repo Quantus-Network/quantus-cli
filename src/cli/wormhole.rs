@@ -5,7 +5,7 @@ use crate::{
 	},
 	cli::{
 		address_format::{bytes_to_quantus_ss58, slice_to_quantus_ss58},
-		common::{submit_transaction, ExecutionMode},
+		common::ExecutionMode,
 		send::get_balance,
 	},
 	log_error, log_print, log_success, log_verbose,
