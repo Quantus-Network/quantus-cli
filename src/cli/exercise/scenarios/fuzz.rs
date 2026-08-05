@@ -21,17 +21,31 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	Ok(())
 }
 
+fn is_clean_rejection(msg: &str) -> bool {
+	// Submit failures now surface as QuantusError::Subxt (Display: "SubXT error: …"),
+	// not the old Generic wrapper that contained "Failed to submit transaction".
+	const NEEDLES: &[&str] = &[
+		"Transaction execution failed",
+		"Transaction invalid",
+		"Transaction error",
+		"Transaction dropped",
+		"Failed to submit transaction",
+		"Invalid Transaction",
+		"Transaction has a bad signature",
+		"Priority is too low",
+		"Transaction is outdated",
+		"Transaction is temporarily banned",
+		"Inability to pay some fees",
+	];
+	NEEDLES.iter().any(|needle| msg.contains(needle))
+}
+
 fn classify(result: crate::error::Result<subxt::utils::H256>, what: &str) -> Result<String> {
 	match result {
 		Ok(hash) => Ok(format!("{what}: included ({hash:?})")),
 		Err(e) => {
 			let msg = e.to_string();
-			let clean = msg.contains("Transaction execution failed") ||
-				msg.contains("Transaction invalid") ||
-				msg.contains("Transaction error") ||
-				msg.contains("Transaction dropped") ||
-				msg.contains("Failed to submit transaction");
-			if clean {
+			if is_clean_rejection(&msg) {
 				let first = msg.lines().next().unwrap_or(&msg).to_string();
 				Ok(format!("{what}: cleanly rejected ({first})"))
 			} else {
@@ -149,4 +163,30 @@ async fn fuzz_reversible(ctx: &mut ExerciseCtx) -> Result<String> {
 		crate::cli::common::submit_transaction(&ctx.client, &sender, call, None, ctx.wait_mode())
 			.await;
 	classify(result, &format!("reversible transfer of {amount}"))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn classify_treats_subxt_pool_rejections_as_clean() {
+		// Submit failures now Display as "SubXT error: …" without the old
+		// "Failed to submit transaction" wrapper text.
+		let err = QuantusError::Generic(
+			"SubXT error: RpcError: Invalid Transaction: Custom error: 0".to_string(),
+		);
+		// Use NetworkError-shaped text that still contains the SubXT Display form.
+		let result: crate::error::Result<subxt::utils::H256> = Err(err);
+		let out = classify(result, "transfer").expect("pool rejection is clean");
+		assert!(out.contains("cleanly rejected"), "got: {out}");
+	}
+
+	#[test]
+	fn classify_treats_connection_failures_as_unclean() {
+		let result: crate::error::Result<subxt::utils::H256> =
+			Err(QuantusError::NetworkError("connection reset by peer".to_string()));
+		let err = classify(result, "transfer").expect_err("network failure is unclean");
+		assert!(err.to_string().contains("unclean failure"), "got: {err}");
+	}
 }

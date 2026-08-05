@@ -450,64 +450,6 @@ pub async fn get_fresh_nonce_with_client(
 	Ok(latest_nonce)
 }
 
-/// Get incremented nonce for retry scenarios from the latest block using existing QuantusClient
-/// This is useful when a transaction fails but the chain doesn't update the nonce.
-/// Not used by `submit_transaction` (auto nonce-bump retry removed); kept for intentional callers.
-#[allow(dead_code)]
-pub async fn get_incremented_nonce_with_client(
-	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
-	base_nonce: u64,
-) -> Result<u64> {
-	let from_account_id = from_keypair.try_to_account_id_32().map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Invalid from keypair public key: {e}"))
-	})?;
-
-	// Get current nonce from the latest block
-	let current_nonce = quantus_client
-		.get_account_nonce_from_best_block(&from_account_id)
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!(
-				"Failed to get account nonce from best block: {e:?}"
-			))
-		})?;
-
-	// Use the higher of current nonce or base_nonce + 1
-	let incremented_nonce = std::cmp::max(current_nonce, base_nonce + 1);
-	log_verbose!(
-		"🔢 Using incremented nonce: {} (base: {}, current from latest block: {})",
-		incremented_nonce,
-		base_nonce,
-		current_nonce
-	);
-	Ok(incremented_nonce)
-}
-
-/// Whether a formatted submission error may trigger automatic resubmit that bumps
-/// the nonce and re-signs the same call.
-///
-/// Always `false`. Matching English substrings from untrusted RPC text is imprecise,
-/// and bumping the nonce without proving the prior extrinsic was rejected can
-/// duplicate non-idempotent transactions. Bad-signature / Invalid Transaction /
-/// pool / ambiguous errors must not be auto-retried this way.
-#[cfg_attr(not(test), allow(dead_code))]
-fn is_retryable_submission_error(error_msg: &str) -> bool {
-	// Categories that were previously (incorrectly) treated as transient.
-	const UNSAFE_OR_AMBIGUOUS: &[&str] = &[
-		"Transaction has a bad signature",
-		"Invalid Transaction",
-		"Priority is too low",
-		"Transaction is outdated",
-		"Transaction is temporarily banned",
-	];
-	if UNSAFE_OR_AMBIGUOUS.iter().any(|needle| error_msg.contains(needle)) {
-		return false;
-	}
-	// Unknown / ambiguous formatted errors are also not safe for nonce-bump retry.
-	false
-}
-
 /// Submit transaction with optional finalization check
 ///
 /// By default, returns immediately after the node accepts the transaction submission.
@@ -1248,29 +1190,6 @@ mod tests {
 		}
 
 		assert_eq!(require_extrinsic_index(Some(3)).unwrap(), 3);
-	}
-
-	#[test]
-	fn unsafe_submission_errors_are_not_retryable() {
-		assert!(!is_retryable_submission_error("Transaction has a bad signature"));
-		assert!(!is_retryable_submission_error(
-			"RpcError: Invalid Transaction: Transaction has a bad signature"
-		));
-		assert!(!is_retryable_submission_error("Invalid Transaction"));
-		assert!(!is_retryable_submission_error(
-			"Failed to submit transaction: Invalid Transaction"
-		));
-		assert!(!is_retryable_submission_error("Priority is too low"));
-		assert!(!is_retryable_submission_error("Transaction is outdated"));
-		assert!(!is_retryable_submission_error("Transaction is temporarily banned"));
-	}
-
-	#[test]
-	fn ambiguous_submission_errors_are_not_retryable() {
-		assert!(!is_retryable_submission_error("connection reset by peer"));
-		assert!(!is_retryable_submission_error("timeout waiting for response"));
-		assert!(!is_retryable_submission_error(""));
-		assert!(!is_retryable_submission_error("some unknown node error"));
 	}
 
 	#[test]
