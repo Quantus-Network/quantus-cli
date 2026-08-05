@@ -465,9 +465,14 @@ pub async fn submit_transaction<Call>(
 where
 	Call: subxt::tx::Payload,
 {
-	let (tx_hash, _included_in) =
-		submit_transaction_with_inclusion_block(quantus_client, from_keypair, call, tip, execution_mode)
-			.await?;
+	let (tx_hash, _included_in) = submit_transaction_with_inclusion_block(
+		quantus_client,
+		from_keypair,
+		call,
+		tip,
+		execution_mode,
+	)
+	.await?;
 	Ok(tx_hash)
 }
 

@@ -1642,22 +1642,8 @@ mod tests {
 		// "foo:bar" creates an NTFS alternate data stream); the remaining
 		// characters are Windows-reserved or control characters.
 		for bad_name in [
-			"../evil",
-			"foo/bar",
-			"foo\\bar",
-			".",
-			"..",
-			"",
-			"C:evil",
-			"foo:bar",
-			"foo<bar",
-			"foo>bar",
-			"foo\"bar",
-			"foo|bar",
-			"foo?bar",
-			"foo*bar",
-			"foo\nbar",
-			"foo\0bar",
+			"../evil", "foo/bar", "foo\\bar", ".", "..", "", "C:evil", "foo:bar", "foo<bar",
+			"foo>bar", "foo\"bar", "foo|bar", "foo?bar", "foo*bar", "foo\nbar", "foo\0bar",
 		] {
 			encrypted.name = bad_name.to_string();
 			let save = keystore.save_wallet(&encrypted);

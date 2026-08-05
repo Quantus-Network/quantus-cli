@@ -217,10 +217,9 @@ pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 /// API compatibility with existing callers and are ignored.
 ///
 /// # Arguments
-/// * `input` - All input data for proof generation (including ZK Merkle proof).
-///   Borrowed mutably: `input.secret` is zeroized before this function returns,
-///   on success and on every error path. Callers that retry must rebuild the
-///   input with a fresh secret.
+/// * `input` - All input data for proof generation (including ZK Merkle proof). Borrowed mutably:
+///   `input.secret` is zeroized before this function returns, on success and on every error path.
+///   Callers that retry must rebuild the input with a fresh secret.
 /// * `prover_bin_path` - Ignored (legacy; leaf prover is built in-process)
 /// * `common_bin_path` - Ignored (legacy; leaf prover is built in-process)
 ///

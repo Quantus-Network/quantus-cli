@@ -312,8 +312,8 @@ fn read_secret_hex_file(path: &str) -> Result<String, String> {
 
 /// Read a mnemonic phrase from a file (never from argv).
 fn read_mnemonic_file(path: &str) -> Result<String, String> {
-	let mnemonic =
-		std::fs::read_to_string(path).map_err(|e| format!("Failed to read mnemonic file: {}", e))?;
+	let mnemonic = std::fs::read_to_string(path)
+		.map_err(|e| format!("Failed to read mnemonic file: {}", e))?;
 	let mnemonic = mnemonic.trim().to_string();
 	if mnemonic.is_empty() {
 		return Err("Mnemonic file is empty".to_string());
@@ -4846,9 +4846,7 @@ mod tests {
 		let err = try_parse_collect_rewards(&[]).unwrap_err();
 		let s = err.to_string();
 		assert!(
-			s.contains("--wallet") ||
-				s.contains("--mnemonic-file") ||
-				s.contains("--secret-file"),
+			s.contains("--wallet") || s.contains("--mnemonic-file") || s.contains("--secret-file"),
 			"expected missing-credential error, got: {s}"
 		);
 	}

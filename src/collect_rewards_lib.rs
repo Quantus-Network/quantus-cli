@@ -378,12 +378,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			.map_err(|e| {
 				CollectRewardsError::from(format!("Failed to get finalized block hash: {}", e))
 			})?;
-		quantus_client
-			.client()
-			.blocks()
-			.at(finalized_hash)
-			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get finalized block: {}", e)))?
+		quantus_client.client().blocks().at(finalized_hash).await.map_err(|e| {
+			CollectRewardsError::from(format!("Failed to get finalized block: {}", e))
+		})?
 	};
 	let proof_block_hash = proof_block.hash();
 
