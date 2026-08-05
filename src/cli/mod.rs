@@ -51,7 +51,7 @@ pub enum Commands {
 		from: String,
 
 		/// Password for the wallet (or use environment variables)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -139,7 +139,7 @@ pub enum Commands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -290,7 +290,7 @@ pub enum Commands {
 		max: String,
 
 		/// Password for the wallet (or use environment variables)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)

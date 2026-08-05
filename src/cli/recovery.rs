@@ -22,7 +22,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		lost: String,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file (for scripting)
 		#[arg(long)]
@@ -41,7 +41,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		rescuer: String,
 		/// Password for friend wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -57,7 +57,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		lost: String,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -73,7 +73,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		rescuer: String,
 		/// Password for lost wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -89,7 +89,7 @@ pub enum RecoveryCommands {
 		#[arg(long)]
 		lost: String,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -135,7 +135,7 @@ pub enum RecoveryCommands {
 		#[arg(long, default_value_t = true)]
 		keep_alive: bool,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]
@@ -160,7 +160,7 @@ pub enum RecoveryCommands {
 		#[arg(long, default_value_t = true)]
 		keep_alive: bool,
 		/// Password for rescuer wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 		/// Read password from file
 		#[arg(long)]

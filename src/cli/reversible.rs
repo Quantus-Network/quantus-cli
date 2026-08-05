@@ -30,7 +30,7 @@ pub enum ReversibleCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -61,7 +61,7 @@ pub enum ReversibleCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -80,7 +80,7 @@ pub enum ReversibleCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -99,7 +99,7 @@ pub enum ReversibleCommands {
 		from: Option<String>,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)

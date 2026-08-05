@@ -861,7 +861,7 @@ pub enum WormholeCommands {
 		wallet: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -905,7 +905,7 @@ pub enum WormholeCommands {
 		wallet: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -927,7 +927,7 @@ pub enum WormholeCommands {
 		wallet: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -961,7 +961,7 @@ pub enum WormholeCommands {
 		secret_file: Option<String>,
 
 		/// Password for the wallet (only used with --wallet)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (only used with --wallet)
@@ -1009,7 +1009,7 @@ pub enum WormholeCommands {
 		wallet: Option<String>,
 
 		/// Password for the wallet (only used with --wallet)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (only used with --wallet)

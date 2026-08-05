@@ -21,7 +21,7 @@ pub enum BatchCommands {
 		from: String,
 
 		/// Password for the wallet (or use environment variables)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)

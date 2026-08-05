@@ -26,7 +26,7 @@ pub enum WalletCommands {
 		name: String,
 
 		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read encryption password from file (owner-only on Unix)
@@ -64,7 +64,7 @@ pub enum WalletCommands {
 		name: String,
 
 		/// Password to decrypt the wallet (optional, will prompt if not provided)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Export format: mnemonic, private-key
@@ -84,7 +84,7 @@ pub enum WalletCommands {
 		name: String,
 
 		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read encryption password from file (owner-only on Unix)
@@ -111,7 +111,7 @@ pub enum WalletCommands {
 		name: String,
 
 		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read encryption password from file (owner-only on Unix)
@@ -148,7 +148,7 @@ pub enum WalletCommands {
 		wallet: Option<String>,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 	},
 }
@@ -644,16 +644,19 @@ pub async fn handle_wallet_command(
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Always read mnemonic from a hidden prompt so it never appears in process argv.
-			let mut mnemonic_phrase = get_mnemonic_from_user()?;
-
-			// New-wallet password policy: confirmed prompt, no silent empty default.
+			// New-wallet password policy: confirmed prompt, no silent empty
+			// default. Resolve (and reject rejected forms like a raw
+			// --password) before prompting for the mnemonic, so a doomed
+			// invocation doesn't collect the secret first.
 			let final_password = crate::wallet::password::get_new_wallet_password(
 				&name,
 				password,
 				password_file,
 				allow_empty_password,
 			)?;
+
+			// Always read mnemonic from a hidden prompt so it never appears in process argv.
+			let mut mnemonic_phrase = get_mnemonic_from_user()?;
 
 			// Choose import method based on flags
 			let result = if no_derivation {
@@ -706,20 +709,22 @@ pub async fn handle_wallet_command(
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Always read seed from a hidden prompt so it never appears in process argv.
-			log_print!("Enter 32-byte seed in hex format (64 hex characters):");
-			let mut seed_raw = rpassword::read_password()
-				.map_err(|e| QuantusError::Generic(format!("Failed to read seed: {e}")))?;
-			let mut seed = seed_raw.trim().to_string();
-			crate::wallet::keystore::zeroize_string(&mut seed_raw);
-
-			// New-wallet password policy: confirmed prompt, no silent empty default.
+			// New-wallet password policy: confirmed prompt, no silent empty
+			// default. Resolve before prompting for the seed, so a doomed
+			// invocation doesn't collect the secret first.
 			let final_password = crate::wallet::password::get_new_wallet_password(
 				&name,
 				password,
 				password_file,
 				allow_empty_password,
 			)?;
+
+			// Always read seed from a hidden prompt so it never appears in process argv.
+			log_print!("Enter 32-byte seed in hex format (64 hex characters):");
+			let mut seed_raw = rpassword::read_password()
+				.map_err(|e| QuantusError::Generic(format!("Failed to read seed: {e}")))?;
+			let mut seed = seed_raw.trim().to_string();
+			crate::wallet::keystore::zeroize_string(&mut seed_raw);
 
 			let result = wallet_manager
 				.create_wallet_from_seed(&name, &seed, Some(&final_password))
