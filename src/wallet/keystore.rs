@@ -89,14 +89,16 @@ fn wallet_filename(name: &str) -> Result<String> {
 	Ok(format!("{name}.json"))
 }
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
+#[cfg(unix)]
 fn set_no_follow(options: &mut OpenOptions) {
 	use std::os::unix::fs::OpenOptionsExt;
-	const O_NOFOLLOW: i32 = 0o400000;
-	options.custom_flags(O_NOFOLLOW);
+	// libc::O_NOFOLLOW carries the per-platform value; the previously
+	// hardcoded Linux constant (0o400000) was a silent no-op on macOS,
+	// where O_NOFOLLOW is 0x0100.
+	options.custom_flags(libc::O_NOFOLLOW);
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "android")))]
+#[cfg(not(unix))]
 fn set_no_follow(_options: &mut OpenOptions) {}
 
 fn open_wallet_for_read(path: &Path) -> std::io::Result<File> {
@@ -1600,6 +1602,36 @@ mod tests {
 			fs::symlink_metadata(&final_path).expect("stat").file_type().is_file(),
 			"final wallet entry must not be a symlink"
 		);
+	}
+
+	/// Read-side O_NOFOLLOW must refuse a wallet path that is a symlink on all
+	/// Unix platforms (the flag was previously a hardcoded Linux constant and
+	/// a silent no-op on macOS).
+	#[cfg(unix)]
+	#[test]
+	fn load_wallet_refuses_symlinked_wallet_file() {
+		use std::os::unix::fs::symlink;
+
+		let temp = TempDir::new().expect("temp dir");
+		let wallets_dir = temp.path().join("wallets");
+		let outside_dir = temp.path().join("outside");
+		fs::create_dir_all(&wallets_dir).expect("wallet dir");
+		fs::create_dir_all(&outside_dir).expect("outside dir");
+
+		// A real, valid wallet file living outside the keystore.
+		let outside_keystore = Keystore::new(&outside_dir);
+		let data = make_test_wallet_data("linked", 22);
+		let encrypted = outside_keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+		outside_keystore.save_wallet(&encrypted).expect("save outside wallet");
+
+		// Symlink it into the keystore under the queried name.
+		let link = wallets_dir.join("linked.json");
+		symlink(outside_dir.join("linked.json"), &link).expect("plant symlink");
+
+		let keystore = Keystore::new(&wallets_dir);
+		keystore
+			.load_wallet("linked")
+			.expect_err("loading a wallet through a symlink must fail");
 	}
 
 	/// #160737: exclusive create must refuse to replace an existing wallet file.
