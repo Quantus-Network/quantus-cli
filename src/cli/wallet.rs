@@ -83,9 +83,17 @@ pub enum WalletCommands {
 		#[arg(short, long)]
 		name: String,
 
-		/// Password to encrypt the wallet (optional, will prompt if not provided)
+		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
 		#[arg(short, long)]
 		password: Option<String>,
+
+		/// Read encryption password from file (owner-only on Unix)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Allow encrypting the imported wallet with an empty password (development only)
+		#[arg(long)]
+		allow_empty_password: bool,
 
 		/// Derivation path (default: m/44'/189189'/0'/0/0)
 		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
@@ -102,9 +110,17 @@ pub enum WalletCommands {
 		#[arg(short, long)]
 		name: String,
 
-		/// Password to encrypt the wallet (optional, will prompt if not provided)
+		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
 		#[arg(short, long)]
 		password: Option<String>,
+
+		/// Read encryption password from file (owner-only on Unix)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Allow encrypting the new wallet with an empty password (development only)
+		#[arg(long)]
+		allow_empty_password: bool,
 	},
 
 	/// List all wallets
@@ -616,7 +632,14 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Import { name, password, derivation_path, no_derivation } => {
+		WalletCommands::Import {
+			name,
+			password,
+			password_file,
+			allow_empty_password,
+			derivation_path,
+			no_derivation,
+		} => {
 			log_print!("📥 Importing wallet...");
 
 			let wallet_manager = WalletManager::new()?;
@@ -624,9 +647,13 @@ pub async fn handle_wallet_command(
 			// Always read mnemonic from a hidden prompt so it never appears in process argv.
 			let mnemonic_phrase = get_mnemonic_from_user()?;
 
-			// Get password from user if not provided
-			let final_password =
-				crate::wallet::password::get_wallet_password(&name, password, None)?;
+			// New-wallet password policy: confirmed prompt, no silent empty default.
+			let final_password = crate::wallet::password::get_new_wallet_password(
+				&name,
+				password,
+				password_file,
+				allow_empty_password,
+			)?;
 
 			// Choose import method based on flags
 			let result = if no_derivation {
@@ -673,7 +700,7 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::FromSeed { name, password } => {
+		WalletCommands::FromSeed { name, password, password_file, allow_empty_password } => {
 			log_print!("🌱 Creating wallet from seed...");
 
 			let wallet_manager = WalletManager::new()?;
@@ -684,9 +711,13 @@ pub async fn handle_wallet_command(
 				.map_err(|e| QuantusError::Generic(format!("Failed to read seed: {e}")))?;
 			let seed = seed.trim().to_string();
 
-			// Get password from user if not provided
-			let final_password =
-				crate::wallet::password::get_wallet_password(&name, password, None)?;
+			// New-wallet password policy: confirmed prompt, no silent empty default.
+			let final_password = crate::wallet::password::get_new_wallet_password(
+				&name,
+				password,
+				password_file,
+				allow_empty_password,
+			)?;
 
 			match wallet_manager
 				.create_wallet_from_seed(&name, &seed, Some(&final_password))
