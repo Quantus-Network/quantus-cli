@@ -92,7 +92,8 @@ fn user_bins_dir() -> PathBuf {
 ///
 /// Safe to call multiple times. A directory attributable to a different CLI
 /// version or sizing configuration (via its manifest or version marker) is
-/// quarantined and regenerated, so upgrades recover automatically. A
+/// quarantined (its artifact files removed by exact filename, never the
+/// directory itself) and regenerated, so upgrades recover automatically. A
 /// same-version directory that fails authentication is rejected rather than
 /// overwritten.
 pub fn ensure_bins_dir() -> Result<PathBuf> {
@@ -112,7 +113,7 @@ pub fn ensure_bins_dir() -> Result<PathBuf> {
 					provenance,
 					env!("CARGO_PKG_VERSION")
 				);
-				remove_path_nofollow(&dir).map_err(QuantusError::Generic)?;
+				remove_stale_artifact_files(&dir)?;
 			},
 			None => {
 				return Err(QuantusError::Generic(format!(
@@ -164,6 +165,48 @@ fn stale_artifact_provenance(dir: &Path) -> Option<String> {
 	}
 
 	None
+}
+
+/// Remove stale circuit artifacts by exact filename, never recursively.
+///
+/// The bins directory can be user-pointed (`QUANTUS_BINS_DIR`) at a directory
+/// that also holds unrelated data — e.g. `~/.quantus`, which contains wallets.
+/// Quarantine therefore only ever deletes the bounded, explicit set of artifact
+/// filenames this CLI (or an older release) produced, and refuses to touch
+/// anything else. Stale files must still be removed (not just overwritten):
+/// if a newer builder stops emitting a manifested file, a leftover stale copy
+/// would otherwise be silently hashed into the new manifest as trusted.
+fn remove_stale_artifact_files(dir: &Path) -> Result<()> {
+	let mut names: std::collections::BTreeSet<&str> = REQUIRED_FILES.iter().copied().collect();
+	names.extend(MANIFESTED_FILES.iter().copied());
+	names.insert(MANIFEST_FILE);
+	names.insert(VERSION_MARKER);
+	// Legacy leaf prover emitted by pre-3.1.0 circuit builders.
+	names.insert("prover.bin");
+
+	for name in names {
+		let path = dir.join(name);
+		match fs::symlink_metadata(&path) {
+			Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+			Err(e) => {
+				return Err(QuantusError::Generic(format!(
+					"Failed to inspect stale artifact {}: {}",
+					path.display(),
+					e
+				)));
+			},
+			Ok(meta) if meta.is_dir() => {
+				return Err(QuantusError::Generic(format!(
+					"Refusing to remove directory {} while replacing stale circuit artifacts; remove it manually and rerun",
+					path.display()
+				)));
+			},
+			Ok(_) => {
+				remove_path_nofollow(&path).map_err(QuantusError::Generic)?;
+			},
+		}
+	}
+	Ok(())
 }
 
 fn ensure_safe_bins_dir(dir: &Path) -> Result<()> {
@@ -585,6 +628,54 @@ mod tests {
 		// that directory claims to be ours but cannot be authenticated.
 		fs::write(dir.join(VERSION_MARKER), env!("CARGO_PKG_VERSION")).unwrap();
 		assert_eq!(stale_artifact_provenance(dir), None);
+	}
+
+	/// Quarantine must never delete anything beyond the exact artifact
+	/// filenames — a user can point QUANTUS_BINS_DIR at a directory that also
+	/// holds wallets or other data.
+	#[test]
+	fn stale_quarantine_preserves_unrelated_entries() {
+		let tmp = TempDir::new().unwrap();
+		let dir = tmp.path();
+		seed_required_files(dir);
+		fs::write(dir.join("prover.bin"), b"legacy leaf prover").unwrap();
+
+		let wallets = dir.join("wallets");
+		fs::create_dir_all(&wallets).unwrap();
+		fs::write(wallets.join("alice.json"), b"precious wallet").unwrap();
+		fs::write(dir.join("notes.txt"), b"user data").unwrap();
+
+		remove_stale_artifact_files(dir).expect("quarantine succeeds");
+
+		for name in REQUIRED_FILES {
+			assert!(!dir.join(name).exists(), "stale artifact {name} must be removed");
+		}
+		assert!(!dir.join("prover.bin").exists(), "legacy prover must be removed");
+		assert!(!dir.join(VERSION_MARKER).exists(), "version marker must be removed");
+		assert!(
+			wallets.join("alice.json").exists(),
+			"unrelated wallet data must survive quarantine"
+		);
+		assert!(dir.join("notes.txt").exists(), "unrelated files must survive quarantine");
+	}
+
+	/// A directory occupying an artifact filename is never recursively deleted.
+	#[test]
+	fn stale_quarantine_refuses_directory_named_like_artifact() {
+		let tmp = TempDir::new().unwrap();
+		let dir = tmp.path();
+		seed_required_files(dir);
+		fs::remove_file(dir.join("verifier.bin")).unwrap();
+		fs::create_dir_all(dir.join("verifier.bin")).unwrap();
+		fs::write(dir.join("verifier.bin").join("keep.txt"), b"keep").unwrap();
+
+		let err = remove_stale_artifact_files(dir)
+			.expect_err("directory named like an artifact must abort quarantine");
+		assert!(err.to_string().contains("Refusing to remove directory"), "got: {err}");
+		assert!(
+			dir.join("verifier.bin").join("keep.txt").exists(),
+			"contents of the unexpected directory must be untouched"
+		);
 	}
 
 	/// A same-version directory with mismatched sizing regenerates instead of erroring.
