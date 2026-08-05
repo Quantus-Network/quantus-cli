@@ -10,9 +10,15 @@
 //! storage location and regenerates the binaries there on demand.
 //!
 //! Resolution order:
-//! 1. `QUANTUS_BINS_DIR` env var (explicit override).
-//! 2. `./generated-bins/` in the current directory (local dev).
-//! 3. `~/.quantus/generated-bins/` (default for installed binaries).
+//! 1. `QUANTUS_BINS_DIR` env var (explicit override; also how local dev opts
+//!    in to `./generated-bins`).
+//! 2. `~/.quantus/generated-bins/` (default for installed binaries).
+//!
+//! `./generated-bins/` in the current working directory is detected but never
+//! trusted implicitly: the manifest is unsigned and lives in the directory it
+//! authenticates, so an attacker-prepared checkout could ship a
+//! self-consistent artifact set that passes verification. Resolution fails
+//! with an explicit opt-in instruction instead.
 
 use crate::{
 	error::{QuantusError, Result},
@@ -67,17 +73,28 @@ struct ArtifactManifest {
 ///
 /// This never generates anything; see [`ensure_bins_dir`] for the full
 /// resolve-and-generate flow.
-pub fn resolve_bins_dir() -> PathBuf {
-	if let Ok(dir) = std::env::var(BINS_DIR_ENV) {
-		return PathBuf::from(dir);
+///
+/// Fails if `./generated-bins` exists in the current working directory without
+/// an explicit `QUANTUS_BINS_DIR` opt-in — see the module docs for why the CWD
+/// source cannot be trusted implicitly.
+pub fn resolve_bins_dir() -> Result<PathBuf> {
+	resolve_bins_dir_from(std::env::var(BINS_DIR_ENV).ok(), Path::new("generated-bins"))
+}
+
+fn resolve_bins_dir_from(env_override: Option<String>, cwd_dir: &Path) -> Result<PathBuf> {
+	if let Some(dir) = env_override {
+		return Ok(PathBuf::from(dir));
 	}
 
-	let cwd_dir = PathBuf::from("generated-bins");
 	if cwd_dir.join("config.json").exists() {
-		return cwd_dir;
+		return Err(QuantusError::Generic(format!(
+			"Found circuit artifacts in ./{dir} but refusing to trust the current working directory implicitly. Set {env}=./{dir} to use them, or run from another directory to use the per-user artifact store",
+			dir = cwd_dir.display(),
+			env = BINS_DIR_ENV,
+		)));
 	}
 
-	user_bins_dir()
+	Ok(user_bins_dir())
 }
 
 /// Location used for auto-generated binaries on installed systems.
@@ -97,7 +114,7 @@ fn user_bins_dir() -> PathBuf {
 /// same-version directory that fails authentication is rejected rather than
 /// overwritten.
 pub fn ensure_bins_dir() -> Result<PathBuf> {
-	let dir = resolve_bins_dir();
+	let dir = resolve_bins_dir()?;
 	ensure_safe_bins_dir(&dir)?;
 
 	if is_ready(&dir) {
@@ -479,6 +496,41 @@ mod tests {
 		let err = verify_manifest(dir).expect_err("tampered verifier must fail authentication");
 		assert!(err.to_string().contains("hash mismatch"), "unexpected error: {err}");
 		assert!(!is_ready(dir));
+	}
+
+	#[test]
+	fn cwd_artifacts_are_refused_without_explicit_opt_in() {
+		// #160697 follow-up: an attacker-prepared checkout can ship a
+		// self-consistent ./generated-bins; it must never be trusted implicitly.
+		let tmp = TempDir::new().unwrap();
+		let cwd_dir = tmp.path().join("generated-bins");
+		fs::create_dir_all(&cwd_dir).unwrap();
+		fs::write(cwd_dir.join("config.json"), b"{}").unwrap();
+
+		let err = resolve_bins_dir_from(None, &cwd_dir)
+			.expect_err("CWD artifacts must require explicit opt-in");
+		assert!(err.to_string().contains(BINS_DIR_ENV), "unexpected error: {err}");
+	}
+
+	#[test]
+	fn env_override_wins_over_cwd_artifacts() {
+		let tmp = TempDir::new().unwrap();
+		let cwd_dir = tmp.path().join("generated-bins");
+		fs::create_dir_all(&cwd_dir).unwrap();
+		fs::write(cwd_dir.join("config.json"), b"{}").unwrap();
+
+		let resolved = resolve_bins_dir_from(Some("/tmp/explicit-bins".to_string()), &cwd_dir)
+			.expect("explicit env override must resolve");
+		assert_eq!(resolved, PathBuf::from("/tmp/explicit-bins"));
+	}
+
+	#[test]
+	fn resolution_defaults_to_user_bins_dir_without_cwd_artifacts() {
+		let tmp = TempDir::new().unwrap();
+		let cwd_dir = tmp.path().join("generated-bins");
+
+		let resolved = resolve_bins_dir_from(None, &cwd_dir).expect("default must resolve");
+		assert_eq!(resolved, user_bins_dir());
 	}
 
 	#[test]

@@ -148,6 +148,7 @@ those can be restored as a narrow workflow without the Rust analysis if needed.
 - `wallet export`: requires `--output` file (no stdout mnemonic dump)
 - Tech collective remove: requires `--min-rank`
 - Circuit artifacts: need a rebuild so `generated-bins/` is a real directory with `manifest.json` (symlink-style bins rejected)
+- Circuit artifacts: `./generated-bins` in the current working directory is no longer trusted implicitly (the unsigned manifest lives in the directory it authenticates, so an untrusted checkout could ship a self-consistent artifact set). Local dev must opt in with `QUANTUS_BINS_DIR=./generated-bins`; installed binaries keep using `~/.quantus/generated-bins`
 - `QuantusClient::new` rejects non-Quantus / incompatible runtimes (expects `specName=quantus-runtime`, the name the real runtime declares); `compatibility-check` connects ungated so it can diagnose rejected nodes
 - Batch transfers use `batch_all` (atomic fail-all)
 
