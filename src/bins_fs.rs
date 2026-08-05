@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 /// Remove a path without following a destination that was swapped to a symlink
 /// between inspection and deletion.
-fn remove_path_nofollow(path: &Path) -> std::result::Result<(), String> {
+pub(crate) fn remove_path_nofollow(path: &Path) -> std::result::Result<(), String> {
 	match fs::symlink_metadata(path) {
 		Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
 		Err(e) => Err(format!("Failed to inspect {}: {}", path.display(), e)),
@@ -49,7 +49,7 @@ fn remove_path_nofollow(path: &Path) -> std::result::Result<(), String> {
 
 /// Atomically publish `src` directory contents to `dest` via a staging directory
 /// and rename, refusing symlink destinations at each step.
-fn publish_dir_atomically(src: &Path, dest: &Path) -> std::result::Result<(), String> {
+pub(crate) fn publish_dir_atomically(src: &Path, dest: &Path) -> std::result::Result<(), String> {
 	let parent = dest
 		.parent()
 		.ok_or_else(|| "destination must have a parent directory".to_string())?;

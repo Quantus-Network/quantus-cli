@@ -27,6 +27,12 @@ use std::{
 
 include!("bins_consts.rs");
 
+mod fs_helpers {
+	#![allow(dead_code)] // publish_dir_atomically is used by build.rs and tests
+	include!("bins_fs.rs");
+}
+use fs_helpers::remove_path_nofollow;
+
 /// Environment variable used to override the bins directory.
 pub const BINS_DIR_ENV: &str = "QUANTUS_BINS_DIR";
 
@@ -99,8 +105,10 @@ fn user_bins_dir() -> PathBuf {
 
 /// Resolve the bins directory and generate any missing circuit binaries.
 ///
-/// Safe to call multiple times; regeneration only happens when the target is
-/// empty. Incomplete or unauthenticated directories are rejected rather than
+/// Safe to call multiple times. A directory attributable to a different CLI
+/// version or sizing configuration (via its manifest or version marker) is
+/// quarantined and regenerated, so upgrades recover automatically. A
+/// same-version directory that fails authentication is rejected rather than
 /// overwritten.
 pub fn ensure_bins_dir() -> Result<PathBuf> {
 	let dir = resolve_bins_dir();
@@ -111,16 +119,66 @@ pub fn ensure_bins_dir() -> Result<PathBuf> {
 	}
 
 	if REQUIRED_FILES.iter().any(|f| dir.join(f).exists()) {
-		return Err(QuantusError::Generic(format!(
-			"Circuit artifact directory {} is incomplete or lacks a valid manifest; remove it or regenerate trusted artifacts",
-			dir.display()
-		)));
+		match stale_artifact_provenance(&dir) {
+			Some(provenance) => {
+				log_print!(
+					"♻️  Replacing circuit artifacts in {} ({}; current CLI is {})",
+					dir.display(),
+					provenance,
+					env!("CARGO_PKG_VERSION")
+				);
+				remove_path_nofollow(&dir).map_err(QuantusError::Generic)?;
+			},
+			None => {
+				return Err(QuantusError::Generic(format!(
+					"Circuit artifact directory {} is incomplete or failed authentication; remove the directory and rerun this command to regenerate trusted artifacts",
+					dir.display()
+				)));
+			},
+		}
 	}
 
 	let num_leaf_proofs = env_num_leaf_proofs();
 	let num_private_batch_proofs = env_num_private_batch_proofs();
 	generate(&dir, num_leaf_proofs, num_private_batch_proofs)?;
 	Ok(dir)
+}
+
+/// Best-effort attribution of an artifact directory to a different CLI version
+/// or sizing configuration, so upgrades can quarantine-and-regenerate instead
+/// of bricking wormhole commands.
+///
+/// Returns a description of the stale provenance, or `None` when the directory
+/// claims to belong to the current version/sizing (in which case a failed
+/// manifest check means tampering or corruption and must stay a hard error).
+fn stale_artifact_provenance(dir: &Path) -> Option<String> {
+	// Prefer the manifest: it records the producing package version and sizing.
+	if let Ok(content) = fs::read_to_string(dir.join(MANIFEST_FILE)) {
+		if let Ok(manifest) = serde_json::from_str::<ArtifactManifest>(&content) {
+			if manifest.package_version != env!("CARGO_PKG_VERSION") {
+				return Some(format!("built by quantus-cli {}", manifest.package_version));
+			}
+			if manifest.num_leaf_proofs != env_num_leaf_proofs() ||
+				manifest.num_private_batch_proofs != env_num_private_batch_proofs()
+			{
+				return Some(format!(
+					"sized for num_leaf_proofs={}, num_private_batch_proofs={}",
+					manifest.num_leaf_proofs, manifest.num_private_batch_proofs
+				));
+			}
+			return None;
+		}
+	}
+
+	// Pre-manifest layouts from older releases only carry the version marker.
+	if let Ok(marker) = fs::read_to_string(dir.join(VERSION_MARKER)) {
+		let marker = marker.trim();
+		if !marker.is_empty() && marker != env!("CARGO_PKG_VERSION") {
+			return Some(format!("built by quantus-cli {marker}"));
+		}
+	}
+
+	None
 }
 
 fn ensure_safe_bins_dir(dir: &Path) -> Result<()> {
@@ -410,7 +468,7 @@ mod tests {
 		std::env::remove_var(BINS_DIR_ENV);
 
 		let err = result.expect_err("incomplete/unauthenticated dir must be rejected");
-		assert!(err.to_string().contains("lacks a valid manifest"), "unexpected error: {err}");
+		assert!(err.to_string().contains("failed authentication"), "unexpected error: {err}");
 	}
 
 	#[test]
@@ -465,7 +523,7 @@ mod tests {
 	}
 
 	// Shared publish helpers from build.rs (#160700).
-	include!("bins_fs.rs");
+	use super::fs_helpers::publish_dir_atomically;
 
 	#[test]
 	fn publish_dir_atomically_replaces_destination_symlink_without_following() {
@@ -502,5 +560,62 @@ mod tests {
 		remove_path_nofollow(&link).expect("remove symlink");
 		assert!(!link.exists());
 		assert!(target.join("keep.txt").exists());
+	}
+
+	/// Upgrades must not brick wormhole: artifacts attributable to another CLI
+	/// version are stale and eligible for quarantine-and-regenerate.
+	#[test]
+	fn artifacts_from_an_older_cli_version_are_stale() {
+		let tmp = TempDir::new().unwrap();
+		let dir = tmp.path();
+		seed_required_files(dir);
+		write_valid_manifest_for_dir(dir);
+
+		// Same version and sizing: not stale (a failed check must stay a hard error).
+		assert_eq!(stale_artifact_provenance(dir), None);
+
+		// Rewrite the manifest as if produced by an older release.
+		let content = fs::read_to_string(dir.join(MANIFEST_FILE)).unwrap();
+		let mut manifest: ArtifactManifest = serde_json::from_str(&content).unwrap();
+		manifest.package_version = "0.0.1-old".to_string();
+		fs::write(dir.join(MANIFEST_FILE), serde_json::to_string(&manifest).unwrap()).unwrap();
+
+		let provenance = stale_artifact_provenance(dir).expect("older version is stale");
+		assert!(provenance.contains("0.0.1-old"), "unexpected provenance: {provenance}");
+	}
+
+	/// Pre-manifest layouts (older releases) are attributed via the version marker.
+	#[test]
+	fn pre_manifest_artifacts_with_old_version_marker_are_stale() {
+		let tmp = TempDir::new().unwrap();
+		let dir = tmp.path();
+		seed_required_files(dir);
+		// No manifest.json at all; marker from an older release.
+		fs::write(dir.join(VERSION_MARKER), "0.0.1-old").unwrap();
+
+		let provenance = stale_artifact_provenance(dir).expect("old marker is stale");
+		assert!(provenance.contains("0.0.1-old"), "unexpected provenance: {provenance}");
+
+		// Marker matching the current version without a manifest is NOT stale:
+		// that directory claims to be ours but cannot be authenticated.
+		fs::write(dir.join(VERSION_MARKER), env!("CARGO_PKG_VERSION")).unwrap();
+		assert_eq!(stale_artifact_provenance(dir), None);
+	}
+
+	/// A same-version directory with mismatched sizing regenerates instead of erroring.
+	#[test]
+	fn artifacts_with_different_sizing_are_stale() {
+		let tmp = TempDir::new().unwrap();
+		let dir = tmp.path();
+		seed_required_files(dir);
+		write_valid_manifest_for_dir(dir);
+
+		let content = fs::read_to_string(dir.join(MANIFEST_FILE)).unwrap();
+		let mut manifest: ArtifactManifest = serde_json::from_str(&content).unwrap();
+		manifest.num_leaf_proofs += 1;
+		fs::write(dir.join(MANIFEST_FILE), serde_json::to_string(&manifest).unwrap()).unwrap();
+
+		let provenance = stale_artifact_provenance(dir).expect("different sizing is stale");
+		assert!(provenance.contains("num_leaf_proofs"), "unexpected provenance: {provenance}");
 	}
 }
