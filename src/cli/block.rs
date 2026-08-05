@@ -810,13 +810,15 @@ pub(crate) fn validate_block_list_range(
 			"Invalid block list range: start ({start}) must be <= end ({end})"
 		)));
 	}
-	let block_count = (end - start) / step + 1;
-	if block_count > MAX_BLOCK_LIST_COUNT {
+	// Compute in u64: (end - start) / step + 1 wraps to 0 in u32 for the full
+	// u32 span, which would slip past the bound below.
+	let block_count = u64::from(end - start) / u64::from(step) + 1;
+	if block_count > u64::from(MAX_BLOCK_LIST_COUNT) {
 		return Err(QuantusError::Generic(format!(
 			"Block list range too large: {block_count} blocks exceeds maximum of {MAX_BLOCK_LIST_COUNT}. Narrow --start/--end or increase --step"
 		)));
 	}
-	Ok(block_count)
+	Ok(block_count as u32)
 }
 
 /// Handle block list command
@@ -1088,5 +1090,15 @@ mod tests {
 			validate_block_list_range(0, MAX_BLOCK_LIST_COUNT - 1, 1).unwrap(),
 			MAX_BLOCK_LIST_COUNT
 		);
+	}
+
+	/// The count must be computed without u32 overflow: `--start 0 --end 4294967295`
+	/// used to wrap `(end - start) / step + 1` to 0 in release builds, slipping past
+	/// the bound into a ~4.3-billion-iteration loop.
+	#[test]
+	fn validate_block_list_range_rejects_full_u32_span_without_overflow() {
+		let err = validate_block_list_range(0, u32::MAX, 1)
+			.expect_err("full u32 span must be rejected, not wrapped to 0");
+		assert!(err.to_string().contains("too large"), "unexpected error: {err}");
 	}
 }
