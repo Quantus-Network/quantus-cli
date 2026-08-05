@@ -2285,7 +2285,8 @@ async fn execute_initial_transfers(
 		.filter_map(|e| e.ok())
 		.collect();
 
-	let funding_account: SubxtAccountId = SubxtAccountId(wallet.keypair.try_to_account_id_32()?.into());
+	let funding_account: SubxtAccountId =
+		SubxtAccountId(wallet.keypair.try_to_account_id_32()?.into());
 	let expected_transfers: Vec<ExpectedTransferEvent> = secrets
 		.iter()
 		.enumerate()

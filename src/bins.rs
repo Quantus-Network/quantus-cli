@@ -10,8 +10,8 @@
 //! storage location and regenerates the binaries there on demand.
 //!
 //! Resolution order:
-//! 1. `QUANTUS_BINS_DIR` env var (explicit override; also how local dev opts
-//!    in to `./generated-bins`).
+//! 1. `QUANTUS_BINS_DIR` env var (explicit override; also how local dev opts in to
+//!    `./generated-bins`).
 //! 2. `~/.quantus/generated-bins/` (default for installed binaries).
 //!
 //! `./generated-bins/` in the current working directory is detected but never

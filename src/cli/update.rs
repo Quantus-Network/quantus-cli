@@ -295,7 +295,12 @@ fn install_verified_release(
 		let mut archive_file = fs::File::create(&archive_path).map_err(|e| {
 			QuantusError::Generic(format!("Failed to create temp archive file: {e}"))
 		})?;
-		download_asset(&archive_asset.download_url, &mut archive_file, MAX_ARCHIVE_ASSET_BYTES, true)?;
+		download_asset(
+			&archive_asset.download_url,
+			&mut archive_file,
+			MAX_ARCHIVE_ASSET_BYTES,
+			true,
+		)?;
 		archive_file
 			.flush()
 			.map_err(|e| QuantusError::Generic(format!("Failed to flush archive download: {e}")))?;

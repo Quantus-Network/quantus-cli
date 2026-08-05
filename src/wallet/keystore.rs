@@ -860,7 +860,8 @@ mod tests {
 
 			// Generate address using both methods
 			let account_id = quantum_keypair.try_to_account_id_32().expect("valid keypair");
-			let ss58_address = quantum_keypair.try_to_account_id_ss58check().expect("valid keypair");
+			let ss58_address =
+				quantum_keypair.try_to_account_id_ss58check().expect("valid keypair");
 
 			// Verify address format (Quantus SS58 prefix 189 = "qz")
 			assert!(
@@ -1317,7 +1318,8 @@ mod tests {
 			.encrypt_wallet_data(&victim, "correct-password")
 			.expect("Encryption should succeed");
 		let victim_address = encrypted.address.clone();
-		let attacker_address = attacker.keypair.try_to_account_id_ss58check().expect("valid keypair");
+		let attacker_address =
+			attacker.keypair.try_to_account_id_ss58check().expect("valid keypair");
 		assert_ne!(victim_address, attacker_address);
 
 		// Attacker rewrites only the plaintext envelope address; ciphertext is untouched.
