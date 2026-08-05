@@ -147,7 +147,7 @@ async fn handle_batch_send_command(
 
 	// Load wallet
 	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
-	let from_account_id = keypair.to_account_id_ss58check();
+	let from_account_id = keypair.try_to_account_id_ss58check()?;
 	validate_batch_transfer_request(&quantus_client, &keypair, &transfers).await?;
 
 	let effective_tip = crate::cli::send::effective_tip_amount(tip_amount);

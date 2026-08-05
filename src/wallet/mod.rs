@@ -832,8 +832,9 @@ mod tests {
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Test address generation
-		let account_id = quantum_keypair.to_account_id_32();
-		let ss58_address = quantum_keypair.to_account_id_ss58check();
+		let account_id = quantum_keypair.try_to_account_id_32().expect("valid keypair");
+		let ss58_address =
+			quantum_keypair.try_to_account_id_ss58check().expect("valid keypair");
 
 		// Verify SS58 address format
 		assert!(ss58_address.starts_with("qz"), "SS58 address should start with 5");

@@ -472,10 +472,12 @@ pub fn predict_multisig_address(
 	account_id.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
 }
 
-fn keypair_to_subxt_account_id(keypair: &crate::wallet::QuantumKeyPair) -> SubxtAccountId32 {
-	let account_id = keypair.to_account_id_32();
+fn keypair_to_subxt_account_id(
+	keypair: &crate::wallet::QuantumKeyPair,
+) -> crate::error::Result<SubxtAccountId32> {
+	let account_id = keypair.try_to_account_id_32()?;
 	let account_bytes: [u8; 32] = *account_id.as_ref();
-	SubxtAccountId32::from(account_bytes)
+	Ok(SubxtAccountId32::from(account_bytes))
 }
 
 fn sorted_account_ids_equal(left: &[SubxtAccountId32], right: &[SubxtAccountId32]) -> bool {
@@ -551,7 +553,7 @@ pub async fn create_multisig(
 			.create_multisig(signers.clone(), threshold, nonce);
 
 	// Submit transaction
-	let creator_account_id = keypair_to_subxt_account_id(creator_keypair);
+	let creator_account_id = keypair_to_subxt_account_id(creator_keypair)?;
 	let execution_mode =
 		ExecutionMode { finalized: false, wait_for_transaction: wait_for_inclusion };
 	let (tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
@@ -1168,7 +1170,7 @@ async fn handle_create_multisig(
 
 	// Load keypair
 	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
-	let creator_account_id = keypair_to_subxt_account_id(&keypair);
+	let creator_account_id = keypair_to_subxt_account_id(&keypair)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;

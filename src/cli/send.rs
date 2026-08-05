@@ -440,7 +440,7 @@ pub async fn transfer_with_nonce(
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating transfer transaction...");
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 
@@ -475,7 +475,7 @@ pub(crate) async fn validate_batch_transfer_request(
 	transfers: &[(String, u128)],
 ) -> Result<()> {
 	log_verbose!("🚀 Preparing batch transfer transaction with {} transfers...", transfers.len());
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
 
 	if transfers.is_empty() {
 		return Err(crate::error::QuantusError::Generic(
@@ -597,7 +597,7 @@ pub async fn handle_send_command(
 	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
 
 	// Get account information
-	let from_account_id = keypair.to_account_id_ss58check();
+	let from_account_id = keypair.try_to_account_id_ss58check()?;
 	let balance = get_balance(&quantus_client, &from_account_id).await?;
 
 	// Get formatted balance with proper decimals

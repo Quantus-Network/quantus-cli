@@ -64,7 +64,7 @@ pub async fn execute_generic_call(
 	log_print!("🚀 Executing generic call");
 	log_print!("Pallet: {}", pallet.bright_green());
 	log_print!("Call: {}", call.bright_cyan());
-	log_print!("From: {}", from_keypair.to_account_id_ss58check().bright_yellow());
+	log_print!("From: {}", from_keypair.try_to_account_id_ss58check()?.bright_yellow());
 	if let Some(tip) = &tip {
 		log_print!("Tip: {}", tip.bright_magenta());
 	}

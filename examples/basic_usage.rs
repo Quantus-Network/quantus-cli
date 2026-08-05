@@ -39,7 +39,7 @@ async fn main() -> Result<()> {
 	let keypair = wallet_data.take_keypair();
 
 	// 5. Get account balance
-	let account_id = keypair.to_account_id_32();
+	let account_id = keypair.try_to_account_id_32()?;
 	let balance = get_account_balance(&client, &account_id).await?;
 	println!("💰 Balance: {balance} DEV");
 

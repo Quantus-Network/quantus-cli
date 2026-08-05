@@ -2119,8 +2119,8 @@ fn load_multiround_wallet(
 	let wallet_manager = WalletManager::new()?;
 	let wallet_password = password::get_wallet_password(wallet_name, password, password_file)?;
 	let mut wallet_data = wallet_manager.load_wallet(wallet_name, &wallet_password)?;
-	let wallet_address = wallet_data.keypair.to_account_id_ss58check();
-	let wallet_account_id = SubxtAccountId(wallet_data.keypair.to_account_id_32().into());
+	let wallet_address = wallet_data.keypair.try_to_account_id_ss58check()?;
+	let wallet_account_id = SubxtAccountId(wallet_data.keypair.try_to_account_id_32()?.into());
 
 	// Require a persisted mnemonic for deterministic wormhole HD derivation.
 	let mnemonic = wallet_data.take_mnemonic().ok_or_else(|| {
@@ -2285,7 +2285,7 @@ async fn execute_initial_transfers(
 		.filter_map(|e| e.ok())
 		.collect();
 
-	let funding_account: SubxtAccountId = SubxtAccountId(wallet.keypair.to_account_id_32().into());
+	let funding_account: SubxtAccountId = SubxtAccountId(wallet.keypair.try_to_account_id_32()?.into());
 	let expected_transfers: Vec<ExpectedTransferEvent> = secrets
 		.iter()
 		.enumerate()

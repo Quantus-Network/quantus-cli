@@ -58,7 +58,7 @@ impl QuantusApp {
 	/// Get wallet balance
 	pub async fn get_balance(&self, wallet_name: &str, password: &str) -> Result<u128> {
 		let wallet_data = self.wallet_manager.load_wallet(wallet_name, password)?;
-		let account_id = wallet_data.keypair.to_account_id_32();
+		let account_id = wallet_data.keypair.try_to_account_id_32()?;
 
 		self.get_account_balance(&account_id).await
 	}

@@ -890,7 +890,7 @@ pub async fn handle_wallet_command(
 					// Load wallet and get its address
 					let keypair =
 						crate::wallet::load_keypair_from_wallet(&wallet_name, password, None)?;
-					keypair.to_account_id_ss58check()
+					keypair.try_to_account_id_ss58check()?
 				},
 				(None, None) => {
 					// This case should be prevented by clap's `required_unless_present`

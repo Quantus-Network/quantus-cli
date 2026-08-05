@@ -117,7 +117,7 @@ pub async fn schedule_transfer(
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🔄 Creating reversible transfer...");
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 
@@ -200,7 +200,7 @@ pub async fn schedule_transfer_with_delay(
 ) -> Result<subxt::utils::H256> {
 	let unit_str = if unit_blocks { "blocks" } else { "seconds" };
 	log_verbose!("🔄 Creating reversible transfer with custom delay ...");
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 	log_verbose!("   Delay: {} {}", delay, unit_str);
@@ -403,7 +403,7 @@ async fn list_pending_transactions(
 			// Load wallet and get its address
 			let keypair =
 				crate::wallet::load_keypair_from_wallet(&wallet, password, password_file)?;
-			keypair.to_account_id_ss58check()
+			keypair.try_to_account_id_ss58check()?
 		},
 		(None, None) => {
 			return Err(crate::error::QuantusError::Generic(

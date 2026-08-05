@@ -279,7 +279,7 @@ pub async fn handle_multisend_command(
 
 	// Load wallet
 	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
-	let from_account_id = keypair.to_account_id_ss58check();
+	let from_account_id = keypair.try_to_account_id_ss58check()?;
 
 	// Check balance
 	let balance = get_balance(&quantus_client, &from_account_id).await?;

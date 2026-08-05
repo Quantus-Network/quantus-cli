@@ -82,10 +82,10 @@ fn random_recipient(ctx: &mut ExerciseCtx) -> Result<crate::cli::common::SubxtAc
 	Ok(match choice {
 		0 => {
 			let idx = ctx.rng.random_range(0..ctx.eph.len());
-			account_id_of(&ctx.eph[idx])
+			account_id_of(&ctx.eph[idx])?
 		},
-		1 => account_id_of(&ctx.fresh_keypair()?),
-		_ => account_id_of(&ctx.eph[0]),
+		1 => account_id_of(&ctx.fresh_keypair()?)?,
+		_ => account_id_of(&ctx.eph[0])?,
 	})
 }
 

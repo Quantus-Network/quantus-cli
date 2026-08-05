@@ -151,7 +151,7 @@ async fn main() -> Result<()> {
 	let wm = WalletManager::new()?;
 	let mut wallet = wm.load_wallet(&args.funder, &args.password)?;
 	let funder_kp = wallet.take_keypair();
-	let funder_ss58 = funder_kp.to_account_id_ss58check();
+	let funder_ss58 = funder_kp.try_to_account_id_ss58check()?;
 	println!("  wallet  : {funder_ss58}");
 
 	// 2. derive wormhole address from a random secret + random exit account ---

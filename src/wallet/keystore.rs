@@ -269,18 +269,15 @@ impl QuantumKeyPair {
 		Ok(resonance_public.into_account())
 	}
 
-	pub fn to_account_id_32(&self) -> AccountId32 {
-		self.try_to_account_id_32().unwrap_or_else(|_| AccountId32::from([0u8; 32]))
-	}
+	// Note: there are deliberately no infallible to_account_id_* variants. The
+	// old ones fell back to the all-zero account / empty string on malformed
+	// keys, turning a detectable error into a silent wrong answer that callers
+	// could send funds to.
 
 	pub fn try_to_account_id_ss58check(&self) -> Result<String> {
 		use crate::cli::address_format::quantus_ss58_format;
 		let account = self.try_to_account_id_32()?;
 		Ok(account.to_ss58check_with_version(quantus_ss58_format()))
-	}
-
-	pub fn to_account_id_ss58check(&self) -> String {
-		self.try_to_account_id_ss58check().unwrap_or_default()
 	}
 
 	/// Convert to subxt Signer for use
@@ -862,8 +859,8 @@ mod tests {
 			let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
 
 			// Generate address using both methods
-			let account_id = quantum_keypair.to_account_id_32();
-			let ss58_address = quantum_keypair.to_account_id_ss58check();
+			let account_id = quantum_keypair.try_to_account_id_32().expect("valid keypair");
+			let ss58_address = quantum_keypair.try_to_account_id_ss58check().expect("valid keypair");
 
 			// Verify address format (Quantus SS58 prefix 189 = "qz")
 			assert!(
@@ -951,8 +948,8 @@ mod tests {
 		let quantum_from_resonance = QuantumKeyPair::from_resonance_pair(&resonance_from_quantum);
 
 		// All should generate the same address
-		let addr1 = quantum_from_dilithium.to_account_id_ss58check();
-		let addr2 = quantum_from_resonance.to_account_id_ss58check();
+		let addr1 = quantum_from_dilithium.try_to_account_id_ss58check().expect("valid keypair");
+		let addr2 = quantum_from_resonance.try_to_account_id_ss58check().expect("valid keypair");
 		let addr3 = resonance_from_quantum
 			.public()
 			.into_account()
@@ -974,9 +971,9 @@ mod tests {
 		let bob_quantum = QuantumKeyPair::from_resonance_pair(&bob_pair);
 		let charlie_quantum = QuantumKeyPair::from_resonance_pair(&charlie_pair);
 
-		let alice_addr = alice_quantum.to_account_id_ss58check();
-		let bob_addr = bob_quantum.to_account_id_ss58check();
-		let charlie_addr = charlie_quantum.to_account_id_ss58check();
+		let alice_addr = alice_quantum.try_to_account_id_ss58check().expect("valid keypair");
+		let bob_addr = bob_quantum.try_to_account_id_ss58check().expect("valid keypair");
+		let charlie_addr = charlie_quantum.try_to_account_id_ss58check().expect("valid keypair");
 
 		// Addresses should be different
 		assert_ne!(alice_addr, bob_addr, "Alice and Bob should have different addresses");
@@ -1061,22 +1058,15 @@ mod tests {
 		};
 
 		// Test that we can generate address from the stored keypair
-		let result = std::panic::catch_unwind(|| wallet_data.keypair.to_account_id_ss58check());
-
-		match result {
-			Ok(address) => {
-				println!("✅ Address generation successful: {address}");
-				// Verify it matches the expected address
-				let expected = alice_pair
-					.public()
-					.into_account()
-					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
-				assert_eq!(address, expected, "Stored wallet should generate correct address");
-			},
-			Err(_) => {
-				panic!("❌ Address generation failed - this is the bug we need to fix!");
-			},
-		}
+		let address = wallet_data
+			.keypair
+			.try_to_account_id_ss58check()
+			.expect("stored wallet keypair should generate an address");
+		let expected = alice_pair
+			.public()
+			.into_account()
+			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
+		assert_eq!(address, expected, "Stored wallet should generate correct address");
 	}
 
 	#[test]
@@ -1122,22 +1112,15 @@ mod tests {
 			.expect("Decryption should succeed");
 
 		// Test that we can generate address from the decrypted keypair
-		let result = std::panic::catch_unwind(|| decrypted_data.keypair.to_account_id_ss58check());
-
-		match result {
-			Ok(address) => {
-				println!("✅ Encrypted wallet address generation successful: {address}");
-				// Verify it matches the expected address
-				let expected = alice_pair
-					.public()
-					.into_account()
-					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
-				assert_eq!(address, expected, "Decrypted wallet should generate correct address");
-			},
-			Err(_) => {
-				panic!("❌ Encrypted wallet address generation failed - this reproduces the send command bug!");
-			},
-		}
+		let address = decrypted_data
+			.keypair
+			.try_to_account_id_ss58check()
+			.expect("decrypted wallet keypair should generate an address");
+		let expected = alice_pair
+			.public()
+			.into_account()
+			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
+		assert_eq!(address, expected, "Decrypted wallet should generate correct address");
 	}
 
 	#[test]
@@ -1180,29 +1163,15 @@ mod tests {
 			wallet_manager.load_wallet("crystal_alice", "").expect("Should load wallet");
 
 		// 2. Try to generate address from the loaded keypair (should work now)
-		let result = std::panic::catch_unwind(|| {
-			// The keypair is already decrypted, so we can use it directly
-			loaded_wallet_data.keypair.to_account_id_ss58check()
-		});
-
-		match result {
-			Ok(address) => {
-				println!("✅ Send command flow works: {address}");
-				// If this passes, the bug is fixed
-				let expected = alice_pair
-					.public()
-					.into_account()
-					.to_ss58check_with_version(Ss58AddressFormat::custom(189));
-				assert_eq!(address, expected, "Loaded wallet should generate correct address");
-			},
-			Err(_) => {
-				println!("❌ Send command flow failed - this reproduces the bug!");
-				// This test should fail initially, proving we found the bug
-				panic!(
-					"This test reproduces the send command bug - load_wallet returns dummy data!"
-				);
-			},
-		}
+		let address = loaded_wallet_data
+			.keypair
+			.try_to_account_id_ss58check()
+			.expect("loaded wallet keypair should generate an address");
+		let expected = alice_pair
+			.public()
+			.into_account()
+			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
+		assert_eq!(address, expected, "Loaded wallet should generate correct address");
 	}
 
 	#[test]
@@ -1274,7 +1243,7 @@ mod tests {
 
 		EncryptedWallet {
 			name: data.name.clone(),
-			address: data.keypair.to_account_id_ss58check(),
+			address: data.keypair.try_to_account_id_ss58check().expect("valid keypair"),
 			encrypted_data,
 			kyber_ciphertext: vec![],
 			kyber_public_key: vec![],
@@ -1348,7 +1317,7 @@ mod tests {
 			.encrypt_wallet_data(&victim, "correct-password")
 			.expect("Encryption should succeed");
 		let victim_address = encrypted.address.clone();
-		let attacker_address = attacker.keypair.to_account_id_ss58check();
+		let attacker_address = attacker.keypair.try_to_account_id_ss58check().expect("valid keypair");
 		assert_ne!(victim_address, attacker_address);
 
 		// Attacker rewrites only the plaintext envelope address; ciphertext is untouched.
@@ -1386,7 +1355,7 @@ mod tests {
 		let encrypted_data = cipher.encrypt(&nonce, plaintext.as_ref()).expect("encrypt");
 		EncryptedWallet {
 			name: data.name.clone(),
-			address: data.keypair.to_account_id_ss58check(),
+			address: data.keypair.try_to_account_id_ss58check().expect("valid keypair"),
 			encrypted_data,
 			kyber_ciphertext: vec![],
 			kyber_public_key: vec![],
@@ -1433,18 +1402,20 @@ mod tests {
 
 	#[test]
 	fn malformed_public_key_returns_error_instead_of_panicking() {
-		// #160640: address derivation must not unwind on garbage public keys.
+		// #160640: address derivation must not unwind on garbage public keys,
+		// and must report an error rather than a silent fallback value (the
+		// removed infallible variants returned the all-zero account).
 		let keypair = QuantumKeyPair { public_key: vec![0x41], private_key: vec![0x42; 32] };
-		let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			let _ = keypair.to_account_id_ss58check();
-		}));
-		assert!(
-			panicked.is_ok(),
-			"malformed decrypted public keys must not unwind CLI/library callers"
-		);
 		assert!(
 			matches!(
 				keypair.try_to_account_id_ss58check(),
+				Err(crate::error::QuantusError::Wallet(WalletError::InvalidPublicKey))
+			),
+			"fallible conversion must report InvalidPublicKey"
+		);
+		assert!(
+			matches!(
+				keypair.try_to_account_id_32(),
 				Err(crate::error::QuantusError::Wallet(WalletError::InvalidPublicKey))
 			),
 			"fallible conversion must report InvalidPublicKey"
