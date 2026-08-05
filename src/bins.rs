@@ -469,6 +469,9 @@ fn generate(dir: &Path, num_leaf_proofs: usize, num_private_batch_proofs: usize)
 mod tests {
 	use super::*;
 	use serial_test::serial;
+	// Symlink-based tests are Unix-only; `cargo test` must still compile on
+	// Windows, which the release pipeline ships for.
+	#[cfg(unix)]
 	use std::os::unix::fs::symlink;
 	use tempfile::TempDir;
 
@@ -551,6 +554,7 @@ mod tests {
 		assert!(err.to_string().contains("failed authentication"), "unexpected error: {err}");
 	}
 
+	#[cfg(unix)]
 	#[test]
 	#[serial]
 	fn ensure_bins_dir_rejects_symlinked_directory() {
@@ -571,6 +575,7 @@ mod tests {
 		assert!(err.to_string().contains("symlinked bins directory"), "unexpected error: {err}");
 	}
 
+	#[cfg(unix)]
 	#[test]
 	fn version_marker_write_refuses_existing_symlink() {
 		// #160699: marker publication must not follow a pre-existing symlink.
@@ -586,6 +591,7 @@ mod tests {
 		assert_eq!(fs::read_to_string(&victim).unwrap(), "do-not-overwrite");
 	}
 
+	#[cfg(unix)]
 	#[test]
 	fn verify_manifest_rejects_symlinked_artifact_file() {
 		let tmp = TempDir::new().unwrap();
@@ -605,6 +611,7 @@ mod tests {
 	// Shared publish helpers from build.rs (#160700).
 	use super::fs_helpers::publish_dir_atomically;
 
+	#[cfg(unix)]
 	#[test]
 	fn publish_dir_atomically_replaces_destination_symlink_without_following() {
 		// #160700: publishing must not write through a swapped destination symlink.
@@ -628,6 +635,7 @@ mod tests {
 		assert!(!victim_dir.join("config.json").exists());
 	}
 
+	#[cfg(unix)]
 	#[test]
 	fn remove_path_nofollow_removes_symlink_without_deleting_target() {
 		let tmp = TempDir::new().unwrap();
