@@ -299,6 +299,19 @@ impl SubsquidClient {
 				.await?;
 
 			if total_count <= SERVER_MAX_LIMIT as i64 {
+				// A Hasura deployment with an API row cap below our requested
+				// limit would return fewer rows than total_count and silently
+				// drop the rest; fail instead of returning a truncated set.
+				if transfers.len() as i64 != total_count {
+					return Err(QuantusError::Generic(format!(
+						"Indexer returned {} of {} transfers for blocks {}..={}; the server row cap appears lower than the requested limit of {}",
+						transfers.len(),
+						total_count,
+						lo,
+						hi,
+						SERVER_MAX_LIMIT
+					)));
+				}
 				all.extend(transfers);
 				continue;
 			}
@@ -310,6 +323,17 @@ impl SubsquidClient {
 				continue;
 			}
 
+			// Single-block offset pagination: total_count > SERVER_MAX_LIMIT,
+			// so this first page must be exactly the server limit.
+			if transfers.len() != SERVER_MAX_LIMIT as usize {
+				return Err(QuantusError::Generic(format!(
+					"Indexer returned {} of {} transfers on the first page for block {}; the server row cap appears lower than the requested limit of {}",
+					transfers.len(),
+					total_count,
+					lo,
+					SERVER_MAX_LIMIT
+				)));
+			}
 			all.extend(transfers);
 			let total_count = u32::try_from(total_count).map_err(|_| {
 				QuantusError::Generic(format!(
@@ -334,10 +358,17 @@ impl SubsquidClient {
 					)
 					.await?;
 
-				if page.is_empty() {
+				// Every page must be exactly full except the last, which must
+				// hold the remainder; anything else means rows were dropped.
+				let expected = std::cmp::min(SERVER_MAX_LIMIT, total_count - offset) as usize;
+				if page.len() != expected {
 					return Err(QuantusError::Generic(format!(
-						"Indexer returned an empty transfer page before offset {} of {} for block {}",
-						offset, total_count, lo
+						"Indexer returned {} transfers at offset {} of {} for block {}, expected {}",
+						page.len(),
+						offset,
+						total_count,
+						lo,
+						expected
 					)));
 				}
 
