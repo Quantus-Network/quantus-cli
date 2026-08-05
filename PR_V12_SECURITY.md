@@ -120,24 +120,22 @@ migrating to non-`Copy` zeroize-on-drop wrapper types end to end, which is out
 of scope for this PR. Treat the residual risk as: secrets may persist in
 process memory until overwritten; they are never persisted or printed.
 
-## CodeQL workflow removal
+## CodeQL workflow narrowed (was: removed)
 
-The in-repo CodeQL GitHub Actions workflow (`.github/workflows/codeql.yml`) was
-removed in this PR. Rationale:
+The CodeQL workflow was initially deleted in this PR because nearly all of its
+alerts were noise in `#[cfg(test)]` modules and `examples/` (hard-coded test
+keys, intentional diagnostic prints). Deleting it outright also removed the
+repo's only first-party SAST (source-level taint analysis) and the
+Actions-hygiene checks — `cargo audit` covers dependency CVEs only and clippy
+is not a security analyzer — so the workflow is reinstated in narrowed form
+instead:
 
-- Nearly all alerts on this crate were noise in `#[cfg(test)]` modules and
-  `examples/` (hard-coded test keys, intentional diagnostic prints).
-- First-party Rust security for dependencies remains covered by `cargo audit`
-  in `ci.yml`. Clippy (`-D warnings`) covers a large class of local correctness
-  issues that CodeQL's Rust queries duplicated poorly.
-- Preferring a quiet CI signal over a high false-positive Actions check that
-  reviewers learned to ignore.
-
-If CodeQL is reintroduced later, prefer path exclusions (`paths-ignore` for
-`examples/**`) and test-code filters rather than re-enabling the prior
-`security-and-quality` sweep as a required check. Actions-hygiene rules that
-lived under the `actions` language matrix are the one useful piece dropped;
-those can be restored as a narrow workflow without the Rust analysis if needed.
+- Default high-precision security query suite instead of the prior
+  `security-and-quality` sweep (drops the quality-noise class).
+- `paths-ignore: examples` so intentional example code stops generating
+  alerts. Inline `mod tests` blocks cannot be path-excluded; the narrowed
+  suite already skips most of what fired there.
+- The `actions` language matrix (workflow hygiene rules) is kept as before.
 
 ## Breaking / UX changes callers should know
 
