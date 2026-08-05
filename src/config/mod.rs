@@ -8,8 +8,9 @@ pub struct CompatibleRuntime {
 	pub transaction_version: u32,
 }
 
-/// Expected runtime spec name for Quantus nodes.
-pub const EXPECTED_RUNTIME_SPEC_NAME: &str = "quantus";
+/// Expected runtime spec name for Quantus nodes, as declared by the runtime's
+/// `RuntimeVersion { spec_name: "quantus-runtime", .. }` in the chain repo.
+pub const EXPECTED_RUNTIME_SPEC_NAME: &str = "quantus-runtime";
 
 /// Supported runtime / transaction version pairs.
 pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
@@ -71,6 +72,15 @@ mod tests {
 			.expect("compatible quantus runtime must be accepted");
 	}
 
+	/// Pinned to the spec name the real Quantus runtime declares
+	/// (`spec_name: "quantus-runtime"` in the chain repo's runtime/src/lib.rs).
+	/// If this fails, the identity gate rejects every real node.
+	#[test]
+	fn validate_runtime_identity_accepts_real_quantus_runtime_spec_name() {
+		validate_runtime_identity("quantus-runtime", 136, 3)
+			.expect("the real runtime spec name 'quantus-runtime' must be accepted");
+	}
+
 	#[test]
 	fn validate_runtime_identity_rejects_wrong_spec_name() {
 		let err = validate_runtime_identity("quantus-impersonator", 136, 3).unwrap_err();
@@ -111,7 +121,7 @@ mod tests {
 	#[test]
 	fn validate_runtime_version_value_rejects_incompatible_runtime() {
 		let value = json!({
-			"specName": "quantus",
+			"specName": EXPECTED_RUNTIME_SPEC_NAME,
 			"specVersion": 1,
 			"transactionVersion": 1,
 		});

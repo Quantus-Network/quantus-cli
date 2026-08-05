@@ -591,56 +591,73 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 	log_print!("🔗 Connecting to: {}", node_url.bright_cyan());
 	log_print!("");
 
-	// Connect to the node
-	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+	// Connect without the runtime identity gate: this command exists precisely to
+	// diagnose nodes the rest of the CLI refuses to talk to.
+	let quantus_client =
+		crate::chain::client::QuantusClient::new_without_runtime_check(node_url).await?;
 
-	// Get runtime version
-	let runtime_version = runtime::get_runtime_version(quantus_client.client()).await?;
+	// Fetch the raw runtime version so we can inspect the spec name too.
+	use jsonrpsee::core::client::ClientT;
+	let runtime_version: serde_json::Value = quantus_client
+		.rpc_client()
+		.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!(
+				"Failed to fetch runtime version: {e:?}"
+			))
+		})?;
+	let spec_name = runtime_version["specName"].as_str().unwrap_or("<missing>").to_string();
+	let spec_version = runtime_version["specVersion"].as_u64().unwrap_or(0) as u32;
+	let impl_version = runtime_version["implVersion"].as_u64().unwrap_or(0) as u32;
+	let transaction_version = runtime_version["transactionVersion"].as_u64().unwrap_or(0) as u32;
 
-	// Get system info for additional details
-	let chain_info = system::get_complete_chain_info(node_url).await?;
+	// Chain info is best-effort: an incompatible node may not support the ChainHead API.
+	let chain_info = system::get_complete_chain_info(node_url).await.ok();
 
 	log_print!("📋 Version Information:");
 	log_print!("   • CLI Version: {}", env!("CARGO_PKG_VERSION").bright_green());
-	log_print!(
-		"   • Runtime Spec Version: {}",
-		runtime_version.spec_version.to_string().bright_yellow()
-	);
-	log_print!(
-		"   • Runtime Impl Version: {}",
-		runtime_version.impl_version.to_string().bright_blue()
-	);
-	log_print!(
-		"   • Transaction Version: {}",
-		runtime_version.transaction_version.to_string().bright_magenta()
-	);
+	log_print!("   • Runtime Spec Name: {}", spec_name.bright_cyan());
+	log_print!("   • Runtime Spec Version: {}", spec_version.to_string().bright_yellow());
+	log_print!("   • Runtime Impl Version: {}", impl_version.to_string().bright_blue());
+	log_print!("   • Transaction Version: {}", transaction_version.to_string().bright_magenta());
 
-	if let Some(name) = &chain_info.chain_name {
+	if let Some(name) = chain_info.as_ref().and_then(|info| info.chain_name.as_ref()) {
 		log_print!("   • Chain Name: {}", name.bright_cyan());
 	}
 
 	log_print!("");
 
 	// Check compatibility
-	let is_compatible = crate::config::is_runtime_compatible(
-		runtime_version.spec_version,
-		runtime_version.transaction_version,
-	);
+	let name_matches = spec_name == crate::config::EXPECTED_RUNTIME_SPEC_NAME;
+	let version_compatible =
+		crate::config::is_runtime_compatible(spec_version, transaction_version);
 
 	log_print!("🔍 Compatibility Analysis:");
+	log_print!("   • Expected spec name: {}", crate::config::EXPECTED_RUNTIME_SPEC_NAME);
 	log_print!("   • Supported runtime/transaction pairs:");
 	for runtime in crate::config::COMPATIBLE_RUNTIMES {
 		log_print!("     - spec {} / tx {}", runtime.spec_version, runtime.transaction_version);
 	}
-	log_print!("   • Current Runtime Version: {}", runtime_version.spec_version);
-	log_print!("   • Current Transaction Version: {}", runtime_version.transaction_version);
+	log_print!("   • Current Spec Name: {spec_name}");
+	log_print!("   • Current Runtime Version: {spec_version}");
+	log_print!("   • Current Transaction Version: {transaction_version}");
 
-	if is_compatible {
+	if name_matches && version_compatible {
 		log_success!("✅ COMPATIBLE - This CLI version supports the connected node");
 		log_print!("   • All features should work correctly");
 		log_print!("   • You can safely use all CLI commands");
+	} else if !name_matches {
+		log_error!("❌ INCOMPATIBLE - The connected node is not running a Quantus runtime");
+		log_print!(
+			"   • Runtime identifies as '{}', expected '{}'",
+			spec_name,
+			crate::config::EXPECTED_RUNTIME_SPEC_NAME
+		);
+		log_print!("   • All other CLI commands will refuse to talk to this node");
 	} else {
 		log_error!("❌ INCOMPATIBLE - This CLI version may not work with the connected node");
+		log_print!("   • The runtime version pair is not in this CLI's supported list");
 		log_print!("   • Some features may not work correctly");
 		log_print!("   • Consider updating the CLI or connecting to a compatible node");
 	}

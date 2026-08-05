@@ -79,6 +79,19 @@ impl QuantusClient {
 
 	/// Create a new QuantusClient by connecting to the specified node URL
 	pub async fn new(node_url: &str) -> crate::error::Result<Self> {
+		Self::connect(node_url, true).await
+	}
+
+	/// Connect without enforcing the runtime identity gate.
+	///
+	/// Only for read-only diagnostics (e.g. `compatibility-check`) that must be able to
+	/// inspect nodes this CLI would otherwise reject. Never use this client to sign or
+	/// submit transactions.
+	pub async fn new_without_runtime_check(node_url: &str) -> crate::error::Result<Self> {
+		Self::connect(node_url, false).await
+	}
+
+	async fn connect(node_url: &str, enforce_runtime_identity: bool) -> crate::error::Result<Self> {
 		let display_node_url = Self::sanitize_url_for_diagnostics(node_url);
 		log_verbose!("🔗 Connecting to Quantus node: {}", display_node_url);
 
@@ -129,18 +142,22 @@ impl QuantusClient {
 
 		// Reject nodes that do not identify as a supported Quantus runtime before the
 		// client can be used to encode or sign transactions.
-		use jsonrpsee::core::client::ClientT;
-		let runtime_version: serde_json::Value = ws_client
-			.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
-			.await
-			.map_err(|e| {
-				QuantusError::NetworkError(format!("Failed to fetch runtime version: {e:?}"))
-			})?;
-		crate::config::validate_runtime_version_value(&runtime_version).map_err(|e| match e {
-			QuantusError::NetworkError(msg) =>
-				QuantusError::NetworkError(format!("{msg} (from {display_node_url})")),
-			other => other,
-		})?;
+		if enforce_runtime_identity {
+			use jsonrpsee::core::client::ClientT;
+			let runtime_version: serde_json::Value = ws_client
+				.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+				.await
+				.map_err(|e| {
+					QuantusError::NetworkError(format!("Failed to fetch runtime version: {e:?}"))
+				})?;
+			crate::config::validate_runtime_version_value(&runtime_version).map_err(
+				|e| match e {
+					QuantusError::NetworkError(msg) =>
+						QuantusError::NetworkError(format!("{msg} (from {display_node_url})")),
+					other => other,
+				},
+			)?;
+		}
 
 		log_verbose!("✅ Connected to Quantus node successfully!");
 
