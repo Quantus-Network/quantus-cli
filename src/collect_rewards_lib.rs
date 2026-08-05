@@ -368,17 +368,22 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			.await
 			.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
 	} else {
-		// Use latest block
-		let best_block = quantus_client
-			.get_latest_block()
+		// Prove against the latest finalized block. Best-block proofs can be
+		// invalidated by reorgs before finality (same class as recursive flows).
+		use subxt::ext::jsonrpsee::{core::client::ClientT, rpc_params};
+		let finalized_hash: subxt::utils::H256 = quantus_client
+			.rpc_client()
+			.request("chain_getFinalizedHead", rpc_params![])
 			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get latest block: {}", e)))?;
+			.map_err(|e| {
+				CollectRewardsError::from(format!("Failed to get finalized block hash: {}", e))
+			})?;
 		quantus_client
 			.client()
 			.blocks()
-			.at(best_block)
+			.at(finalized_hash)
 			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
+			.map_err(|e| CollectRewardsError::from(format!("Failed to get finalized block: {}", e)))?
 	};
 	let proof_block_hash = proof_block.hash();
 
