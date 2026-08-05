@@ -1663,8 +1663,6 @@ pub async fn submit_unsigned_verify_private_batch(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
 ) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
-	use subxt::tx::TxStatus;
-
 	let verify_tx = quantus_node::api::tx().wormhole().verify_private_batch(proof_bytes);
 
 	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
@@ -1676,27 +1674,15 @@ pub async fn submit_unsigned_verify_private_batch(
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
 
-	while let Some(Ok(status)) = tx_progress.next().await {
-		match status {
-			TxStatus::InBestBlock(_) => continue,
-			TxStatus::InFinalizedBlock(tx_in_block) => {
-				return Ok((
-					IncludedAt::Finalized,
-					tx_in_block.block_hash(),
-					tx_in_block.extrinsic_hash(),
-				));
-			},
-			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Transaction failed: {}",
-					message
-				)));
-			},
-			_ => continue,
-		}
-	}
-
-	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+	let tx_hash = tx_progress.extrinsic_hash();
+	let block_hash = crate::cli::common::wait_tx_inclusion(
+		&mut tx_progress,
+		quantus_client.client(),
+		&tx_hash,
+		crate::cli::common::TransactionStage::Finalized,
+	)
+	.await?;
+	Ok((IncludedAt::Finalized, block_hash, tx_hash))
 }
 
 /// Collect wormhole events for our extrinsic (by tx_hash) in a given block.
@@ -1828,8 +1814,6 @@ pub async fn submit_unsigned_verify_public_batch(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
 ) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
-	use subxt::tx::TxStatus;
-
 	let verify_tx = quantus_node::api::tx().wormhole().verify_public_batch(proof_bytes);
 
 	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
@@ -1841,27 +1825,15 @@ pub async fn submit_unsigned_verify_public_batch(
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to submit tx: {}", e)))?;
 
-	while let Some(Ok(status)) = tx_progress.next().await {
-		match status {
-			TxStatus::InBestBlock(_) => continue,
-			TxStatus::InFinalizedBlock(tx_in_block) => {
-				return Ok((
-					IncludedAt::Finalized,
-					tx_in_block.block_hash(),
-					tx_in_block.extrinsic_hash(),
-				));
-			},
-			TxStatus::Error { message } | TxStatus::Invalid { message } => {
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Transaction failed: {}",
-					message
-				)));
-			},
-			_ => continue,
-		}
-	}
-
-	Err(crate::error::QuantusError::Generic("Transaction stream ended unexpectedly".to_string()))
+	let tx_hash = tx_progress.extrinsic_hash();
+	let block_hash = crate::cli::common::wait_tx_inclusion(
+		&mut tx_progress,
+		quantus_client.client(),
+		&tx_hash,
+		crate::cli::common::TransactionStage::Finalized,
+	)
+	.await?;
+	Ok((IncludedAt::Finalized, block_hash, tx_hash))
 }
 
 async fn verify_public_batch(proof_file: String, node_url: &str) -> crate::error::Result<()> {
@@ -4318,6 +4290,33 @@ mod tests {
 		assert_eq!(IncludedAt::Finalized.label(), "finalized block");
 		assert_ne!(IncludedAt::Best.label(), IncludedAt::Finalized.label());
 		let _: *const () = at_finalized_block as *const ();
+	}
+
+	#[test]
+	fn unsigned_verify_submitters_use_bounded_finalization_wait() {
+		// The unbounded `while let Some(Ok(status)) = tx_progress.next()` loops
+		// must stay gone; unsigned verify shares wait_tx_inclusion's deadlines.
+		let source = include_str!("wormhole.rs");
+		let private_fn = source
+			.split("pub async fn submit_unsigned_verify_private_batch")
+			.nth(1)
+			.and_then(|s| s.split("pub async fn ").next())
+			.expect("private batch submitter");
+		let public_fn = source
+			.split("pub async fn submit_unsigned_verify_public_batch")
+			.nth(1)
+			.and_then(|s| s.split("pub async fn ").next())
+			.expect("public batch submitter");
+		for body in [private_fn, public_fn] {
+			assert!(
+				body.contains("wait_tx_inclusion"),
+				"unsigned verify must use the bounded wait_tx_inclusion helper"
+			);
+			assert!(
+				!body.contains("tx_progress.next().await"),
+				"unsigned verify must not wait on an unbounded status stream"
+			);
+		}
 	}
 
 	#[test]

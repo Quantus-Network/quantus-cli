@@ -13,7 +13,7 @@ pub type SubxtAccountId32 = subxt::ext::subxt_core::utils::AccountId32;
 const MILLIS_PER_SECOND: u64 = 1_000;
 const TX_STATUS_INACTIVITY_TIMEOUT_SECS: u64 = 30;
 const TX_STATUS_INCLUDED_TIMEOUT_SECS: u64 = 5 * 60;
-const TX_STATUS_FINALIZED_TIMEOUT_SECS: u64 = 30 * 60;
+pub(crate) const TX_STATUS_FINALIZED_TIMEOUT_SECS: u64 = 30 * 60;
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ExecutionMode {
@@ -191,7 +191,9 @@ fn require_extrinsic_index(our_extrinsic_index: Option<usize>) -> Result<usize> 
 	})
 }
 
-type TxWatchFlow = std::ops::ControlFlow<Result<()>, ()>;
+/// `Break` carries the outcome of the watch: the hash of the block in which the
+/// transaction reached the target stage, or the terminal error.
+type TxWatchFlow = std::ops::ControlFlow<Result<subxt::utils::H256>, ()>;
 
 fn update_waiting_spinner(
 	spinner: Option<&indicatif::ProgressBar>,
@@ -269,7 +271,7 @@ async fn handle_in_best_block(
 					elapsed_secs
 				));
 			}
-			std::ops::ControlFlow::Break(Ok(()))
+			std::ops::ControlFlow::Break(Ok(block_hash))
 		},
 		Ok(WatchDecision::Continue) => std::ops::ControlFlow::Continue(()),
 		Err(err) => std::ops::ControlFlow::Break(Err(err)),
@@ -303,7 +305,7 @@ async fn handle_in_finalized_block(
 			if let Some(pb) = spinner {
 				pb.finish_with_message(format!("✅ Transaction finalized! ({}s)", elapsed_secs));
 			}
-			std::ops::ControlFlow::Break(Ok(()))
+			std::ops::ControlFlow::Break(Ok(block_hash))
 		},
 		Ok(WatchDecision::Continue) | Ok(WatchDecision::WaitForFinalization) =>
 			std::ops::ControlFlow::Continue(()),
@@ -521,6 +523,29 @@ pub async fn submit_transaction<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	let (tx_hash, _included_in) =
+		submit_transaction_with_inclusion_block(quantus_client, from_keypair, call, tip, execution_mode)
+			.await?;
+	Ok(tx_hash)
+}
+
+/// Like [`submit_transaction`], but also returns the hash of the block in which
+/// the transaction reached the requested stage (`None` when the transaction was
+/// only submitted without watching).
+///
+/// Callers that read events for the transaction must use this block hash rather
+/// than the current best/finalized tip, which may have moved past the inclusion
+/// block by the time the watch returns.
+pub async fn submit_transaction_with_inclusion_block<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+	call: Call,
+	tip: Option<u128>,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<(subxt::utils::H256, Option<subxt::utils::H256>)>
+where
+	Call: subxt::tx::Payload,
+{
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -599,7 +624,7 @@ where
 
 				let tx_hash = tx_progress.extrinsic_hash();
 
-				wait_tx_inclusion(
+				let included_in = wait_tx_inclusion(
 					&mut tx_progress,
 					quantus_client.client(),
 					&tx_hash,
@@ -607,7 +632,7 @@ where
 				)
 				.await?;
 
-				Ok(tx_hash)
+				Ok((tx_hash, Some(included_in)))
 			},
 			Err(e) => {
 				log_error!("❌ Failed to submit transaction: {e:?}");
@@ -618,7 +643,7 @@ where
 		match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
 			Ok(tx_hash) => {
 				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
-				Ok(tx_hash)
+				Ok((tx_hash, None))
 			},
 			Err(e) => {
 				log_error!("❌ Failed to submit transaction: {e:?}");
@@ -678,7 +703,7 @@ where
 			Ok(mut tx_progress) => {
 				let tx_hash = tx_progress.extrinsic_hash();
 				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
-				wait_tx_inclusion(
+				let _included_in = wait_tx_inclusion(
 					&mut tx_progress,
 					quantus_client.client(),
 					&tx_hash,
@@ -711,12 +736,19 @@ where
 /// Since Quantus network is PoW, we can't use default subxt's way of waiting for finalized block as
 /// it may take a long time. We wait for the transaction to be included in the best block and leave
 /// it up to the user to check the status of the transaction.
-async fn wait_tx_inclusion(
+///
+/// Returns the hash of the block in which the transaction reached the target
+/// stage, so callers can read events from the actual inclusion block instead of
+/// racing the moving finalized tip.
+///
+/// Also used by unsigned wormhole verify submitters so they share the same
+/// inactivity / overall-deadline bounds as signed watches.
+pub(crate) async fn wait_tx_inclusion(
 	tx_progress: &mut TxProgress<ChainConfig, OnlineClient<ChainConfig>>,
 	client: &OnlineClient<ChainConfig>,
 	tx_hash: &subxt::utils::H256,
 	target_stage: TransactionStage,
-) -> Result<()> {
+) -> Result<subxt::utils::H256> {
 	use indicatif::{ProgressBar, ProgressStyle};
 
 	let start_time = std::time::Instant::now();
@@ -855,7 +887,12 @@ async fn wait_tx_inclusion(
 			Ok(WatchDecision::Continue) | Ok(WatchDecision::WaitForFinalization) => {
 				update_waiting_spinner(spinner.as_ref(), target_stage, elapsed_secs);
 			},
-			Ok(WatchDecision::Success) => return Ok(()),
+			// In-block events are handled (and returned) above; no other event
+			// reports Success, so this arm is defensively unreachable.
+			Ok(WatchDecision::Success) =>
+				return Err(crate::error::QuantusError::Generic(
+					"transaction watcher reported success without an inclusion block".to_string(),
+				)),
 			Err(err) => {
 				crate::log_error!("   {} (elapsed: {}s)", err, elapsed_secs);
 				if let Some(pb) = spinner {
