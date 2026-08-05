@@ -51,6 +51,26 @@ fn keystore_lock() -> &'static Mutex<()> {
 	LOCK.get_or_init(|| Mutex::new(()))
 }
 
+/// Frozen Argon2id wallet-format profile (memory KiB, iterations, parallelism).
+///
+/// Deliberately literals rather than `argon2::Params::DEFAULT_*`: the crate's
+/// defaults are crate properties and already changed between argon2 0.4 and
+/// 0.5. If encrypt/decrypt tracked them, a future dependency bump would
+/// silently write a new profile and reject every wallet already on disk with a
+/// bare Decryption error (while self-consistent roundtrip tests stayed green).
+const WALLET_ARGON2_M_COST: u32 = 19_456;
+const WALLET_ARGON2_T_COST: u32 = 2;
+const WALLET_ARGON2_P_COST: u32 = 1;
+
+/// Argon2 instance for the frozen wallet profile, used by both encrypt and
+/// decrypt so the written and accepted profiles cannot drift apart.
+fn wallet_argon2() -> Argon2<'static> {
+	let params =
+		Params::new(WALLET_ARGON2_M_COST, WALLET_ARGON2_T_COST, WALLET_ARGON2_P_COST, None)
+			.expect("frozen Argon2 wallet profile is valid");
+	Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
+}
+
 fn wallet_filename(name: &str) -> Result<String> {
 	// Reject path separators and traversal, plus Windows-specific escapes:
 	// ':' makes "C:evil.json" resolve outside the keystore (drive-relative
@@ -556,8 +576,8 @@ impl Keystore {
 		let mut argon2_salt = [0u8; 16];
 		rng().fill_bytes(&mut argon2_salt);
 
-		// 2. Derive encryption key from password using Argon2 (quantum-safe)
-		let argon2 = Argon2::default();
+		// 2. Derive encryption key from password using the frozen Argon2 profile
+		let argon2 = wallet_argon2();
 		let salt_string = argon2::password_hash::SaltString::encode_b64(&argon2_salt)
 			.map_err(|e| WalletError::Encryption(e.to_string()))?;
 		let password_hash = argon2
@@ -652,13 +672,9 @@ impl Keystore {
 	fn derive_aes_key(encrypted: &EncryptedWallet, password: &str) -> Result<Key<Aes256Gcm>> {
 		// The cost parameters come from the wallet file. Treat them as an
 		// untrusted wallet-format profile, not as caller-selectable work factors:
-		// generated wallets use Argon2id v=19 with the library default costs
-		// (currently m=19456 KiB, t=2, p=1), and accepting higher values lets a
-		// crafted file force expensive memory/CPU work before password validation.
-		const SUPPORTED_M_COST: u32 = Params::DEFAULT_M_COST;
-		const SUPPORTED_T_COST: u32 = Params::DEFAULT_T_COST;
-		const SUPPORTED_P_COST: u32 = Params::DEFAULT_P_COST;
-
+		// generated wallets use Argon2id v=19 with the frozen profile
+		// (m=19456 KiB, t=2, p=1), and accepting higher values lets a crafted
+		// file force expensive memory/CPU work before password validation.
 		let parsed =
 			PasswordHash::new(&encrypted.argon2_params).map_err(|_| WalletError::Decryption)?;
 
@@ -670,10 +686,13 @@ impl Keystore {
 		if version != Version::V0x13 {
 			return Err(WalletError::Decryption.into());
 		}
-		let m_cost = parsed.params.get_decimal("m").unwrap_or(Params::DEFAULT_M_COST);
-		let t_cost = parsed.params.get_decimal("t").unwrap_or(Params::DEFAULT_T_COST);
-		let p_cost = parsed.params.get_decimal("p").unwrap_or(Params::DEFAULT_P_COST);
-		if m_cost != SUPPORTED_M_COST || t_cost != SUPPORTED_T_COST || p_cost != SUPPORTED_P_COST {
+		let m_cost = parsed.params.get_decimal("m").unwrap_or(WALLET_ARGON2_M_COST);
+		let t_cost = parsed.params.get_decimal("t").unwrap_or(WALLET_ARGON2_T_COST);
+		let p_cost = parsed.params.get_decimal("p").unwrap_or(WALLET_ARGON2_P_COST);
+		if m_cost != WALLET_ARGON2_M_COST ||
+			t_cost != WALLET_ARGON2_T_COST ||
+			p_cost != WALLET_ARGON2_P_COST
+		{
 			return Err(WalletError::Decryption.into());
 		}
 		let params =
@@ -1240,7 +1259,8 @@ mod tests {
 	fn encrypt_legacy(data: &WalletData, password: &str) -> EncryptedWallet {
 		let mut argon2_salt = [0u8; 16];
 		rng().fill_bytes(&mut argon2_salt);
-		let argon2 = Argon2::default();
+		// Legacy files in the wild were produced with the same frozen profile.
+		let argon2 = wallet_argon2();
 		let salt_string = argon2::password_hash::SaltString::encode_b64(&argon2_salt).unwrap();
 		let password_hash = argon2.hash_password(password.as_bytes(), &salt_string).unwrap();
 		let hash_bytes = password_hash.hash.as_ref().unwrap().as_bytes();
@@ -1282,7 +1302,7 @@ mod tests {
 		assert!(!Keystore::has_embedded_key_material(&encrypted));
 
 		// The serialized wallet file must not contain the base64 digest anywhere.
-		let argon2 = Argon2::default();
+		let argon2 = wallet_argon2();
 		let salt_string =
 			argon2::password_hash::SaltString::encode_b64(&encrypted.argon2_salt).unwrap();
 		let full_phc = argon2.hash_password(b"hunter2", &salt_string).unwrap().to_string();
@@ -1376,10 +1396,26 @@ mod tests {
 		}
 	}
 
+	/// The written profile is pinned to literals: a future argon2 crate bump
+	/// changing `Params::DEFAULT_*` must not silently change what we write
+	/// (and thereby brick every wallet already on disk at decrypt time).
+	#[test]
+	fn encrypt_writes_the_frozen_argon2_profile() {
+		let temp_dir = TempDir::new().expect("temp dir");
+		let keystore = Keystore::new(temp_dir.path());
+		let data = make_test_wallet_data("frozen-profile", 13);
+		let encrypted = keystore.encrypt_wallet_data(&data, "pw").expect("encrypt");
+
+		let parsed = PasswordHash::new(&encrypted.argon2_params).expect("PHC parses");
+		assert_eq!(parsed.params.get_decimal("m"), Some(19_456), "m cost must stay frozen");
+		assert_eq!(parsed.params.get_decimal("t"), Some(2), "t cost must stay frozen");
+		assert_eq!(parsed.params.get_decimal("p"), Some(1), "p cost must stay frozen");
+	}
+
 	#[test]
 	fn above_profile_argon2_params_are_rejected_on_decrypt() {
 		// #160715: costs above the generated-wallet profile must be rejected before
-		// Argon2 runs (defaults are m=DEFAULT_M_COST, t=DEFAULT_T_COST, p=DEFAULT_P_COST).
+		// Argon2 runs (the frozen profile is m=19456, t=2, p=1).
 		let temp_dir = TempDir::new().expect("temp dir");
 		let keystore = Keystore::new(temp_dir.path());
 		let data = make_test_wallet_data("high-cost", 11);
