@@ -554,7 +554,7 @@ pub async fn create_multisig(
 	let creator_account_id = keypair_to_subxt_account_id(creator_keypair);
 	let execution_mode =
 		ExecutionMode { finalized: false, wait_for_transaction: wait_for_inclusion };
-	let tx_hash = crate::cli::common::submit_transaction(
+	let (tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		quantus_client,
 		creator_keypair,
 		create_tx,
@@ -563,10 +563,15 @@ pub async fn create_multisig(
 	)
 	.await?;
 
-	// If waiting, extract the matching address from events
+	// If waiting, extract the matching address from the events of the
+	// transaction's own inclusion block; the tip may have moved past it.
 	let multisig_address = if wait_for_inclusion {
-		let latest_block_hash = quantus_client.get_latest_block().await?;
-		let events = quantus_client.client().events().at(latest_block_hash).await?;
+		let inclusion_block_hash = included_in.ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Multisig creation watch returned no inclusion block".to_string(),
+			)
+		})?;
+		let events = quantus_client.client().events().at(inclusion_block_hash).await?;
 
 		let multisig_events =
 			events.find::<quantus_subxt::api::multisig::events::MultisigCreated>();
@@ -1181,7 +1186,7 @@ async fn handle_create_multisig(
 		wait_for_transaction: true, // Always wait to confirm address
 	};
 
-	let _tx_hash = crate::cli::common::submit_transaction(
+	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		&quantus_client,
 		&keypair,
 		create_tx,
@@ -1197,9 +1202,14 @@ async fn handle_create_multisig(
 		log_print!("");
 		log_print!("🔍 Looking for MultisigCreated event...");
 
-		// Query latest block events
-		let latest_block_hash = quantus_client.get_latest_block().await?;
-		let events = quantus_client.client().events().at(latest_block_hash).await?;
+		// Query events at the transaction's own inclusion block; with --finalized
+		// the tip is typically far past it by the time the watch returns.
+		let inclusion_block_hash = included_in.ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Multisig creation watch returned no inclusion block".to_string(),
+			)
+		})?;
+		let events = quantus_client.client().events().at(inclusion_block_hash).await?;
 
 		// Find MultisigCreated event matching this create
 		let multisig_events =
