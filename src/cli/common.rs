@@ -897,6 +897,7 @@ pub(crate) fn format_dispatch_error(
 async fn verify_preimage_on_chain(
 	quantus_client: &crate::chain::client::QuantusClient,
 	expected_preimage: &[u8],
+	at_block: subxt::utils::H256,
 ) -> Result<()> {
 	use sp_runtime::traits::{BlakeTwo256, Hash};
 
@@ -907,8 +908,7 @@ async fn verify_preimage_on_chain(
 			expected_preimage.len()
 		))
 	})?;
-	let latest_block_hash = quantus_client.get_latest_block().await?;
-	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+	let storage_at = quantus_client.client().storage().at(at_block);
 	let preimage_addr = crate::chain::quantus_subxt::api::storage()
 		.preimage()
 		.preimage_for((preimage_hash, preimage_len));
@@ -948,21 +948,40 @@ pub async fn submit_preimage(
 		crate::chain::quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
 	let wait_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
 
-	match submit_transaction(quantus_client, keypair, note_preimage_tx, None, wait_mode).await {
-		Ok(_) => {
-			verify_preimage_on_chain(quantus_client, &encoded_call).await?;
+	match submit_transaction_with_inclusion_block(
+		quantus_client,
+		keypair,
+		note_preimage_tx,
+		None,
+		wait_mode,
+	)
+	.await
+	{
+		Ok((_, included_in)) => {
+			// Verify in the inclusion block: the moving tip may not have
+			// advanced past (or even reached) the inclusion block when the
+			// watch returns, so reading the latest block can miss the
+			// just-noted preimage.
+			let at_block = match included_in {
+				Some(hash) => hash,
+				None => quantus_client.get_latest_block().await?,
+			};
+			verify_preimage_on_chain(quantus_client, &encoded_call, at_block).await?;
 			crate::log_success!("Preimage submitted");
 		},
 		Err(e) => {
 			// Do not trust formatted error substrings (e.g. "AlreadyNoted"). Only
 			// continue when the expected preimage bytes are present on-chain.
-			verify_preimage_on_chain(quantus_client, &encoded_call).await.map_err(
-				|verify_err| {
+			// There is no inclusion block here (the submission failed), so an
+			// already-noted preimage is looked up at the current tip.
+			let latest_block_hash = quantus_client.get_latest_block().await?;
+			verify_preimage_on_chain(quantus_client, &encoded_call, latest_block_hash)
+				.await
+				.map_err(|verify_err| {
 					crate::error::QuantusError::Generic(format!(
 					"Preimage submission failed ({e}); on-chain verification also failed ({verify_err})"
 				))
-				},
-			)?;
+				})?;
 			crate::log_print!(
 				"✅ {} Expected preimage already exists on-chain, continuing",
 				"OK".bright_green().bold()
