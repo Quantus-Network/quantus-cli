@@ -442,7 +442,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			)));
 		}
 
-		let input = wormhole_lib::ProofGenerationInput {
+		// generate_proof zeroizes input.secret before returning; each iteration
+		// rebuilds the input from wormhole_secret_bytes.
+		let mut input = wormhole_lib::ProofGenerationInput {
 			secret: wormhole_secret_bytes,
 			transfer_count,
 			wormhole_address: wormhole_address_bytes,
@@ -467,7 +469,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		// Generate proof
 		let prover_path = bins_dir.join("prover.bin");
 		let common_path = bins_dir.join("common.bin");
-		let result = wormhole_lib::generate_proof(&input, &prover_path, &common_path)
+		let result = wormhole_lib::generate_proof(&mut input, &prover_path, &common_path)
 			.map_err(|e| CollectRewardsError::from(e.message))?;
 
 		proof_bytes_list.push(result.proof_bytes);

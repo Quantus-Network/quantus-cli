@@ -72,13 +72,24 @@ fn zeroize_bytes_digest(digest: &mut BytesDigest) {
 	compiler_fence(Ordering::SeqCst);
 }
 
-#[allow(invalid_reference_casting)]
-fn zeroize_input_secret(input: &ProofGenerationInput) {
-	let ptr = ptr::addr_of!(input.secret).cast_mut().cast::<u8>();
-	for offset in 0..input.secret.len() {
-		unsafe { ptr.add(offset).write_volatile(0) };
+/// Zeroize-on-drop wrapper for a copy of the secret digest, so every exit path
+/// out of proof generation (including early `?` returns) wipes the copy.
+struct ZeroizingDigest(BytesDigest);
+
+impl Drop for ZeroizingDigest {
+	fn drop(&mut self) {
+		zeroize_bytes_digest(&mut self.0);
 	}
-	compiler_fence(Ordering::SeqCst);
+}
+
+/// Zeroize-on-drop wrapper for the assembled circuit inputs, which embed a copy
+/// of the secret in `private.secret`.
+struct ZeroizingCircuitInputs(CircuitInputs);
+
+impl Drop for ZeroizingCircuitInputs {
+	fn drop(&mut self) {
+		zeroize_bytes_digest(&mut self.0.private.secret);
+	}
 }
 
 /// Input data for generating a wormhole proof.
@@ -206,36 +217,83 @@ pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 /// API compatibility with existing callers and are ignored.
 ///
 /// # Arguments
-/// * `input` - All input data for proof generation (including ZK Merkle proof)
+/// * `input` - All input data for proof generation (including ZK Merkle proof).
+///   Borrowed mutably: `input.secret` is zeroized before this function returns,
+///   on success and on every error path. Callers that retry must rebuild the
+///   input with a fresh secret.
 /// * `prover_bin_path` - Ignored (legacy; leaf prover is built in-process)
 /// * `common_bin_path` - Ignored (legacy; leaf prover is built in-process)
 ///
 /// # Returns
 /// Proof bytes and nullifier
 pub fn generate_proof(
-	input: &ProofGenerationInput,
+	input: &mut ProofGenerationInput,
 	prover_bin_path: &Path,
 	common_bin_path: &Path,
 ) -> Result<ProofGenerationOutput> {
-	// Convert secret to BytesDigest
-	let mut secret_digest: BytesDigest = input
-		.secret
+	// Leaf prover is built from the canonical circuit config (no longer loads prover.bin).
+	// Paths are kept for API compatibility with callers that still pass bin locations.
+	let _ = (prover_bin_path, common_bin_path);
+
+	let result = generate_proof_inner(input);
+	// Wipe the caller-visible secret unconditionally, on success and on every error path.
+	zeroize_bytes(&mut input.secret);
+	result
+}
+
+fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationOutput> {
+	// Perform every fallible conversion before the secret is copied anywhere, so an
+	// early `?` return can never skip zeroization of a secret copy.
+	let parent_hash = input
+		.parent_hash
+		.as_slice()
 		.try_into()
-		.map_err(|e| WormholeLibError::from(format!("Invalid secret: {:?}", e)))?;
+		.map_err(|e| WormholeLibError::from(format!("Invalid parent hash: {:?}", e)))?;
+	let state_root = input
+		.state_root
+		.as_slice()
+		.try_into()
+		.map_err(|e| WormholeLibError::from(format!("Invalid state root: {:?}", e)))?;
+	let extrinsics_root = input
+		.extrinsics_root
+		.as_slice()
+		.try_into()
+		.map_err(|e| WormholeLibError::from(format!("Invalid extrinsics root: {:?}", e)))?;
+	let exit_account_1 = input
+		.exit_account_1
+		.as_slice()
+		.try_into()
+		.map_err(|e| WormholeLibError::from(format!("Invalid exit account 1: {:?}", e)))?;
+	let exit_account_2 = input
+		.exit_account_2
+		.as_slice()
+		.try_into()
+		.map_err(|e| WormholeLibError::from(format!("Invalid exit account 2: {:?}", e)))?;
+	let block_hash = input
+		.block_hash
+		.as_slice()
+		.try_into()
+		.map_err(|e| WormholeLibError::from(format!("Invalid block hash: {:?}", e)))?;
+
+	// Convert secret to BytesDigest; the guard wipes this copy on every exit path.
+	let secret_digest = ZeroizingDigest(
+		input
+			.secret
+			.try_into()
+			.map_err(|e| WormholeLibError::from(format!("Invalid secret: {:?}", e)))?,
+	);
 
 	// Compute nullifier
-	let nullifier = Nullifier::from_preimage(secret_digest, input.transfer_count);
+	let nullifier = Nullifier::from_preimage(secret_digest.0, input.transfer_count);
 	let nullifier_bytes = digest_to_bytes(nullifier.hash);
 
 	// Compute unspendable account
 	let unspendable =
-		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret_digest);
+		qp_wormhole_circuit::unspendable_account::UnspendableAccount::from_secret(secret_digest.0);
 	let unspendable_bytes = digest_to_bytes(unspendable.account_id);
 
 	// Verify the wormhole address matches what we computed from the secret
 	if *unspendable_bytes != input.wormhole_address {
-		zeroize_bytes_digest(&mut secret_digest);
-		zeroize_input_secret(input);
 		return Err(WormholeLibError::from(
 			"Wormhole address doesn't match the computed unspendable account from secret"
 				.to_string(),
@@ -248,82 +306,48 @@ pub fn generate_proof(
 	let copy_len = input.digest.len().min(DIGEST_LOGS_SIZE);
 	digest_padded[..copy_len].copy_from_slice(&input.digest[..copy_len]);
 
-	// Build circuit inputs with ZK Merkle proof
-	let private = PrivateCircuitInputs {
-		secret: secret_digest,
-		transfer_count: input.transfer_count,
-		unspendable_account: unspendable_bytes,
-		parent_hash: input
-			.parent_hash
-			.as_slice()
-			.try_into()
-			.map_err(|e| WormholeLibError::from(format!("Invalid parent hash: {:?}", e)))?,
-		state_root: input
-			.state_root
-			.as_slice()
-			.try_into()
-			.map_err(|e| WormholeLibError::from(format!("Invalid state root: {:?}", e)))?,
-		extrinsics_root: input
-			.extrinsics_root
-			.as_slice()
-			.try_into()
-			.map_err(|e| WormholeLibError::from(format!("Invalid extrinsics root: {:?}", e)))?,
-		digest: digest_padded,
-		input_amount: input.input_amount,
-		zk_tree_root: input.zk_tree_root,
-		zk_merkle_siblings: input.zk_merkle_siblings.clone(),
-		zk_merkle_positions: input.zk_merkle_positions.clone(),
-	};
-	zeroize_bytes_digest(&mut secret_digest);
+	// Build circuit inputs with ZK Merkle proof; the guard wipes the embedded
+	// secret copy on every exit path.
+	let circuit_inputs = ZeroizingCircuitInputs(CircuitInputs {
+		public: PublicCircuitInputs {
+			asset_id: input.asset_id,
+			output_amount_1: input.output_amount_1,
+			output_amount_2: input.output_amount_2,
+			volume_fee_bps: input.volume_fee_bps,
+			nullifier: nullifier_bytes,
+			exit_account_1,
+			exit_account_2,
+			block_hash,
+			block_number: input.block_number,
+		},
+		private: PrivateCircuitInputs {
+			secret: secret_digest.0,
+			transfer_count: input.transfer_count,
+			unspendable_account: unspendable_bytes,
+			parent_hash,
+			state_root,
+			extrinsics_root,
+			digest: digest_padded,
+			input_amount: input.input_amount,
+			zk_tree_root: input.zk_tree_root,
+			zk_merkle_siblings: input.zk_merkle_siblings.clone(),
+			zk_merkle_positions: input.zk_merkle_positions.clone(),
+		},
+	});
+	drop(secret_digest);
+	zeroize_bytes(&mut digest_padded);
 
-	let public = PublicCircuitInputs {
-		asset_id: input.asset_id,
-		output_amount_1: input.output_amount_1,
-		output_amount_2: input.output_amount_2,
-		volume_fee_bps: input.volume_fee_bps,
-		nullifier: nullifier_bytes,
-		exit_account_1: input
-			.exit_account_1
-			.as_slice()
-			.try_into()
-			.map_err(|e| WormholeLibError::from(format!("Invalid exit account 1: {:?}", e)))?,
-		exit_account_2: input
-			.exit_account_2
-			.as_slice()
-			.try_into()
-			.map_err(|e| WormholeLibError::from(format!("Invalid exit account 2: {:?}", e)))?,
-		block_hash: input
-			.block_hash
-			.as_slice()
-			.try_into()
-			.map_err(|e| WormholeLibError::from(format!("Invalid block hash: {:?}", e)))?,
-		block_number: input.block_number,
-	};
-
-	let mut circuit_inputs = CircuitInputs { public, private };
-
-	// Leaf prover is built from the canonical circuit config (no longer loads prover.bin).
-	// Paths are kept for API compatibility with callers that still pass bin locations.
-	let _ = (prover_bin_path, common_bin_path);
 	let prover = qp_wormhole_prover::build_fresh();
 
-	let result = (|| -> Result<ProofGenerationOutput> {
-		let prover_with_inputs = prover
-			.commit(&circuit_inputs)
-			.map_err(|e| WormholeLibError::from(format!("Failed to commit inputs: {}", e)))?;
+	let prover_with_inputs = prover
+		.commit(&circuit_inputs.0)
+		.map_err(|e| WormholeLibError::from(format!("Failed to commit inputs: {}", e)))?;
 
-		let proof = prover_with_inputs
-			.prove()
-			.map_err(|e| WormholeLibError::from(format!("Proof generation failed: {}", e)))?;
+	let proof = prover_with_inputs
+		.prove()
+		.map_err(|e| WormholeLibError::from(format!("Proof generation failed: {}", e)))?;
 
-		Ok(ProofGenerationOutput { proof_bytes: proof.to_bytes(), nullifier: *nullifier_bytes })
-	})();
-
-	zeroize_bytes_digest(&mut circuit_inputs.private.secret);
-	zeroize_bytes(&mut digest_padded);
-	zeroize_input_secret(input);
-
-	result
+	Ok(ProofGenerationOutput { proof_bytes: proof.to_bytes(), nullifier: *nullifier_bytes })
 }
 
 #[cfg(test)]
@@ -375,7 +399,7 @@ mod tests {
 		let transfer_count = 4u64;
 		let wormhole_address = compute_wormhole_address(&secret).expect("secret derives address");
 
-		let input = ProofGenerationInput {
+		let mut input = ProofGenerationInput {
 			secret,
 			transfer_count,
 			wormhole_address,
@@ -406,7 +430,7 @@ mod tests {
 		};
 
 		let output = generate_proof(
-			&input,
+			&mut input,
 			Path::new("ignored-prover.bin"),
 			Path::new("ignored-common.bin"),
 		)
@@ -416,6 +440,53 @@ mod tests {
 		assert_eq!(
 			input.secret, [0u8; 32],
 			"generate_proof must zeroize the caller-owned secret before returning"
+		);
+	}
+
+	/// The secret must also be wiped on error paths, e.g. a wormhole address that
+	/// does not match the secret.
+	#[test]
+	fn secret_is_zeroized_when_proof_generation_fails_early() {
+		let secret = decode_32("4c8587bd422e01d961acdc75e7d66f6761b7af7c9b1864a492f369c9d6724f05");
+
+		let mut input = ProofGenerationInput {
+			secret,
+			transfer_count: 0,
+			// Deliberately not the address derived from `secret`.
+			wormhole_address: [0xAAu8; 32],
+			input_amount: 100,
+			block_hash: [0u8; 32],
+			block_number: 0,
+			parent_hash: [0u8; 32],
+			state_root: [0u8; 32],
+			extrinsics_root: [0u8; 32],
+			digest: vec![],
+			zk_tree_root: [0u8; 32],
+			zk_merkle_siblings: vec![],
+			zk_merkle_positions: vec![],
+			exit_account_1: [0u8; 32],
+			exit_account_2: [0u8; 32],
+			output_amount_1: 0,
+			output_amount_2: 0,
+			volume_fee_bps: VOLUME_FEE_BPS,
+			asset_id: NATIVE_ASSET_ID,
+		};
+
+		let err = generate_proof(
+			&mut input,
+			Path::new("ignored-prover.bin"),
+			Path::new("ignored-common.bin"),
+		)
+		.expect_err("mismatched wormhole address must be rejected");
+
+		assert!(
+			err.message.contains("doesn't match"),
+			"expected address-mismatch error, got: {}",
+			err.message
+		);
+		assert_eq!(
+			input.secret, [0u8; 32],
+			"generate_proof must zeroize the caller-owned secret on error paths too"
 		);
 	}
 }

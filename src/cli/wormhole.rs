@@ -2898,8 +2898,9 @@ async fn generate_proof(
 	let (sorted_siblings, positions) =
 		compute_merkle_positions(&zk_proof.siblings, zk_proof.leaf_hash);
 
-	// Build ProofGenerationInput using wormhole_lib types with ZK Merkle proof
-	let input = wormhole_lib::ProofGenerationInput {
+	// Build ProofGenerationInput using wormhole_lib types with ZK Merkle proof.
+	// generate_proof zeroizes input.secret before returning.
+	let mut input = wormhole_lib::ProofGenerationInput {
 		secret,
 		transfer_count,
 		wormhole_address,
@@ -2923,7 +2924,7 @@ async fn generate_proof(
 
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 	let result = wormhole_lib::generate_proof(
-		&input,
+		&mut input,
 		&bins_dir.join("prover.bin"),
 		&bins_dir.join("common.bin"),
 	)
