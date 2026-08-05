@@ -128,6 +128,17 @@ pub fn latest_stable_version() -> crate::error::Result<String> {
 	Ok(release.version.trim_start_matches('v').to_string())
 }
 
+/// Semver comparison that surfaces unparseable release tags as errors instead
+/// of silently reporting "already latest" (`unwrap_or(false)` previously
+/// swallowed a non-semver `latest` tag).
+fn version_is_newer(current: &str, latest: &str) -> crate::error::Result<bool> {
+	self_update::version::bump_is_greater(current, latest).map_err(|e| {
+		QuantusError::Generic(format!(
+			"Cannot compare current version `{current}` with latest release tag `{latest}`: {e}"
+		))
+	})
+}
+
 /// Verify `data` matches the expected SHA-256 hex digest (case-insensitive).
 ///
 /// Used to bind a downloaded release archive to the published `sha256sums`
@@ -200,7 +211,7 @@ fn run_update(
 	// upgrade is always one that `quantus update` can actually install.
 	if check_only {
 		let latest = latest_stable_version()?;
-		if self_update::version::bump_is_greater(current, &latest).unwrap_or(false) {
+		if version_is_newer(current, &latest)? {
 			return Ok(UpdateOutcome::UpdateAvailable(latest));
 		}
 		return Ok(UpdateOutcome::AlreadyLatest(current.to_string()));
@@ -219,7 +230,7 @@ fn run_update(
 		updater.get_release_version(tag).map_err(map_self_update_err)?
 	} else {
 		let latest = updater.get_latest_release().map_err(map_self_update_err)?;
-		if !self_update::version::bump_is_greater(current, &latest.version).unwrap_or(false) {
+		if !version_is_newer(current, &latest.version)? {
 			return Ok(UpdateOutcome::AlreadyLatest(latest.version));
 		}
 		latest
@@ -269,7 +280,7 @@ fn install_verified_release(
 
 	log_print!("Downloading checksums...");
 	let mut sums_bytes = Vec::new();
-	download_asset(&sums_asset.download_url, &mut sums_bytes, false)?;
+	download_asset(&sums_asset.download_url, &mut sums_bytes, MAX_SUMS_ASSET_BYTES, false)?;
 	let sums_text = std::str::from_utf8(&sums_bytes).map_err(|e| {
 		QuantusError::Generic(format!("Release sha256sums file is not valid UTF-8: {e}"))
 	})?;
@@ -284,7 +295,7 @@ fn install_verified_release(
 		let mut archive_file = fs::File::create(&archive_path).map_err(|e| {
 			QuantusError::Generic(format!("Failed to create temp archive file: {e}"))
 		})?;
-		download_asset(&archive_asset.download_url, &mut archive_file, true)?;
+		download_asset(&archive_asset.download_url, &mut archive_file, MAX_ARCHIVE_ASSET_BYTES, true)?;
 		archive_file
 			.flush()
 			.map_err(|e| QuantusError::Generic(format!("Failed to flush archive download: {e}")))?;
@@ -337,11 +348,51 @@ fn substitute_bin_path(template: &str, version: &str, target: &str, bin: &str) -
 		.replace("{{bin}}", bin)
 }
 
+/// Upper bound for the sha256sums text asset (a handful of lines).
+const MAX_SUMS_ASSET_BYTES: u64 = 64 * 1024;
+/// Upper bound for the release archive. Real archives are tens of MB; this
+/// exists so a rogue release asset cannot exhaust disk/memory before the
+/// checksum is ever consulted.
+const MAX_ARCHIVE_ASSET_BYTES: u64 = 512 * 1024 * 1024;
+
+/// Writer adapter that fails once more than `limit` bytes have been written.
+struct LimitedWriter<W> {
+	inner: W,
+	remaining: u64,
+	limit: u64,
+}
+
+impl<W> LimitedWriter<W> {
+	fn new(inner: W, limit: u64) -> Self {
+		Self { inner, remaining: limit, limit }
+	}
+}
+
+impl<W: Write> Write for LimitedWriter<W> {
+	fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+		if buf.len() as u64 > self.remaining {
+			return Err(io::Error::other(format!(
+				"download exceeds the maximum allowed size of {} bytes",
+				self.limit
+			)));
+		}
+		let written = self.inner.write(buf)?;
+		self.remaining -= written as u64;
+		Ok(written)
+	}
+
+	fn flush(&mut self) -> io::Result<()> {
+		self.inner.flush()
+	}
+}
+
 fn download_asset(
 	url: &str,
 	dest: &mut impl Write,
+	max_bytes: u64,
 	show_progress: bool,
 ) -> crate::error::Result<()> {
+	let mut limited = LimitedWriter::new(dest, max_bytes);
 	let mut download = self_update::Download::from_url(url);
 	download
 		.set_header(
@@ -349,7 +400,7 @@ fn download_asset(
 			"application/octet-stream".parse().expect("static ACCEPT header"),
 		)
 		.show_progress(show_progress);
-	download.download_to(dest).map_err(map_self_update_err)
+	download.download_to(&mut limited).map_err(map_self_update_err)
 }
 
 fn confirm_update() -> crate::error::Result<()> {
@@ -386,8 +437,28 @@ fn map_self_update_err(err: self_update::errors::Error) -> QuantusError {
 
 #[cfg(test)]
 mod tests {
-	use super::{expected_hash_from_sha256sums, verify_sha256};
+	use super::{expected_hash_from_sha256sums, verify_sha256, version_is_newer, LimitedWriter};
 	use sha2::{Digest, Sha256};
+	use std::io::Write;
+
+	#[test]
+	fn limited_writer_enforces_download_cap() {
+		let mut sink = Vec::new();
+		let mut limited = LimitedWriter::new(&mut sink, 8);
+		limited.write_all(b"12345678").expect("within limit");
+		let err = limited.write_all(b"9").expect_err("over limit must fail");
+		assert!(err.to_string().contains("maximum allowed size"), "unexpected error: {err}");
+		assert_eq!(sink, b"12345678");
+	}
+
+	#[test]
+	fn non_semver_latest_tag_is_an_error_not_already_latest() {
+		assert!(version_is_newer("1.6.0", "1.7.0").expect("semver compares"));
+		assert!(!version_is_newer("1.6.0", "1.6.0").expect("semver compares"));
+		let err = version_is_newer("1.6.0", "nightly-build")
+			.expect_err("non-semver tag must surface an error");
+		assert!(err.to_string().contains("nightly-build"), "unexpected error: {err}");
+	}
 
 	#[test]
 	fn verify_sha256_match_accepts_mismatch_refuses() {
