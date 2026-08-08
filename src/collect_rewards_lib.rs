@@ -553,7 +553,7 @@ pub async fn query_pending_transfers(
 
 	// Query Subsquid using privacy-preserving hash prefix
 	let subsquid_client = SubsquidClient::new(subsquid_url.to_string())?;
-	let address_hash = compute_address_hash(&wormhole_secret.address());
+	let address_hash = compute_address_hash(wormhole_secret.address());
 	let prefix = get_hash_prefix(&address_hash, 8); // 8 hex chars for good privacy
 
 	let params = TransferQueryParams::new();
@@ -1372,7 +1372,7 @@ mod tests {
 		let path = format!("m/44'/{}/0'/1'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
 		let wormhole_secret = derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path).unwrap();
 		let secret_bytes: [u8; 32] = *wormhole_secret.secret().as_bytes();
-		let address_hash = compute_address_hash(&wormhole_secret.address());
+		let address_hash = compute_address_hash(wormhole_secret.address());
 
 		let spent_transfer_count = 5u64;
 		let spent_nullifier =
