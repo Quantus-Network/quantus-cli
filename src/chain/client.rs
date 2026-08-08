@@ -327,10 +327,10 @@ impl QuantusClient {
 }
 
 // Implement subxt::tx::Signer for ResonancePair
-impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::DilithiumPair {
+impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium87Pair {
 	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
 		use sp_core::Pair;
-		<qp_dilithium_crypto::types::DilithiumPublic as IdentifyAccount>::into_account(
+		<qp_dilithium_crypto::types::Dilithium87Public as IdentifyAccount>::into_account(
 			self.public(),
 		)
 	}
@@ -340,11 +340,11 @@ impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::DilithiumPai
 		// sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in
 		// ResonanceSignatureScheme
 		let signature_with_public =
-			<qp_dilithium_crypto::types::DilithiumPair as sp_core::Pair>::sign(
+			<qp_dilithium_crypto::types::Dilithium87Pair as sp_core::Pair>::sign(
 				self,
 				signer_payload,
 			);
-		qp_dilithium_crypto::types::DilithiumSignatureScheme::Dilithium(signature_with_public)
+		qp_dilithium_crypto::types::DilithiumSignatureScheme::Dilithium87(signature_with_public)
 	}
 }
 

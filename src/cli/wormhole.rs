@@ -281,7 +281,8 @@ pub fn compute_merkle_positions(
 		sorted_siblings.push(sorted_sibs);
 
 		// Compute parent hash for next level using Poseidon
-		current_hash = hash_node_presorted(&all_four);
+		current_hash = hash_node_presorted(&all_four)
+			.expect("merkle node children from chain must be valid field elements");
 	}
 
 	(sorted_siblings, positions)
@@ -2207,7 +2208,7 @@ async fn execute_initial_transfers(
 	// Build batch of transfer calls
 	let mut calls = Vec::with_capacity(num_proofs);
 	for (i, secret) in secrets.iter().enumerate() {
-		let wormhole_address = SubxtAccountId(secret.address);
+		let wormhole_address = SubxtAccountId(*secret.address());
 		let transfer_call = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address),
 			value: partition_amounts[i],
@@ -2241,7 +2242,7 @@ async fn execute_initial_transfers(
 		.hash();
 	let mut transfer_counts_before: Vec<u64> = Vec::with_capacity(num_proofs);
 	for secret in secrets.iter() {
-		let wormhole_address = SubxtAccountId(secret.address);
+		let wormhole_address = SubxtAccountId(*secret.address());
 		let count = client
 			.storage()
 			.at(finalized_block_hash)
@@ -2250,7 +2251,7 @@ async fn execute_initial_transfers(
 			.map_err(|e| {
 				crate::error::QuantusError::Generic(format!(
 					"Failed to fetch transfer count for {}: {}",
-					hex::encode(secret.address),
+					hex::encode(secret.address()),
 					e
 				))
 			})?
@@ -2291,7 +2292,7 @@ async fn execute_initial_transfers(
 		.iter()
 		.enumerate()
 		.map(|(i, secret)| ExpectedTransferEvent {
-			wormhole_address: SubxtAccountId(secret.address),
+			wormhole_address: SubxtAccountId(*secret.address()),
 			funding_account: Some(funding_account.clone()),
 			amount: Some(partition_amounts[i]),
 			transfer_count: Some(transfer_counts_before[i]),
@@ -2410,7 +2411,7 @@ async fn generate_round_proofs(
 
 		// Generate proof with dual output assignment. Bind the hex-encoded
 		// secret so it can be wiped instead of dropping as a temporary.
-		let mut secret_hex = hex::encode(secret.secret.as_bytes());
+		let mut secret_hex = hex::encode(secret.secret().as_bytes());
 		let proof_result = generate_proof(
 			&secret_hex,
 			transfer.amount, // Use actual transfer amount for storage key
@@ -2655,7 +2656,7 @@ async fn run_multiround(
 			let mut addrs = Vec::new();
 			for i in 1..=num_proofs {
 				let next_secret = derive_wormhole_secret(&wallet.mnemonic, round + 1, i)?;
-				addrs.push(SubxtAccountId(next_secret.address));
+				addrs.push(SubxtAccountId(*next_secret.address()));
 			}
 			addrs
 		};
@@ -2737,7 +2738,7 @@ async fn run_multiround(
 				.map(|i| {
 					let next_secret =
 						derive_wormhole_secret(&wallet.mnemonic, round + 1, i).unwrap();
-					SubxtAccountId(next_secret.address)
+					SubxtAccountId(*next_secret.address())
 				})
 				.collect();
 			let expected_ordered: Vec<ExpectedTransferEvent> = next_round_addresses
@@ -3219,7 +3220,7 @@ fn run_multiround_dry_run(
 		log_print!("  Wormhole addresses (to be funded):");
 		for i in 1..=num_proofs {
 			let secret = derive_wormhole_secret(mnemonic, round, i)?;
-			let address = sp_core::crypto::AccountId32::new(secret.address)
+			let address = sp_core::crypto::AccountId32::new(*secret.address())
 				.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 			log_print!("    [{}] {}", i, address);
 		}
@@ -3231,7 +3232,7 @@ fn run_multiround_dry_run(
 		} else {
 			for i in 1..=num_proofs {
 				let next_secret = derive_wormhole_secret(mnemonic, round + 1, i)?;
-				let address = sp_core::crypto::AccountId32::new(next_secret.address)
+				let address = sp_core::crypto::AccountId32::new(*next_secret.address())
 					.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 				log_print!("    [{}] {} (round {} wormhole)", i, address, round + 1);
 			}
@@ -3590,7 +3591,7 @@ async fn run_dissolve(
 	log_print!("{}", "Layer 0: Initial funding".bright_yellow());
 
 	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
-	let wormhole_address = SubxtAccountId(initial_secret.address);
+	let wormhole_address = SubxtAccountId(*initial_secret.address());
 
 	let finalized_block_hash = at_finalized_block(&quantus_client)
 		.await
@@ -3667,7 +3668,7 @@ async fn run_dissolve(
 			})?;
 
 	let mut current_outputs = vec![DissolveOutput {
-		secret: *initial_secret.secret.as_bytes(),
+		secret: *initial_secret.secret().as_bytes(),
 		amount: initial_transfer.amount,
 		transfer_count: initial_transfer.transfer_count,
 		funding_account: initial_transfer.funding_account,
@@ -3738,14 +3739,14 @@ async fn run_dissolve(
 
 				let assignment = ProofOutputAssignment {
 					output_amount_1: output_1.max(1),
-					exit_account_1: next_secrets[exit_1_idx].address,
+					exit_account_1: *next_secrets[exit_1_idx].address(),
 					output_amount_2: output_2.max(1),
-					exit_account_2: next_secrets[exit_2_idx].address,
+					exit_account_2: *next_secrets[exit_2_idx].address(),
 				};
 				expected_child_outputs.push((
-					*next_secrets[exit_1_idx].secret.as_bytes(),
+					*next_secrets[exit_1_idx].secret().as_bytes(),
 					ExpectedTransferEvent {
-						wormhole_address: SubxtAccountId(next_secrets[exit_1_idx].address),
+						wormhole_address: SubxtAccountId(*next_secrets[exit_1_idx].address()),
 						funding_account: Some(minting_account.clone()),
 						amount: Some((assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR),
 						transfer_count: None,
@@ -3753,9 +3754,9 @@ async fn run_dissolve(
 					},
 				));
 				expected_child_outputs.push((
-					*next_secrets[exit_2_idx].secret.as_bytes(),
+					*next_secrets[exit_2_idx].secret().as_bytes(),
 					ExpectedTransferEvent {
-						wormhole_address: SubxtAccountId(next_secrets[exit_2_idx].address),
+						wormhole_address: SubxtAccountId(*next_secrets[exit_2_idx].address()),
 						funding_account: Some(minting_account.clone()),
 						amount: Some((assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR),
 						transfer_count: None,
@@ -4144,7 +4145,7 @@ async fn run_check_nullifier(
 			crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e))
 		})?;
 
-		let secret: [u8; 32] = *wormhole_pair.secret.as_bytes();
+		let secret: [u8; 32] = *wormhole_pair.secret().as_bytes();
 		log_print!("Derived wormhole secret from wallet '{}' (index {})", wallet, wormhole_index);
 		secret
 	} else {

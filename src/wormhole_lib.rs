@@ -12,6 +12,7 @@
 use qp_wormhole_circuit::{
 	inputs::{CircuitInputs, PrivateCircuitInputs},
 	nullifier::Nullifier,
+	sensitive::Secret,
 };
 use qp_wormhole_inputs::PublicCircuitInputs;
 use qp_zk_circuits_common::{
@@ -88,7 +89,11 @@ struct ZeroizingCircuitInputs(CircuitInputs);
 
 impl Drop for ZeroizingCircuitInputs {
 	fn drop(&mut self) {
-		zeroize_bytes_digest(&mut self.0.private.secret);
+		// `Secret` zeroizes on drop; replace now so the embedded copy is wiped
+		// even if the outer `CircuitInputs` value is moved elsewhere later.
+		self.0.private.secret = Secret::from(
+			BytesDigest::try_from([0u8; 32]).expect("all-zero digest is always valid"),
+		);
 	}
 }
 
@@ -320,7 +325,7 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 			block_number: input.block_number,
 		},
 		private: PrivateCircuitInputs {
-			secret: secret_digest.0,
+			secret: Secret::from(secret_digest.0),
 			transfer_count: input.transfer_count,
 			unspendable_account: unspendable_bytes,
 			parent_hash,

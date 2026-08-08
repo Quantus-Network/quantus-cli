@@ -10,9 +10,10 @@ pub mod password;
 
 use crate::error::{QuantusError, Result, WalletError};
 pub use keystore::{Keystore, QuantumKeyPair, WalletData};
-use qp_dilithium_crypto::DilithiumPair;
+use qp_dilithium_crypto::Dilithium87Pair;
 use qp_rusty_crystals_hdwallet::{
 	derive_key_from_mnemonic, generate_mnemonic, mnemonic_to_seed, SensitiveBytes32,
+	SensitiveBytes64,
 };
 use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
@@ -104,7 +105,7 @@ impl WalletManager {
 		let wallet_data = WalletData {
 			name: name.to_string(),
 			keypair: quantum_keypair,
-			mnemonic: Some(mnemonic.clone()),
+			mnemonic: Some(mnemonic.to_string()),
 			derivation_path: derivation_path.to_string(),
 			metadata,
 		};
@@ -259,11 +260,11 @@ impl WalletManager {
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
 		keystore::zeroize_bytes(&mut seed);
-		let mut seed64 =
-			mnemonic_to_seed(mnemonic.clone(), None).map_err(|_| WalletError::KeyGeneration)?;
-		let dilithium_pair = DilithiumPair::from_seed(&seed64);
-		keystore::zeroize_bytes(&mut seed64);
-		let dilithium_pair = dilithium_pair.map_err(|_| WalletError::KeyGeneration)?;
+		let mut seed64 = SensitiveBytes64::zeroed();
+		mnemonic_to_seed(mnemonic.to_string(), None, &mut seed64)
+			.map_err(|_| WalletError::KeyGeneration)?;
+		let dilithium_pair = Dilithium87Pair::from_seed(seed64.as_bytes())
+			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
 
 		// Create wallet data
@@ -278,7 +279,7 @@ impl WalletManager {
 		let wallet_data = WalletData {
 			name: name.to_string(),
 			keypair: quantum_keypair,
-			mnemonic: Some(mnemonic),
+			mnemonic: Some(mnemonic.to_string()),
 			derivation_path: "master".to_string(),
 			metadata,
 		};
@@ -311,10 +312,11 @@ impl WalletManager {
 		}
 
 		// No derivation path - get the seed and create a key from the seed
-		let seed64 = mnemonic_to_seed(mnemonic.to_string(), None)
+		let mut seed64 = SensitiveBytes64::zeroed();
+		mnemonic_to_seed(mnemonic.to_string(), None, &mut seed64)
 			.map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_pair =
-			DilithiumPair::from_seed(&seed64).map_err(|_| WalletError::KeyGeneration)?;
+		let dilithium_pair = Dilithium87Pair::from_seed(seed64.as_bytes())
+			.map_err(|_| WalletError::KeyGeneration)?;
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
 
 		// Create wallet data
@@ -424,12 +426,12 @@ impl WalletManager {
 			return Err(WalletError::InvalidMnemonic.into());
 		}
 
-		// Create DilithiumPair from seed; wipe both copies of the seed after use.
+		// Create Dilithium87Pair from seed; wipe both copies of the seed after use.
 		let mut seed_bytes_32: [u8; 32] =
 			seed_bytes.as_slice().try_into().map_err(|_| WalletError::InvalidMnemonic)?;
 		keystore::zeroize_bytes(&mut seed_bytes);
 
-		let dilithium_pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed_bytes_32);
+		let dilithium_pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed_bytes_32);
 		keystore::zeroize_bytes(&mut seed_bytes_32);
 		let dilithium_pair = dilithium_pair.map_err(|_| WalletError::InvalidMnemonic)?;
 
@@ -651,7 +653,7 @@ mod tests {
 		let keystore = Keystore::new(&wallet_manager.wallets_dir);
 		let mut entropy = [9u8; 32];
 		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
-			qp_rusty_crystals_hdwallet::SensitiveBytes32::from(&mut entropy),
+			&mut qp_rusty_crystals_hdwallet::SensitiveBytes32::from(&mut entropy),
 		);
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 		let wallet_data = WalletData {
@@ -775,7 +777,7 @@ mod tests {
 		// Create test wallet data
 		let mut entropy = [1u8; 32]; // Use fixed entropy for deterministic tests
 		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
-			SensitiveBytes32::from(&mut entropy),
+			&mut SensitiveBytes32::from(&mut entropy),
 		);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
@@ -827,7 +829,7 @@ mod tests {
 		// Generate keypair
 		let mut entropy = [2u8; 32]; // Use different entropy for variety
 		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
-			SensitiveBytes32::from(&mut entropy),
+			&mut SensitiveBytes32::from(&mut entropy),
 		);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
@@ -854,7 +856,7 @@ mod tests {
 		// Create and encrypt wallet data
 		let mut entropy = [3u8; 32]; // Use different entropy for each test
 		let dilithium_keypair = qp_rusty_crystals_dilithium::ml_dsa_87::Keypair::generate(
-			SensitiveBytes32::from(&mut entropy),
+			&mut SensitiveBytes32::from(&mut entropy),
 		);
 		let quantum_keypair = keystore::QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 

@@ -29,7 +29,7 @@ impl ExerciseCtx {
 
 	pub fn fresh_keypair(&mut self) -> Result<QuantumKeyPair> {
 		let seed: [u8; 32] = self.rng.random();
-		let pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed)
+		let pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed)
 			.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
 		Ok(QuantumKeyPair::from_resonance_pair(&pair))
 	}

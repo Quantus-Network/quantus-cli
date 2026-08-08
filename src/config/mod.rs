@@ -18,6 +18,7 @@ pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
 	CompatibleRuntime { spec_version: 135, transaction_version: 2 },
 	CompatibleRuntime { spec_version: 135, transaction_version: 3 },
 	CompatibleRuntime { spec_version: 136, transaction_version: 3 },
+	CompatibleRuntime { spec_version: 142, transaction_version: 3 },
 ];
 
 /// Check whether a runtime version pair is supported by this CLI.
@@ -70,6 +71,8 @@ mod tests {
 	fn validate_runtime_identity_accepts_compatible_quantus_runtime() {
 		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 136, 3)
 			.expect("compatible quantus runtime must be accepted");
+		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 142, 3)
+			.expect("the current vesting-enabled runtime must be accepted");
 	}
 
 	/// Pinned to the spec name the real Quantus runtime declares

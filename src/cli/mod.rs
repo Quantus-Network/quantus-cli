@@ -26,6 +26,7 @@ pub mod tech_referenda;
 pub mod transfers;
 pub mod treasury;
 pub mod update;
+pub mod vesting;
 pub mod wallet;
 pub mod wormhole;
 
@@ -110,6 +111,10 @@ pub enum Commands {
 	/// Treasury account info
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
+
+	/// Vesting schedules (treasury-funded, claimable by anyone for the beneficiary)
+	#[command(subcommand)]
+	Vesting(vesting::VestingCommands),
 
 	/// Privacy-preserving transfer queries via Subsquid indexer
 	#[command(subcommand)]
@@ -368,6 +373,8 @@ pub async fn execute_command(
 			.await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
+		Commands::Vesting(vesting_cmd) =>
+			vesting::handle_vesting_command(vesting_cmd, node_url, execution_mode).await,
 		Commands::Transfers(transfers_cmd) =>
 			transfers::handle_transfers_command(transfers_cmd, node_url).await,
 		Commands::Runtime(runtime_cmd) =>

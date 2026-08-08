@@ -32,7 +32,7 @@ use std::{
 	sync::{Condvar, Mutex, OnceLock},
 };
 
-use qp_dilithium_crypto::types::{DilithiumPair, DilithiumPublic};
+use qp_dilithium_crypto::types::{Dilithium87Pair, Dilithium87Public};
 use sp_runtime::traits::IdentifyAccount;
 
 pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
@@ -231,30 +231,30 @@ impl QuantumKeyPair {
 	/// Create from rusty-crystals Keypair
 	pub fn from_dilithium_keypair(keypair: &Keypair) -> Self {
 		Self {
-			public_key: keypair.public.to_bytes().to_vec(),
-			private_key: keypair.secret.to_bytes().to_vec(),
+			public_key: keypair.public().to_bytes().to_vec(),
+			private_key: keypair.secret().to_bytes().to_vec(),
 		}
 	}
 
 	/// Convert to rusty-crystals Keypair
 	#[allow(dead_code)]
 	pub fn to_dilithium_keypair(&self) -> Result<Keypair> {
-		Ok(Keypair {
-			public: PublicKey::from_bytes(&self.public_key)
-				.map_err(|_| crate::error::WalletError::KeyGeneration)?,
-			secret: SecretKey::from_bytes(&self.private_key)
-				.map_err(|_| crate::error::WalletError::KeyGeneration)?,
-		})
-	}
-
-	/// Convert to DilithiumPair for use with substrate-api-client
-	pub fn to_resonance_pair(&self) -> Result<DilithiumPair> {
-		// Convert our QuantumKeyPair to DilithiumPair using from_raw
-		Ok(DilithiumPair::from_raw(&self.public_key, &self.private_key)
+		let secret = SecretKey::from_bytes(&self.private_key)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?;
+		let public = PublicKey::from_bytes(&self.public_key)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?;
+		Ok(Keypair::from_parts(secret, public)
 			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
 	}
 
-	pub fn from_resonance_pair(keypair: &DilithiumPair) -> Self {
+	/// Convert to Dilithium87Pair for use with substrate-api-client
+	pub fn to_resonance_pair(&self) -> Result<Dilithium87Pair> {
+		// Convert our QuantumKeyPair to Dilithium87Pair using from_raw
+		Ok(Dilithium87Pair::from_raw(&self.public_key, &self.private_key)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
+	}
+
+	pub fn from_resonance_pair(keypair: &Dilithium87Pair) -> Self {
 		use sp_core::Pair;
 		Self {
 			public_key: keypair.public().as_ref().to_vec(),
@@ -263,8 +263,8 @@ impl QuantumKeyPair {
 	}
 
 	pub fn try_to_account_id_32(&self) -> Result<AccountId32> {
-		// Use the DilithiumPublic's into_account method for correct address generation
-		let resonance_public = DilithiumPublic::from_slice(&self.public_key)
+		// Use the Dilithium87Public's into_account method for correct address generation
+		let resonance_public = Dilithium87Public::from_slice(&self.public_key)
 			.map_err(|_| crate::error::WalletError::InvalidPublicKey)?;
 		Ok(resonance_public.into_account())
 	}
@@ -281,8 +281,8 @@ impl QuantumKeyPair {
 	}
 
 	/// Convert to subxt Signer for use
-	pub fn to_subxt_signer(&self) -> Result<qp_dilithium_crypto::types::DilithiumPair> {
-		// Convert to DilithiumPair first - now it implements subxt::tx::Signer<ChainConfig>
+	pub fn to_subxt_signer(&self) -> Result<qp_dilithium_crypto::types::Dilithium87Pair> {
+		// Convert to Dilithium87Pair first - now it implements subxt::tx::Signer<ChainConfig>
 		let resonance_pair = self.to_resonance_pair()?;
 
 		Ok(resonance_pair)
@@ -793,21 +793,21 @@ mod tests {
 	fn test_quantum_keypair_from_dilithium_keypair() {
 		// Generate a test keypair
 		let mut entropy = [1u8; 32];
-		let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
+		let dilithium_keypair = Keypair::generate(&mut SensitiveBytes32::from(&mut entropy));
 
 		// Convert to QuantumKeyPair
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 		// Verify the conversion
-		assert_eq!(quantum_keypair.public_key, dilithium_keypair.public.to_bytes().to_vec());
-		assert_eq!(quantum_keypair.private_key, dilithium_keypair.secret.to_bytes().to_vec());
+		assert_eq!(quantum_keypair.public_key, dilithium_keypair.public().to_bytes().to_vec());
+		assert_eq!(quantum_keypair.private_key, dilithium_keypair.secret().to_bytes().to_vec());
 	}
 
 	#[test]
 	fn test_quantum_keypair_to_dilithium_keypair_roundtrip() {
 		// Generate a test keypair
 		let mut entropy = [2u8; 32];
-		let original_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
+		let original_keypair = Keypair::generate(&mut SensitiveBytes32::from(&mut entropy));
 
 		// Convert to QuantumKeyPair and back
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&original_keypair);
@@ -815,8 +815,8 @@ mod tests {
 			quantum_keypair.to_dilithium_keypair().expect("Conversion should succeed");
 
 		// Verify round-trip conversion preserves data
-		assert_eq!(original_keypair.public.to_bytes(), converted_keypair.public.to_bytes());
-		assert_eq!(original_keypair.secret.to_bytes(), converted_keypair.secret.to_bytes());
+		assert_eq!(original_keypair.public().to_bytes(), converted_keypair.public().to_bytes());
+		assert_eq!(original_keypair.secret().to_bytes(), converted_keypair.secret().to_bytes());
 	}
 
 	#[test]
@@ -940,7 +940,7 @@ mod tests {
 		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 
 		let mut entropy = [3u8; 32];
-		let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
+		let dilithium_keypair = Keypair::generate(&mut SensitiveBytes32::from(&mut entropy));
 
 		// Convert through different paths
 		let quantum_from_dilithium = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
@@ -957,7 +957,7 @@ mod tests {
 			.to_ss58check_with_version(Ss58AddressFormat::custom(189));
 
 		assert_eq!(addr1, addr2, "Addresses should be consistent across conversion paths");
-		assert_eq!(addr2, addr3, "Address should match direct DilithiumPair calculation");
+		assert_eq!(addr2, addr3, "Address should match direct Dilithium87Pair calculation");
 	}
 
 	#[test]
@@ -1180,7 +1180,7 @@ mod tests {
 		// Generate multiple keypairs and verify they maintain data integrity
 		for i in 0..5 {
 			let mut entropy = [i as u8; 32];
-			let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
+			let dilithium_keypair = Keypair::generate(&mut SensitiveBytes32::from(&mut entropy));
 			let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 
 			// Print actual key sizes for debugging (first iteration only)
@@ -1215,7 +1215,7 @@ mod tests {
 
 	fn make_test_wallet_data(name: &str, entropy_byte: u8) -> WalletData {
 		let mut entropy = [entropy_byte; 32];
-		let dilithium_keypair = Keypair::generate(SensitiveBytes32::from(&mut entropy));
+		let dilithium_keypair = Keypair::generate(&mut SensitiveBytes32::from(&mut entropy));
 		let keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
 		WalletData {
 			name: name.to_string(),
