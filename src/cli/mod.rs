@@ -456,7 +456,7 @@ pub async fn execute_command(
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
 		Commands::Wormhole(wormhole_cmd) =>
-			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
+			wormhole::handle_wormhole_command(wormhole_cmd, node_url, execution_mode).await,
 		Commands::Multisend {
 			from,
 			addresses_file,

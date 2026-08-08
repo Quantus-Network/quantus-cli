@@ -32,8 +32,9 @@ pub const NATIVE_ASSET_ID: u32 = 0;
 /// Scale down factor for quantizing amounts (10^10 to go from 12 to 2 decimal places)
 pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
 
-/// Volume fee rate in basis points (10 bps = 0.1%)
-pub const VOLUME_FEE_BPS: u32 = 10;
+/// Volume fee rate in basis points (must match on-chain `VolumeFeeRateBps`).
+/// Runtime currently sets 4 bps (0.04%).
+pub const VOLUME_FEE_BPS: u32 = 4;
 
 /// Result type for wormhole library operations
 pub type Result<T> = std::result::Result<T, WormholeLibError>;

@@ -824,9 +824,8 @@ async fn submit_and_get_events(
 		)));
 	}
 
-	// Check volume fee BPS (should be 10 for testnet)
-	// Note: We can't query the chain config directly, but 10 is the expected value
-	const EXPECTED_VOLUME_FEE_BPS: u32 = 10;
+	// Must match on-chain VolumeFeeRateBps (currently 4 bps).
+	const EXPECTED_VOLUME_FEE_BPS: u32 = crate::wormhole_lib::VOLUME_FEE_BPS;
 	if inputs.volume_fee_bps != EXPECTED_VOLUME_FEE_BPS {
 		return Err(CollectRewardsError::from(format!(
 			"Pre-validation failed: InvalidVolumeFeeRate (got {}, expected {})",
