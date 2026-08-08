@@ -48,7 +48,6 @@ async fn run_multiround_command(ctx: &ExerciseCtx, wallet_name: &str) -> Result<
 		dry_run: false,
 		public: false,
 	};
-	crate::cli::wormhole::handle_wormhole_command(command, &ctx.node_url, ctx.wait_mode())
-		.await?;
+	crate::cli::wormhole::handle_wormhole_command(command, &ctx.node_url, ctx.wait_mode()).await?;
 	Ok("wormhole multiround (5 rounds, 5 proofs each) completed".to_string())
 }

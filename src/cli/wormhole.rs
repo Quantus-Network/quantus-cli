@@ -3272,12 +3272,8 @@ pub async fn verify_public_batch_and_get_events(
 	subxt::utils::H256,
 	Vec<wormhole::events::NativeTransferred>,
 )> {
-	verify_public_batch_and_get_events_until(
-		proof_file,
-		quantus_client,
-		TransactionStage::Included,
-	)
-	.await
+	verify_public_batch_and_get_events_until(proof_file, quantus_client, TransactionStage::Included)
+		.await
 }
 
 /// Like [`verify_public_batch_and_get_events`], waiting until `target_stage`.
@@ -3321,7 +3317,8 @@ pub async fn verify_public_batch_and_get_events_until(
 
 	// Submit unsigned tx + wait for inclusion (best by default; finalized only if requested)
 	let (included_at, block_hash, tx_hash) =
-		submit_unsigned_verify_public_batch_until(quantus_client, proof_bytes, target_stage).await?;
+		submit_unsigned_verify_public_batch_until(quantus_client, proof_bytes, target_stage)
+			.await?;
 
 	log_verbose!(
 		"Submitted tx included in {}: block={:?}, tx={:?}",
@@ -4505,10 +4502,7 @@ mod tests {
 		assert_ne!(IncludedAt::Best.label(), IncludedAt::Finalized.label());
 		let _: *const () = at_finalized_block as *const ();
 		let _: *const () = at_best_block as *const ();
-		assert_eq!(
-			wormhole_inclusion_stage(ExecutionMode::default()),
-			TransactionStage::Included
-		);
+		assert_eq!(wormhole_inclusion_stage(ExecutionMode::default()), TransactionStage::Included);
 		assert_eq!(
 			wormhole_inclusion_stage(ExecutionMode {
 				finalized: true,
