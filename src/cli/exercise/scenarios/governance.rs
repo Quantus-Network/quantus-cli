@@ -20,7 +20,7 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 }
 
 async fn membership_reads(ctx: &mut ExerciseCtx) -> Result<String> {
-	let alice_ss58 = ctx.alice.to_account_id_ss58check();
+	let alice_ss58 = ctx.alice.try_to_account_id_ss58check()?;
 	let is_member = crate::cli::tech_collective::is_member(&ctx.client, &alice_ss58).await?;
 	if !is_member {
 		return Err(QuantusError::Generic(
@@ -139,7 +139,7 @@ async fn add_member_requires_root(ctx: &mut ExerciseCtx) -> Result<String> {
 	let intruder = ctx.fresh_keypair()?;
 	let call = quantus_subxt::api::tx()
 		.tech_collective()
-		.add_member(subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&intruder)));
+		.add_member(subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&intruder)?));
 	let alice = ctx.alice.clone();
 	submit_expect_failure(ctx, &alice, call, &["BadOrigin"]).await
 }

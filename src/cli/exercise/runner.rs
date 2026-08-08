@@ -39,10 +39,10 @@ impl ExerciseCtx {
 	}
 }
 
-pub fn account_id_of(keypair: &QuantumKeyPair) -> SubxtAccountId32 {
-	let account = keypair.to_account_id_32();
+pub fn account_id_of(keypair: &QuantumKeyPair) -> Result<SubxtAccountId32> {
+	let account = keypair.try_to_account_id_32()?;
 	let bytes: [u8; 32] = *account.as_ref();
-	SubxtAccountId32::from(bytes)
+	Ok(SubxtAccountId32::from(bytes))
 }
 
 pub async fn submit_ok<Call>(

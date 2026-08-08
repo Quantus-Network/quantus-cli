@@ -285,7 +285,7 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 	let mut addresses = Vec::with_capacity(count);
 	for _ in 0..count {
 		let keypair = ctx.fresh_keypair()?;
-		addresses.push(keypair.to_account_id_ss58check());
+		addresses.push(keypair.try_to_account_id_ss58check()?);
 		ctx.eph.push(keypair);
 	}
 

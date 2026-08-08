@@ -60,8 +60,8 @@ pub use wormhole_lib::{
 // into `chain::quantus_subxt::api::wormhole::events::*`.
 pub use chain::quantus_subxt::api::wormhole::events::NativeTransferred;
 pub use cli::wormhole::{
-	aggregate_proofs, at_best_block, compute_merkle_positions, decode_full_leaf_data,
-	get_zk_merkle_proof, parse_transfer_events, read_proof_file,
+	aggregate_proofs, at_best_block, at_finalized_block, compute_merkle_positions,
+	decode_full_leaf_data, get_zk_merkle_proof, parse_transfer_events, read_proof_file,
 	submit_unsigned_verify_private_batch, verify_private_batch_and_get_events, write_proof_file,
 	IncludedAt, TransferInfo,
 };

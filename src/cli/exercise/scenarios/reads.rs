@@ -100,7 +100,7 @@ async fn treasury_info(ctx: &ExerciseCtx) -> Result<String> {
 }
 
 async fn high_security_status(ctx: &ExerciseCtx) -> Result<String> {
-	let alice = crate::cli::exercise::runner::account_id_of(&ctx.alice);
+	let alice = crate::cli::exercise::runner::account_id_of(&ctx.alice)?;
 	let addr = quantus_subxt::api::storage()
 		.reversible_transfers()
 		.high_security_accounts(alice);
@@ -118,7 +118,7 @@ async fn scheduler_agenda(ctx: &ExerciseCtx) -> Result<String> {
 }
 
 async fn account_balances(ctx: &ExerciseCtx) -> Result<String> {
-	let alice_ss58 = ctx.alice.to_account_id_ss58check();
+	let alice_ss58 = ctx.alice.try_to_account_id_ss58check()?;
 	let balance = ctx.free_balance(&alice_ss58).await?;
 	if balance == 0 {
 		return Err(QuantusError::Generic(

@@ -4,12 +4,17 @@ use crate::{
 	cli::address_format::QuantusSS58,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
-	wallet::{password::get_mnemonic_from_user, WalletManager, DEFAULT_DERIVATION_PATH},
+	wallet::{
+		password::{get_mnemonic_from_user, get_new_wallet_password},
+		WalletManager, DEFAULT_DERIVATION_PATH,
+	},
 };
 use clap::Subcommand;
 use colored::Colorize;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
 use std::io::{self, Write};
+#[cfg(unix)]
+use std::os::unix::fs::OpenOptionsExt;
 
 /// Wallet management commands
 #[derive(Subcommand, Debug)]
@@ -20,9 +25,17 @@ pub enum WalletCommands {
 		#[arg(short, long)]
 		name: String,
 
-		/// Password to encrypt the wallet (optional, will prompt if not provided)
-		#[arg(short, long)]
+		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
+
+		/// Read encryption password from file (owner-only on Unix)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Allow creating a wallet with an empty password (development only)
+		#[arg(long)]
+		allow_empty_password: bool,
 
 		/// Derivation path (default: m/44'/189189'/0'/0/0)
 		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
@@ -51,12 +64,17 @@ pub enum WalletCommands {
 		name: String,
 
 		/// Password to decrypt the wallet (optional, will prompt if not provided)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Export format: mnemonic, private-key
 		#[arg(short, long, default_value = "mnemonic")]
 		format: String,
+
+		/// Write the mnemonic to this file instead of printing it (created with owner-only
+		/// permissions)
+		#[arg(short, long)]
+		output: Option<std::path::PathBuf>,
 	},
 
 	/// Import wallet from mnemonic phrase
@@ -65,13 +83,17 @@ pub enum WalletCommands {
 		#[arg(short, long)]
 		name: String,
 
-		/// Mnemonic phrase (24 words, will prompt if not provided)
-		#[arg(short, long)]
-		mnemonic: Option<String>,
-
-		/// Password to encrypt the wallet (optional, will prompt if not provided)
-		#[arg(short, long)]
+		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
+
+		/// Read encryption password from file (owner-only on Unix)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Allow encrypting the imported wallet with an empty password (development only)
+		#[arg(long)]
+		allow_empty_password: bool,
 
 		/// Derivation path (default: m/44'/189189'/0'/0/0)
 		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
@@ -106,13 +128,17 @@ pub enum WalletCommands {
 		#[arg(short, long)]
 		name: String,
 
-		/// 32-byte seed in hex format (64 hex characters)
-		#[arg(short, long)]
-		seed: String,
-
-		/// Password to encrypt the wallet (optional, will prompt if not provided)
-		#[arg(short, long)]
+		/// Password to encrypt the wallet (unsupported on argv; use --password-file or prompt)
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
+
+		/// Read encryption password from file (owner-only on Unix)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// Allow encrypting the new wallet with an empty password (development only)
+		#[arg(long)]
+		allow_empty_password: bool,
 	},
 
 	/// List all wallets
@@ -140,7 +166,7 @@ pub enum WalletCommands {
 		wallet: Option<String>,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 	},
 }
@@ -174,14 +200,23 @@ pub async fn get_account_nonce(
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
 	let account_info = storage_at
-		.fetch_or_default(&storage_addr)
+		.fetch(&storage_addr)
 		.await
 		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}")))?;
 
-	log_verbose!("✅ Account info retrieved with storage query!");
-	log_verbose!("🔢 Nonce: {}", account_info.nonce);
+	let (nonce, exists) = crate::chain::client::QuantusClient::interpret_account_nonce(
+		account_info.map(|info| info.nonce),
+	);
+	if exists {
+		log_verbose!("✅ Account info retrieved with storage query!");
+	} else {
+		log_print!(
+			"⚠️  Account has no on-chain System::Account entry; reporting nonce 0 (new/unused account)"
+		);
+	}
+	log_verbose!("🔢 Nonce: {} (exists={})", nonce, exists);
 
-	Ok(account_info.nonce)
+	Ok(nonce)
 }
 
 /// Fetch high-security status from chain for an account (SS58). Returns None if disabled or on
@@ -303,28 +338,59 @@ async fn fetch_pending_transfers_for_guardian(
 	Ok((total, per_account))
 }
 
+fn write_mnemonic_to_protected_file(
+	path: &std::path::Path,
+	mnemonic: &str,
+) -> crate::error::Result<()> {
+	let mut options = std::fs::OpenOptions::new();
+	options.write(true).create_new(true);
+	#[cfg(unix)]
+	options.mode(0o600);
+
+	let mut file = options.open(path).map_err(|e| {
+		QuantusError::Generic(format!("Failed to create mnemonic export file: {e}"))
+	})?;
+	file.write_all(mnemonic.as_bytes())
+		.map_err(|e| QuantusError::Generic(format!("Failed to write mnemonic export file: {e}")))?;
+	file.write_all(b"\n")
+		.map_err(|e| QuantusError::Generic(format!("Failed to write mnemonic export file: {e}")))?;
+	file.sync_all()
+		.map_err(|e| QuantusError::Generic(format!("Failed to sync mnemonic export file: {e}")))?;
+	Ok(())
+}
+
 /// Handle wallet commands
 pub async fn handle_wallet_command(
 	command: WalletCommands,
 	node_url: &str,
 ) -> crate::error::Result<()> {
 	match command {
-		WalletCommands::Create { name, password, derivation_path, no_derivation } => {
+		WalletCommands::Create {
+			name,
+			password,
+			password_file,
+			allow_empty_password,
+			derivation_path,
+			no_derivation,
+		} => {
 			log_print!("🔐 Creating new quantum wallet...");
+
+			let final_password =
+				get_new_wallet_password(&name, password, password_file, allow_empty_password)?;
 
 			let wallet_manager = WalletManager::new()?;
 
 			// Choose creation method based on flags
 			let result = if no_derivation {
 				// Use master seed directly (like quantus-node --no-derivation)
-				wallet_manager.create_wallet_no_derivation(&name, password.as_deref()).await
+				wallet_manager.create_wallet_no_derivation(&name, Some(&final_password)).await
 			} else if derivation_path == DEFAULT_DERIVATION_PATH {
-				wallet_manager.create_wallet(&name, password.as_deref()).await
+				wallet_manager.create_wallet(&name, Some(&final_password)).await
 			} else {
 				wallet_manager
 					.create_wallet_with_derivation_path(
 						&name,
-						password.as_deref(),
+						Some(&final_password),
 						&derivation_path,
 					)
 					.await
@@ -578,7 +644,7 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Export { name, password, format } => {
+		WalletCommands::Export { name, password, format, output } => {
 			log_print!("📤 Exporting wallet...");
 
 			if format.to_lowercase() != "mnemonic" {
@@ -588,20 +654,30 @@ pub async fn handle_wallet_command(
 				));
 			}
 
+			let Some(output_path) = output else {
+				log_error!(
+					"Refusing to print the mnemonic to stdout. Use --output <file> to create a protected export file."
+				);
+				return Err(crate::error::QuantusError::Generic(
+					"Mnemonic export requires --output".to_string(),
+				));
+			};
+
 			let wallet_manager = WalletManager::new()?;
 
 			match wallet_manager.export_mnemonic(&name, password.as_deref()) {
 				Ok(mnemonic) => {
+					write_mnemonic_to_protected_file(&output_path, &mnemonic)?;
 					log_success!("✅ Wallet exported successfully!");
-					log_print!("\nYour secret mnemonic phrase:");
-					log_print!("{}", "--------------------------------------------------".dimmed());
-					log_print!("{}", mnemonic.bright_yellow());
-					log_print!("{}", "--------------------------------------------------".dimmed());
 					log_print!(
-                        "\n{}",
-                        "⚠️  Keep this phrase safe and secret. Anyone with this phrase can access your funds."
-                            .bright_red()
-                    );
+						"Mnemonic written to: {}",
+						output_path.display().to_string().bright_cyan()
+					);
+					log_print!(
+						"{}",
+						"⚠️  Keep this file safe and secret. Anyone with this phrase can access your funds."
+							.bright_red()
+					);
 				},
 				Err(e) => {
 					log_error!("{}", format!("❌ Failed to export wallet: {e}").red());
@@ -612,18 +688,31 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::Import { name, mnemonic, password, derivation_path, no_derivation } => {
+		WalletCommands::Import {
+			name,
+			password,
+			password_file,
+			allow_empty_password,
+			derivation_path,
+			no_derivation,
+		} => {
 			log_print!("📥 Importing wallet...");
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Get mnemonic from user if not provided
-			let mnemonic_phrase =
-				if let Some(mnemonic) = mnemonic { mnemonic } else { get_mnemonic_from_user()? };
+			// New-wallet password policy: confirmed prompt, no silent empty
+			// default. Resolve (and reject rejected forms like a raw
+			// --password) before prompting for the mnemonic, so a doomed
+			// invocation doesn't collect the secret first.
+			let final_password = crate::wallet::password::get_new_wallet_password(
+				&name,
+				password,
+				password_file,
+				allow_empty_password,
+			)?;
 
-			// Get password from user if not provided
-			let final_password =
-				crate::wallet::password::get_wallet_password(&name, password, None)?;
+			// Always read mnemonic from a hidden prompt so it never appears in process argv.
+			let mut mnemonic_phrase = get_mnemonic_from_user()?;
 
 			// Choose import method based on flags
 			let result = if no_derivation {
@@ -645,6 +734,7 @@ pub async fn handle_wallet_command(
 					)
 					.await
 			};
+			crate::wallet::keystore::zeroize_string(&mut mnemonic_phrase);
 
 			match result {
 				Ok(wallet_info) => {
@@ -670,19 +760,34 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::FromSeed { name, seed, password } => {
+		WalletCommands::FromSeed { name, password, password_file, allow_empty_password } => {
 			log_print!("🌱 Creating wallet from seed...");
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Get password from user if not provided
-			let final_password =
-				crate::wallet::password::get_wallet_password(&name, password, None)?;
+			// New-wallet password policy: confirmed prompt, no silent empty
+			// default. Resolve before prompting for the seed, so a doomed
+			// invocation doesn't collect the secret first.
+			let final_password = crate::wallet::password::get_new_wallet_password(
+				&name,
+				password,
+				password_file,
+				allow_empty_password,
+			)?;
 
-			match wallet_manager
+			// Always read seed from a hidden prompt so it never appears in process argv.
+			log_print!("Enter 32-byte seed in hex format (64 hex characters):");
+			let mut seed_raw = rpassword::read_password()
+				.map_err(|e| QuantusError::Generic(format!("Failed to read seed: {e}")))?;
+			let mut seed = seed_raw.trim().to_string();
+			crate::wallet::keystore::zeroize_string(&mut seed_raw);
+
+			let result = wallet_manager
 				.create_wallet_from_seed(&name, &seed, Some(&final_password))
-				.await
-			{
+				.await;
+			crate::wallet::keystore::zeroize_string(&mut seed);
+
+			match result {
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
@@ -759,63 +864,69 @@ pub async fn handle_wallet_command(
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Check if wallet exists first
-			match wallet_manager.get_wallet(&name, None) {
-				Ok(Some(wallet_info)) => {
-					// Show wallet info before deletion
-					log_print!("Wallet to delete:");
-					log_print!("  Name: {}", wallet_info.name.bright_green());
-					log_print!("  Address: {}", wallet_info.address.bright_cyan());
-					log_print!("  Type: {}", wallet_info.key_type.bright_yellow());
-					log_print!(
-						"  Created: {}",
-						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
-					);
-
-					// Confirmation prompt unless --force is used
-					if !force {
-						log_print!("\n{}", "⚠️  This action cannot be undone!".bright_red());
-						log_print!("Type the wallet name to confirm deletion:");
-
-						print!("Confirm wallet name: ");
-						io::stdout().flush().unwrap();
-
-						let mut input = String::new();
-						io::stdin().read_line(&mut input).unwrap();
-						let input = input.trim();
-
-						if input != name {
-							log_print!(
-								"{}",
-								"❌ Wallet name doesn't match. Deletion cancelled.".red()
-							);
-							return Ok(());
-						}
-					}
-
-					// Perform deletion
-					match wallet_manager.delete_wallet(&name) {
-						Ok(true) => {
-							log_success!("✅ Wallet '{}' deleted successfully!", name);
-						},
-						Ok(false) => {
-							log_error!("{}", format!("❌ Wallet '{name}' was not found").red());
-						},
-						Err(e) => {
-							log_error!("{}", format!("❌ Failed to delete wallet: {e}").red());
-							return Err(e);
-						},
-					}
-				},
+			// Check if wallet exists first. A parse error means the file exists
+			// but is corrupt; it must still be deletable via the CLI.
+			let wallet_info = match wallet_manager.get_wallet(&name, None) {
+				Ok(Some(wallet_info)) => Some(wallet_info),
 				Ok(None) => {
 					log_error!("{}", format!("❌ Wallet '{name}' not found").red());
 					log_print!(
 						"Use {} to see available wallets",
 						"quantus wallet list".bright_green()
 					);
+					return Ok(());
 				},
 				Err(e) => {
-					log_error!("{}", format!("❌ Failed to check wallet: {e}").red());
+					log_print!(
+						"{}",
+						format!("⚠️  Wallet file for '{name}' exists but cannot be parsed: {e}")
+							.yellow()
+					);
+					log_print!("   Deleting will remove the corrupt wallet file.");
+					None
+				},
+			};
+
+			if let Some(wallet_info) = wallet_info {
+				// Show wallet info before deletion
+				log_print!("Wallet to delete:");
+				log_print!("  Name: {}", wallet_info.name.bright_green());
+				log_print!("  Address: {}", wallet_info.address.bright_cyan());
+				log_print!("  Type: {}", wallet_info.key_type.bright_yellow());
+				log_print!(
+					"  Created: {}",
+					wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
+				);
+			}
+
+			// Confirmation prompt unless --force is used
+			if !force {
+				log_print!("\n{}", "⚠️  This action cannot be undone!".bright_red());
+				log_print!("Type the wallet name to confirm deletion:");
+
+				print!("Confirm wallet name: ");
+				io::stdout().flush().unwrap();
+
+				let mut input = String::new();
+				io::stdin().read_line(&mut input).unwrap();
+				let input = input.trim();
+
+				if input != name {
+					log_print!("{}", "❌ Wallet name doesn't match. Deletion cancelled.".red());
+					return Ok(());
+				}
+			}
+
+			// Perform deletion
+			match wallet_manager.delete_wallet(&name) {
+				Ok(true) => {
+					log_success!("✅ Wallet '{}' deleted successfully!", name);
+				},
+				Ok(false) => {
+					log_error!("{}", format!("❌ Wallet '{name}' was not found").red());
+				},
+				Err(e) => {
+					log_error!("{}", format!("❌ Failed to delete wallet: {e}").red());
 					return Err(e);
 				},
 			}
@@ -838,7 +949,7 @@ pub async fn handle_wallet_command(
 				},
 				(None, Some(wallet_name)) =>
 					crate::wallet::load_signer_from_wallet(&wallet_name, password, None)?
-						.account_id_ss58check(),
+						.try_account_id_ss58check()?,
 				(None, None) => {
 					// This case should be prevented by clap's `required_unless_present`
 					unreachable!("Either --address or --wallet must be provided");
@@ -859,5 +970,115 @@ pub async fn handle_wallet_command(
 
 			Ok(())
 		},
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use clap::Parser;
+	use serial_test::serial;
+	use tempfile::TempDir;
+
+	#[derive(Parser, Debug)]
+	#[command(name = "quantus")]
+	struct TestCli {
+		#[command(subcommand)]
+		command: crate::cli::Commands,
+	}
+
+	#[tokio::test]
+	#[serial]
+	async fn wallet_export_without_output_refuses_stdout_mnemonic() {
+		// #159469: export must not emit the recovery secret via log_print/stdout.
+		let home = TempDir::new().expect("temp HOME");
+		std::env::set_var("HOME", home.path());
+		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
+
+		let manager = WalletManager::new().expect("wallet manager");
+		manager.create_wallet("export-leak", Some("")).await.expect("create wallet");
+
+		let result = handle_wallet_command(
+			WalletCommands::Export {
+				name: "export-leak".to_string(),
+				password: None,
+				format: "mnemonic".to_string(),
+				output: None,
+			},
+			"ws://127.0.0.1:9944",
+		)
+		.await;
+
+		assert!(result.is_err(), "export without --output must refuse stdout mnemonic emission");
+		assert!(
+			result.unwrap_err().to_string().contains("requires --output"),
+			"error should mention --output"
+		);
+	}
+
+	#[tokio::test]
+	#[serial]
+	async fn wallet_export_writes_mnemonic_to_protected_file_not_stdout_path() {
+		let home = TempDir::new().expect("temp HOME");
+		std::env::set_var("HOME", home.path());
+		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD");
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD_EXPORT_FILE");
+
+		let manager = WalletManager::new().expect("wallet manager");
+		manager.create_wallet("export-file", Some("")).await.expect("create wallet");
+		let mnemonic = manager
+			.export_mnemonic("export-file", None)
+			.expect("export mnemonic for fixture");
+
+		let out = home.path().join("mnemonic.txt");
+		handle_wallet_command(
+			WalletCommands::Export {
+				name: "export-file".to_string(),
+				password: None,
+				format: "mnemonic".to_string(),
+				output: Some(out.clone()),
+			},
+			"ws://127.0.0.1:9944",
+		)
+		.await
+		.expect("export with --output must succeed");
+
+		let written = std::fs::read_to_string(&out).expect("export file");
+		assert_eq!(written.trim(), mnemonic.trim());
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			let mode = std::fs::metadata(&out).unwrap().permissions().mode() & 0o777;
+			assert_eq!(mode, 0o600, "export file must be owner-read/write only");
+		}
+	}
+
+	#[test]
+	fn wallet_import_rejects_mnemonic_cli_argument() {
+		let result = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"import",
+			"--name",
+			"poc",
+			"--mnemonic",
+			"abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art",
+		]);
+		assert!(result.is_err(), "wallet import must not accept --mnemonic on the command line");
+	}
+
+	#[test]
+	fn wallet_from_seed_rejects_seed_cli_argument() {
+		let result = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"from-seed",
+			"--name",
+			"poc",
+			"--seed",
+			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+		]);
+		assert!(result.is_err(), "wallet from-seed must not accept --seed on the command line");
 	}
 }

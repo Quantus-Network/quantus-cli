@@ -1,6 +1,7 @@
 //! `quantus system` subcommand - system information
 use crate::{
 	chain::client::{ChainConfig, QuantusClient},
+	error::QuantusError,
 	log_print, log_verbose,
 };
 use colored::Colorize;
@@ -14,12 +15,56 @@ use subxt::{
 	PolkadotConfig,
 };
 
+/// Maximum decimal places supported by u128 balance scaling (10^38 fits in u128).
+pub const MAX_SUPPORTED_TOKEN_DECIMALS: u64 = 38;
+
 /// Chain native token information structure
 #[derive(Debug, Clone)]
 pub struct TokenInfo {
 	pub symbol: String,
 	pub decimals: u8,
 	pub ss58_format: Option<u8>,
+}
+
+/// Parse and validate chain token properties from RPC `chainspec_v1_properties`.
+///
+/// Fail closed: missing/out-of-range `tokenDecimals`, empty `tokenSymbol`, and
+/// `ss58Format` values above 255 are rejected instead of defaulted or truncated.
+pub fn parse_token_info_from_properties(
+	properties: &serde_json::Map<String, Value>,
+) -> crate::error::Result<TokenInfo> {
+	let symbol = properties
+		.get("tokenSymbol")
+		.and_then(|v| v.as_str())
+		.filter(|symbol| !symbol.is_empty())
+		.ok_or_else(|| {
+			QuantusError::NetworkError("Invalid or missing chain property tokenSymbol".to_string())
+		})?
+		.to_string();
+
+	let decimals = properties
+		.get("tokenDecimals")
+		.and_then(|v| v.as_u64())
+		.filter(|decimals| *decimals <= MAX_SUPPORTED_TOKEN_DECIMALS)
+		.ok_or_else(|| {
+			QuantusError::NetworkError(format!(
+				"Invalid or missing chain property tokenDecimals; expected an integer between 0 and {MAX_SUPPORTED_TOKEN_DECIMALS}"
+			))
+		})? as u8;
+
+	let ss58_format = properties
+		.get("ss58Format")
+		.map(|v| {
+			v.as_u64().and_then(|format| u8::try_from(format).ok()).ok_or_else(|| {
+				QuantusError::NetworkError(
+					"Invalid chain property ss58Format; expected an integer between 0 and 255"
+						.to_string(),
+				)
+			})
+		})
+		.transpose()?;
+
+	Ok(TokenInfo { symbol, decimals, ss58_format })
 }
 
 /// Chain information from ChainHead API
@@ -48,21 +93,7 @@ impl ChainHeadTokenClient {
 	pub async fn get_token_info(&self) -> Result<TokenInfo, Box<dyn Error>> {
 		// Get system properties using chainspec_v1_properties
 		let properties: serde_json::Map<String, Value> = self.rpc.chainspec_v1_properties().await?;
-
-		// Extract token symbol
-		let symbol = properties
-			.get("tokenSymbol")
-			.and_then(|v| v.as_str())
-			.unwrap_or("UNIT") // default to UNIT if no information
-			.to_string();
-
-		// Extract decimal places
-		let decimals = properties.get("tokenDecimals").and_then(|v| v.as_u64()).unwrap_or(0) as u8; // default to 0 if no information
-
-		// Extract SS58 format (optional)
-		let ss58_format = properties.get("ss58Format").and_then(|v| v.as_u64()).map(|v| v as u8);
-
-		Ok(TokenInfo { symbol, decimals, ss58_format })
+		Ok(parse_token_info_from_properties(&properties)?)
 	}
 
 	/// Gets chain name
@@ -360,4 +391,90 @@ async fn list_rpc_methods(quantus_client: &QuantusClient) -> crate::error::Resul
 	}
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use serde_json::json;
+
+	fn props(value: serde_json::Value) -> serde_json::Map<String, Value> {
+		value.as_object().expect("test properties must be an object").clone()
+	}
+
+	#[test]
+	fn parse_token_info_accepts_valid_properties() {
+		let info = parse_token_info_from_properties(&props(json!({
+			"tokenSymbol": "QUAN",
+			"tokenDecimals": 12,
+			"ss58Format": 42,
+		})))
+		.expect("valid token properties must be accepted");
+		assert_eq!(info.symbol, "QUAN");
+		assert_eq!(info.decimals, 12);
+		assert_eq!(info.ss58_format, Some(42));
+	}
+
+	#[test]
+	fn parse_token_info_rejects_missing_token_decimals() {
+		let err = parse_token_info_from_properties(&props(json!({
+			"tokenSymbol": "QUAN",
+		})))
+		.unwrap_err();
+		assert!(
+			err.to_string().contains("tokenDecimals"),
+			"expected missing tokenDecimals rejection, got: {err}"
+		);
+	}
+
+	#[test]
+	fn parse_token_info_rejects_out_of_range_token_decimals() {
+		let err = parse_token_info_from_properties(&props(json!({
+			"tokenSymbol": "QUAN",
+			"tokenDecimals": MAX_SUPPORTED_TOKEN_DECIMALS + 1,
+		})))
+		.unwrap_err();
+		assert!(
+			err.to_string().contains("tokenDecimals"),
+			"expected out-of-range tokenDecimals rejection, got: {err}"
+		);
+	}
+
+	#[test]
+	fn parse_token_info_rejects_empty_symbol() {
+		let err = parse_token_info_from_properties(&props(json!({
+			"tokenSymbol": "",
+			"tokenDecimals": 12,
+		})))
+		.unwrap_err();
+		assert!(
+			err.to_string().contains("tokenSymbol"),
+			"expected empty symbol rejection, got: {err}"
+		);
+	}
+
+	#[test]
+	fn parse_token_info_rejects_ss58_format_above_255() {
+		let err = parse_token_info_from_properties(&props(json!({
+			"tokenSymbol": "QUAN",
+			"tokenDecimals": 12,
+			"ss58Format": 256,
+		})))
+		.unwrap_err();
+		assert!(
+			err.to_string().contains("ss58Format"),
+			"expected ss58Format>255 rejection, got: {err}"
+		);
+	}
+
+	#[test]
+	fn parse_token_info_allows_missing_ss58_format() {
+		let info = parse_token_info_from_properties(&props(json!({
+			"tokenSymbol": "QUAN",
+			"tokenDecimals": 0,
+		})))
+		.expect("ss58Format is optional");
+		assert_eq!(info.decimals, 0);
+		assert_eq!(info.ss58_format, None);
+	}
 }

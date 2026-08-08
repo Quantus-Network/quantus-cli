@@ -58,7 +58,7 @@ pub enum PreimageCommands {
 		#[arg(long)]
 		from: String,
 		/// Password for wallet (optional)
-		#[arg(long)]
+		#[arg(long, hide = true)]
 		password: Option<String>,
 		/// Password file path (optional)
 		#[arg(long)]

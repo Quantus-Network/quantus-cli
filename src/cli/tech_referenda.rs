@@ -24,7 +24,7 @@ pub enum TechReferendaCommands {
 		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		#[arg(long)]
@@ -42,7 +42,7 @@ pub enum TechReferendaCommands {
 		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		#[arg(long)]
@@ -65,7 +65,7 @@ pub enum TechReferendaCommands {
 		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		#[arg(long)]
@@ -107,7 +107,7 @@ pub enum TechReferendaCommands {
 		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		#[arg(long)]
@@ -127,7 +127,7 @@ pub enum TechReferendaCommands {
 		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		#[arg(long)]
@@ -147,7 +147,7 @@ pub enum TechReferendaCommands {
 		#[arg(short, long, value_name = "WALLET")]
 		from: String,
 
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		#[arg(long)]

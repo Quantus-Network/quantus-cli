@@ -1,7 +1,14 @@
 //! `quantus metadata` subcommand - metadata exploration
-use crate::{chain::client::ChainConfig, log_print, log_verbose};
+use crate::{chain::client::ChainConfig, error::QuantusError, log_print, log_verbose};
 use colored::Colorize;
 use subxt::OnlineClient;
+
+/// Accumulate metadata statistics with overflow checks.
+pub(crate) fn accumulate_metadata_count(total: usize, add: usize) -> crate::error::Result<usize> {
+	total.checked_add(add).ok_or_else(|| {
+		QuantusError::Generic("Metadata statistics counter overflowed usize".to_string())
+	})
+}
 
 /// Explore chain metadata and display all available pallets and calls
 pub async fn explore_chain_metadata(
@@ -112,15 +119,16 @@ pub async fn get_metadata_stats(client: &OnlineClient<ChainConfig>) -> crate::er
 	log_print!("   🔗 API: Type-safe SubXT");
 
 	// Count calls across all pallets
-	let mut total_calls = 0;
-	let mut total_storage = 0;
+	let mut total_calls = 0usize;
+	let mut total_storage = 0usize;
 
 	for pallet in &pallets {
 		if let Some(calls) = pallet.call_variants() {
-			total_calls += calls.len();
+			total_calls = accumulate_metadata_count(total_calls, calls.len())?;
 		}
 		if let Some(storage_metadata) = pallet.storage() {
-			total_storage += storage_metadata.entries().len();
+			total_storage =
+				accumulate_metadata_count(total_storage, storage_metadata.entries().len())?;
 		}
 	}
 
@@ -143,5 +151,22 @@ pub async fn handle_metadata_command(
 		get_metadata_stats(quantus_client.client()).await
 	} else {
 		explore_chain_metadata(quantus_client.client(), no_docs, pallet_filter).await
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn accumulate_metadata_count_rejects_usize_overflow() {
+		let err = accumulate_metadata_count(usize::MAX, 1)
+			.expect_err("unchecked metadata accumulation must not wrap");
+		assert!(err.to_string().contains("overflowed"), "unexpected overflow error: {err}");
+	}
+
+	#[test]
+	fn accumulate_metadata_count_adds_within_bounds() {
+		assert_eq!(accumulate_metadata_count(10, 5).unwrap(), 15);
 	}
 }

@@ -118,11 +118,14 @@ qp-wormhole-prover = { version = "3.1.0", default-features = false, features = [
 qp-wormhole-verifier = { version = "3.1.0", default-features = false, features = ["std"] }
 qp-zk-circuits-common = { version = "3.1.0", default-features = false, features = ["std"] }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
 
 [build-dependencies]
 hex = "0.4"
 qp-poseidon-core = "3.0.2"
 qp-wormhole-circuit-builder = { version = "3.1.0" }
+sha2 = "0.10"
 
 [dev-dependencies]
 qp-poseidon-core = "3.0.2"

@@ -21,7 +21,7 @@ pub enum BatchCommands {
 		from: String,
 
 		/// Password for the wallet (or use environment variables)
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -147,7 +147,7 @@ async fn handle_batch_send_command(
 
 	// Load wallet
 	let signer = crate::wallet::load_signer_from_wallet(&from_wallet, password, password_file)?;
-	let from_account_id = signer.account_id_ss58check();
+	let from_account_id = signer.try_account_id_ss58check()?;
 	validate_batch_transfer_request(&quantus_client, &signer, &transfers).await?;
 
 	let effective_tip = crate::cli::send::effective_tip_amount(tip_amount);
@@ -239,7 +239,7 @@ async fn handle_batch_config_command(
 
 	if show_info {
 		log_print!("ℹ️  {} Batch Transfer Information", "CONFIG".bright_cyan().bold());
-		log_print!("   • Batch transfers use utility.batch() pallet");
+		log_print!("   • Batch transfers use utility.batch_all() pallet");
 		log_print!("   • All transfers in one transaction (atomic)");
 		log_print!("   • Single nonce used for all transfers");
 		log_print!("   • Lower fees compared to individual transfers");
@@ -269,7 +269,7 @@ async fn handle_batch_config_command(
 
 		// Show info
 		log_print!("ℹ️  {} Batch Transfer Information", "CONFIG".bright_cyan().bold());
-		log_print!("   • Batch transfers use utility.batch() pallet");
+		log_print!("   • Batch transfers use utility.batch_all() pallet");
 		log_print!("   • All transfers in one transaction (atomic)");
 		log_print!("   • Single nonce used for all transfers");
 		log_print!("   • Lower fees compared to individual transfers");

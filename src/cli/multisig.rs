@@ -1,12 +1,14 @@
 use crate::{
 	chain::quantus_subxt::{self},
-	cli::common::ExecutionMode,
+	cli::common::{delay_seconds_to_millis, ExecutionMode},
 	log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
 use hex;
 use sp_core::crypto::{AccountId32 as SpAccountId32, Ss58Codec};
+
+type SubxtAccountId32 = subxt::ext::subxt_core::utils::AccountId32;
 
 // Base unit (QUAN) decimals for amount conversions
 const QUAN_DECIMALS: u128 = 1_000_000_000_000; // 10^12
@@ -128,7 +130,7 @@ pub enum ProposeSubcommand {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -163,7 +165,7 @@ pub enum ProposeSubcommand {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -198,7 +200,7 @@ pub enum ProposeSubcommand {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -234,7 +236,7 @@ pub enum MultisigCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file (for scripting)
@@ -276,7 +278,7 @@ pub enum MultisigCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -299,7 +301,7 @@ pub enum MultisigCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -322,7 +324,7 @@ pub enum MultisigCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -345,7 +347,7 @@ pub enum MultisigCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -364,7 +366,7 @@ pub enum MultisigCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file
@@ -444,9 +446,10 @@ pub fn predict_multisig_address(
 		})
 		.collect();
 
-	// Sort signers for deterministic address (same as runtime does)
+	// Sort and deduplicate signers for deterministic address (same as runtime does)
 	let mut sorted_signers = sp_signers;
 	sorted_signers.sort();
+	sorted_signers.dedup();
 
 	// Build data to hash: pallet_id || sorted_signers || threshold || nonce
 	// IMPORTANT: Must match runtime encoding exactly
@@ -467,6 +470,68 @@ pub fn predict_multisig_address(
 
 	// Convert to SS58 format (network 189 for Quantus)
 	account_id.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
+}
+
+fn keypair_to_subxt_account_id(
+	keypair: &crate::wallet::QuantumKeyPair,
+) -> crate::error::Result<SubxtAccountId32> {
+	let account_id = keypair.try_to_account_id_32()?;
+	let account_bytes: [u8; 32] = *account_id.as_ref();
+	Ok(SubxtAccountId32::from(account_bytes))
+}
+
+fn signer_to_subxt_account_id(
+	signer: &crate::wallet::WalletSigner,
+) -> crate::error::Result<SubxtAccountId32> {
+	let ss58 = signer.try_account_id_ss58check()?;
+	let (account_id, _) = SpAccountId32::from_ss58check_with_version(&ss58)
+		.map_err(|_| crate::error::WalletError::InvalidAddress)?;
+	Ok(SubxtAccountId32::from(<[u8; 32]>::from(account_id)))
+}
+
+fn sorted_account_ids_equal(left: &[SubxtAccountId32], right: &[SubxtAccountId32]) -> bool {
+	if left.len() != right.len() {
+		return false;
+	}
+
+	let mut left_sorted = left.to_vec();
+	left_sorted.sort();
+	let mut right_sorted = right.to_vec();
+	right_sorted.sort();
+	left_sorted == right_sorted
+}
+
+fn matching_multisig_created_address(
+	event: &quantus_subxt::api::multisig::events::MultisigCreated,
+	creator: &SubxtAccountId32,
+	signers: &[SubxtAccountId32],
+	threshold: u32,
+	nonce: u64,
+) -> Option<String> {
+	if &event.creator != creator ||
+		event.threshold != threshold ||
+		event.nonce != nonce ||
+		!sorted_account_ids_equal(&event.signers, signers)
+	{
+		return None;
+	}
+
+	let addr_bytes: &[u8; 32] = event.multisig_address.as_ref();
+	let addr = SpAccountId32::from(*addr_bytes);
+	Some(addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189)))
+}
+
+#[cfg(test)]
+fn find_matching_multisig_created_address<'a>(
+	events: impl IntoIterator<Item = &'a quantus_subxt::api::multisig::events::MultisigCreated>,
+	creator: &SubxtAccountId32,
+	signers: &[SubxtAccountId32],
+	threshold: u32,
+	nonce: u64,
+) -> Option<String> {
+	events
+		.into_iter()
+		.find_map(|ev| matching_multisig_created_address(ev, creator, signers, threshold, nonce))
 }
 
 /// Create a multisig account
@@ -497,10 +562,11 @@ pub async fn create_multisig(
 			.create_multisig(signers.clone(), threshold, nonce);
 
 	// Submit transaction
+	let creator_account_id = keypair_to_subxt_account_id(creator_keypair)?;
 	let execution_mode =
 		ExecutionMode { finalized: false, wait_for_transaction: wait_for_inclusion };
 	let signer = crate::wallet::WalletSigner::Hot(creator_keypair.clone());
-	let tx_hash = crate::cli::common::submit_transaction(
+	let (tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		quantus_client,
 		&signer,
 		create_tx,
@@ -509,21 +575,39 @@ pub async fn create_multisig(
 	)
 	.await?;
 
-	// If waiting, extract address from events
+	// If waiting, extract the matching address from the events of the
+	// transaction's own inclusion block; the tip may have moved past it.
 	let multisig_address = if wait_for_inclusion {
-		let latest_block_hash = quantus_client.get_latest_block().await?;
-		let events = quantus_client.client().events().at(latest_block_hash).await?;
+		let inclusion_block_hash = included_in.ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Multisig creation watch returned no inclusion block".to_string(),
+			)
+		})?;
+		let events = quantus_client.client().events().at(inclusion_block_hash).await?;
 
-		let mut multisig_events =
+		let multisig_events =
 			events.find::<quantus_subxt::api::multisig::events::MultisigCreated>();
 
-		let address: Option<String> = if let Some(Ok(ev)) = multisig_events.next() {
-			let addr_bytes: &[u8; 32] = ev.multisig_address.as_ref();
-			let addr = SpAccountId32::from(*addr_bytes);
-			Some(addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189)))
-		} else {
-			None
-		};
+		let mut address: Option<String> = None;
+		for event_result in multisig_events {
+			match event_result {
+				Ok(ev) => {
+					if let Some(matching_address) = matching_multisig_created_address(
+						&ev,
+						&creator_account_id,
+						&signers,
+						threshold,
+						nonce,
+					) {
+						address = Some(matching_address);
+						break;
+					}
+				},
+				Err(e) => {
+					log_verbose!("Error parsing event: {:?}", e);
+				},
+			}
+		}
 		address
 	} else {
 		None
@@ -1042,7 +1126,7 @@ async fn handle_create_multisig(
 	log_print!("🔐 {} Creating multisig...", "MULTISIG".bright_magenta().bold());
 
 	// Parse signers - convert to AccountId32
-	let signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
+	let mut signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
 		.split(',')
 		.map(|s| s.trim())
 		.map(|addr| {
@@ -1061,6 +1145,14 @@ async fn handle_create_multisig(
 			Ok(subxt::ext::subxt_core::utils::AccountId32::from(bytes))
 		})
 		.collect::<Result<Vec<_>, crate::error::QuantusError>>()?;
+	signer_addresses.sort_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
+	signer_addresses.dedup_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
 
 	log_verbose!("Signers: {} addresses", signer_addresses.len());
 	log_verbose!("Threshold: {}", threshold);
@@ -1092,6 +1184,7 @@ async fn handle_create_multisig(
 
 	// Load signer
 	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
+	let creator_account_id = signer_to_subxt_account_id(&signer)?;
 
 	// Connect to chain
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
@@ -1109,7 +1202,7 @@ async fn handle_create_multisig(
 		wait_for_transaction: true, // Always wait to confirm address
 	};
 
-	let _tx_hash = crate::cli::common::submit_transaction(
+	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		&quantus_client,
 		&signer,
 		create_tx,
@@ -1125,11 +1218,16 @@ async fn handle_create_multisig(
 		log_print!("");
 		log_print!("🔍 Looking for MultisigCreated event...");
 
-		// Query latest block events
-		let latest_block_hash = quantus_client.get_latest_block().await?;
-		let events = quantus_client.client().events().at(latest_block_hash).await?;
+		// Query events at the transaction's own inclusion block; with --finalized
+		// the tip is typically far past it by the time the watch returns.
+		let inclusion_block_hash = included_in.ok_or_else(|| {
+			crate::error::QuantusError::Generic(
+				"Multisig creation watch returned no inclusion block".to_string(),
+			)
+		})?;
+		let events = quantus_client.client().events().at(inclusion_block_hash).await?;
 
-		// Find MultisigCreated event
+		// Find MultisigCreated event matching this create
 		let multisig_events =
 			events.find::<quantus_subxt::api::multisig::events::MultisigCreated>();
 
@@ -1137,13 +1235,17 @@ async fn handle_create_multisig(
 		for event_result in multisig_events {
 			match event_result {
 				Ok(ev) => {
-					let addr_bytes: &[u8; 32] = ev.multisig_address.as_ref();
-					let addr = SpAccountId32::from(*addr_bytes);
-					actual_address = Some(addr.to_ss58check_with_version(
-						sp_core::crypto::Ss58AddressFormat::custom(189),
-					));
-					log_verbose!("Found MultisigCreated event");
-					break;
+					if let Some(address) = matching_multisig_created_address(
+						&ev,
+						&creator_account_id,
+						&signer_addresses,
+						threshold,
+						nonce,
+					) {
+						actual_address = Some(address);
+						log_verbose!("Found matching MultisigCreated event");
+						break;
+					}
 				},
 				Err(e) => {
 					log_verbose!("Error parsing event: {:?}", e);
@@ -1196,7 +1298,7 @@ async fn handle_predict_address(
 	log_print!("");
 
 	// Parse signers - convert to AccountId32
-	let signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
+	let mut signer_addresses: Vec<subxt::ext::subxt_core::utils::AccountId32> = signers
 		.split(',')
 		.map(|s| s.trim())
 		.map(|addr| {
@@ -1215,6 +1317,14 @@ async fn handle_predict_address(
 			Ok(subxt::ext::subxt_core::utils::AccountId32::from(bytes))
 		})
 		.collect::<Result<Vec<_>, crate::error::QuantusError>>()?;
+	signer_addresses.sort_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
+	signer_addresses.dedup_by_key(|account| {
+		let bytes: [u8; 32] = *account.as_ref();
+		bytes
+	});
 
 	// Validate inputs
 	if signer_addresses.is_empty() {
@@ -2950,7 +3060,7 @@ async fn handle_high_security_set(
 	let delay_value = if let Some(blocks) = delay_blocks {
 		HsDelay::BlockNumber(blocks)
 	} else if let Some(seconds) = delay_seconds {
-		HsDelay::Timestamp(seconds * 1000) // Convert seconds to milliseconds
+		HsDelay::Timestamp(delay_seconds_to_millis(seconds)?)
 	} else {
 		return Err(crate::error::QuantusError::Generic("Missing delay parameter".to_string()));
 	};
@@ -3074,4 +3184,82 @@ async fn handle_high_security_set(
 	log_print!("");
 
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use quantus_subxt::api::multisig::events::MultisigCreated;
+
+	fn account(byte: u8) -> SubxtAccountId32 {
+		SubxtAccountId32::from([byte; 32])
+	}
+
+	fn ss58(account_id: &SubxtAccountId32) -> String {
+		let addr_bytes: &[u8; 32] = account_id.as_ref();
+		let addr = SpAccountId32::from(*addr_bytes);
+		addr.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
+	}
+
+	#[test]
+	fn duplicate_signers_do_not_inflate_predicted_multisig_address() {
+		// #160052: prediction must hash the unique sorted signer set.
+		let signer = account(7);
+		let with_dup = predict_multisig_address(vec![signer.clone(), signer.clone()], 2, 0);
+		let unique = predict_multisig_address(vec![signer], 2, 0);
+		assert_eq!(with_dup, unique, "multisig address prediction must ignore duplicate signers");
+	}
+
+	#[tokio::test]
+	async fn duplicate_signers_threshold_rejected_after_dedup() {
+		// #160052: threshold validated against unique signers, not raw CSV length.
+		let signer_ss58 = ss58(&account(7));
+		let duplicate_csv = format!("{0},{0}", signer_ss58);
+		let result = handle_multisig_command(
+			MultisigCommands::PredictAddress { signers: duplicate_csv, threshold: 2, nonce: 0 },
+			"ws://127.0.0.1:9944",
+			ExecutionMode::default(),
+		)
+		.await;
+		assert!(
+			result.is_err(),
+			"duplicate-only signer sets with threshold 2 must fail local validation: {:?}",
+			result
+		);
+	}
+
+	#[test]
+	fn find_matching_multisig_created_address_skips_unrelated_same_block_event() {
+		let creator = account(1);
+		let signers = vec![account(10), account(11)];
+		let threshold = 2u32;
+		let nonce = 7u64;
+		let wanted_address = account(99);
+
+		let wrong_first = MultisigCreated {
+			creator: account(2),
+			multisig_address: account(88),
+			signers: vec![account(20), account(21)],
+			threshold: 1,
+			nonce: 1,
+		};
+		let matching = MultisigCreated {
+			creator: creator.clone(),
+			multisig_address: wanted_address.clone(),
+			// Unsorted relative to query signers; matcher must compare sorted.
+			signers: vec![account(11), account(10)],
+			threshold,
+			nonce,
+		};
+
+		let selected = find_matching_multisig_created_address(
+			[&wrong_first, &matching],
+			&creator,
+			&signers,
+			threshold,
+			nonce,
+		);
+
+		assert_eq!(selected, Some(ss58(&wanted_address)));
+	}
 }

@@ -41,8 +41,8 @@ fn transfer_call(
 async fn transfer_over_balance(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[0].clone();
 	let recipient = ctx.fresh_keypair()?;
-	let balance = ctx.free_balance(&sender.to_account_id_ss58check()).await?;
-	let call = transfer_call(account_id_of(&recipient), balance.saturating_mul(2));
+	let balance = ctx.free_balance(&sender.try_to_account_id_ss58check()?).await?;
+	let call = transfer_call(account_id_of(&recipient)?, balance.saturating_mul(2));
 	submit_expect_failure(ctx, &sender, call, &["FundsUnavailable", "InsufficientBalance"]).await
 }
 
@@ -52,14 +52,14 @@ async fn transfer_below_ed(ctx: &mut ExerciseCtx) -> Result<String> {
 	}
 	let sender = ctx.eph[0].clone();
 	let recipient = ctx.fresh_keypair()?;
-	let call = transfer_call(account_id_of(&recipient), ctx.existential_deposit - 1);
+	let call = transfer_call(account_id_of(&recipient)?, ctx.existential_deposit - 1);
 	submit_expect_failure(ctx, &sender, call, &["BelowMinimum", "ExistentialDeposit"]).await
 }
 
 async fn transfer_overflow_amount(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[1].clone();
 	let recipient = ctx.fresh_keypair()?;
-	let call = transfer_call(account_id_of(&recipient), u128::MAX);
+	let call = transfer_call(account_id_of(&recipient)?, u128::MAX);
 	submit_expect_failure(
 		ctx,
 		&sender,
@@ -80,7 +80,7 @@ async fn malformed_address(_ctx: &mut ExerciseCtx) -> Result<String> {
 
 async fn stale_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[0].clone();
-	let account = sender.to_account_id_32();
+	let account = sender.try_to_account_id_32()?;
 	let current_nonce = ctx.client.get_account_nonce_from_best_block(&account).await?;
 	if current_nonce == 0 {
 		return Err(QuantusError::Generic(
@@ -88,7 +88,7 @@ async fn stale_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 		));
 	}
 	let recipient = ctx.fresh_keypair()?;
-	let call = transfer_call(account_id_of(&recipient), ctx.unit);
+	let call = transfer_call(account_id_of(&recipient)?, ctx.unit);
 	match crate::cli::common::submit_transaction_with_nonce(
 		&ctx.client,
 		&crate::wallet::WalletSigner::Hot(sender.clone()),
@@ -118,7 +118,7 @@ async fn reversible_delay_too_short(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?;
 	use quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay;
 	let call = quantus_subxt::api::tx().reversible_transfers().schedule_transfer_with_delay(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)),
+		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)?),
 		ctx.unit,
 		Delay::BlockNumber(1),
 	);
@@ -129,7 +129,7 @@ async fn reversible_default_delay_not_hs(ctx: &mut ExerciseCtx) -> Result<String
 	let sender = ctx.eph[2].clone();
 	let recipient = ctx.fresh_keypair()?;
 	let call = quantus_subxt::api::tx().reversible_transfers().schedule_transfer(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)),
+		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)?),
 		ctx.unit,
 	);
 	submit_expect_failure(ctx, &sender, call, &["AccountNotHighSecurity"]).await
@@ -140,7 +140,7 @@ async fn high_security_self_guardian(ctx: &mut ExerciseCtx) -> Result<String> {
 	use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
 	let call = quantus_subxt::api::tx()
 		.reversible_transfers()
-		.set_high_security(Delay::BlockNumber(10), account_id_of(&sender));
+		.set_high_security(Delay::BlockNumber(10), account_id_of(&sender)?);
 	submit_expect_failure(ctx, &sender, call, &["GuardianCannotBeSelf"]).await
 }
 

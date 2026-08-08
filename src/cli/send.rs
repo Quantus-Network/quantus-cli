@@ -87,7 +87,9 @@ pub fn format_balance(amount: u128, decimals: u8) -> String {
 		return amount.to_string();
 	}
 
-	let divisor = 10_u128.pow(decimals as u32);
+	let Some(divisor) = 10_u128.checked_pow(decimals as u32) else {
+		return format!("<unsupported decimals: {decimals}>");
+	};
 	let whole_part = amount / divisor;
 	let fractional_part = amount % divisor;
 
@@ -271,7 +273,9 @@ pub(crate) fn build_batch_transfer_call(
 		}));
 	}
 
-	Ok(quantus_subxt::api::tx().utility().batch(calls))
+	// batch_all is atomic: any child call failure aborts and reverts the whole batch.
+	// utility.batch() can partially apply earlier calls and still return Ok.
+	Ok(quantus_subxt::api::tx().utility().batch_all(calls))
 }
 
 pub async fn estimate_transaction_partial_fee<Call>(
@@ -457,7 +461,7 @@ pub async fn transfer_with_nonce(
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating transfer transaction...");
-	log_verbose!("   From: {}", from_keypair.to_account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 
@@ -492,7 +496,7 @@ pub(crate) async fn validate_batch_transfer_request(
 	transfers: &[(String, u128)],
 ) -> Result<()> {
 	log_verbose!("🚀 Preparing batch transfer transaction with {} transfers...", transfers.len());
-	log_verbose!("   From: {}", signer.account_id_ss58check().bright_cyan());
+	log_verbose!("   From: {}", signer.try_account_id_ss58check()?.bright_cyan());
 
 	if transfers.is_empty() {
 		return Err(crate::error::QuantusError::Generic(
@@ -500,12 +504,11 @@ pub(crate) async fn validate_batch_transfer_request(
 		));
 	}
 
-	let (safe_limit, recommended_limit) =
-		get_batch_limits(quantus_client).await.unwrap_or((500, 1000));
+	let (safe_limit, recommended_limit) = get_batch_limits(quantus_client).await?;
 
 	if transfers.len() as u32 > recommended_limit {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Too many transfers in batch ({}) - chain limit is ~{} (safe: {})",
+			"Too many transfers in batch ({}) - chain batched calls limit is {} (safe: {})",
 			transfers.len(),
 			recommended_limit,
 			safe_limit
@@ -619,7 +622,7 @@ pub async fn handle_send_command(
 	let signer = crate::wallet::load_signer_from_wallet(&from_wallet, password, password_file)?;
 
 	// Get account information
-	let from_account_id = signer.account_id_ss58check();
+	let from_account_id = signer.try_account_id_ss58check()?;
 	let balance = get_balance(&quantus_client, &from_account_id).await?;
 
 	// Get formatted balance with proper decimals
@@ -743,47 +746,49 @@ pub async fn load_transfers_from_file(file_path: &str) -> Result<Vec<(String, u1
 	Ok(transfers)
 }
 
+/// Derive CLI safe/recommended batch limits from the runtime call-count limit.
+pub(crate) fn limits_from_batched_calls_limit(batched_calls_limit: u32) -> (u32, u32) {
+	(batched_calls_limit / 2, batched_calls_limit)
+}
+
 /// Get chain constants for batch limits
 pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u32)> {
-	// Try to get actual chain constants
 	let constants = quantus_client.client().constants();
+	let batched_calls_limit = constants
+		.at(&quantus_subxt::api::constants().utility().batched_calls_limit())
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to read Utility::batched_calls_limit from runtime metadata: {e:?}"
+			))
+		})?;
+	let (safe_limit, recommended_limit) = limits_from_batched_calls_limit(batched_calls_limit);
 
-	// Get block weight limit
-	let block_weight_limit = constants
-		.at(&quantus_subxt::api::constants().system().block_weights())
-		.map(|weights| weights.max_block.ref_time)
-		.unwrap_or(2_000_000_000_000); // Default 2 trillion weight units
-
-	// Estimate transfers per block (rough calculation)
-	let transfer_weight = 1_500_000_000u64; // Rough estimate per transfer
-	let max_transfers_by_weight = (block_weight_limit / transfer_weight) as u32;
-
-	// Get max extrinsic length
-	let max_extrinsic_length = constants
-		.at(&quantus_subxt::api::constants().system().block_length())
-		.map(|length| length.max.normal)
-		.unwrap_or(5_242_880); // Default 5MB
-
-	// Estimate transfers per extrinsic size (very rough)
-	let transfer_size = 100u32; // Rough estimate per transfer in bytes
-	let max_transfers_by_size = max_extrinsic_length / transfer_size;
-
-	let recommended_limit = std::cmp::min(max_transfers_by_weight, max_transfers_by_size);
-	let safe_limit = recommended_limit / 2; // Be conservative
-
-	log_verbose!(
-		"📊 Chain limits: weight allows ~{}, size allows ~{}",
-		max_transfers_by_weight,
-		max_transfers_by_size
-	);
-	log_verbose!("📊 Recommended batch size: {} (safe: {})", recommended_limit, safe_limit);
+	log_verbose!("📊 Chain batched calls limit: {} (safe: {})", batched_calls_limit, safe_limit);
 
 	Ok((safe_limit, recommended_limit))
 }
 
 #[cfg(test)]
 mod tests {
-	use super::{effective_tip_amount, parse_amount_with_decimals};
+	use super::{
+		build_batch_transfer_call, effective_tip_amount, format_balance,
+		limits_from_batched_calls_limit, parse_amount_with_decimals,
+	};
+	use subxt::tx::Payload;
+
+	/// Substrate Alice (valid SS58); used only to construct a call for metadata checks.
+	const TEST_DEST: &str = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
+
+	#[test]
+	fn batch_transfer_call_uses_atomic_batch_all() {
+		let call = build_batch_transfer_call(&[(TEST_DEST.to_string(), 1)]).unwrap();
+		let details = call.validation_details().expect("static payload exposes call metadata");
+		assert_eq!(details.pallet_name, "Utility");
+		assert_eq!(
+			details.call_name, "batch_all",
+			"user-facing batch transfers must be atomic (utility.batch_all), not utility.batch"
+		);
+	}
 
 	#[test]
 	fn parses_exact_decimal_amounts() {
@@ -829,6 +834,28 @@ mod tests {
 
 		let overflow = format!("{}.0", whole + 1);
 		assert!(parse_amount_with_decimals(&overflow, 12).is_err());
+	}
+
+	#[test]
+	fn batch_limits_come_from_runtime_batched_calls_limit() {
+		// Heuristic weight/length estimates previously returned unrelated numbers and
+		// validate_batch_transfer_request fell back to (500, 1000) on errors.
+		let (safe, recommended) = limits_from_batched_calls_limit(40);
+		assert_eq!(recommended, 40, "recommended must be Utility::batched_calls_limit");
+		assert_eq!(safe, 20, "safe limit is half the runtime call-count limit");
+		assert_ne!(recommended, 1000, "must not use the hard-coded heuristic fallback");
+	}
+
+	#[test]
+	fn format_balance_rejects_unsupported_decimals_without_panic() {
+		let formatted = std::panic::catch_unwind(|| format_balance(u128::MAX, 39))
+			.expect("format_balance must not panic on unsupported decimals");
+		assert!(
+			formatted.contains("unsupported decimals"),
+			"expected unsupported-decimals marker, got: {formatted}"
+		);
+		assert_eq!(format_balance(1_500_000_000_000, 12), "1.5");
+		assert_eq!(format_balance(42, 0), "42");
 	}
 
 	#[test]

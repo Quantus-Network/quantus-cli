@@ -21,7 +21,7 @@ async fn pending_ids(
 	ctx: &ExerciseCtx,
 	sender: &crate::wallet::QuantumKeyPair,
 ) -> Result<Vec<subxt::utils::H256>> {
-	let account = account_id_of(sender);
+	let account = account_id_of(sender)?;
 	let addr = quantus_subxt::api::storage()
 		.reversible_transfers()
 		.pending_transfers_by_sender(account);
@@ -32,7 +32,7 @@ async fn pending_ids(
 
 async fn schedule_and_cancel(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[2].clone();
-	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
+	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
 	let amount = ctx.unit;
 
 	crate::cli::reversible::schedule_transfer_with_delay(
@@ -68,7 +68,7 @@ async fn schedule_and_cancel(ctx: &mut ExerciseCtx) -> Result<String> {
 
 async fn schedule_with_delay(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[2].clone();
-	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
+	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
 	let delay_blocks = 50u64;
 
 	crate::cli::reversible::schedule_transfer_with_delay(
@@ -97,7 +97,7 @@ async fn schedule_with_delay(ctx: &mut ExerciseCtx) -> Result<String> {
 async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 	// High-security is sticky; use a dedicated account.
 	let account = ctx.fresh_keypair()?;
-	let account_ss58 = account.to_account_id_ss58check();
+	let account_ss58 = account.try_to_account_id_ss58check()?;
 
 	let funder = ctx.eph[3].clone();
 	crate::cli::send::transfer(
@@ -110,7 +110,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 	)
 	.await?;
 
-	let guardian = account_id_of(&ctx.alice);
+	let guardian = account_id_of(&ctx.alice)?;
 	use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
 	let call = quantus_subxt::api::tx()
 		.reversible_transfers()
@@ -119,12 +119,12 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	let addr = quantus_subxt::api::storage()
 		.reversible_transfers()
-		.high_security_accounts(account_id_of(&account));
+		.high_security_accounts(account_id_of(&account)?);
 	let latest = ctx.client.get_latest_block().await?;
 	let value = ctx.client.client().storage().at(latest).fetch(&addr).await?;
 	match value {
 		Some(data) =>
-			if data.guardian != account_id_of(&ctx.alice) {
+			if data.guardian != account_id_of(&ctx.alice)? {
 				return Err(QuantusError::Generic(
 					"high-security guardian in storage does not match alice".to_string(),
 				));
@@ -135,7 +135,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 			)),
 	}
 
-	let recipient = ctx.fresh_keypair()?.to_account_id_ss58check();
+	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
 	crate::cli::reversible::schedule_transfer(
 		&ctx.client,
 		&crate::wallet::WalletSigner::Hot(account.clone()),

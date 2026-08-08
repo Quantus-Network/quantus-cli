@@ -56,8 +56,17 @@ pub enum WalletError {
 	#[error("Invalid password (or corrupted wallet file)")]
 	InvalidPassword,
 
+	#[error("Invalid wallet address")]
+	InvalidAddress,
+
+	#[error("Invalid wallet name")]
+	InvalidName,
+
 	#[error("Key generation failed")]
 	KeyGeneration,
+
+	#[error("Invalid public key")]
+	InvalidPublicKey,
 
 	#[error("Encryption failed: {0}")]
 	Encryption(String),
@@ -67,6 +76,9 @@ pub enum WalletError {
 
 	#[error("'{0}' is a cold (watch-only) wallet with no local key material. Extrinsics sign via QR; this operation needs a hot wallet")]
 	ColdWalletNoKeys(String),
+
+	#[error("Wallet integrity check failed: {0}")]
+	Integrity(String),
 }
 
 /// Type alias for Results using QuantusError

@@ -17,7 +17,7 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 }
 
 async fn config_reads(ctx: &mut ExerciseCtx) -> Result<String> {
-	let alice = account_id_of(&ctx.alice);
+	let alice = account_id_of(&ctx.alice)?;
 	let latest = ctx.client.get_latest_block().await?;
 	let storage_at = ctx.client.client().storage().at(latest);
 
@@ -34,7 +34,7 @@ async fn config_reads(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn initiate_not_recoverable(ctx: &mut ExerciseCtx) -> Result<String> {
-	let lost = account_id_of(&ctx.bob);
+	let lost = account_id_of(&ctx.bob)?;
 	let call = quantus_subxt::api::tx()
 		.recovery()
 		.initiate_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost));

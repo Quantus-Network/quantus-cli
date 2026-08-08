@@ -269,7 +269,7 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 	nonce_override: Option<u32>,
 	execution_mode: crate::cli::common::ExecutionMode,
 	io: &ColdIo,
-) -> Result<subxt::utils::H256> {
+) -> Result<(subxt::utils::H256, Option<subxt::utils::H256>)> {
 	use sp_core::crypto::Ss58Codec;
 
 	let account = AccountId32::from_ss58check_with_version(cold_address_ss58)
@@ -514,7 +514,9 @@ mod tests {
 
 	fn alice_account() -> AccountId32 {
 		let pair = qp_dilithium_crypto::crystal_alice();
-		crate::wallet::QuantumKeyPair::from_resonance_pair(&pair).to_account_id_32()
+		crate::wallet::QuantumKeyPair::from_resonance_pair(&pair)
+			.try_to_account_id_32()
+			.expect("valid keypair")
 	}
 
 	fn transfer_call() -> impl subxt::tx::Payload {
