@@ -3596,6 +3596,7 @@ dependencies = [
 [[package]]
 name = "qp-dilithium-crypto"
 version = "0.5.0"
+source = "git+https://github.com/Quantus-Network/chain?branch=chore%2Fbump-crypto-deps-2026-08#563ed51b485e9936f5e78fbde9935dcb2490c4bf"
 dependencies = [
  "log",
  "parity-scale-codec",
