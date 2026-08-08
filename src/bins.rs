@@ -44,15 +44,13 @@ pub const BINS_DIR_ENV: &str = "QUANTUS_BINS_DIR";
 
 /// Files that must be present for all wormhole operations to succeed.
 ///
-/// Note: there is no leaf `prover.bin` — qp-wormhole-circuit-builder 3.1.0+ does
-/// not emit one; leaf proofs use `qp_wormhole_prover::build_fresh()`.
+/// No `*_prover.bin` artifacts: circuit-builder 4.2.0+ never emits them;
+/// leaf / private-batch / public-batch provers rebuild from source.
 const REQUIRED_FILES: &[&str] = &[
 	"verifier.bin",
 	"common.bin",
-	"private_batch_prover.bin",
 	"private_batch_verifier.bin",
 	"private_batch_common.bin",
-	"public_batch_prover.bin",
 	"public_batch_verifier.bin",
 	"public_batch_common.bin",
 	"dummy_proof.bin",
@@ -198,8 +196,10 @@ fn remove_stale_artifact_files(dir: &Path) -> Result<()> {
 	names.extend(MANIFESTED_FILES.iter().copied());
 	names.insert(MANIFEST_FILE);
 	names.insert(VERSION_MARKER);
-	// Legacy leaf prover emitted by pre-3.1.0 circuit builders.
+	// Legacy prover artifacts no longer emitted by circuit-builder 4.2.0+.
 	names.insert("prover.bin");
+	names.insert("private_batch_prover.bin");
+	names.insert("public_batch_prover.bin");
 
 	for name in names {
 		let path = dir.join(name);
