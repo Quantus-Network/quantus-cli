@@ -316,13 +316,44 @@ fn parse_moment(value: &str) -> Result<u64> {
 		let seconds: u64 = offset.parse().map_err(|_| {
 			QuantusError::Generic(format!("Invalid relative moment '+{offset}': expected seconds"))
 		})?;
-		return Ok(now_ms()? + seconds * 1_000);
+		let offset_ms = seconds.checked_mul(1_000).ok_or_else(|| {
+			QuantusError::Generic(format!(
+				"Invalid relative moment '+{offset}': seconds overflow when converting to milliseconds"
+			))
+		})?;
+		return now_ms()?.checked_add(offset_ms).ok_or_else(|| {
+			QuantusError::Generic(format!(
+				"Invalid relative moment '+{offset}': timestamp overflow when adding to now"
+			))
+		});
 	}
 	value.parse().map_err(|_| {
 		QuantusError::Generic(format!(
 			"Invalid moment '{value}': expected unix milliseconds, \"now\", or \"+<seconds>\""
 		))
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn parse_moment_rejects_relative_seconds_overflow() {
+		let err = parse_moment(&format!("+{}", u64::MAX)).unwrap_err();
+		let msg = err.to_string();
+		assert!(
+			msg.contains("overflow") && msg.contains("milliseconds"),
+			"expected checked_mul error, got: {msg}"
+		);
+	}
+
+	#[test]
+	fn parse_moment_accepts_small_relative_offset() {
+		let now = parse_moment("now").expect("now");
+		let later = parse_moment("+1").expect("+1s");
+		assert!(later >= now + 1_000, "expected +1s to add 1000ms");
+	}
 }
 
 async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Result<()> {
