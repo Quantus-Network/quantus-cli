@@ -482,6 +482,18 @@ where
 	Ok(tx_hash)
 }
 
+/// Reject ML-DSA-65 signers on runtimes that only decode ML-DSA-87 signatures.
+async fn ensure_keypair_scheme_supported(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+) -> crate::error::Result<()> {
+	if from_keypair.scheme != crate::wallet::DilithiumScheme::MlDsa65 {
+		return Ok(());
+	}
+	let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
+	crate::config::ensure_ml_dsa_65_supported(spec_version, transaction_version)
+}
+
 /// Like [`submit_transaction`], but also returns the hash of the block in which
 /// the transaction reached the requested stage (`None` when the transaction was
 /// only submitted without watching).
@@ -499,6 +511,8 @@ pub async fn submit_transaction_with_inclusion_block<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
+
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -618,6 +632,8 @@ pub async fn submit_transaction_with_nonce<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
+
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;

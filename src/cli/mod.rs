@@ -644,7 +644,16 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 	log_print!("   • Expected spec name: {}", crate::config::EXPECTED_RUNTIME_SPEC_NAME);
 	log_print!("   • Supported runtime/transaction pairs:");
 	for runtime in crate::config::COMPATIBLE_RUNTIMES {
-		log_print!("     - spec {} / tx {}", runtime.spec_version, runtime.transaction_version);
+		let schemes = if runtime.supports_ml_dsa_65 {
+			"ml-dsa-65, ml-dsa-87"
+		} else {
+			"ml-dsa-87"
+		};
+		log_print!(
+			"     - spec {} / tx {} ({schemes})",
+			runtime.spec_version,
+			runtime.transaction_version
+		);
 	}
 	log_print!("   • Current Spec Name: {spec_name}");
 	log_print!("   • Current Runtime Version: {spec_version}");
