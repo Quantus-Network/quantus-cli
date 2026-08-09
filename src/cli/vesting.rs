@@ -334,28 +334,6 @@ fn parse_moment(value: &str) -> Result<u64> {
 	})
 }
 
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn parse_moment_rejects_relative_seconds_overflow() {
-		let err = parse_moment(&format!("+{}", u64::MAX)).unwrap_err();
-		let msg = err.to_string();
-		assert!(
-			msg.contains("overflow") && msg.contains("milliseconds"),
-			"expected checked_mul error, got: {msg}"
-		);
-	}
-
-	#[test]
-	fn parse_moment_accepts_small_relative_offset() {
-		let now = parse_moment("now").expect("now");
-		let later = parse_moment("+1").expect("+1s");
-		assert!(later >= now + 1_000, "expected +1s to add 1000ms");
-	}
-}
-
 async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Result<()> {
 	let constants = quantus_client.client().constants();
 	let payout_quantum =
@@ -524,4 +502,26 @@ async fn claim(
 	}
 	log_success!("✅ Claim submitted. Tx: {:?}", tx_hash);
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn parse_moment_rejects_relative_seconds_overflow() {
+		let err = parse_moment(&format!("+{}", u64::MAX)).unwrap_err();
+		let msg = err.to_string();
+		assert!(
+			msg.contains("overflow") && msg.contains("milliseconds"),
+			"expected checked_mul error, got: {msg}"
+		);
+	}
+
+	#[test]
+	fn parse_moment_accepts_small_relative_offset() {
+		let now = parse_moment("now").expect("now");
+		let later = parse_moment("+1").expect("+1s");
+		assert!(later >= now + 1_000, "expected +1s to add 1000ms");
+	}
 }
