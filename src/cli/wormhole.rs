@@ -4538,9 +4538,11 @@ mod tests {
 				!body.contains("tx_progress.next().await"),
 				"unsigned verify must not wait on an unbounded status stream"
 			);
+			// Match arms may mention Finalized for passthrough; the wait helper
+			// must still receive the normalized `stage` local, not a Finalized literal.
 			assert!(
-				!body.contains("TransactionStage::Finalized,"),
-				"default path must not hardcode Finalized; stage is passed in"
+				body.contains("&tx_hash,\n\t\tstage,\n\t)"),
+				"wait_tx_inclusion must receive the caller-selected stage parameter"
 			);
 		}
 	}
@@ -4639,20 +4641,21 @@ mod tests {
 	fn test_fee_calculation_edge_cases() {
 		// Test the circuit fee constraint: output_amount * 10000 <= input_amount * (10000 -
 		// volume_fee_bps) This is equivalent to: output <= input * (1 - fee_rate)
+		// VOLUME_FEE_BPS is 4 → keep factor 9996/10000.
 
-		// Small amounts where fee rounds to zero
+		// Small amounts where fee rounds down
 		let input_small: u32 = 100;
 		let output_small = compute_output_amount(input_small, VOLUME_FEE_BPS);
 		assert_eq!(output_small, 99);
-		// Verify constraint: 99 * 10000 = 990000 <= 100 * 9990 = 999000 ✓
+		// Verify constraint: 99 * 10000 = 990000 <= 100 * 9996 = 999600 ✓
 		assert!(
 			(output_small as u64) * 10000 <= (input_small as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
-		// Medium amounts
+		// Medium amounts: 10000 * 9996 / 10000 = 9996
 		let input_medium: u32 = 10000;
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
-		assert_eq!(output_medium, 9990);
+		assert_eq!(output_medium, 9996);
 		assert!(
 			(output_medium as u64) * 10000 <=
 				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
