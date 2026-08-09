@@ -108,8 +108,13 @@ impl WalletManager {
 
 	/// Create a new wallet (default scheme: ML-DSA-65).
 	pub async fn create_wallet(&self, name: &str, password: Option<&str>) -> Result<WalletInfo> {
-		self.create_wallet_with_scheme(name, password, DEFAULT_DERIVATION_PATH, DilithiumScheme::MlDsa65)
-			.await
+		self.create_wallet_with_scheme(
+			name,
+			password,
+			DEFAULT_DERIVATION_PATH,
+			DilithiumScheme::MlDsa65,
+		)
+		.await
 	}
 
 	/// Create a new wallet with custom derivation path (default scheme: ML-DSA-65).
@@ -119,13 +124,8 @@ impl WalletManager {
 		password: Option<&str>,
 		derivation_path: &str,
 	) -> Result<WalletInfo> {
-		self.create_wallet_with_scheme(
-			name,
-			password,
-			derivation_path,
-			DilithiumScheme::MlDsa65,
-		)
-		.await
+		self.create_wallet_with_scheme(name, password, derivation_path, DilithiumScheme::MlDsa65)
+			.await
 	}
 
 	/// Create a new wallet with derivation path and signature scheme.

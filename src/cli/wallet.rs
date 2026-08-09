@@ -377,11 +377,7 @@ pub async fn handle_wallet_command(
 
 			let result = if no_derivation {
 				wallet_manager
-					.create_wallet_no_derivation_with_scheme(
-						&name,
-						Some(&final_password),
-						scheme,
-					)
+					.create_wallet_no_derivation_with_scheme(&name, Some(&final_password), scheme)
 					.await
 			} else {
 				wallet_manager
@@ -750,12 +746,7 @@ pub async fn handle_wallet_command(
 			crate::wallet::keystore::zeroize_string(&mut seed_raw);
 
 			let result = wallet_manager
-				.create_wallet_from_seed_with_scheme(
-					&name,
-					&seed,
-					Some(&final_password),
-					scheme,
-				)
+				.create_wallet_from_seed_with_scheme(&name, &seed, Some(&final_password), scheme)
 				.await;
 			crate::wallet::keystore::zeroize_string(&mut seed);
 

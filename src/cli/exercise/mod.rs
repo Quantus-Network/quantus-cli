@@ -291,8 +291,7 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 	let mut scheme_87 = 0usize;
 	// Alternate schemes so funded senders exercise both ML-DSA-65 and ML-DSA-87 signing.
 	for i in 0..count {
-		let scheme =
-			if i % 2 == 0 { DilithiumScheme::MlDsa65 } else { DilithiumScheme::MlDsa87 };
+		let scheme = if i % 2 == 0 { DilithiumScheme::MlDsa65 } else { DilithiumScheme::MlDsa87 };
 		match scheme {
 			DilithiumScheme::MlDsa65 => scheme_65 += 1,
 			DilithiumScheme::MlDsa87 => scheme_87 += 1,

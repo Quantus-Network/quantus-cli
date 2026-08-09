@@ -352,12 +352,18 @@ impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 		match self {
 			Self::MlDsa65(pair) => {
 				let signature_with_public =
-					<qp_dilithium_crypto::types::Dilithium65Pair as Pair>::sign(pair, signer_payload);
+					<qp_dilithium_crypto::types::Dilithium65Pair as Pair>::sign(
+						pair,
+						signer_payload,
+					);
 				DilithiumSignatureScheme::Dilithium65(signature_with_public)
 			},
 			Self::MlDsa87(pair) => {
 				let signature_with_public =
-					<qp_dilithium_crypto::types::Dilithium87Pair as Pair>::sign(pair, signer_payload);
+					<qp_dilithium_crypto::types::Dilithium87Pair as Pair>::sign(
+						pair,
+						signer_payload,
+					);
 				DilithiumSignatureScheme::Dilithium87(signature_with_public)
 			},
 		}

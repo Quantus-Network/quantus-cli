@@ -278,15 +278,13 @@ impl Drop for QuantumKeyPair {
 impl QuantumKeyPair {
 	/// Placeholder used when moving a keypair out of [`WalletData`].
 	pub(crate) fn empty() -> Self {
-		Self {
-			public_key: Vec::new(),
-			private_key: Vec::new(),
-			scheme: DilithiumScheme::MlDsa87,
-		}
+		Self { public_key: Vec::new(), private_key: Vec::new(), scheme: DilithiumScheme::MlDsa87 }
 	}
 
 	/// Create from an ML-DSA-87 rusty-crystals keypair.
-	pub fn from_ml_dsa_87_keypair(keypair: &qp_rusty_crystals_dilithium::ml_dsa_87::Keypair) -> Self {
+	pub fn from_ml_dsa_87_keypair(
+		keypair: &qp_rusty_crystals_dilithium::ml_dsa_87::Keypair,
+	) -> Self {
 		Self {
 			public_key: keypair.public().to_bytes().to_vec(),
 			private_key: keypair.secret().to_bytes().to_vec(),
@@ -295,7 +293,9 @@ impl QuantumKeyPair {
 	}
 
 	/// Create from an ML-DSA-65 rusty-crystals keypair.
-	pub fn from_ml_dsa_65_keypair(keypair: &qp_rusty_crystals_dilithium::ml_dsa_65::Keypair) -> Self {
+	pub fn from_ml_dsa_65_keypair(
+		keypair: &qp_rusty_crystals_dilithium::ml_dsa_65::Keypair,
+	) -> Self {
 		Self {
 			public_key: keypair.public().to_bytes().to_vec(),
 			private_key: keypair.secret().to_bytes().to_vec(),
@@ -304,7 +304,9 @@ impl QuantumKeyPair {
 	}
 
 	/// Backward-compatible alias for ML-DSA-87 keypairs.
-	pub fn from_dilithium_keypair(keypair: &qp_rusty_crystals_dilithium::ml_dsa_87::Keypair) -> Self {
+	pub fn from_dilithium_keypair(
+		keypair: &qp_rusty_crystals_dilithium::ml_dsa_87::Keypair,
+	) -> Self {
 		Self::from_ml_dsa_87_keypair(keypair)
 	}
 
@@ -836,8 +838,7 @@ impl Keystore {
 mod tests {
 	use super::*;
 	use qp_dilithium_crypto::{
-		crystal_alice, crystal_charlie, dilithium_bob,
-		types::Dilithium65Pair,
+		crystal_alice, crystal_charlie, dilithium_bob, types::Dilithium65Pair,
 	};
 	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
 	use sp_core::Pair;
@@ -1122,9 +1123,8 @@ mod tests {
 			private_key: vec![4, 5, 6],
 			scheme: DilithiumScheme::MlDsa87,
 		};
-		let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			keypair.to_resonance_pair()
-		}));
+		let panicked =
+			std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| keypair.to_resonance_pair()));
 		assert!(panicked.is_ok(), "malformed keys must not panic");
 		assert!(
 			matches!(

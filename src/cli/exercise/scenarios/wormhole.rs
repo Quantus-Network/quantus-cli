@@ -29,7 +29,12 @@ async fn multiround(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Result<St
 	let manager = WalletManager::new()?;
 	let _ = manager.delete_wallet(&wallet_name);
 	let info = manager
-		.create_wallet_with_scheme(&wallet_name, None, crate::wallet::DEFAULT_DERIVATION_PATH, scheme)
+		.create_wallet_with_scheme(
+			&wallet_name,
+			None,
+			crate::wallet::DEFAULT_DERIVATION_PATH,
+			scheme,
+		)
 		.await?;
 
 	let funding = 500 * ctx.unit;
@@ -66,7 +71,5 @@ async fn run_multiround_command(
 		public: false,
 	};
 	crate::cli::wormhole::handle_wormhole_command(command, &ctx.node_url, ctx.wait_mode()).await?;
-	Ok(format!(
-		"wormhole multiround ({scheme}; 5 rounds, 5 proofs each) completed"
-	))
+	Ok(format!("wormhole multiround ({scheme}; 5 rounds, 5 proofs each) completed"))
 }

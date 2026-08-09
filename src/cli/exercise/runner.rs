@@ -32,35 +32,41 @@ impl ExerciseCtx {
 		let seed: [u8; 32] = self.rng.random();
 		match scheme {
 			DilithiumScheme::MlDsa65 => {
-				let pair = qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed)
-					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				let pair =
+					qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
 				Ok(QuantumKeyPair::from_dilithium65_pair(&pair))
 			},
 			DilithiumScheme::MlDsa87 => {
-				let pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed)
-					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				let pair =
+					qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
 				Ok(QuantumKeyPair::from_resonance_pair(&pair))
 			},
 		}
 	}
 
-	/// Fresh keypair alternating schemes from the seed bytes (both 65 and 87 get exercise coverage).
+	/// Fresh keypair alternating schemes from the seed bytes (both 65 and 87 get exercise
+	/// coverage).
 	pub fn fresh_keypair(&mut self) -> Result<QuantumKeyPair> {
 		let seed: [u8; 32] = self.rng.random();
-		let scheme = if seed[0] % 2 == 0 {
-			DilithiumScheme::MlDsa65
-		} else {
-			DilithiumScheme::MlDsa87
-		};
+		let scheme =
+			if seed[0] % 2 == 0 { DilithiumScheme::MlDsa65 } else { DilithiumScheme::MlDsa87 };
 		match scheme {
 			DilithiumScheme::MlDsa65 => {
-				let pair = qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed)
-					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				let pair =
+					qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
 				Ok(QuantumKeyPair::from_dilithium65_pair(&pair))
 			},
 			DilithiumScheme::MlDsa87 => {
-				let pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed)
-					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				let pair =
+					qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
 				Ok(QuantumKeyPair::from_resonance_pair(&pair))
 			},
 		}
