@@ -2,7 +2,7 @@
 
 use crate::{
 	cli::exercise::{report::Report, runner::ExerciseCtx},
-	error::Result,
+	error::{QuantusError, Result},
 	exercise_step,
 	wallet::{DilithiumScheme, WalletManager},
 };
@@ -27,7 +27,13 @@ async fn multiround(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Result<St
 	// Dev wallets (crystal_*) have no mnemonic; wormhole HD derivation requires one.
 	let wallet_name = format!("exercise_wormhole_{}_{}", scheme, ctx.seed);
 	let manager = WalletManager::new()?;
-	let _ = manager.delete_wallet(&wallet_name);
+	// Clear leftovers from a previous interrupted run (Ok(false) if absent).
+	manager.delete_wallet(&wallet_name).map_err(|e| {
+		QuantusError::Generic(format!(
+			"failed to clear leftover exercise wallet {wallet_name}: {e}"
+		))
+	})?;
+
 	let info = manager
 		.create_wallet_with_scheme(
 			&wallet_name,
@@ -37,20 +43,32 @@ async fn multiround(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Result<St
 		)
 		.await?;
 
-	let funding = 500 * ctx.unit;
-	crate::cli::send::transfer(
-		&ctx.client,
-		&ctx.alice,
-		&info.address,
-		funding,
-		None,
-		ctx.wait_mode(),
-	)
-	.await?;
+	let run_result = async {
+		let funding = 500 * ctx.unit;
+		crate::cli::send::transfer(
+			&ctx.client,
+			&ctx.alice,
+			&info.address,
+			funding,
+			None,
+			ctx.wait_mode(),
+		)
+		.await?;
+		run_multiround_command(ctx, &wallet_name, scheme).await
+	}
+	.await;
 
-	let result = run_multiround_command(ctx, &wallet_name, scheme).await;
-	let _ = manager.delete_wallet(&wallet_name);
-	result
+	let delete_result = manager.delete_wallet(&wallet_name);
+	match (run_result, delete_result) {
+		(Ok(msg), Ok(_)) => Ok(msg),
+		(Ok(_), Err(e)) => Err(QuantusError::Generic(format!(
+			"wormhole exercise succeeded but failed to delete wallet {wallet_name}: {e}"
+		))),
+		(Err(e), Ok(_)) => Err(e),
+		(Err(e), Err(del_e)) => Err(QuantusError::Generic(format!(
+			"{e}; also failed to delete exercise wallet {wallet_name}: {del_e}"
+		))),
+	}
 }
 
 async fn run_multiround_command(
