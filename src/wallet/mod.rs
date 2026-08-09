@@ -107,6 +107,7 @@ impl WalletManager {
 	}
 
 	/// Create a new wallet (default scheme: ML-DSA-65).
+	#[allow(dead_code)] // SDK/examples convenience; CLI passes an explicit `--scheme`
 	pub async fn create_wallet(&self, name: &str, password: Option<&str>) -> Result<WalletInfo> {
 		self.create_wallet_with_scheme(
 			name,
@@ -118,6 +119,7 @@ impl WalletManager {
 	}
 
 	/// Create a new wallet with custom derivation path (default scheme: ML-DSA-65).
+	#[allow(dead_code)] // SDK/examples convenience; CLI passes an explicit `--scheme`
 	pub async fn create_wallet_with_derivation_path(
 		&self,
 		name: &str,
@@ -285,6 +287,7 @@ impl WalletManager {
 	}
 
 	/// Import wallet from mnemonic phrase (default scheme: ML-DSA-65).
+	#[allow(dead_code)] // SDK/examples convenience; CLI passes an explicit `--scheme`
 	pub async fn import_wallet(
 		&self,
 		name: &str,
@@ -302,6 +305,7 @@ impl WalletManager {
 	}
 
 	/// Create wallet from mnemonic without derivation (master seed; default ML-DSA-65).
+	#[allow(dead_code)] // SDK/examples convenience; CLI passes an explicit `--scheme`
 	pub async fn create_wallet_no_derivation(
 		&self,
 		name: &str,
@@ -363,6 +367,7 @@ impl WalletManager {
 	}
 
 	/// Import wallet from mnemonic without derivation (default scheme: ML-DSA-65).
+	#[allow(dead_code)] // SDK/examples convenience; CLI passes an explicit `--scheme`
 	pub async fn import_wallet_no_derivation(
 		&self,
 		name: &str,
@@ -428,6 +433,7 @@ impl WalletManager {
 	}
 
 	/// Import wallet from mnemonic with custom derivation path (default ML-DSA-65).
+	#[allow(dead_code)] // SDK/examples convenience; CLI passes an explicit `--scheme`
 	pub async fn import_wallet_with_derivation_path(
 		&self,
 		name: &str,
@@ -493,6 +499,7 @@ impl WalletManager {
 	}
 
 	/// Create wallet from 32-byte seed (default scheme: ML-DSA-65).
+	#[allow(dead_code)] // SDK/examples convenience; CLI passes an explicit `--scheme`
 	pub async fn create_wallet_from_seed(
 		&self,
 		name: &str,

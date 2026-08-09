@@ -304,6 +304,7 @@ impl QuantumKeyPair {
 	}
 
 	/// Backward-compatible alias for ML-DSA-87 keypairs.
+	#[allow(dead_code)] // SDK/tests alias; CLI uses scheme-specific constructors
 	pub fn from_dilithium_keypair(
 		keypair: &qp_rusty_crystals_dilithium::ml_dsa_87::Keypair,
 	) -> Self {
@@ -373,10 +374,12 @@ impl QuantumKeyPair {
 	/// Convert to a scheme-aware subxt signer.
 	pub fn to_subxt_signer(&self) -> Result<crate::chain::client::QuantusSigner> {
 		match self.scheme {
-			DilithiumScheme::MlDsa87 =>
-				Ok(crate::chain::client::QuantusSigner::MlDsa87(self.to_resonance_pair()?)),
-			DilithiumScheme::MlDsa65 =>
-				Ok(crate::chain::client::QuantusSigner::MlDsa65(self.to_dilithium65_pair()?)),
+			DilithiumScheme::MlDsa87 => Ok(crate::chain::client::QuantusSigner::MlDsa87(Box::new(
+				self.to_resonance_pair()?,
+			))),
+			DilithiumScheme::MlDsa65 => Ok(crate::chain::client::QuantusSigner::MlDsa65(Box::new(
+				self.to_dilithium65_pair()?,
+			))),
 		}
 	}
 

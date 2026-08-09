@@ -327,9 +327,12 @@ impl QuantusClient {
 }
 
 /// Scheme-aware subxt signer (ML-DSA-65 or ML-DSA-87).
+///
+/// Pairs are boxed: Dilithium secret material is multi‑KB, and an unboxed enum
+/// trips `clippy::large_enum_variant`.
 pub enum QuantusSigner {
-	MlDsa65(qp_dilithium_crypto::types::Dilithium65Pair),
-	MlDsa87(qp_dilithium_crypto::types::Dilithium87Pair),
+	MlDsa65(Box<qp_dilithium_crypto::types::Dilithium65Pair>),
+	MlDsa87(Box<qp_dilithium_crypto::types::Dilithium87Pair>),
 }
 
 impl subxt::tx::Signer<ChainConfig> for QuantusSigner {

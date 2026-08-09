@@ -52,8 +52,11 @@ impl ExerciseCtx {
 	/// coverage).
 	pub fn fresh_keypair(&mut self) -> Result<QuantumKeyPair> {
 		let seed: [u8; 32] = self.rng.random();
-		let scheme =
-			if seed[0] % 2 == 0 { DilithiumScheme::MlDsa65 } else { DilithiumScheme::MlDsa87 };
+		let scheme = if seed[0].is_multiple_of(2) {
+			DilithiumScheme::MlDsa65
+		} else {
+			DilithiumScheme::MlDsa87
+		};
 		match scheme {
 			DilithiumScheme::MlDsa65 => {
 				let pair =
