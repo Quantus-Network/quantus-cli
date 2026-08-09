@@ -7,7 +7,7 @@ pub mod scenarios;
 use crate::{
 	chain::{client::QuantusClient, quantus_subxt},
 	error::{QuantusError, Result},
-	wallet::QuantumKeyPair,
+	wallet::{DilithiumScheme, QuantumKeyPair},
 };
 use clap::Args;
 use rand::SeedableRng;
@@ -287,8 +287,17 @@ async fn ensure_dev_wallets_on_disk() -> Result<()> {
 async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<String> {
 	let funding_per_account = 1_000 * ctx.unit;
 	let mut addresses = Vec::with_capacity(count);
-	for _ in 0..count {
-		let keypair = ctx.fresh_keypair()?;
+	let mut scheme_65 = 0usize;
+	let mut scheme_87 = 0usize;
+	// Alternate schemes so funded senders exercise both ML-DSA-65 and ML-DSA-87 signing.
+	for i in 0..count {
+		let scheme =
+			if i % 2 == 0 { DilithiumScheme::MlDsa65 } else { DilithiumScheme::MlDsa87 };
+		match scheme {
+			DilithiumScheme::MlDsa65 => scheme_65 += 1,
+			DilithiumScheme::MlDsa87 => scheme_87 += 1,
+		}
+		let keypair = ctx.fresh_keypair_with_scheme(scheme)?;
 		addresses.push(keypair.try_to_account_id_ss58check()?);
 		ctx.eph.push(keypair);
 	}
@@ -329,5 +338,8 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 	} else {
 		String::new()
 	};
-	Ok(format!("derived and funded {count} ephemeral accounts with 1000 tokens each{note}"))
+	Ok(format!(
+		"derived and funded {count} ephemeral accounts with 1000 tokens each \
+		 ({scheme_65}× ml-dsa-65, {scheme_87}× ml-dsa-87){note}"
+	))
 }

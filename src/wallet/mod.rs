@@ -9,14 +9,53 @@ pub mod keystore;
 pub mod password;
 
 use crate::error::{QuantusError, Result, WalletError};
-pub use keystore::{Keystore, QuantumKeyPair, WalletData};
-use qp_dilithium_crypto::Dilithium87Pair;
+pub use keystore::{DilithiumScheme, Keystore, QuantumKeyPair, WalletData};
+use qp_dilithium_crypto::types::{Dilithium65Pair, Dilithium87Pair};
 use qp_rusty_crystals_hdwallet::{
-	derive_key_from_mnemonic, generate_mnemonic, mnemonic_to_seed, SensitiveBytes32,
-	SensitiveBytes64,
+	generate_mnemonic, mnemonic_to_seed, SensitiveBytes32, SensitiveBytes64,
 };
 use rand::{rng, RngCore};
 use serde::{Deserialize, Serialize};
+
+fn derive_keypair_from_mnemonic(
+	mnemonic: &str,
+	derivation_path: &str,
+	scheme: DilithiumScheme,
+) -> Result<QuantumKeyPair> {
+	match scheme {
+		DilithiumScheme::MlDsa65 => {
+			let pair = qp_rusty_crystals_hdwallet::ml_dsa_65::derive_key_from_mnemonic(
+				mnemonic,
+				None,
+				derivation_path,
+			)
+			.map_err(|_| WalletError::KeyGeneration)?;
+			Ok(QuantumKeyPair::from_ml_dsa_65_keypair(&pair))
+		},
+		DilithiumScheme::MlDsa87 => {
+			let pair = qp_rusty_crystals_hdwallet::ml_dsa_87::derive_key_from_mnemonic(
+				mnemonic,
+				None,
+				derivation_path,
+			)
+			.map_err(|_| WalletError::KeyGeneration)?;
+			Ok(QuantumKeyPair::from_ml_dsa_87_keypair(&pair))
+		},
+	}
+}
+
+fn pair_from_master_seed(seed: &[u8], scheme: DilithiumScheme) -> Result<QuantumKeyPair> {
+	match scheme {
+		DilithiumScheme::MlDsa65 => {
+			let pair = Dilithium65Pair::from_seed(seed).map_err(|_| WalletError::KeyGeneration)?;
+			Ok(QuantumKeyPair::from_dilithium65_pair(&pair))
+		},
+		DilithiumScheme::MlDsa87 => {
+			let pair = Dilithium87Pair::from_seed(seed).map_err(|_| WalletError::KeyGeneration)?;
+			Ok(QuantumKeyPair::from_resonance_pair(&pair))
+		},
+	}
+}
 
 /// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'
 pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0'/0'";
@@ -67,18 +106,35 @@ impl WalletManager {
 		Ok(Self { wallets_dir })
 	}
 
-	/// Create a new wallet
+	/// Create a new wallet (default scheme: ML-DSA-65).
 	pub async fn create_wallet(&self, name: &str, password: Option<&str>) -> Result<WalletInfo> {
-		self.create_wallet_with_derivation_path(name, password, DEFAULT_DERIVATION_PATH)
+		self.create_wallet_with_scheme(name, password, DEFAULT_DERIVATION_PATH, DilithiumScheme::MlDsa65)
 			.await
 	}
 
-	/// Create a new wallet with custom derivation path
+	/// Create a new wallet with custom derivation path (default scheme: ML-DSA-65).
 	pub async fn create_wallet_with_derivation_path(
 		&self,
 		name: &str,
 		password: Option<&str>,
 		derivation_path: &str,
+	) -> Result<WalletInfo> {
+		self.create_wallet_with_scheme(
+			name,
+			password,
+			derivation_path,
+			DilithiumScheme::MlDsa65,
+		)
+		.await
+	}
+
+	/// Create a new wallet with derivation path and signature scheme.
+	pub async fn create_wallet_with_scheme(
+		&self,
+		name: &str,
+		password: Option<&str>,
+		derivation_path: &str,
+		scheme: DilithiumScheme,
 	) -> Result<WalletInfo> {
 		let keystore = Keystore::new(&self.wallets_dir);
 		let _create_guard = keystore.lock_wallet_create(name)?;
@@ -86,19 +142,16 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Generate a new Dilithium keypair using derivation path
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
 		let sensitive_seed = SensitiveBytes32::from(&mut seed);
 		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
 		keystore::zeroize_bytes(&mut seed);
-		let dilithium_keypair = derive_key_from_mnemonic(&mnemonic, None, derivation_path)
-			.map_err(|_| WalletError::KeyGeneration)?;
-		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_keypair);
+		let quantum_keypair = derive_keypair_from_mnemonic(&mnemonic, derivation_path, scheme)?;
 
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
-		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("algorithm".to_string(), scheme.algorithm_label().to_string());
 		metadata.insert("derivation_path".to_string(), derivation_path.to_string());
 		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
@@ -110,8 +163,7 @@ impl WalletManager {
 			metadata,
 		};
 
-		// Encrypt and save the wallet
-		let password = password.unwrap_or(""); // Use empty password if none provided
+		let password = password.unwrap_or("");
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
 		keystore.save_new_wallet(&encrypted_wallet)?;
 
@@ -119,7 +171,7 @@ impl WalletManager {
 			name: name.to_string(),
 			address,
 			created_at: encrypted_wallet.created_at,
-			key_type: "Dilithium ML-DSA-87".to_string(),
+			key_type: scheme.key_type_label().to_string(),
 			derivation_path: derivation_path.to_string(),
 		})
 	}
@@ -140,22 +192,22 @@ impl WalletManager {
 			_ => return Err(WalletError::KeyGeneration.into()),
 		};
 
+		// Genesis helpers are ML-DSA-87 only.
 		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&resonance_pair);
+		let scheme = DilithiumScheme::MlDsa87;
 
-		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
-		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("algorithm".to_string(), scheme.algorithm_label().to_string());
 		metadata.insert("test_wallet".to_string(), "true".to_string());
 
-		// Generate address from public key
 		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
 			keypair: quantum_keypair,
-			mnemonic: None,                    // Test wallets don't have mnemonics
-			derivation_path: "m/".to_string(), // Developer wallets use root path
+			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
@@ -169,7 +221,7 @@ impl WalletManager {
 			name: name.to_string(),
 			address,
 			created_at: encrypted_wallet.created_at,
-			key_type: "Dilithium ML-DSA-87".to_string(),
+			key_type: scheme.key_type_label().to_string(),
 			derivation_path: "m/".to_string(),
 		})
 	}
@@ -210,7 +262,7 @@ impl WalletManager {
 					name: wallet_data.name.clone(),
 					address: wallet_data.keypair.try_to_account_id_ss58check()?,
 					created_at: encrypted_wallet.created_at,
-					key_type: "Dilithium ML-DSA-87".to_string(),
+					key_type: wallet_data.keypair.scheme.key_type_label().to_string(),
 					derivation_path: "[Encrypted]".to_string(),
 				},
 				Err(crate::error::QuantusError::Wallet(
@@ -219,7 +271,7 @@ impl WalletManager {
 					name,
 					address: "[Encrypted]".to_string(),
 					created_at: encrypted_wallet.created_at,
-					key_type: "Dilithium ML-DSA-87".to_string(),
+					key_type: "Dilithium".to_string(),
 					derivation_path: "[Encrypted]".to_string(),
 				},
 				Err(_) => continue,
@@ -232,22 +284,39 @@ impl WalletManager {
 		Ok(wallets)
 	}
 
-	/// Import wallet from mnemonic phrase
+	/// Import wallet from mnemonic phrase (default scheme: ML-DSA-65).
 	pub async fn import_wallet(
 		&self,
 		name: &str,
 		mnemonic: &str,
 		password: Option<&str>,
 	) -> Result<WalletInfo> {
-		self.import_wallet_with_derivation_path(name, mnemonic, password, DEFAULT_DERIVATION_PATH)
-			.await
+		self.import_wallet_with_scheme(
+			name,
+			mnemonic,
+			password,
+			DEFAULT_DERIVATION_PATH,
+			DilithiumScheme::MlDsa65,
+		)
+		.await
 	}
 
-	/// Create wallet from mnemonic without derivation (master seed)
+	/// Create wallet from mnemonic without derivation (master seed; default ML-DSA-65).
 	pub async fn create_wallet_no_derivation(
 		&self,
 		name: &str,
 		password: Option<&str>,
+	) -> Result<WalletInfo> {
+		self.create_wallet_no_derivation_with_scheme(name, password, DilithiumScheme::MlDsa65)
+			.await
+	}
+
+	/// Create wallet from mnemonic without derivation, with an explicit scheme.
+	pub async fn create_wallet_no_derivation_with_scheme(
+		&self,
+		name: &str,
+		password: Option<&str>,
+		scheme: DilithiumScheme,
 	) -> Result<WalletInfo> {
 		let keystore = Keystore::new(&self.wallets_dir);
 		let _create_guard = keystore.lock_wallet_create(name)?;
@@ -263,17 +332,13 @@ impl WalletManager {
 		let mut seed64 = SensitiveBytes64::zeroed();
 		mnemonic_to_seed(mnemonic.to_string(), None, &mut seed64)
 			.map_err(|_| WalletError::KeyGeneration)?;
-		let dilithium_pair = Dilithium87Pair::from_seed(seed64.as_bytes())
-			.map_err(|_| WalletError::KeyGeneration)?;
-		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
+		let quantum_keypair = pair_from_master_seed(seed64.as_bytes(), scheme)?;
 
-		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
-		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("algorithm".to_string(), scheme.algorithm_label().to_string());
 		metadata.insert("no_derivation".to_string(), "true".to_string());
 
-		// Generate address from public key
 		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
@@ -284,8 +349,7 @@ impl WalletManager {
 			metadata,
 		};
 
-		// Encrypt and save the wallet
-		let password = password.unwrap_or(""); // Use empty password if none provided
+		let password = password.unwrap_or("");
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
 		keystore.save_new_wallet(&encrypted_wallet)?;
 
@@ -293,17 +357,34 @@ impl WalletManager {
 			name: name.to_string(),
 			address,
 			created_at: chrono::Utc::now(),
-			key_type: "Dilithium ML-DSA-87".to_string(),
+			key_type: scheme.key_type_label().to_string(),
 			derivation_path: "master".to_string(),
 		})
 	}
 
-	/// Import wallet from mnemonic without derivation (master seed)
+	/// Import wallet from mnemonic without derivation (default scheme: ML-DSA-65).
 	pub async fn import_wallet_no_derivation(
 		&self,
 		name: &str,
 		mnemonic: &str,
 		password: Option<&str>,
+	) -> Result<WalletInfo> {
+		self.import_wallet_no_derivation_with_scheme(
+			name,
+			mnemonic,
+			password,
+			DilithiumScheme::MlDsa65,
+		)
+		.await
+	}
+
+	/// Import wallet from mnemonic without derivation, with an explicit scheme.
+	pub async fn import_wallet_no_derivation_with_scheme(
+		&self,
+		name: &str,
+		mnemonic: &str,
+		password: Option<&str>,
+		scheme: DilithiumScheme,
 	) -> Result<WalletInfo> {
 		let keystore = Keystore::new(&self.wallets_dir);
 		let _create_guard = keystore.lock_wallet_create(name)?;
@@ -311,22 +392,18 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// No derivation path - get the seed and create a key from the seed
 		let mut seed64 = SensitiveBytes64::zeroed();
 		mnemonic_to_seed(mnemonic.to_string(), None, &mut seed64)
 			.map_err(|_| WalletError::InvalidMnemonic)?;
-		let dilithium_pair = Dilithium87Pair::from_seed(seed64.as_bytes())
+		let quantum_keypair = pair_from_master_seed(seed64.as_bytes(), scheme)
 			.map_err(|_| WalletError::KeyGeneration)?;
-		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
 
-		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
-		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("algorithm".to_string(), scheme.algorithm_label().to_string());
 		metadata.insert("imported".to_string(), "true".to_string());
 		metadata.insert("no_derivation".to_string(), "true".to_string());
 
-		// Generate address from public key
 		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
@@ -337,8 +414,7 @@ impl WalletManager {
 			metadata,
 		};
 
-		// Encrypt and save the wallet
-		let password = password.unwrap_or(""); // Use empty password if none provided
+		let password = password.unwrap_or("");
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
 		keystore.save_new_wallet(&encrypted_wallet)?;
 
@@ -346,12 +422,12 @@ impl WalletManager {
 			name: name.to_string(),
 			address,
 			created_at: chrono::Utc::now(),
-			key_type: "Dilithium ML-DSA-87".to_string(),
+			key_type: scheme.key_type_label().to_string(),
 			derivation_path: "master".to_string(),
 		})
 	}
 
-	/// Import wallet from mnemonic phrase with custom derivation path
+	/// Import wallet from mnemonic with custom derivation path (default ML-DSA-65).
 	pub async fn import_wallet_with_derivation_path(
 		&self,
 		name: &str,
@@ -359,24 +435,40 @@ impl WalletManager {
 		password: Option<&str>,
 		derivation_path: &str,
 	) -> Result<WalletInfo> {
+		self.import_wallet_with_scheme(
+			name,
+			mnemonic,
+			password,
+			derivation_path,
+			DilithiumScheme::MlDsa65,
+		)
+		.await
+	}
+
+	/// Import wallet from mnemonic with derivation path and signature scheme.
+	pub async fn import_wallet_with_scheme(
+		&self,
+		name: &str,
+		mnemonic: &str,
+		password: Option<&str>,
+		derivation_path: &str,
+		scheme: DilithiumScheme,
+	) -> Result<WalletInfo> {
 		let keystore = Keystore::new(&self.wallets_dir);
 		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		let dilithium_pair = derive_key_from_mnemonic(mnemonic, None, derivation_path)
+		let quantum_keypair = derive_keypair_from_mnemonic(mnemonic, derivation_path, scheme)
 			.map_err(|_| WalletError::InvalidMnemonic)?;
-		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&dilithium_pair);
 
-		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
-		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("algorithm".to_string(), scheme.algorithm_label().to_string());
 		metadata.insert("imported".to_string(), "true".to_string());
 		metadata.insert("derivation_path".to_string(), derivation_path.to_string());
 
-		// Generate address from public key
 		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
@@ -387,8 +479,7 @@ impl WalletManager {
 			metadata,
 		};
 
-		// Encrypt and save the wallet
-		let password = password.unwrap_or(""); // Use empty password if none provided
+		let password = password.unwrap_or("");
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
 		keystore.save_new_wallet(&encrypted_wallet)?;
 
@@ -396,17 +487,29 @@ impl WalletManager {
 			name: name.to_string(),
 			address,
 			created_at: encrypted_wallet.created_at,
-			key_type: "Dilithium ML-DSA-87".to_string(),
+			key_type: scheme.key_type_label().to_string(),
 			derivation_path: derivation_path.to_string(),
 		})
 	}
 
-	/// Create wallet from 32-byte seed
+	/// Create wallet from 32-byte seed (default scheme: ML-DSA-65).
 	pub async fn create_wallet_from_seed(
 		&self,
 		name: &str,
 		seed: &str,
 		password: Option<&str>,
+	) -> Result<WalletInfo> {
+		self.create_wallet_from_seed_with_scheme(name, seed, password, DilithiumScheme::MlDsa65)
+			.await
+	}
+
+	/// Create wallet from 32-byte seed with an explicit scheme.
+	pub async fn create_wallet_from_seed_with_scheme(
+		&self,
+		name: &str,
+		seed: &str,
+		password: Option<&str>,
+		scheme: DilithiumScheme,
 	) -> Result<WalletInfo> {
 		let keystore = Keystore::new(&self.wallets_dir);
 		let _create_guard = keystore.lock_wallet_create(name)?;
@@ -414,49 +517,40 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		// Validate seed hex format (should be 64 hex characters for 32 bytes)
 		if seed.len() != 64 {
-			return Err(WalletError::InvalidMnemonic.into()); // Reusing error type
+			return Err(WalletError::InvalidMnemonic.into());
 		}
 
-		// Convert hex to bytes
 		let mut seed_bytes = hex::decode(seed).map_err(|_| WalletError::InvalidMnemonic)?;
 		if seed_bytes.len() != 32 {
 			keystore::zeroize_bytes(&mut seed_bytes);
 			return Err(WalletError::InvalidMnemonic.into());
 		}
 
-		// Create Dilithium87Pair from seed; wipe both copies of the seed after use.
 		let mut seed_bytes_32: [u8; 32] =
 			seed_bytes.as_slice().try_into().map_err(|_| WalletError::InvalidMnemonic)?;
 		keystore::zeroize_bytes(&mut seed_bytes);
 
-		let dilithium_pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed_bytes_32);
+		let quantum_keypair = pair_from_master_seed(&seed_bytes_32, scheme);
 		keystore::zeroize_bytes(&mut seed_bytes_32);
-		let dilithium_pair = dilithium_pair.map_err(|_| WalletError::InvalidMnemonic)?;
+		let quantum_keypair = quantum_keypair.map_err(|_| WalletError::InvalidMnemonic)?;
 
-		// Convert to QuantumKeyPair
-		let quantum_keypair = QuantumKeyPair::from_resonance_pair(&dilithium_pair);
-
-		// Create wallet data
 		let mut metadata = std::collections::HashMap::new();
 		metadata.insert("version".to_string(), "1.0.0".to_string());
-		metadata.insert("algorithm".to_string(), "ML-DSA-87".to_string());
+		metadata.insert("algorithm".to_string(), scheme.algorithm_label().to_string());
 		metadata.insert("from_seed".to_string(), "true".to_string());
 
-		// Generate address from public key
 		let address = quantum_keypair.try_to_account_id_ss58check()?;
 
 		let wallet_data = WalletData {
 			name: name.to_string(),
 			keypair: quantum_keypair,
-			mnemonic: None,                    // No mnemonic for seed-based wallets
-			derivation_path: "m/".to_string(), // Seed-based wallets use root path
+			mnemonic: None,
+			derivation_path: "m/".to_string(),
 			metadata,
 		};
 
-		// Encrypt and save the wallet
-		let password = password.unwrap_or(""); // Use empty password if none provided
+		let password = password.unwrap_or("");
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
 		keystore.save_new_wallet(&encrypted_wallet)?;
 
@@ -464,7 +558,7 @@ impl WalletManager {
 			name: name.to_string(),
 			address,
 			created_at: encrypted_wallet.created_at,
-			key_type: "Dilithium ML-DSA-87".to_string(),
+			key_type: scheme.key_type_label().to_string(),
 			derivation_path: "m/".to_string(),
 		})
 	}
@@ -483,7 +577,7 @@ impl WalletManager {
 							name: wallet_data.name.clone(),
 							address,
 							created_at: encrypted_wallet.created_at,
-							key_type: "Dilithium ML-DSA-87".to_string(),
+							key_type: wallet_data.keypair.scheme.key_type_label().to_string(),
 							derivation_path: wallet_data.derivation_path.clone(),
 						}))
 					},
@@ -493,7 +587,7 @@ impl WalletManager {
 							name: name.to_string(),
 							address: "[Wrong password]".to_string(),
 							created_at: encrypted_wallet.created_at,
-							key_type: "Dilithium ML-DSA-87".to_string(),
+							key_type: "Dilithium".to_string(),
 							derivation_path: "[Wrong password]".to_string(),
 						}))
 					},
@@ -507,7 +601,7 @@ impl WalletManager {
 							name: wallet_data.name.clone(),
 							address,
 							created_at: encrypted_wallet.created_at,
-							key_type: "Dilithium ML-DSA-87".to_string(),
+							key_type: wallet_data.keypair.scheme.key_type_label().to_string(),
 							derivation_path: "[Encrypted]".to_string(),
 						}))
 					},
@@ -517,7 +611,7 @@ impl WalletManager {
 						name: name.to_string(),
 						address: "[Encrypted]".to_string(),
 						created_at: encrypted_wallet.created_at,
-						key_type: "Dilithium ML-DSA-87".to_string(),
+						key_type: "Dilithium".to_string(),
 						derivation_path: "[Encrypted]".to_string(),
 					})),
 					Err(e) => Err(e),
@@ -687,7 +781,7 @@ mod tests {
 		// Verify wallet info
 		assert_eq!(wallet_info.name, "test-wallet");
 		assert!(wallet_info.address.starts_with("qz")); // SS58 addresses start with 5
-		assert_eq!(wallet_info.key_type, "Dilithium ML-DSA-87");
+		assert_eq!(wallet_info.key_type, "Dilithium ML-DSA-65");
 		assert!(wallet_info.created_at <= chrono::Utc::now());
 	}
 
@@ -933,7 +1027,7 @@ mod tests {
 		// Verify wallet info
 		assert_eq!(imported_wallet.name, "imported-test-wallet");
 		assert!(imported_wallet.address.starts_with("qz"));
-		assert_eq!(imported_wallet.key_type, "Dilithium ML-DSA-87");
+		assert_eq!(imported_wallet.key_type, "Dilithium ML-DSA-65");
 
 		// Import the same mnemonic again should create the same address
 		let imported_wallet2 = wallet_manager
@@ -953,16 +1047,24 @@ mod tests {
 		let expected_address_no_derive = "qzmTAz3UUw1WGUuVh8nbFmPwcftomduwy6twq6NDR6y9qqtEs";
 		let expected_address_hd_0 = "qzm5QCox8Dp5A3oSXZZYHD8YoYgPz7enykZb6RPUropdCyN5h";
 
+		// Known address vectors are pinned to ML-DSA-87.
 		let imported_wallet = wallet_manager
-			.import_wallet("imported-test-wallet", test_mnemonic, Some("import-password"))
+			.import_wallet_with_scheme(
+				"imported-test-wallet",
+				test_mnemonic,
+				Some("import-password"),
+				DEFAULT_DERIVATION_PATH,
+				DilithiumScheme::MlDsa87,
+			)
 			.await
 			.expect("Failed to import wallet");
 
 		let imported_wallet_no_derive = wallet_manager
-			.import_wallet_no_derivation(
+			.import_wallet_no_derivation_with_scheme(
 				"imported-test-wallet_no_derive",
 				test_mnemonic,
 				Some("import-password"),
+				DilithiumScheme::MlDsa87,
 			)
 			.await
 			.expect("Failed to import wallet");
@@ -1075,10 +1177,11 @@ mod tests {
 		// Empty-password wallets expose authenticated addresses; password-protected
 		// wallets must not leak the unauthenticated envelope address.
 		for wallet in &wallets {
-			assert_eq!(wallet.key_type, "Dilithium ML-DSA-87");
 			if wallet.name == "wallet-2" {
+				assert_eq!(wallet.key_type, "Dilithium ML-DSA-65");
 				assert!(wallet.address.starts_with("qz"));
 			} else {
+				assert_eq!(wallet.key_type, "Dilithium");
 				assert_eq!(wallet.address, "[Encrypted]");
 			}
 		}

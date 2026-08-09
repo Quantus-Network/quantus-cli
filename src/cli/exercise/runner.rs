@@ -4,7 +4,7 @@ use crate::{
 	chain::client::QuantusClient,
 	cli::common::{ExecutionMode, SubxtAccountId32},
 	error::{QuantusError, Result},
-	wallet::QuantumKeyPair,
+	wallet::{DilithiumScheme, QuantumKeyPair},
 };
 use rand::{rngs::StdRng, Rng};
 
@@ -27,11 +27,43 @@ impl ExerciseCtx {
 		ExecutionMode { finalized: false, wait_for_transaction: true }
 	}
 
+	/// Fresh keypair using an explicit Dilithium scheme.
+	pub fn fresh_keypair_with_scheme(&mut self, scheme: DilithiumScheme) -> Result<QuantumKeyPair> {
+		let seed: [u8; 32] = self.rng.random();
+		match scheme {
+			DilithiumScheme::MlDsa65 => {
+				let pair = qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed)
+					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				Ok(QuantumKeyPair::from_dilithium65_pair(&pair))
+			},
+			DilithiumScheme::MlDsa87 => {
+				let pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed)
+					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				Ok(QuantumKeyPair::from_resonance_pair(&pair))
+			},
+		}
+	}
+
+	/// Fresh keypair alternating schemes from the seed bytes (both 65 and 87 get exercise coverage).
 	pub fn fresh_keypair(&mut self) -> Result<QuantumKeyPair> {
 		let seed: [u8; 32] = self.rng.random();
-		let pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed)
-			.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
-		Ok(QuantumKeyPair::from_resonance_pair(&pair))
+		let scheme = if seed[0] % 2 == 0 {
+			DilithiumScheme::MlDsa65
+		} else {
+			DilithiumScheme::MlDsa87
+		};
+		match scheme {
+			DilithiumScheme::MlDsa65 => {
+				let pair = qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed)
+					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				Ok(QuantumKeyPair::from_dilithium65_pair(&pair))
+			},
+			DilithiumScheme::MlDsa87 => {
+				let pair = qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed)
+					.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
+				Ok(QuantumKeyPair::from_resonance_pair(&pair))
+			},
+		}
 	}
 
 	pub async fn free_balance(&self, ss58: &str) -> Result<u128> {

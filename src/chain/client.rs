@@ -326,7 +326,44 @@ impl QuantusClient {
 	}
 }
 
-// Implement subxt::tx::Signer for ResonancePair
+/// Scheme-aware subxt signer (ML-DSA-65 or ML-DSA-87).
+pub enum QuantusSigner {
+	MlDsa65(qp_dilithium_crypto::types::Dilithium65Pair),
+	MlDsa87(qp_dilithium_crypto::types::Dilithium87Pair),
+}
+
+impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
+	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
+		use sp_core::Pair;
+		match self {
+			Self::MlDsa65(pair) =>
+				<qp_dilithium_crypto::types::Dilithium65Public as IdentifyAccount>::into_account(
+					pair.public(),
+				),
+			Self::MlDsa87(pair) =>
+				<qp_dilithium_crypto::types::Dilithium87Public as IdentifyAccount>::into_account(
+					pair.public(),
+				),
+		}
+	}
+
+	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
+		use sp_core::Pair;
+		match self {
+			Self::MlDsa65(pair) => {
+				let signature_with_public =
+					<qp_dilithium_crypto::types::Dilithium65Pair as Pair>::sign(pair, signer_payload);
+				DilithiumSignatureScheme::Dilithium65(signature_with_public)
+			},
+			Self::MlDsa87(pair) => {
+				let signature_with_public =
+					<qp_dilithium_crypto::types::Dilithium87Pair as Pair>::sign(pair, signer_payload);
+				DilithiumSignatureScheme::Dilithium87(signature_with_public)
+			},
+		}
+	}
+}
+
 impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium87Pair {
 	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
 		use sp_core::Pair;
@@ -336,15 +373,30 @@ impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium87P
 	}
 
 	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
-		// Use the sign method from the trait implemented for ResonancePair
-		// sp_core::Pair::sign returns ResonanceSignatureWithPublic, which we need to wrap in
-		// ResonanceSignatureScheme
 		let signature_with_public =
 			<qp_dilithium_crypto::types::Dilithium87Pair as sp_core::Pair>::sign(
 				self,
 				signer_payload,
 			);
-		qp_dilithium_crypto::types::DilithiumSignatureScheme::Dilithium87(signature_with_public)
+		DilithiumSignatureScheme::Dilithium87(signature_with_public)
+	}
+}
+
+impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium65Pair {
+	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
+		use sp_core::Pair;
+		<qp_dilithium_crypto::types::Dilithium65Public as IdentifyAccount>::into_account(
+			self.public(),
+		)
+	}
+
+	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
+		let signature_with_public =
+			<qp_dilithium_crypto::types::Dilithium65Pair as sp_core::Pair>::sign(
+				self,
+				signer_payload,
+			);
+		DilithiumSignatureScheme::Dilithium65(signature_with_public)
 	}
 }
 

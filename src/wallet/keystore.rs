@@ -5,7 +5,7 @@
 /// - Loading and decrypting wallet data with post-quantum cryptography
 /// - Managing wallet files on disk with quantum-resistant security
 use crate::error::{QuantusError, Result, WalletError};
-use qp_rusty_crystals_dilithium::ml_dsa_87::{Keypair, PublicKey, SecretKey};
+use clap::ValueEnum;
 #[cfg(test)]
 use qp_rusty_crystals_hdwallet::SensitiveBytes32;
 use serde::{Deserialize, Serialize};
@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use sp_core::crypto::Ss58AddressFormat;
 use sp_core::{
 	crypto::{AccountId32, Ss58Codec},
-	ByteArray,
+	ByteArray, Pair as _,
 };
 // Quantum-safe encryption imports
 use aes_gcm::{
@@ -32,8 +32,52 @@ use std::{
 	sync::{Condvar, Mutex, OnceLock},
 };
 
-use qp_dilithium_crypto::types::{Dilithium87Pair, Dilithium87Public};
+use qp_dilithium_crypto::types::{
+	Dilithium65Pair, Dilithium65Public, Dilithium87Pair, Dilithium87Public,
+};
 use sp_runtime::traits::IdentifyAccount;
+
+/// Dilithium / ML-DSA signature scheme used by a wallet.
+///
+/// CLI create/import defaults to [`Self::MlDsa65`]. Missing `scheme` when
+/// deserializing older encrypted wallets defaults to [`Self::MlDsa87`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[clap(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case")]
+pub enum DilithiumScheme {
+	MlDsa65,
+	MlDsa87,
+}
+
+fn legacy_dilithium_scheme() -> DilithiumScheme {
+	DilithiumScheme::MlDsa87
+}
+
+impl DilithiumScheme {
+	pub fn algorithm_label(self) -> &'static str {
+		match self {
+			Self::MlDsa65 => "ML-DSA-65",
+			Self::MlDsa87 => "ML-DSA-87",
+		}
+	}
+
+	pub fn key_type_label(self) -> &'static str {
+		match self {
+			Self::MlDsa65 => "Dilithium ML-DSA-65",
+			Self::MlDsa87 => "Dilithium ML-DSA-87",
+		}
+	}
+}
+
+impl fmt::Display for DilithiumScheme {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		// Match clap ValueEnum / CLI flag spelling (`ml-dsa-65`).
+		match self {
+			Self::MlDsa65 => f.write_str("ml-dsa-65"),
+			Self::MlDsa87 => f.write_str("ml-dsa-87"),
+		}
+	}
+}
 
 pub(crate) fn zeroize_bytes(bytes: &mut [u8]) {
 	for byte in bytes {
@@ -210,11 +254,15 @@ impl Drop for WalletCreateGuard {
 pub struct QuantumKeyPair {
 	pub public_key: Vec<u8>,
 	pub private_key: Vec<u8>,
+	/// Signature scheme for these key bytes. Absent in legacy wallets ⇒ ML-DSA-87.
+	#[serde(default = "legacy_dilithium_scheme")]
+	pub scheme: DilithiumScheme,
 }
 
 impl fmt::Debug for QuantumKeyPair {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("QuantumKeyPair")
+			.field("scheme", &self.scheme)
 			.field("public_key_len", &self.public_key.len())
 			.field("private_key", &"[redacted]")
 			.finish()
@@ -228,45 +276,85 @@ impl Drop for QuantumKeyPair {
 }
 
 impl QuantumKeyPair {
-	/// Create from rusty-crystals Keypair
-	pub fn from_dilithium_keypair(keypair: &Keypair) -> Self {
+	/// Placeholder used when moving a keypair out of [`WalletData`].
+	pub(crate) fn empty() -> Self {
 		Self {
-			public_key: keypair.public().to_bytes().to_vec(),
-			private_key: keypair.secret().to_bytes().to_vec(),
+			public_key: Vec::new(),
+			private_key: Vec::new(),
+			scheme: DilithiumScheme::MlDsa87,
 		}
 	}
 
-	/// Convert to rusty-crystals Keypair
-	#[allow(dead_code)]
-	pub fn to_dilithium_keypair(&self) -> Result<Keypair> {
-		let secret = SecretKey::from_bytes(&self.private_key)
-			.map_err(|_| crate::error::WalletError::KeyGeneration)?;
-		let public = PublicKey::from_bytes(&self.public_key)
-			.map_err(|_| crate::error::WalletError::KeyGeneration)?;
-		Ok(Keypair::from_parts(secret, public)
-			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
+	/// Create from an ML-DSA-87 rusty-crystals keypair.
+	pub fn from_ml_dsa_87_keypair(keypair: &qp_rusty_crystals_dilithium::ml_dsa_87::Keypair) -> Self {
+		Self {
+			public_key: keypair.public().to_bytes().to_vec(),
+			private_key: keypair.secret().to_bytes().to_vec(),
+			scheme: DilithiumScheme::MlDsa87,
+		}
 	}
 
-	/// Convert to Dilithium87Pair for use with substrate-api-client
+	/// Create from an ML-DSA-65 rusty-crystals keypair.
+	pub fn from_ml_dsa_65_keypair(keypair: &qp_rusty_crystals_dilithium::ml_dsa_65::Keypair) -> Self {
+		Self {
+			public_key: keypair.public().to_bytes().to_vec(),
+			private_key: keypair.secret().to_bytes().to_vec(),
+			scheme: DilithiumScheme::MlDsa65,
+		}
+	}
+
+	/// Backward-compatible alias for ML-DSA-87 keypairs.
+	pub fn from_dilithium_keypair(keypair: &qp_rusty_crystals_dilithium::ml_dsa_87::Keypair) -> Self {
+		Self::from_ml_dsa_87_keypair(keypair)
+	}
+
+	/// Convert to Dilithium87Pair (only valid for ML-DSA-87 wallets).
 	pub fn to_resonance_pair(&self) -> Result<Dilithium87Pair> {
-		// Convert our QuantumKeyPair to Dilithium87Pair using from_raw
+		if self.scheme != DilithiumScheme::MlDsa87 {
+			return Err(crate::error::WalletError::KeyGeneration.into());
+		}
 		Ok(Dilithium87Pair::from_raw(&self.public_key, &self.private_key)
 			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
 	}
 
+	/// Convert to Dilithium65Pair (only valid for ML-DSA-65 wallets).
+	pub fn to_dilithium65_pair(&self) -> Result<Dilithium65Pair> {
+		if self.scheme != DilithiumScheme::MlDsa65 {
+			return Err(crate::error::WalletError::KeyGeneration.into());
+		}
+		Ok(Dilithium65Pair::from_raw(&self.public_key, &self.private_key)
+			.map_err(|_| crate::error::WalletError::KeyGeneration)?)
+	}
+
 	pub fn from_resonance_pair(keypair: &Dilithium87Pair) -> Self {
-		use sp_core::Pair;
 		Self {
 			public_key: keypair.public().as_ref().to_vec(),
 			private_key: keypair.secret_bytes().to_vec(),
+			scheme: DilithiumScheme::MlDsa87,
+		}
+	}
+
+	pub fn from_dilithium65_pair(keypair: &Dilithium65Pair) -> Self {
+		Self {
+			public_key: keypair.public().as_ref().to_vec(),
+			private_key: keypair.secret_bytes().to_vec(),
+			scheme: DilithiumScheme::MlDsa65,
 		}
 	}
 
 	pub fn try_to_account_id_32(&self) -> Result<AccountId32> {
-		// Use the Dilithium87Public's into_account method for correct address generation
-		let resonance_public = Dilithium87Public::from_slice(&self.public_key)
-			.map_err(|_| crate::error::WalletError::InvalidPublicKey)?;
-		Ok(resonance_public.into_account())
+		match self.scheme {
+			DilithiumScheme::MlDsa87 => {
+				let public = Dilithium87Public::from_slice(&self.public_key)
+					.map_err(|_| crate::error::WalletError::InvalidPublicKey)?;
+				Ok(public.into_account())
+			},
+			DilithiumScheme::MlDsa65 => {
+				let public = Dilithium65Public::from_slice(&self.public_key)
+					.map_err(|_| crate::error::WalletError::InvalidPublicKey)?;
+				Ok(public.into_account())
+			},
+		}
 	}
 
 	// Note: there are deliberately no infallible to_account_id_* variants. The
@@ -280,12 +368,14 @@ impl QuantumKeyPair {
 		Ok(account.to_ss58check_with_version(quantus_ss58_format()))
 	}
 
-	/// Convert to subxt Signer for use
-	pub fn to_subxt_signer(&self) -> Result<qp_dilithium_crypto::types::Dilithium87Pair> {
-		// Convert to Dilithium87Pair first - now it implements subxt::tx::Signer<ChainConfig>
-		let resonance_pair = self.to_resonance_pair()?;
-
-		Ok(resonance_pair)
+	/// Convert to a scheme-aware subxt signer.
+	pub fn to_subxt_signer(&self) -> Result<crate::chain::client::QuantusSigner> {
+		match self.scheme {
+			DilithiumScheme::MlDsa87 =>
+				Ok(crate::chain::client::QuantusSigner::MlDsa87(self.to_resonance_pair()?)),
+			DilithiumScheme::MlDsa65 =>
+				Ok(crate::chain::client::QuantusSigner::MlDsa65(self.to_dilithium65_pair()?)),
+		}
 	}
 
 	#[allow(dead_code)]
@@ -346,10 +436,7 @@ impl Drop for WalletData {
 impl WalletData {
 	/// Take the keypair out without moving other fields (compatible with `Drop`).
 	pub fn take_keypair(&mut self) -> QuantumKeyPair {
-		std::mem::replace(
-			&mut self.keypair,
-			QuantumKeyPair { public_key: Vec::new(), private_key: Vec::new() },
-		)
+		std::mem::replace(&mut self.keypair, QuantumKeyPair::empty())
 	}
 
 	/// Take the mnemonic out without moving other fields (compatible with `Drop`).
@@ -748,15 +835,21 @@ impl Keystore {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use qp_dilithium_crypto::{crystal_alice, crystal_charlie, dilithium_bob};
+	use qp_dilithium_crypto::{
+		crystal_alice, crystal_charlie, dilithium_bob,
+		types::Dilithium65Pair,
+	};
 	use qp_rusty_crystals_dilithium::ml_dsa_87::Keypair;
 	use sp_core::Pair;
 	use tempfile::TempDir;
 
 	#[test]
 	fn quantum_keypair_debug_redacts_private_key() {
-		let keypair =
-			QuantumKeyPair { public_key: vec![1, 2, 3], private_key: vec![0xde, 0xad, 0xbe, 0xef] };
+		let keypair = QuantumKeyPair {
+			public_key: vec![1, 2, 3],
+			private_key: vec![0xde, 0xad, 0xbe, 0xef],
+			scheme: DilithiumScheme::MlDsa87,
+		};
 		let rendered = format!("{keypair:?}");
 		assert!(
 			rendered.contains("[redacted]"),
@@ -772,7 +865,11 @@ mod tests {
 	fn wallet_data_debug_redacts_mnemonic() {
 		let data = WalletData {
 			name: "test".to_string(),
-			keypair: QuantumKeyPair { public_key: vec![1], private_key: vec![2] },
+			keypair: QuantumKeyPair {
+				public_key: vec![1],
+				private_key: vec![2],
+				scheme: DilithiumScheme::MlDsa87,
+			},
 			mnemonic: Some("abandon ability able about above absent".to_string()),
 			derivation_path: "m/".to_string(),
 			metadata: Default::default(),
@@ -804,19 +901,20 @@ mod tests {
 	}
 
 	#[test]
-	fn test_quantum_keypair_to_dilithium_keypair_roundtrip() {
-		// Generate a test keypair
+	fn test_quantum_keypair_dilithium_keypair_roundtrip() {
 		let mut entropy = [2u8; 32];
 		let original_keypair = Keypair::generate(&mut SensitiveBytes32::from(&mut entropy));
 
-		// Convert to QuantumKeyPair and back
 		let quantum_keypair = QuantumKeyPair::from_dilithium_keypair(&original_keypair);
+		assert_eq!(quantum_keypair.scheme, DilithiumScheme::MlDsa87);
 		let converted_keypair =
-			quantum_keypair.to_dilithium_keypair().expect("Conversion should succeed");
+			quantum_keypair.to_resonance_pair().expect("Conversion should succeed");
 
-		// Verify round-trip conversion preserves data
-		assert_eq!(original_keypair.public().to_bytes(), converted_keypair.public().to_bytes());
-		assert_eq!(original_keypair.secret().to_bytes(), converted_keypair.secret().to_bytes());
+		assert_eq!(original_keypair.public().to_bytes(), converted_keypair.public().as_ref());
+		assert_eq!(
+			original_keypair.secret().to_bytes().as_slice(),
+			converted_keypair.secret_bytes()
+		);
 	}
 
 	#[test]
@@ -1017,11 +1115,15 @@ mod tests {
 	}
 
 	#[test]
-	fn to_dilithium_keypair_rejects_malformed_key_bytes() {
+	fn to_resonance_pair_rejects_malformed_key_bytes() {
 		// #160783: malformed key material must not panic.
-		let keypair = QuantumKeyPair { public_key: vec![1, 2, 3], private_key: vec![4, 5, 6] };
+		let keypair = QuantumKeyPair {
+			public_key: vec![1, 2, 3],
+			private_key: vec![4, 5, 6],
+			scheme: DilithiumScheme::MlDsa87,
+		};
 		let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-			keypair.to_dilithium_keypair()
+			keypair.to_resonance_pair()
 		}));
 		assert!(panicked.is_ok(), "malformed keys must not panic");
 		assert!(
@@ -1031,6 +1133,33 @@ mod tests {
 			),
 			"expected KeyGeneration error"
 		);
+	}
+
+	#[test]
+	fn legacy_wallet_json_without_scheme_defaults_to_ml_dsa_87() {
+		let json = r#"{
+			"public_key": [1, 2, 3],
+			"private_key": [4, 5, 6]
+		}"#;
+		let keypair: QuantumKeyPair = serde_json::from_str(json).expect("deserialize");
+		assert_eq!(keypair.scheme, DilithiumScheme::MlDsa87);
+	}
+
+	#[test]
+	fn ml_dsa_65_keypair_roundtrip_and_signer() {
+		let pair = Dilithium65Pair::from_seed(&[7u8; 32]).expect("seed");
+		let quantum = QuantumKeyPair::from_dilithium65_pair(&pair);
+		assert_eq!(quantum.scheme, DilithiumScheme::MlDsa65);
+		assert_eq!(quantum.public_key.len(), 1952);
+		assert_eq!(quantum.private_key.len(), 4032);
+		let restored = quantum.to_dilithium65_pair().expect("65 pair");
+		assert_eq!(pair.public().as_ref(), restored.public().as_ref());
+		let signer = quantum.to_subxt_signer().expect("signer");
+		match signer {
+			crate::chain::client::QuantusSigner::MlDsa65(_) => {},
+			_ => panic!("expected MlDsa65 signer"),
+		}
+		assert!(quantum.try_to_account_id_ss58check().is_ok());
 	}
 
 	#[test]
@@ -1407,7 +1536,11 @@ mod tests {
 		// #160640: address derivation must not unwind on garbage public keys,
 		// and must report an error rather than a silent fallback value (the
 		// removed infallible variants returned the all-zero account).
-		let keypair = QuantumKeyPair { public_key: vec![0x41], private_key: vec![0x42; 32] };
+		let keypair = QuantumKeyPair {
+			public_key: vec![0x41],
+			private_key: vec![0x42; 32],
+			scheme: DilithiumScheme::MlDsa87,
+		};
 		assert!(
 			matches!(
 				keypair.try_to_account_id_ss58check(),

@@ -6,7 +6,7 @@ use crate::{
 	log_error, log_print, log_success, log_verbose,
 	wallet::{
 		password::{get_mnemonic_from_user, get_new_wallet_password},
-		WalletManager, DEFAULT_DERIVATION_PATH,
+		DilithiumScheme, WalletManager, DEFAULT_DERIVATION_PATH,
 	},
 };
 use clap::Subcommand;
@@ -44,6 +44,10 @@ pub enum WalletCommands {
 		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
 		#[arg(long)]
 		no_derivation: bool,
+
+		/// Dilithium signature scheme (default: ml-dsa-65)
+		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
+		scheme: DilithiumScheme,
 	},
 
 	/// View wallet information
@@ -102,6 +106,10 @@ pub enum WalletCommands {
 		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
 		#[arg(long)]
 		no_derivation: bool,
+
+		/// Dilithium signature scheme (default: ml-dsa-65)
+		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
+		scheme: DilithiumScheme,
 	},
 
 	/// Create wallet from 32-byte seed
@@ -121,6 +129,10 @@ pub enum WalletCommands {
 		/// Allow encrypting the new wallet with an empty password (development only)
 		#[arg(long)]
 		allow_empty_password: bool,
+
+		/// Dilithium signature scheme (default: ml-dsa-65)
+		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
+		scheme: DilithiumScheme,
 	},
 
 	/// List all wallets
@@ -354,6 +366,7 @@ pub async fn handle_wallet_command(
 			allow_empty_password,
 			derivation_path,
 			no_derivation,
+			scheme,
 		} => {
 			log_print!("🔐 Creating new quantum wallet...");
 
@@ -362,18 +375,21 @@ pub async fn handle_wallet_command(
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Choose creation method based on flags
 			let result = if no_derivation {
-				// Use master seed directly (like quantus-node --no-derivation)
-				wallet_manager.create_wallet_no_derivation(&name, Some(&final_password)).await
-			} else if derivation_path == DEFAULT_DERIVATION_PATH {
-				wallet_manager.create_wallet(&name, Some(&final_password)).await
+				wallet_manager
+					.create_wallet_no_derivation_with_scheme(
+						&name,
+						Some(&final_password),
+						scheme,
+					)
+					.await
 			} else {
 				wallet_manager
-					.create_wallet_with_derivation_path(
+					.create_wallet_with_scheme(
 						&name,
 						Some(&final_password),
 						&derivation_path,
+						scheme,
 					)
 					.await
 			};
@@ -639,6 +655,7 @@ pub async fn handle_wallet_command(
 			allow_empty_password,
 			derivation_path,
 			no_derivation,
+			scheme,
 		} => {
 			log_print!("📥 Importing wallet...");
 
@@ -658,23 +675,23 @@ pub async fn handle_wallet_command(
 			// Always read mnemonic from a hidden prompt so it never appears in process argv.
 			let mut mnemonic_phrase = get_mnemonic_from_user()?;
 
-			// Choose import method based on flags
 			let result = if no_derivation {
-				// Use master seed directly (like quantus-node --no-derivation)
 				wallet_manager
-					.import_wallet_no_derivation(&name, &mnemonic_phrase, Some(&final_password))
-					.await
-			} else if derivation_path == DEFAULT_DERIVATION_PATH {
-				wallet_manager
-					.import_wallet(&name, &mnemonic_phrase, Some(&final_password))
+					.import_wallet_no_derivation_with_scheme(
+						&name,
+						&mnemonic_phrase,
+						Some(&final_password),
+						scheme,
+					)
 					.await
 			} else {
 				wallet_manager
-					.import_wallet_with_derivation_path(
+					.import_wallet_with_scheme(
 						&name,
 						&mnemonic_phrase,
 						Some(&final_password),
 						&derivation_path,
+						scheme,
 					)
 					.await
 			};
@@ -704,7 +721,13 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::FromSeed { name, password, password_file, allow_empty_password } => {
+		WalletCommands::FromSeed {
+			name,
+			password,
+			password_file,
+			allow_empty_password,
+			scheme,
+		} => {
 			log_print!("🌱 Creating wallet from seed...");
 
 			let wallet_manager = WalletManager::new()?;
@@ -727,7 +750,12 @@ pub async fn handle_wallet_command(
 			crate::wallet::keystore::zeroize_string(&mut seed_raw);
 
 			let result = wallet_manager
-				.create_wallet_from_seed(&name, &seed, Some(&final_password))
+				.create_wallet_from_seed_with_scheme(
+					&name,
+					&seed,
+					Some(&final_password),
+					scheme,
+				)
 				.await;
 			crate::wallet::keystore::zeroize_string(&mut seed);
 

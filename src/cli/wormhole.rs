@@ -2323,6 +2323,7 @@ async fn execute_initial_transfers(
 	let quantum_keypair = QuantumKeyPair {
 		public_key: wallet.keypair.public_key.clone(),
 		private_key: wallet.keypair.private_key.clone(),
+		scheme: wallet.keypair.scheme,
 	};
 
 	log_print!("  Submitting batch of {} transfers...", num_proofs);
@@ -3795,6 +3796,7 @@ async fn run_dissolve(
 	let quantum_keypair = QuantumKeyPair {
 		public_key: wallet.keypair.public_key.clone(),
 		private_key: wallet.keypair.private_key.clone(),
+		scheme: wallet.keypair.scheme,
 	};
 
 	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
