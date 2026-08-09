@@ -10,13 +10,14 @@ const MANIFEST_FILE: &str = "manifest.json";
 /// Files hashed into `manifest.json` by `build.rs` and authenticated by
 /// `crate::bins` at runtime. Defined once here so the two sides cannot drift
 /// into a "file set mismatch" rejection of freshly built artifacts.
+// No `*_prover.bin` entries: qp-wormhole-circuit-builder 4.2.0+ never emits
+// them (provers rebuild circuits from source so a poisoned prover artifact
+// cannot exfiltrate witness data).
 const MANIFESTED_FILES: &[&str] = &[
 	"verifier.bin",
 	"common.bin",
-	"private_batch_prover.bin",
 	"private_batch_verifier.bin",
 	"private_batch_common.bin",
-	"public_batch_prover.bin",
 	"public_batch_verifier.bin",
 	"public_batch_common.bin",
 	"dummy_proof.bin",

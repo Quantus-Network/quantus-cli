@@ -7,7 +7,7 @@ pub mod scenarios;
 use crate::{
 	chain::{client::QuantusClient, quantus_subxt},
 	error::{QuantusError, Result},
-	wallet::QuantumKeyPair,
+	wallet::{DilithiumScheme, QuantumKeyPair},
 };
 use clap::Args;
 use rand::SeedableRng;
@@ -59,6 +59,7 @@ pub enum Phase {
 	Recovery,
 	Preimage,
 	Governance,
+	Vesting,
 	Negative,
 	Fuzz,
 	Wormhole,
@@ -75,6 +76,7 @@ impl Phase {
 			Phase::Recovery,
 			Phase::Preimage,
 			Phase::Governance,
+			Phase::Vesting,
 			Phase::Negative,
 			Phase::Fuzz,
 			Phase::Wormhole,
@@ -90,6 +92,7 @@ impl Phase {
 			Phase::Recovery => "recovery",
 			Phase::Preimage => "preimage",
 			Phase::Governance => "governance",
+			Phase::Vesting => "vesting",
 			Phase::Negative => "negative",
 			Phase::Fuzz => "fuzz",
 			Phase::Wormhole => "wormhole",
@@ -196,6 +199,7 @@ async fn run_phases(
 			Phase::Recovery => scenarios::recovery::run(ctx, report, &label).await?,
 			Phase::Preimage => scenarios::preimage::run(ctx, report, &label).await?,
 			Phase::Governance => scenarios::governance::run(ctx, report, &label).await?,
+			Phase::Vesting => scenarios::vesting::run(ctx, report, &label).await?,
 			Phase::Negative => scenarios::negative::run(ctx, report, &label).await?,
 			Phase::Fuzz => scenarios::fuzz::run(ctx, report, &label).await?,
 			Phase::Wormhole => scenarios::wormhole::run(ctx, report, &label).await?,
@@ -283,8 +287,16 @@ async fn ensure_dev_wallets_on_disk() -> Result<()> {
 async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<String> {
 	let funding_per_account = 1_000 * ctx.unit;
 	let mut addresses = Vec::with_capacity(count);
-	for _ in 0..count {
-		let keypair = ctx.fresh_keypair()?;
+	let mut scheme_65 = 0usize;
+	let mut scheme_87 = 0usize;
+	// Alternate schemes so funded senders exercise both ML-DSA-65 and ML-DSA-87 signing.
+	for i in 0..count {
+		let scheme = if i % 2 == 0 { DilithiumScheme::MlDsa65 } else { DilithiumScheme::MlDsa87 };
+		match scheme {
+			DilithiumScheme::MlDsa65 => scheme_65 += 1,
+			DilithiumScheme::MlDsa87 => scheme_87 += 1,
+		}
+		let keypair = ctx.fresh_keypair_with_scheme(scheme)?;
 		addresses.push(keypair.try_to_account_id_ss58check()?);
 		ctx.eph.push(keypair);
 	}
@@ -325,5 +337,8 @@ async fn fund_ephemeral_accounts(ctx: &mut ExerciseCtx, count: usize) -> Result<
 	} else {
 		String::new()
 	};
-	Ok(format!("derived and funded {count} ephemeral accounts with 1000 tokens each{note}"))
+	Ok(format!(
+		"derived and funded {count} ephemeral accounts with 1000 tokens each \
+		 ({scheme_65}× ml-dsa-65, {scheme_87}× ml-dsa-87){note}"
+	))
 }

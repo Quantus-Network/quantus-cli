@@ -5,7 +5,7 @@ use crate::{
 	},
 	cli::{
 		address_format::{bytes_to_quantus_ss58, slice_to_quantus_ss58},
-		common::ExecutionMode,
+		common::{ExecutionMode, TransactionStage},
 		send::get_balance,
 	},
 	log_error, log_print, log_success, log_verbose,
@@ -281,7 +281,8 @@ pub fn compute_merkle_positions(
 		sorted_siblings.push(sorted_sibs);
 
 		// Compute parent hash for next level using Poseidon
-		current_hash = hash_node_presorted(&all_four);
+		current_hash = hash_node_presorted(&all_four)
+			.expect("merkle node children from chain must be valid field elements");
 	}
 
 	(sorted_siblings, positions)
@@ -1030,9 +1031,42 @@ pub enum WormholeCommands {
 	},
 }
 
+/// Wait mode for wormhole steps that must observe inclusion (events / next-round inputs).
+/// Honors `--finalized-tx`; otherwise waits for best-block inclusion only.
+fn wormhole_inclusion_mode(execution_mode: ExecutionMode) -> ExecutionMode {
+	ExecutionMode { wait_for_transaction: true, ..execution_mode }
+}
+
+fn wormhole_inclusion_stage(execution_mode: ExecutionMode) -> TransactionStage {
+	wormhole_inclusion_mode(execution_mode).transaction_stage()
+}
+
+fn included_at_for_stage(stage: TransactionStage) -> IncludedAt {
+	match stage {
+		TransactionStage::Finalized => IncludedAt::Finalized,
+		TransactionStage::Included | TransactionStage::Submitted => IncludedAt::Best,
+	}
+}
+
+/// Tip block used for pre-submit storage reads and for ZK Merkle proof generation.
+///
+/// Must match the wait mode: if funding/verify only waited for best-block inclusion,
+/// freshly written leaves are not yet in the finalized tree.
+async fn wormhole_tip_block(
+	quantus_client: &QuantusClient,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
+	if execution_mode.finalized {
+		at_finalized_block(quantus_client).await
+	} else {
+		at_best_block(quantus_client).await
+	}
+}
+
 pub async fn handle_wormhole_command(
 	command: WormholeCommands,
 	node_url: &str,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<()> {
 	match command {
 		WormholeCommands::Address { secret_file } => show_wormhole_address(secret_file),
@@ -1090,10 +1124,12 @@ pub async fn handle_wormhole_command(
 			Ok(())
 		},
 		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
-		WormholeCommands::VerifyAggregated { proof } => verify_private_batch(proof, node_url).await,
+		WormholeCommands::VerifyAggregated { proof } =>
+			verify_private_batch(proof, node_url, execution_mode).await,
 		WormholeCommands::AggregatePublic { proofs, aggregator, output } =>
 			aggregate_public_batch(proofs, aggregator, output).await,
-		WormholeCommands::VerifyPublicBatch { proof } => verify_public_batch(proof, node_url).await,
+		WormholeCommands::VerifyPublicBatch { proof } =>
+			verify_public_batch(proof, node_url, execution_mode).await,
 		WormholeCommands::ParseProof { proof, aggregated, public_batch, verify } =>
 			parse_proof_file(proof, aggregated, public_batch, verify).await,
 		WormholeCommands::Multiround {
@@ -1123,6 +1159,7 @@ pub async fn handle_wormhole_command(
 				dry_run,
 				public,
 				node_url,
+				execution_mode,
 			)
 			.await
 		},
@@ -1148,6 +1185,7 @@ pub async fn handle_wormhole_command(
 				keep_files,
 				output_dir,
 				node_url,
+				execution_mode,
 			)
 			.await
 		},
@@ -1285,8 +1323,6 @@ pub async fn at_finalized_block(
 /// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
 /// of the SDK surface. Network/decoding failures are wrapped in
 /// [`crate::error::QuantusError::NetworkError`].
-// Public SDK helper (re-exported from lib); unused by the CLI binary itself.
-#[allow(dead_code)]
 pub async fn at_best_block(
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
@@ -1657,12 +1693,36 @@ fn read_hex_proof_file_to_bytes(proof_file: &str) -> crate::error::Result<Vec<u8
 	Ok(proof_bytes)
 }
 
-/// Submit unsigned verify_private_batch(proof_bytes) and return (included_at, block_hash,
-/// tx_hash).
+/// Submit unsigned `verify_private_batch` and wait until best-block inclusion.
+///
+/// Use [`submit_unsigned_verify_private_batch_until`] with
+/// [`TransactionStage::Finalized`] when finalization is required.
+#[allow(dead_code)] // SDK re-export; CLI uses the `_until` variant.
 pub async fn submit_unsigned_verify_private_batch(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
 ) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
+	submit_unsigned_verify_private_batch_until(
+		quantus_client,
+		proof_bytes,
+		TransactionStage::Included,
+	)
+	.await
+}
+
+/// Submit unsigned `verify_private_batch` and wait until `target_stage`.
+///
+/// `Submitted` is treated as [`TransactionStage::Included`] because callers need
+/// the inclusion block to inspect events.
+pub async fn submit_unsigned_verify_private_batch_until(
+	quantus_client: &QuantusClient,
+	proof_bytes: Vec<u8>,
+	target_stage: TransactionStage,
+) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
+	let stage = match target_stage {
+		TransactionStage::Finalized => TransactionStage::Finalized,
+		TransactionStage::Included | TransactionStage::Submitted => TransactionStage::Included,
+	};
 	let verify_tx = quantus_node::api::tx().wormhole().verify_private_batch(proof_bytes);
 
 	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
@@ -1679,10 +1739,10 @@ pub async fn submit_unsigned_verify_private_batch(
 		&mut tx_progress,
 		quantus_client.client(),
 		&tx_hash,
-		crate::cli::common::TransactionStage::Finalized,
+		stage,
 	)
 	.await?;
-	Ok((IncludedAt::Finalized, block_hash, tx_hash))
+	Ok((included_at_for_stage(stage), block_hash, tx_hash))
 }
 
 /// Collect wormhole events for our extrinsic (by tx_hash) in a given block.
@@ -1763,7 +1823,11 @@ async fn collect_wormhole_events_for_extrinsic(
 	)
 }
 
-async fn verify_private_batch(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+async fn verify_private_batch(
+	proof_file: String,
+	node_url: &str,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<()> {
 	log_print!("Verifying aggregated wormhole proof on-chain...");
 
 	let proof_bytes = read_hex_proof_file_to_bytes(&proof_file)?;
@@ -1777,8 +1841,12 @@ async fn verify_private_batch(proof_file: String, node_url: &str) -> crate::erro
 
 	log_verbose!("Submitting unsigned aggregated verification transaction...");
 
-	let (included_at, block_hash, tx_hash) =
-		submit_unsigned_verify_private_batch(&quantus_client, proof_bytes).await?;
+	let (included_at, block_hash, tx_hash) = submit_unsigned_verify_private_batch_until(
+		&quantus_client,
+		proof_bytes,
+		wormhole_inclusion_stage(execution_mode),
+	)
+	.await?;
 
 	// One unified check (no best/finalized copy-paste)
 	let result = check_proof_verification_events(
@@ -1808,12 +1876,36 @@ async fn verify_private_batch(proof_file: String, node_url: &str) -> crate::erro
 	Err(crate::error::QuantusError::Generic(error_msg))
 }
 
-/// Submit unsigned verify_public_batch(proof_bytes) and return (included_at, block_hash,
-/// tx_hash).
+/// Submit unsigned `verify_public_batch` and wait until best-block inclusion.
+///
+/// Use [`submit_unsigned_verify_public_batch_until`] with
+/// [`TransactionStage::Finalized`] when finalization is required.
+#[allow(dead_code)] // SDK re-export; CLI uses the `_until` variant.
 pub async fn submit_unsigned_verify_public_batch(
 	quantus_client: &QuantusClient,
 	proof_bytes: Vec<u8>,
 ) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
+	submit_unsigned_verify_public_batch_until(
+		quantus_client,
+		proof_bytes,
+		TransactionStage::Included,
+	)
+	.await
+}
+
+/// Submit unsigned `verify_public_batch` and wait until `target_stage`.
+///
+/// `Submitted` is treated as [`TransactionStage::Included`] because callers need
+/// the inclusion block to inspect events.
+pub async fn submit_unsigned_verify_public_batch_until(
+	quantus_client: &QuantusClient,
+	proof_bytes: Vec<u8>,
+	target_stage: TransactionStage,
+) -> crate::error::Result<(IncludedAt, subxt::utils::H256, subxt::utils::H256)> {
+	let stage = match target_stage {
+		TransactionStage::Finalized => TransactionStage::Finalized,
+		TransactionStage::Included | TransactionStage::Submitted => TransactionStage::Included,
+	};
 	let verify_tx = quantus_node::api::tx().wormhole().verify_public_batch(proof_bytes);
 
 	let unsigned_tx = quantus_client.client().tx().create_unsigned(&verify_tx).map_err(|e| {
@@ -1830,13 +1922,17 @@ pub async fn submit_unsigned_verify_public_batch(
 		&mut tx_progress,
 		quantus_client.client(),
 		&tx_hash,
-		crate::cli::common::TransactionStage::Finalized,
+		stage,
 	)
 	.await?;
-	Ok((IncludedAt::Finalized, block_hash, tx_hash))
+	Ok((included_at_for_stage(stage), block_hash, tx_hash))
 }
 
-async fn verify_public_batch(proof_file: String, node_url: &str) -> crate::error::Result<()> {
+async fn verify_public_batch(
+	proof_file: String,
+	node_url: &str,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<()> {
 	log_print!("Verifying public-batch wormhole proof on-chain...");
 
 	let proof_bytes = read_hex_proof_file_to_bytes(&proof_file)?;
@@ -1849,8 +1945,12 @@ async fn verify_public_batch(proof_file: String, node_url: &str) -> crate::error
 
 	log_verbose!("Submitting unsigned public-batch verification transaction...");
 
-	let (included_at, block_hash, tx_hash) =
-		submit_unsigned_verify_public_batch(&quantus_client, proof_bytes).await?;
+	let (included_at, block_hash, tx_hash) = submit_unsigned_verify_public_batch_until(
+		&quantus_client,
+		proof_bytes,
+		wormhole_inclusion_stage(execution_mode),
+	)
+	.await?;
 
 	let result = check_proof_verification_events(
 		quantus_client.client(),
@@ -2021,7 +2121,7 @@ fn derive_wormhole_secret(
 }
 
 /// Calculate the amount for a given round, accounting for fees
-/// Each round deducts 0.1% fee (10 bps)
+/// Each round deducts the on-chain volume fee (`VOLUME_FEE_BPS`)
 /// Round 1: fee applied once, Round 2: fee applied twice, etc.
 fn calculate_round_amount(initial_amount: u128, round: usize) -> u128 {
 	let mut amount = initial_amount;
@@ -2187,6 +2287,7 @@ async fn execute_initial_transfers(
 	secrets: &[WormholePair],
 	amount: u128,
 	num_proofs: usize,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<Vec<TransferInfo>> {
 	use colored::Colorize;
 	use quantus_node::api::runtime_types::{
@@ -2207,7 +2308,7 @@ async fn execute_initial_transfers(
 	// Build batch of transfer calls
 	let mut calls = Vec::with_capacity(num_proofs);
 	for (i, secret) in secrets.iter().enumerate() {
-		let wormhole_address = SubxtAccountId(secret.address);
+		let wormhole_address = SubxtAccountId(*secret.address());
 		let transfer_call = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
 			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address),
 			value: partition_amounts[i],
@@ -2222,6 +2323,7 @@ async fn execute_initial_transfers(
 	let quantum_keypair = QuantumKeyPair {
 		public_key: wallet.keypair.public_key.clone(),
 		private_key: wallet.keypair.private_key.clone(),
+		scheme: wallet.keypair.scheme,
 	};
 
 	log_print!("  Submitting batch of {} transfers...", num_proofs);
@@ -2230,27 +2332,27 @@ async fn execute_initial_transfers(
 	// The transfer_count used in the proof is the count at the time of transfer,
 	// which equals the count before the transfer (since it increments after).
 	let client = quantus_client.client();
-	let finalized_block_hash = at_finalized_block(quantus_client)
+	let tip_block_hash = wormhole_tip_block(quantus_client, execution_mode)
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
-				"Failed to get finalized block for transfer counts: {}",
+				"Failed to get tip block for transfer counts: {}",
 				e
 			))
 		})?
 		.hash();
 	let mut transfer_counts_before: Vec<u64> = Vec::with_capacity(num_proofs);
 	for secret in secrets.iter() {
-		let wormhole_address = SubxtAccountId(secret.address);
+		let wormhole_address = SubxtAccountId(*secret.address());
 		let count = client
 			.storage()
-			.at(finalized_block_hash)
+			.at(tip_block_hash)
 			.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address))
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::Generic(format!(
 					"Failed to fetch transfer count for {}: {}",
-					hex::encode(secret.address),
+					hex::encode(secret.address()),
 					e
 				))
 			})?
@@ -2258,18 +2360,19 @@ async fn execute_initial_transfers(
 		transfer_counts_before.push(count);
 	}
 
+	let wait_mode = wormhole_inclusion_mode(execution_mode);
 	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		quantus_client,
 		&quantum_keypair,
 		batch_tx,
 		None,
-		ExecutionMode { finalized: true, wait_for_transaction: true },
+		wait_mode,
 	)
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Batch transfer failed: {}", e)))?;
 
-	// Read events from the transaction's own finalized inclusion block; the
-	// finalized tip may already have moved past it.
+	// Read events from the transaction's own inclusion block; the tip may already
+	// have moved past it by the time we query.
 	let block_hash = included_in.ok_or_else(|| {
 		crate::error::QuantusError::Generic(
 			"Batch transfer watch returned no inclusion block".to_string(),
@@ -2291,7 +2394,7 @@ async fn execute_initial_transfers(
 		.iter()
 		.enumerate()
 		.map(|(i, secret)| ExpectedTransferEvent {
-			wormhole_address: SubxtAccountId(secret.address),
+			wormhole_address: SubxtAccountId(*secret.address()),
 			funding_account: Some(funding_account.clone()),
 			amount: Some(partition_amounts[i]),
 			transfer_count: Some(transfer_counts_before[i]),
@@ -2302,8 +2405,9 @@ async fn execute_initial_transfers(
 		parse_expected_transfer_events(&transfer_events, &expected_transfers, block_hash)?;
 
 	log_success!(
-		"  {} transfers submitted in a single finalized batch (block {})",
+		"  {} transfers submitted in a single batch ({} block {})",
 		num_proofs,
+		wait_mode.transaction_stage().status_label(),
 		hex::encode(block_hash.0)
 	);
 
@@ -2319,17 +2423,24 @@ async fn generate_round_proofs(
 	minting_account: &SubxtAccountId,
 	round_dir: &str,
 	num_proofs: usize,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<RoundProofGeneration> {
 	use colored::Colorize;
 
 	log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
 
-	// All proofs in an aggregation batch must use the same finalized block for storage proofs.
-	let proof_block = at_finalized_block(quantus_client)
+	// All proofs in an aggregation batch must use the same tip block for storage
+	// proofs. Use best (not finalized) unless `--finalized-tx`, otherwise freshly
+	// included leaves from the funding/verify step are missing from the tree.
+	let proof_block = wormhole_tip_block(quantus_client, execution_mode)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
 	let proof_block_hash = proof_block.hash();
-	log_print!("  Using block {} for all proofs", hex::encode(proof_block_hash.0));
+	log_print!(
+		"  Using {} block {} for all proofs",
+		if execution_mode.finalized { "finalized" } else { "best" },
+		hex::encode(proof_block_hash.0)
+	);
 
 	// Collect input amounts and exit accounts for random assignment
 	let input_amounts: Vec<u128> = transfers.iter().map(|t| t.amount).collect();
@@ -2410,7 +2521,7 @@ async fn generate_round_proofs(
 
 		// Generate proof with dual output assignment. Bind the hex-encoded
 		// secret so it can be wiped instead of dropping as a temporary.
-		let mut secret_hex = hex::encode(secret.secret.as_bytes());
+		let mut secret_hex = hex::encode(secret.secret().as_bytes());
 		let proof_result = generate_proof(
 			&secret_hex,
 			transfer.amount, // Use actual transfer amount for storage key
@@ -2556,6 +2667,7 @@ async fn run_multiround(
 	dry_run: bool,
 	public: bool,
 	node_url: &str,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<()> {
 	use colored::Colorize;
 
@@ -2655,7 +2767,7 @@ async fn run_multiround(
 			let mut addrs = Vec::new();
 			for i in 1..=num_proofs {
 				let next_secret = derive_wormhole_secret(&wallet.mnemonic, round + 1, i)?;
-				addrs.push(SubxtAccountId(next_secret.address));
+				addrs.push(SubxtAccountId(*next_secret.address()));
 			}
 			addrs
 		};
@@ -2663,9 +2775,15 @@ async fn run_multiround(
 		// Step 1: Get transfer info (execute transfers for round 1, reuse from previous round
 		// otherwise)
 		if round == 1 {
-			current_transfers =
-				execute_initial_transfers(&quantus_client, &wallet, &secrets, amount, num_proofs)
-					.await?;
+			current_transfers = execute_initial_transfers(
+				&quantus_client,
+				&wallet,
+				&secrets,
+				amount,
+				num_proofs,
+				execution_mode,
+			)
+			.await?;
 
 			// Log balance immediately after funding transfers
 			let balance_after_funding =
@@ -2691,6 +2809,7 @@ async fn run_multiround(
 			&minting_account,
 			&round_dir,
 			num_proofs,
+			execution_mode,
 		)
 		.await?;
 
@@ -2715,10 +2834,20 @@ async fn run_multiround(
 				public_batch_file.clone(),
 			)
 			.await?;
-			verify_public_batch_and_get_events(&public_batch_file, &quantus_client).await?
+			verify_public_batch_and_get_events_until(
+				&public_batch_file,
+				&quantus_client,
+				wormhole_inclusion_stage(execution_mode),
+			)
+			.await?
 		} else {
 			log_print!("{}", "Step 4: Submitting aggregated proof on-chain...".bright_yellow());
-			verify_private_batch_and_get_events(&aggregated_file, &quantus_client).await?
+			verify_private_batch_and_get_events_until(
+				&aggregated_file,
+				&quantus_client,
+				wormhole_inclusion_stage(execution_mode),
+			)
+			.await?
 		};
 
 		log_print!(
@@ -2737,7 +2866,7 @@ async fn run_multiround(
 				.map(|i| {
 					let next_secret =
 						derive_wormhole_secret(&wallet.mnemonic, round + 1, i).unwrap();
-					SubxtAccountId(next_secret.address)
+					SubxtAccountId(*next_secret.address())
 				})
 				.collect();
 			let expected_ordered: Vec<ExpectedTransferEvent> = next_round_addresses
@@ -3012,10 +3141,32 @@ pub fn decode_full_leaf_data(leaf_data: &[u8]) -> crate::error::Result<([u8; 32]
 	Ok((to_account, transfer_count, asset_id, amount))
 }
 
-/// Verify an aggregated proof and return the block hash, extrinsic hash, and transfer events
+/// Verify an aggregated proof and return the block hash, extrinsic hash, and transfer events.
+///
+/// Waits for best-block inclusion by default. Prefer
+/// [`verify_private_batch_and_get_events_until`] when `--finalized-tx` is set.
+#[allow(dead_code)] // SDK re-export; CLI uses the `_until` variant.
 pub async fn verify_private_batch_and_get_events(
 	proof_file: &str,
 	quantus_client: &QuantusClient,
+) -> crate::error::Result<(
+	subxt::utils::H256,
+	subxt::utils::H256,
+	Vec<wormhole::events::NativeTransferred>,
+)> {
+	verify_private_batch_and_get_events_until(
+		proof_file,
+		quantus_client,
+		TransactionStage::Included,
+	)
+	.await
+}
+
+/// Like [`verify_private_batch_and_get_events`], waiting until `target_stage`.
+pub async fn verify_private_batch_and_get_events_until(
+	proof_file: &str,
+	quantus_client: &QuantusClient,
+	target_stage: TransactionStage,
 ) -> crate::error::Result<(
 	subxt::utils::H256,
 	subxt::utils::H256,
@@ -3071,9 +3222,10 @@ pub async fn verify_private_batch_and_get_events(
 	})?;
 	log_verbose!("Local verification passed!");
 
-	// Submit unsigned tx + wait for inclusion (best or finalized)
+	// Submit unsigned tx + wait for inclusion (best by default; finalized only if requested)
 	let (included_at, block_hash, tx_hash) =
-		submit_unsigned_verify_private_batch(quantus_client, proof_bytes).await?;
+		submit_unsigned_verify_private_batch_until(quantus_client, proof_bytes, target_stage)
+			.await?;
 
 	log_verbose!(
 		"Submitted tx included in {}: block={:?}, tx={:?}",
@@ -3108,10 +3260,28 @@ pub async fn verify_private_batch_and_get_events(
 	Ok((block_hash, tx_hash, transfer_events))
 }
 
-/// Verify a public-batch proof and return the block hash, extrinsic hash, and transfer events
+/// Verify a public-batch proof and return the block hash, extrinsic hash, and transfer events.
+///
+/// Waits for best-block inclusion by default. Prefer
+/// [`verify_public_batch_and_get_events_until`] when `--finalized-tx` is set.
+#[allow(dead_code)] // SDK re-export; CLI uses the `_until` variant.
 pub async fn verify_public_batch_and_get_events(
 	proof_file: &str,
 	quantus_client: &QuantusClient,
+) -> crate::error::Result<(
+	subxt::utils::H256,
+	subxt::utils::H256,
+	Vec<wormhole::events::NativeTransferred>,
+)> {
+	verify_public_batch_and_get_events_until(proof_file, quantus_client, TransactionStage::Included)
+		.await
+}
+
+/// Like [`verify_public_batch_and_get_events`], waiting until `target_stage`.
+pub async fn verify_public_batch_and_get_events_until(
+	proof_file: &str,
+	quantus_client: &QuantusClient,
+	target_stage: TransactionStage,
 ) -> crate::error::Result<(
 	subxt::utils::H256,
 	subxt::utils::H256,
@@ -3146,9 +3316,10 @@ pub async fn verify_public_batch_and_get_events(
 	})?;
 	log_verbose!("Local verification passed!");
 
-	// Submit unsigned tx + wait for inclusion (best or finalized)
+	// Submit unsigned tx + wait for inclusion (best by default; finalized only if requested)
 	let (included_at, block_hash, tx_hash) =
-		submit_unsigned_verify_public_batch(quantus_client, proof_bytes).await?;
+		submit_unsigned_verify_public_batch_until(quantus_client, proof_bytes, target_stage)
+			.await?;
 
 	log_verbose!(
 		"Submitted tx included in {}: block={:?}, tx={:?}",
@@ -3219,7 +3390,7 @@ fn run_multiround_dry_run(
 		log_print!("  Wormhole addresses (to be funded):");
 		for i in 1..=num_proofs {
 			let secret = derive_wormhole_secret(mnemonic, round, i)?;
-			let address = sp_core::crypto::AccountId32::new(secret.address)
+			let address = sp_core::crypto::AccountId32::new(*secret.address())
 				.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 			log_print!("    [{}] {}", i, address);
 		}
@@ -3231,7 +3402,7 @@ fn run_multiround_dry_run(
 		} else {
 			for i in 1..=num_proofs {
 				let next_secret = derive_wormhole_secret(mnemonic, round + 1, i)?;
-				let address = sp_core::crypto::AccountId32::new(next_secret.address)
+				let address = sp_core::crypto::AccountId32::new(*next_secret.address())
 					.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
 				log_print!("    [{}] {} (round {} wormhole)", i, address, round + 1);
 			}
@@ -3534,6 +3705,7 @@ async fn run_dissolve(
 	keep_files: bool,
 	output_dir: String,
 	node_url: &str,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<()> {
 	use colored::Colorize;
 
@@ -3590,13 +3762,13 @@ async fn run_dissolve(
 	log_print!("{}", "Layer 0: Initial funding".bright_yellow());
 
 	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
-	let wormhole_address = SubxtAccountId(initial_secret.address);
+	let wormhole_address = SubxtAccountId(*initial_secret.address());
 
-	let finalized_block_hash = at_finalized_block(&quantus_client)
+	let tip_block_hash = wormhole_tip_block(&quantus_client, execution_mode)
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
-				"Failed to get finalized block for dissolve transfer count: {}",
+				"Failed to get tip block for dissolve transfer count: {}",
 				e
 			))
 		})?
@@ -3604,7 +3776,7 @@ async fn run_dissolve(
 	let transfer_count_before = quantus_client
 		.client()
 		.storage()
-		.at(finalized_block_hash)
+		.at(tip_block_hash)
 		.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address.clone()))
 		.await
 		.map_err(|e| {
@@ -3624,6 +3796,7 @@ async fn run_dissolve(
 	let quantum_keypair = QuantumKeyPair {
 		public_key: wallet.keypair.public_key.clone(),
 		private_key: wallet.keypair.private_key.clone(),
+		scheme: wallet.keypair.scheme,
 	};
 
 	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
@@ -3631,13 +3804,13 @@ async fn run_dissolve(
 		&quantum_keypair,
 		transfer_tx,
 		None,
-		ExecutionMode { finalized: true, wait_for_transaction: true },
+		wormhole_inclusion_mode(execution_mode),
 	)
 	.await
 	.map_err(|e| crate::error::QuantusError::Generic(format!("Initial transfer failed: {}", e)))?;
 
-	// Read events from the transaction's own finalized inclusion block; the
-	// finalized tip may already have moved past it.
+	// Read events from the transaction's own inclusion block; the tip may already
+	// have moved past it by the time we query.
 	let block_hash = included_in.ok_or_else(|| {
 		crate::error::QuantusError::Generic(
 			"Initial transfer watch returned no inclusion block".to_string(),
@@ -3667,7 +3840,7 @@ async fn run_dissolve(
 			})?;
 
 	let mut current_outputs = vec![DissolveOutput {
-		secret: *initial_secret.secret.as_bytes(),
+		secret: *initial_secret.secret().as_bytes(),
 		amount: initial_transfer.amount,
 		transfer_count: initial_transfer.transfer_count,
 		funding_account: initial_transfer.funding_account,
@@ -3738,14 +3911,14 @@ async fn run_dissolve(
 
 				let assignment = ProofOutputAssignment {
 					output_amount_1: output_1.max(1),
-					exit_account_1: next_secrets[exit_1_idx].address,
+					exit_account_1: *next_secrets[exit_1_idx].address(),
 					output_amount_2: output_2.max(1),
-					exit_account_2: next_secrets[exit_2_idx].address,
+					exit_account_2: *next_secrets[exit_2_idx].address(),
 				};
 				expected_child_outputs.push((
-					*next_secrets[exit_1_idx].secret.as_bytes(),
+					*next_secrets[exit_1_idx].secret().as_bytes(),
 					ExpectedTransferEvent {
-						wormhole_address: SubxtAccountId(next_secrets[exit_1_idx].address),
+						wormhole_address: SubxtAccountId(*next_secrets[exit_1_idx].address()),
 						funding_account: Some(minting_account.clone()),
 						amount: Some((assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR),
 						transfer_count: None,
@@ -3753,9 +3926,9 @@ async fn run_dissolve(
 					},
 				));
 				expected_child_outputs.push((
-					*next_secrets[exit_2_idx].secret.as_bytes(),
+					*next_secrets[exit_2_idx].secret().as_bytes(),
 					ExpectedTransferEvent {
-						wormhole_address: SubxtAccountId(next_secrets[exit_2_idx].address),
+						wormhole_address: SubxtAccountId(*next_secrets[exit_2_idx].address()),
 						funding_account: Some(minting_account.clone()),
 						amount: Some((assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR),
 						transfer_count: None,
@@ -3801,7 +3974,12 @@ async fn run_dissolve(
 			// Verify on-chain
 			log_print!("    Verifying on-chain...");
 			let (verification_block, _extrinsic_hash, transfer_events) =
-				verify_private_batch_and_get_events(&aggregated_file, &quantus_client).await?;
+				verify_private_batch_and_get_events_until(
+					&aggregated_file,
+					&quantus_client,
+					wormhole_inclusion_stage(execution_mode),
+				)
+				.await?;
 
 			log_success!("    Verified in block 0x{}", hex::encode(verification_block.0));
 
@@ -4144,7 +4322,7 @@ async fn run_check_nullifier(
 			crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e))
 		})?;
 
-		let secret: [u8; 32] = *wormhole_pair.secret.as_bytes();
+		let secret: [u8; 32] = *wormhole_pair.secret().as_bytes();
 		log_print!("Derived wormhole secret from wallet '{}' (index {})", wallet, wormhole_index);
 		secret
 	} else {
@@ -4318,26 +4496,36 @@ mod tests {
 	}
 
 	#[test]
-	fn recursive_flows_prefer_finalized_inclusion() {
-		// Unsigned verify paths return only Finalized; Best remains for API
-		// compatibility but recursive snapshot/proof code uses at_finalized_block.
+	fn recursive_flows_align_tip_reads_with_tx_wait_mode() {
+		// Funding/verify wait for best-block inclusion by default; tip reads and
+		// ZK Merkle proofs must use the same tip (best vs finalized), or freshly
+		// written leaves are missing from the tree.
 		assert_eq!(IncludedAt::Finalized.label(), "finalized block");
 		assert_ne!(IncludedAt::Best.label(), IncludedAt::Finalized.label());
 		let _: *const () = at_finalized_block as *const ();
+		let _: *const () = at_best_block as *const ();
+		assert_eq!(wormhole_inclusion_stage(ExecutionMode::default()), TransactionStage::Included);
+		assert_eq!(
+			wormhole_inclusion_stage(ExecutionMode {
+				finalized: true,
+				wait_for_transaction: false,
+			}),
+			TransactionStage::Finalized
+		);
 	}
 
 	#[test]
-	fn unsigned_verify_submitters_use_bounded_finalization_wait() {
+	fn unsigned_verify_submitters_use_bounded_inclusion_wait() {
 		// The unbounded `while let Some(Ok(status)) = tx_progress.next()` loops
 		// must stay gone; unsigned verify shares wait_tx_inclusion's deadlines.
 		let source = include_str!("wormhole.rs");
 		let private_fn = source
-			.split("pub async fn submit_unsigned_verify_private_batch")
+			.split("pub async fn submit_unsigned_verify_private_batch_until")
 			.nth(1)
 			.and_then(|s| s.split("pub async fn ").next())
 			.expect("private batch submitter");
 		let public_fn = source
-			.split("pub async fn submit_unsigned_verify_public_batch")
+			.split("pub async fn submit_unsigned_verify_public_batch_until")
 			.nth(1)
 			.and_then(|s| s.split("pub async fn ").next())
 			.expect("public batch submitter");
@@ -4349,6 +4537,12 @@ mod tests {
 			assert!(
 				!body.contains("tx_progress.next().await"),
 				"unsigned verify must not wait on an unbounded status stream"
+			);
+			// Match arms may mention Finalized for passthrough; the wait helper
+			// must still receive the normalized `stage` local, not a Finalized literal.
+			assert!(
+				body.contains("&tx_hash,\n\t\tstage,\n\t)"),
+				"wait_tx_inclusion must receive the caller-selected stage parameter"
 			);
 		}
 	}
@@ -4447,20 +4641,21 @@ mod tests {
 	fn test_fee_calculation_edge_cases() {
 		// Test the circuit fee constraint: output_amount * 10000 <= input_amount * (10000 -
 		// volume_fee_bps) This is equivalent to: output <= input * (1 - fee_rate)
+		// VOLUME_FEE_BPS is 4 → keep factor 9996/10000.
 
-		// Small amounts where fee rounds to zero
+		// Small amounts where fee rounds down
 		let input_small: u32 = 100;
 		let output_small = compute_output_amount(input_small, VOLUME_FEE_BPS);
 		assert_eq!(output_small, 99);
-		// Verify constraint: 99 * 10000 = 990000 <= 100 * 9990 = 999000 ✓
+		// Verify constraint: 99 * 10000 = 990000 <= 100 * 9996 = 999600 ✓
 		assert!(
 			(output_small as u64) * 10000 <= (input_small as u64) * (10000 - VOLUME_FEE_BPS as u64)
 		);
 
-		// Medium amounts
+		// Medium amounts: 10000 * 9996 / 10000 = 9996
 		let input_medium: u32 = 10000;
 		let output_medium = compute_output_amount(input_medium, VOLUME_FEE_BPS);
-		assert_eq!(output_medium, 9990);
+		assert_eq!(output_medium, 9996);
 		assert!(
 			(output_medium as u64) * 10000 <=
 				(input_medium as u64) * (10000 - VOLUME_FEE_BPS as u64)
@@ -4568,8 +4763,8 @@ mod tests {
 	/// Test that constants match expected on-chain configuration
 	#[test]
 	fn test_constants_match_chain_config() {
-		// Volume fee rate should be 10 bps (0.1%)
-		assert_eq!(VOLUME_FEE_BPS, 10, "Volume fee should be 10 bps");
+		// Volume fee rate must match on-chain VolumeFeeRateBps (4 bps).
+		assert_eq!(VOLUME_FEE_BPS, 4, "Volume fee should be 4 bps");
 
 		// Native asset ID should be 0
 		assert_eq!(NATIVE_ASSET_ID, 0, "Native asset ID should be 0");
@@ -4586,8 +4781,8 @@ mod tests {
 
 	#[test]
 	fn test_volume_fee_bps_constant() {
-		// Ensure VOLUME_FEE_BPS matches expected value (10 bps = 0.1%)
-		assert_eq!(VOLUME_FEE_BPS, 10);
+		// Ensure VOLUME_FEE_BPS matches on-chain VolumeFeeRateBps (4 bps).
+		assert_eq!(VOLUME_FEE_BPS, 4);
 	}
 
 	#[test]

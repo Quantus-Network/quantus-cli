@@ -8,6 +8,7 @@ use crate::{
 	},
 	error::{QuantusError, Result},
 	exercise_step,
+	wallet::DilithiumScheme,
 };
 
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
@@ -16,7 +17,45 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	exercise_step!(report, phase, "transfer_with_tip", transfer_with_tip(ctx));
 	exercise_step!(report, phase, "transfer_manual_nonce", transfer_manual_nonce(ctx));
 	exercise_step!(report, phase, "remark_with_event", remark_with_event(ctx));
+	exercise_step!(
+		report,
+		phase,
+		"scheme_ml_dsa_65_transfer",
+		scheme_transfer(ctx, DilithiumScheme::MlDsa65)
+	);
+	exercise_step!(
+		report,
+		phase,
+		"scheme_ml_dsa_87_transfer",
+		scheme_transfer(ctx, DilithiumScheme::MlDsa87)
+	);
 	Ok(())
+}
+
+async fn scheme_transfer(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Result<String> {
+	let sender = ctx.eph.iter().find(|k| k.scheme == scheme).cloned().ok_or_else(|| {
+		QuantusError::Generic(format!("no ephemeral account with scheme {scheme}"))
+	})?;
+	let recipient = ctx.fresh_keypair_with_scheme(scheme)?;
+	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
+	let amount = ctx.unit;
+	let before = ctx.free_balance(&recipient_ss58).await?;
+	crate::cli::send::transfer(
+		&ctx.client,
+		&sender,
+		&recipient_ss58,
+		amount,
+		None,
+		ctx.wait_mode(),
+	)
+	.await?;
+	let after = ctx.free_balance(&recipient_ss58).await?;
+	if after != before + amount {
+		return Err(QuantusError::Generic(format!(
+			"{scheme} recipient balance mismatch: before {before}, after {after}, expected +{amount}"
+		)));
+	}
+	Ok(format!("{scheme} sender signed transfer; recipient balance verified"))
 }
 
 async fn single_transfer(ctx: &mut ExerciseCtx) -> Result<String> {

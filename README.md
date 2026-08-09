@@ -497,6 +497,35 @@ quantus treasury info
 
 ---
 
+### Vesting
+
+Treasury-funded vesting schedules. Funds vest linearly between `start` and `end` (nothing before `cliff`). `claim` is permissionless — anyone can trigger a payout, which always goes to the schedule's stored beneficiary (this is the claim path for keyless wormhole or high-security beneficiaries). The admin calls (`create-schedule`, `end-schedule`, `retarget`) require the treasury origin; since the treasury is a multisig on real deployments, print the call data with `--call-data-only` and route it through `quantus multisig propose`.
+
+```bash
+# Inspect
+quantus vesting info
+quantus vesting list [--beneficiary qz...]
+quantus vesting show --schedule-id 0
+
+# Claim the vested payout of a schedule (any funded wallet can sign)
+quantus vesting claim --schedule-id 0 --from my_wallet
+
+# Admin: create a schedule (moments are unix ms, "now", or "+<seconds>")
+quantus vesting create-schedule \
+  --beneficiary qz... \
+  --start now --cliff +7776000 --end +31536000 \
+  --total 10000 \
+  --call-data-only   # print hex call data for a treasury multisig proposal
+
+# Admin: end early (vested part to beneficiary, rest back to treasury)
+quantus vesting end-schedule --schedule-id 3 --call-data-only
+
+# Admin: change beneficiary
+quantus vesting retarget --schedule-id 3 --new-beneficiary qz... --call-data-only
+```
+
+---
+
 ### Privacy-Preserving Transfer Queries
 
 Query transfers via a Subsquid indexer using hash-prefix queries that hide your exact address.
