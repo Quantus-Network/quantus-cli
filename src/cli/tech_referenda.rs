@@ -83,7 +83,7 @@ pub enum TechReferendaCommands {
 		index: u32,
 	},
 
-	/// Check the voting status and tally for a specific Tech Referendum
+	/// Check the status of a Tech Referendum: phase, tally, timings and enactment estimates
 	#[command(arg_required_else_help = true)]
 	Status {
 		/// Referendum index (shown in `list` output)
@@ -554,6 +554,87 @@ async fn get_proposal_details(
 	Ok(())
 }
 
+type TrackDetails =
+	quantus_subxt::api::runtime_types::pallet_referenda::types::TrackDetails<u128, u32, String>;
+
+/// Fetch the TechReferenda track list from chain constants
+fn fetch_tracks(
+	quantus_client: &crate::chain::client::QuantusClient,
+) -> crate::error::Result<Vec<(u16, TrackDetails)>> {
+	quantus_client
+		.client()
+		.constants()
+		.at(&quantus_subxt::api::constants().tech_referenda().tracks())
+		.map_err(|e| QuantusError::Generic(format!("Failed to decode Tracks constant: {e:?}")))
+}
+
+/// Fetch the chain's target block time in milliseconds
+fn target_block_time_ms(
+	quantus_client: &crate::chain::client::QuantusClient,
+) -> crate::error::Result<u64> {
+	quantus_client
+		.client()
+		.constants()
+		.at(&quantus_subxt::api::constants().q_po_w().target_block_time())
+		.map_err(|e| {
+			QuantusError::Generic(format!("Failed to read TargetBlockTime constant: {e:?}"))
+		})
+}
+
+/// Track names are stored as fixed-width, NUL-padded strings on chain
+fn track_display_name(name: &str) -> &str {
+	name.trim_matches(|c: char| c == '\0' || c.is_whitespace())
+}
+
+/// Human-readable duration for a number of blocks at the target block time
+fn format_blocks_duration(blocks: u64, block_time_ms: u64) -> String {
+	let secs = blocks.saturating_mul(block_time_ms) / 1000;
+	if secs < 60 {
+		format!("{}s", secs)
+	} else if secs < 3600 {
+		format!("{:.0}min", secs as f64 / 60.0)
+	} else if secs < 172_800 {
+		format!("{:.1}h", secs as f64 / 3600.0)
+	} else {
+		format!("{:.1} days", secs as f64 / 86400.0)
+	}
+}
+
+/// Describe a block number relative to the current block, with an estimated wall-clock time
+fn format_block_eta(target_block: u32, current_block: u32, block_time_ms: u64) -> String {
+	if target_block <= current_block {
+		let ago = (current_block - target_block) as u64;
+		format!("block {} (~{} ago)", target_block, format_blocks_duration(ago, block_time_ms))
+	} else {
+		let delta = (target_block - current_block) as u64;
+		let eta = chrono::Utc::now() +
+			chrono::Duration::milliseconds(delta.saturating_mul(block_time_ms) as i64);
+		format!(
+			"block {} (in {} blocks / ~{}, ≈ {})",
+			target_block,
+			delta,
+			format_blocks_duration(delta, block_time_ms),
+			eta.format("%Y-%m-%d %H:%M UTC")
+		)
+	}
+}
+
+/// Compute the enactment block for a given approval block, honoring the track's minimum delay
+fn enactment_block(
+	enactment: &quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime<
+		u32,
+	>,
+	approval_block: u32,
+	min_enactment_period: u32,
+) -> u32 {
+	use quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime;
+	let desired = match enactment {
+		DispatchTime::At(block) => *block,
+		DispatchTime::After(offset) => approval_block.saturating_add(*offset),
+	};
+	desired.max(approval_block.saturating_add(min_enactment_period))
+}
+
 /// Get the status of a Tech Referendum
 async fn get_proposal_status(
 	quantus_client: &crate::chain::client::QuantusClient,
@@ -576,35 +657,255 @@ async fn get_proposal_status(
 			log_print!("📊 Status for Referendum #{}", index.to_string().bright_yellow());
 			match info {
 				ReferendumInfo::Ongoing(status) => {
+					let current_block =
+						quantus_client.client().blocks().at(latest_block_hash).await?.number();
+					let block_time_ms = target_block_time_ms(quantus_client)?;
+					let tracks = fetch_tracks(quantus_client)?;
+					let (_, track) =
+						tracks.iter().find(|(id, _)| *id == status.track).ok_or_else(|| {
+							QuantusError::Generic(format!(
+								"Track {} not found in Tracks constant",
+								status.track
+							))
+						})?;
+
 					log_print!("   - Status: {}", "Ongoing".bright_green());
-					log_print!("   - Track: {}", status.track);
-					log_print!("   - Submitted at: block {}", status.submitted);
+					log_print!(
+						"   - Track: {} ({})",
+						status.track,
+						track_display_name(&track.name).bright_cyan()
+					);
+					log_print!("   - Current block: {}", current_block);
+					log_print!(
+						"   - Submitted at: {}",
+						format_block_eta(status.submitted, current_block, block_time_ms)
+					);
 					log_print!(
 						"   - Tally: Ayes: {}, Nays: {}",
 						status.tally.ayes,
 						status.tally.nays
 					);
+					log_print!(
+						"   - Decision deposit: {}",
+						if status.decision_deposit.is_some() {
+							"placed".green()
+						} else {
+							"not placed".yellow()
+						}
+					);
+
+					log_print!("");
+					log_print!(
+						"   ⏱️  Track phase durations (target block time {}s):",
+						block_time_ms / 1000
+					);
+					log_print!(
+						"      - Prepare: {} blocks (~{})",
+						track.prepare_period,
+						format_blocks_duration(track.prepare_period as u64, block_time_ms)
+					);
+					log_print!(
+						"      - Decide: up to {} blocks (~{})",
+						track.decision_period,
+						format_blocks_duration(track.decision_period as u64, block_time_ms)
+					);
+					log_print!(
+						"      - Confirm: {} blocks (~{})",
+						track.confirm_period,
+						format_blocks_duration(track.confirm_period as u64, block_time_ms)
+					);
+					log_print!(
+						"      - Enactment delay after approval: ≥ {} blocks (~{})",
+						track.min_enactment_period,
+						format_blocks_duration(track.min_enactment_period as u64, block_time_ms)
+					);
+
+					log_print!("");
+					let prepare_end = status.submitted.saturating_add(track.prepare_period);
+					match &status.deciding {
+						None => {
+							log_print!(
+								"   🧭 Phase: {} (1 of 3: Preparing → Deciding → Confirming)",
+								"Preparing".bright_yellow()
+							);
+							log_print!(
+								"      - Prepare period ends at {}",
+								format_block_eta(prepare_end, current_block, block_time_ms)
+							);
+							if status.in_queue {
+								log_print!(
+									"      - ⏳ Queued: waiting for a free deciding slot on this track"
+								);
+							}
+							log_print!("");
+							if prepare_end <= current_block {
+								if status.decision_deposit.is_none() {
+									log_print!(
+										"   ⏭️  Next phase: Deciding — prepare period complete, starts once the decision deposit is placed"
+									);
+									log_print!(
+										"      💡 Run: quantus tech-referenda place-decision-deposit --index {} --from <wallet>",
+										index
+									);
+								} else {
+									log_print!(
+										"   ⏭️  Next phase: Deciding — prepare period complete, transition is imminent"
+									);
+								}
+							} else {
+								log_print!(
+									"   ⏭️  Next phase: Deciding — earliest at {}{}",
+									format_block_eta(prepare_end, current_block, block_time_ms),
+									if status.decision_deposit.is_none() {
+										" (requires the decision deposit to be placed)"
+									} else {
+										""
+									}
+								);
+							}
+							let deciding_start = prepare_end.max(current_block);
+							let earliest_approval =
+								deciding_start.saturating_add(track.confirm_period);
+							let latest_approval = deciding_start
+								.saturating_add(track.decision_period)
+								.saturating_add(track.confirm_period);
+							log_print!(
+								"   🏁 Earliest enactment: {} (confirmation starts as soon as deciding begins)",
+								format_block_eta(
+									enactment_block(
+										&status.enactment,
+										earliest_approval,
+										track.min_enactment_period
+									),
+									current_block,
+									block_time_ms
+								)
+							);
+							log_print!(
+								"   🏁 Latest enactment: {} (confirmation only starts at the decision deadline)",
+								format_block_eta(
+									enactment_block(
+										&status.enactment,
+										latest_approval,
+										track.min_enactment_period
+									),
+									current_block,
+									block_time_ms
+								)
+							);
+						},
+						Some(deciding) => match deciding.confirming {
+							None => {
+								let decision_end =
+									deciding.since.saturating_add(track.decision_period);
+								log_print!(
+									"   🧭 Phase: {} (2 of 3: Preparing → Deciding → Confirming)",
+									"Deciding".bright_yellow()
+								);
+								log_print!(
+									"      - Started at {}",
+									format_block_eta(deciding.since, current_block, block_time_ms)
+								);
+								log_print!(
+									"      - Decision deadline: {} — must enter Confirming by then or it is rejected",
+									format_block_eta(decision_end, current_block, block_time_ms)
+								);
+								log_print!("");
+								log_print!(
+									"   ⏭️  Next phase: Confirming — starts as soon as approval & support thresholds pass; lasts {} blocks (~{})",
+									track.confirm_period,
+									format_blocks_duration(
+										track.confirm_period as u64,
+										block_time_ms
+									)
+								);
+								let earliest_approval =
+									current_block.saturating_add(track.confirm_period);
+								let latest_approval =
+									decision_end.saturating_add(track.confirm_period);
+								log_print!(
+									"   🏁 Earliest enactment: {} (confirmation starts now)",
+									format_block_eta(
+										enactment_block(
+											&status.enactment,
+											earliest_approval,
+											track.min_enactment_period
+										),
+										current_block,
+										block_time_ms
+									)
+								);
+								log_print!(
+									"   🏁 Latest enactment: {} (confirmation only starts at the decision deadline)",
+									format_block_eta(
+										enactment_block(
+											&status.enactment,
+											latest_approval,
+											track.min_enactment_period
+										),
+										current_block,
+										block_time_ms
+									)
+								);
+							},
+							Some(confirm_end) => {
+								log_print!(
+									"   🧭 Phase: {} (3 of 3: Preparing → Deciding → Confirming)",
+									"Confirming".bright_green()
+								);
+								log_print!(
+									"      - Confirmation started at {}",
+									format_block_eta(
+										confirm_end.saturating_sub(track.confirm_period),
+										current_block,
+										block_time_ms
+									)
+								);
+								log_print!(
+									"      - Approval at {} (if support holds; otherwise it falls back to Deciding)",
+									format_block_eta(confirm_end, current_block, block_time_ms)
+								);
+								log_print!("");
+								log_print!("   ⏭️  Next phase: Approved → enactment is scheduled");
+								log_print!(
+									"   🏁 Enactment: {}",
+									format_block_eta(
+										enactment_block(
+											&status.enactment,
+											confirm_end,
+											track.min_enactment_period
+										),
+										current_block,
+										block_time_ms
+									)
+								);
+							},
+						},
+					}
 					log_verbose!("   - Full status: {:#?}", status);
 				},
-				ReferendumInfo::Approved(submitted, ..) => {
+				ReferendumInfo::Approved(since, ..) => {
 					log_print!("   - Status: {}", "Approved".green());
-					log_print!("   - Submitted at block: {}", submitted);
+					log_print!("   - Approved at block: {}", since);
+					log_print!(
+						"   💡 Enactment is scheduled; check the scheduler for the exact block"
+					);
 				},
-				ReferendumInfo::Rejected(submitted, ..) => {
+				ReferendumInfo::Rejected(since, ..) => {
 					log_print!("   - Status: {}", "Rejected".red());
-					log_print!("   - Submitted at block: {}", submitted);
+					log_print!("   - Rejected at block: {}", since);
 				},
-				ReferendumInfo::Cancelled(submitted, ..) => {
+				ReferendumInfo::Cancelled(since, ..) => {
 					log_print!("   - Status: {}", "Cancelled".yellow());
-					log_print!("   - Submitted at block: {}", submitted);
+					log_print!("   - Cancelled at block: {}", since);
 				},
-				ReferendumInfo::TimedOut(submitted, ..) => {
+				ReferendumInfo::TimedOut(since, ..) => {
 					log_print!("   - Status: {}", "TimedOut".dimmed());
-					log_print!("   - Submitted at block: {}", submitted);
+					log_print!("   - Timed out at block: {}", since);
 				},
-				ReferendumInfo::Killed(submitted) => {
+				ReferendumInfo::Killed(since) => {
 					log_print!("   - Status: {}", "Killed".red().bold());
-					log_print!("   - Killed at block: {}", submitted);
+					log_print!("   - Killed at block: {}", since);
 				},
 			}
 		},
@@ -643,34 +944,43 @@ async fn get_config(
 	log_print!("⚙️  Tech Referenda Configuration");
 	log_print!("");
 
-	let constants = quantus_client.client().constants();
-	let tracks_addr = quantus_subxt::api::constants().tech_referenda().tracks();
+	let tracks = fetch_tracks(quantus_client)?;
+	let block_time_ms = target_block_time_ms(quantus_client)?;
 
-	match constants.at(&tracks_addr) {
-		Ok(tracks) => {
-			log_print!("{}", "📊 Track Configuration:".bold());
-			for (id, info) in tracks.iter() {
-				log_print!("   ------------------------------------");
-				log_print!(
-					"   • {} #{}: {}",
-					"Track".bold(),
-					id,
-					info.name.to_string().bright_cyan()
-				);
-				log_print!("   • Max Deciding: {}", info.max_deciding);
-				log_print!("   • Decision Deposit: {}", info.decision_deposit);
-				log_print!("   • Prepare Period: {} blocks", info.prepare_period);
-				log_print!("   • Decision Period: {} blocks", info.decision_period);
-				log_print!("   • Confirm Period: {} blocks", info.confirm_period);
-				log_print!("   • Min Enactment Period: {} blocks", info.min_enactment_period);
-			}
-			log_print!("   ------------------------------------");
-		},
-		Err(e) => {
-			log_error!("❌ Failed to decode Tracks constant: {:?}", e);
-			log_print!("💡 It's possible the Tracks constant is not in the expected format.");
-		},
+	log_print!("{}", "📊 Track Configuration:".bold());
+	log_print!("   Target block time: {}s", block_time_ms / 1000);
+	for (id, info) in tracks.iter() {
+		log_print!("   ------------------------------------");
+		log_print!(
+			"   • {} #{}: {}",
+			"Track".bold(),
+			id,
+			track_display_name(&info.name).bright_cyan()
+		);
+		log_print!("   • Max Deciding: {}", info.max_deciding);
+		log_print!("   • Decision Deposit: {}", info.decision_deposit);
+		log_print!(
+			"   • Prepare Period: {} blocks (~{})",
+			info.prepare_period,
+			format_blocks_duration(info.prepare_period as u64, block_time_ms)
+		);
+		log_print!(
+			"   • Decision Period: {} blocks (~{})",
+			info.decision_period,
+			format_blocks_duration(info.decision_period as u64, block_time_ms)
+		);
+		log_print!(
+			"   • Confirm Period: {} blocks (~{})",
+			info.confirm_period,
+			format_blocks_duration(info.confirm_period as u64, block_time_ms)
+		);
+		log_print!(
+			"   • Min Enactment Period: {} blocks (~{})",
+			info.min_enactment_period,
+			format_blocks_duration(info.min_enactment_period as u64, block_time_ms)
+		);
 	}
+	log_print!("   ------------------------------------");
 
 	Ok(())
 }
