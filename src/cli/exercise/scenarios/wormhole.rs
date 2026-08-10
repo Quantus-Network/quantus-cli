@@ -8,22 +8,26 @@ use crate::{
 };
 
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
+	// Split the two runs across both signature schemes *and* both wormhole
+	// extrinsics: the private run submits Wormhole::verify_private_batch, the
+	// public run wraps each round in a public batch and submits
+	// Wormhole::verify_public_batch.
 	exercise_step!(
 		report,
 		phase,
-		"multiround_ml_dsa_65",
-		multiround(ctx, DilithiumScheme::MlDsa65)
+		"multiround_private_ml_dsa_65",
+		multiround(ctx, DilithiumScheme::MlDsa65, false)
 	);
 	exercise_step!(
 		report,
 		phase,
-		"multiround_ml_dsa_87",
-		multiround(ctx, DilithiumScheme::MlDsa87)
+		"multiround_public_ml_dsa_87",
+		multiround(ctx, DilithiumScheme::MlDsa87, true)
 	);
 	Ok(())
 }
 
-async fn multiround(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Result<String> {
+async fn multiround(ctx: &mut ExerciseCtx, scheme: DilithiumScheme, public: bool) -> Result<String> {
 	// Dev wallets (crystal_*) have no mnemonic; wormhole HD derivation requires one.
 	let wallet_name = format!("exercise_wormhole_{}_{}", scheme, ctx.seed);
 	let manager = WalletManager::new()?;
@@ -54,7 +58,7 @@ async fn multiround(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Result<St
 			ctx.wait_mode(),
 		)
 		.await?;
-		run_multiround_command(ctx, &wallet_name, scheme).await
+		run_multiround_command(ctx, &wallet_name, scheme, public).await
 	}
 	.await;
 
@@ -75,6 +79,7 @@ async fn run_multiround_command(
 	ctx: &ExerciseCtx,
 	wallet_name: &str,
 	scheme: DilithiumScheme,
+	public: bool,
 ) -> Result<String> {
 	let command = crate::cli::wormhole::WormholeCommands::Multiround {
 		num_proofs: 5,
@@ -86,8 +91,9 @@ async fn run_multiround_command(
 		keep_files: false,
 		output_dir: format!("/tmp/wormhole_exercise_{}_{}", scheme, ctx.seed),
 		dry_run: false,
-		public: false,
+		public,
 	};
 	crate::cli::wormhole::handle_wormhole_command(command, &ctx.node_url, ctx.wait_mode()).await?;
-	Ok(format!("wormhole multiround ({scheme}; 5 rounds, 5 proofs each) completed"))
+	let extrinsic = if public { "verify_public_batch" } else { "verify_private_batch" };
+	Ok(format!("wormhole multiround ({scheme}; 5 rounds, 5 proofs each, {extrinsic}) completed"))
 }
