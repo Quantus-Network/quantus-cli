@@ -23,7 +23,7 @@ pub enum RuntimeCommands {
 		from: String,
 
 		/// Password for the wallet
-		#[arg(short, long)]
+		#[arg(short, long, hide = true)]
 		password: Option<String>,
 
 		/// Read password from file

@@ -149,9 +149,9 @@ async fn main() -> Result<()> {
 
 	// 1. wallet ----------------------------------------------------------------
 	let wm = WalletManager::new()?;
-	let wallet = wm.load_wallet(&args.funder, &args.password)?;
-	let funder_kp = wallet.keypair;
-	let funder_ss58 = funder_kp.to_account_id_ss58check();
+	let mut wallet = wm.load_wallet(&args.funder, &args.password)?;
+	let funder_kp = wallet.take_keypair();
+	let funder_ss58 = funder_kp.try_to_account_id_ss58check()?;
 	println!("  wallet  : {funder_ss58}");
 
 	// 2. derive wormhole address from a random secret + random exit account ---
@@ -247,7 +247,8 @@ async fn main() -> Result<()> {
 	let prover_bin = bins_dir.join("prover.bin");
 	let common_bin = bins_dir.join("common.bin");
 
-	let pgi = ProofGenerationInput {
+	// generate_proof zeroizes pgi.secret before returning.
+	let mut pgi = ProofGenerationInput {
 		secret,
 		transfer_count: event.transfer_count,
 		wormhole_address: wh_addr,
@@ -270,7 +271,7 @@ async fn main() -> Result<()> {
 	};
 
 	let leaf_start = std::time::Instant::now();
-	let leaf_result = wormhole_lib::generate_proof(&pgi, &prover_bin, &common_bin)
+	let leaf_result = wormhole_lib::generate_proof(&mut pgi, &prover_bin, &common_bin)
 		.map_err(|e| QuantusError::Generic(format!("generate_proof: {}", e.message)))?;
 	println!(
 		"  leaf proof generated in {:.2}s ({} bytes)",

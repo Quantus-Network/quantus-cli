@@ -5,10 +5,12 @@
 //! exact addresses to the indexer.
 
 use crate::{
-	cli::send::format_balance,
+	cli::send::{format_balance, get_chain_properties},
 	error::{QuantusError, Result},
 	log_error, log_print, log_success, log_verbose,
-	subsquid::{compute_address_hash, get_hash_prefix, SubsquidClient, TransferQueryParams},
+	subsquid::{
+		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
+	},
 	wallet::WalletManager,
 };
 use clap::Subcommand;
@@ -67,7 +69,7 @@ pub enum TransfersCommands {
 }
 
 /// Handle transfers commands
-pub async fn handle_transfers_command(cmd: TransfersCommands) -> Result<()> {
+pub async fn handle_transfers_command(cmd: TransfersCommands, node_url: &str) -> Result<()> {
 	match cmd {
 		TransfersCommands::Query {
 			subsquid_url,
@@ -88,6 +90,7 @@ pub async fn handle_transfers_command(cmd: TransfersCommands) -> Result<()> {
 				limit,
 				wallet,
 				json,
+				node_url,
 			)
 			.await,
 		TransfersCommands::HashAddress { address, prefix_len } =>
@@ -106,6 +109,7 @@ async fn handle_query_command(
 	limit: u32,
 	wallet_name: Option<String>,
 	json_output: bool,
+	node_url: &str,
 ) -> Result<()> {
 	// Validate prefix length
 	if prefix_len == 0 || prefix_len > 64 {
@@ -186,10 +190,23 @@ async fn handle_query_command(
 		if transfers.is_empty() {
 			log_print!("No transfers found for your addresses.");
 		} else {
+			let parsed_transfers: Vec<_> = transfers
+				.iter()
+				.map(|transfer| {
+					Ok((
+						transfer,
+						parse_transfer_amount(transfer)?,
+						transfer_timestamp_prefix(transfer)?,
+					))
+				})
+				.collect::<Result<_>>()?;
+			let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+			let (symbol, decimals) = get_chain_properties(&quantus_client).await?;
+
 			log_success!("Found {} transfers:", transfers.len().to_string().bright_green());
 			log_print!("");
 
-			for transfer in &transfers {
+			for (transfer, amount, timestamp) in parsed_transfers {
 				// Determine if this is incoming or outgoing
 				let our_address_hashes: std::collections::HashSet<String> =
 					raw_addresses.iter().map(compute_address_hash).collect();
@@ -204,14 +221,13 @@ async fn handle_query_command(
 					(false, false) => "???".dimmed(), // Shouldn't happen
 				};
 
-				// Parse and format amount (12 decimals is standard for Substrate)
-				let amount: u128 = transfer.amount.parse().unwrap_or(0);
-				let formatted_amount = format!("{} DEV", format_balance(amount, 12));
+				// Format indexer amount with the connected chain properties.
+				let formatted_amount = format!("{} {}", format_balance(amount, decimals), symbol);
 
 				log_print!(
 					"  [{}] {} | Block {} | {} | {} -> {}",
 					direction,
-					&transfer.timestamp[..19], // Truncate to YYYY-MM-DDTHH:MM:SS
+					timestamp, // Truncate to YYYY-MM-DDTHH:MM:SS
 					transfer.block_height.to_string().bright_yellow(),
 					formatted_amount.bright_cyan(),
 					truncate_address(&transfer.from_id),
@@ -226,6 +242,24 @@ async fn handle_query_command(
 	}
 
 	Ok(())
+}
+
+fn parse_transfer_amount(transfer: &Transfer) -> Result<u128> {
+	transfer.amount.parse().map_err(|_| {
+		QuantusError::Generic(format!(
+			"Invalid transfer amount from indexer for transfer {}: '{}'",
+			transfer.id, transfer.amount
+		))
+	})
+}
+
+fn transfer_timestamp_prefix(transfer: &Transfer) -> Result<&str> {
+	transfer.timestamp.get(..19).ok_or_else(|| {
+		QuantusError::Generic(format!(
+			"Invalid transfer timestamp from indexer for transfer {}: '{}'",
+			transfer.id, transfer.timestamp
+		))
+	})
 }
 
 /// Handle the hash-address subcommand
@@ -259,5 +293,50 @@ fn truncate_address(address: &str) -> String {
 		format!("{}...{}", &address[..8], &address[address.len() - 6..])
 	} else {
 		address.to_string()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn sample_transfer(amount: &str, timestamp: &str) -> Transfer {
+		Transfer {
+			id: "t1".to_string(),
+			block_id: "b1".to_string(),
+			block_height: 1,
+			timestamp: timestamp.to_string(),
+			extrinsic_hash: None,
+			from_id: "from".to_string(),
+			to_id: "to".to_string(),
+			amount: amount.to_string(),
+			fee: "0".to_string(),
+			from_hash: "aa".to_string(),
+			to_hash: "bb".to_string(),
+			leaf_index: "0".to_string(),
+			transfer_count: "0".to_string(),
+		}
+	}
+
+	#[test]
+	fn parse_transfer_amount_rejects_invalid_values() {
+		let bad = sample_transfer("not-a-number", "2024-01-01T00:00:00.000Z");
+		let err = parse_transfer_amount(&bad).unwrap_err();
+		assert!(err.to_string().contains("Invalid transfer amount"), "unexpected error: {err}");
+		assert_eq!(
+			parse_transfer_amount(&sample_transfer("12345", "2024-01-01T00:00:00.000Z")).unwrap(),
+			12345
+		);
+	}
+
+	#[test]
+	fn transfer_timestamp_prefix_rejects_short_timestamps() {
+		let short = sample_transfer("1", "short");
+		let err = transfer_timestamp_prefix(&short).unwrap_err();
+		assert!(err.to_string().contains("Invalid transfer timestamp"), "unexpected error: {err}");
+		assert_eq!(
+			transfer_timestamp_prefix(&sample_transfer("1", "2024-01-01T00:00:00.000Z")).unwrap(),
+			"2024-01-01T00:00:00"
+		);
 	}
 }

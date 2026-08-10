@@ -7,7 +7,7 @@ pub mod scenarios;
 use crate::{
 	chain::{client::QuantusClient, quantus_subxt},
 	error::{QuantusError, Result},
-	wallet::QuantumKeyPair,
+	wallet::{DilithiumScheme, QuantumKeyPair},
 };
 use clap::Args;
 use rand::SeedableRng;
@@ -15,10 +15,11 @@ use report::Report;
 use runner::ExerciseCtx;
 use std::path::PathBuf;
 
-/// Divisor applied to every *discretionary* token amount used by the scenarios (transfers,
-/// multisig funding, wormhole amount, …) so the suite can run on a small budget. Fixed,
-/// chain-imposed amounts (existential deposit, multisig/preimage/governance deposits) are
-/// read from the chain and never scaled.
+/// Divisor applied to every *discretionary* token amount the budgeted ephemeral accounts spend
+/// (transfers, multisig funding, …) so the suite can run on a small budget. Fixed, chain-imposed
+/// amounts (existential deposit, multisig/preimage/governance deposits) are read from the chain
+/// and never scaled, and neither are amounts funded straight from the root account
+/// (`recovery`, `vesting`, `wormhole`).
 pub(crate) const DISCRETIONARY_SCALE: u128 = 100;
 
 #[derive(Args, Debug)]
@@ -66,7 +67,9 @@ pub struct ExerciseArgs {
 	/// Total budget, in whole tokens, drawn from the root account to fund the ephemeral test
 	/// accounts (split evenly across them). Fixed chain deposits (existential deposit,
 	/// multisig/preimage deposits) are covered on top and are not scaled; discretionary test
-	/// transfers are scaled down internally so a small budget suffices.
+	/// transfers are scaled down internally so a small budget suffices. The `recovery`,
+	/// `vesting` and `wormhole` phases fund dedicated accounts from the root account on top
+	/// of this budget.
 	#[arg(long, default_value_t = 40.0)]
 	pub total_amount: f64,
 
@@ -82,11 +85,13 @@ pub struct ExerciseArgs {
 pub enum Phase {
 	Reads,
 	Balances,
+	Utility,
 	Reversible,
 	Multisig,
 	Recovery,
 	Preimage,
 	Governance,
+	Vesting,
 	Negative,
 	Fuzz,
 	Wormhole,
@@ -98,11 +103,13 @@ impl Phase {
 		vec![
 			Phase::Reads,
 			Phase::Balances,
+			Phase::Utility,
 			Phase::Reversible,
 			Phase::Multisig,
 			Phase::Recovery,
 			Phase::Preimage,
 			Phase::Governance,
+			Phase::Vesting,
 			Phase::Negative,
 			Phase::Fuzz,
 			Phase::Wormhole,
@@ -113,11 +120,13 @@ impl Phase {
 		match self {
 			Phase::Reads => "reads",
 			Phase::Balances => "balances",
+			Phase::Utility => "utility",
 			Phase::Reversible => "reversible",
 			Phase::Multisig => "multisig",
 			Phase::Recovery => "recovery",
 			Phase::Preimage => "preimage",
 			Phase::Governance => "governance",
+			Phase::Vesting => "vesting",
 			Phase::Negative => "negative",
 			Phase::Fuzz => "fuzz",
 			Phase::Wormhole => "wormhole",
@@ -219,11 +228,13 @@ async fn run_phases(
 		match phase {
 			Phase::Reads => scenarios::reads::run(ctx, report, &label).await?,
 			Phase::Balances => scenarios::balances::run(ctx, report, &label).await?,
+			Phase::Utility => scenarios::utility::run(ctx, report, &label).await?,
 			Phase::Reversible => scenarios::reversible::run(ctx, report, &label).await?,
 			Phase::Multisig => scenarios::multisig::run(ctx, report, &label).await?,
 			Phase::Recovery => scenarios::recovery::run(ctx, report, &label).await?,
 			Phase::Preimage => scenarios::preimage::run(ctx, report, &label).await?,
 			Phase::Governance => scenarios::governance::run(ctx, report, &label).await?,
+			Phase::Vesting => scenarios::vesting::run(ctx, report, &label).await?,
 			Phase::Negative => scenarios::negative::run(ctx, report, &label).await?,
 			Phase::Fuzz => scenarios::fuzz::run(ctx, report, &label).await?,
 			Phase::Wormhole => scenarios::wormhole::run(ctx, report, &label).await?,
@@ -262,7 +273,7 @@ async fn setup(
 
 	// Resolve the funding ("root") account. Defaults to the built-in crystal_alice dev
 	// account; a custom wallet can be supplied for public-testnet runs.
-	let (alice, root_name, root_password) = match &args.root_account {
+	let (alice, root_name) = match &args.root_account {
 		Some(name) => {
 			let password = crate::wallet::password::get_wallet_password(
 				name,
@@ -271,15 +282,14 @@ async fn setup(
 			)?;
 			let manager = crate::wallet::WalletManager::new()?;
 			let wallet_data = manager.load_wallet(name, &password)?;
-			(wallet_data.keypair, name.clone(), password)
+			(wallet_data.keypair.clone(), name.clone())
 		},
 		None => {
-			// Wormhole loads the dev wallet by name from disk.
+			// Dev scenarios load crystal_* wallets by name from disk.
 			ensure_dev_wallets_on_disk().await?;
 			(
 				QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_alice()),
 				"crystal_alice".to_string(),
-				String::new(),
 			)
 		},
 	};
@@ -311,7 +321,7 @@ async fn setup(
 
 	// Preflight: fail early with a clear message if the funder can't pay, instead of a raw
 	// "Inability to pay some fees" RPC rejection mid-run.
-	let root_ss58 = alice.to_account_id_ss58check();
+	let root_ss58 = alice.try_to_account_id_ss58check()?;
 	let root_balance = crate::cli::send::get_balance(&client, &root_ss58).await?;
 	if root_balance < total_budget {
 		return Err(QuantusError::Generic(format!(
@@ -339,10 +349,9 @@ async fn setup(
 		bob,
 		charlie,
 		eph: Vec::new(),
+		unit,
 		test_unit,
 		existential_deposit,
-		root_name,
-		root_password,
 		rng,
 		seed,
 		fuzz_iterations: args.fuzz_iterations,
@@ -374,9 +383,17 @@ async fn fund_ephemeral_accounts(
 	funding_per_account: u128,
 ) -> Result<String> {
 	let mut addresses = Vec::with_capacity(count);
-	for _ in 0..count {
-		let keypair = ctx.fresh_keypair()?;
-		addresses.push(keypair.to_account_id_ss58check());
+	let mut scheme_65 = 0usize;
+	let mut scheme_87 = 0usize;
+	// Alternate schemes so funded senders exercise both ML-DSA-65 and ML-DSA-87 signing.
+	for i in 0..count {
+		let scheme = if i % 2 == 0 { DilithiumScheme::MlDsa65 } else { DilithiumScheme::MlDsa87 };
+		match scheme {
+			DilithiumScheme::MlDsa65 => scheme_65 += 1,
+			DilithiumScheme::MlDsa87 => scheme_87 += 1,
+		}
+		let keypair = ctx.fresh_keypair_with_scheme(scheme)?;
+		addresses.push(keypair.try_to_account_id_ss58check()?);
 		ctx.eph.push(keypair);
 	}
 
@@ -417,6 +434,7 @@ async fn fund_ephemeral_accounts(
 		String::new()
 	};
 	Ok(format!(
-		"derived and funded {count} ephemeral accounts with {funding_per_account} raw units each{note}"
+		"derived and funded {count} ephemeral accounts with {funding_per_account} raw units each \
+		 ({scheme_65}× ml-dsa-65, {scheme_87}× ml-dsa-87){note}"
 	))
 }

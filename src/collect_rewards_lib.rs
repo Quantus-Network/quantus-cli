@@ -45,6 +45,8 @@ use subxt::{
 /// Result type for collect rewards operations
 pub type Result<T> = std::result::Result<T, CollectRewardsError>;
 
+const MAX_PRE_SUBMISSION_NULLIFIER_QUERIES: usize = 7;
+
 /// Error type for collect rewards operations
 #[derive(Debug, Clone)]
 pub struct CollectRewardsError {
@@ -180,8 +182,8 @@ pub fn resolve_credential(credential: &WormholeCredential) -> Result<(String, [u
 			let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
 			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
 				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
-			let address_bytes: [u8; 32] = wormhole_pair.address;
-			let secret_bytes: [u8; 32] = *wormhole_pair.secret.as_bytes();
+			let address_bytes: [u8; 32] = *wormhole_pair.address();
+			let secret_bytes: [u8; 32] = *wormhole_pair.secret().as_bytes();
 			Ok((AccountId32::from(address_bytes).to_ss58check(), address_bytes, secret_bytes))
 		},
 		WormholeCredential::Secret { hex } => {
@@ -220,9 +222,10 @@ pub struct CollectRewardsConfig {
 /// This is the main entry point for the SDK to collect rewards. It handles the entire flow:
 /// 1. Derives wormhole address from mnemonic
 /// 2. Queries Subsquid for pending transfers to that address
-/// 3. Generates ZK proofs for selected transfers
-/// 4. Aggregates proofs into batches (size determined by circuit config)
-/// 5. Submits withdrawal transactions to chain
+/// 3. Filters spent nullifiers against the current best chain state
+/// 4. Generates ZK proofs for selected transfers
+/// 5. Aggregates proofs into batches (size determined by circuit config)
+/// 6. Submits withdrawal transactions to chain
 ///
 /// # Arguments
 /// * `config` - Configuration for the operation
@@ -267,21 +270,19 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		});
 	}
 
-	// Step 2b: Connect to chain (needed for nullifier fallback and proof submission)
+	// Step 2b: Connect to chain for authoritative nullifier checks and proof submission
 	progress.on_step("connect", "Connecting to chain");
 
 	let quantus_client = QuantusClient::new(&config.node_url)
 		.await
 		.map_err(|e| CollectRewardsError::from(format!("Failed to connect to node: {}", e)))?;
 
-	// Step 2c: Filter out already-spent transfers by checking nullifiers
-	// Tries Subsquid first, falls back to on-chain checking if Subsquid fails
-	progress.on_step("nullifiers", "Checking for already-spent nullifiers");
+	// Step 2c: Filter out already-spent transfers against a pinned best-chain snapshot
+	progress.on_step("nullifiers", "Checking current on-chain nullifiers");
 
-	let unspent_transfers = filter_unspent_transfers_with_fallback(
+	let unspent_transfers = filter_unspent_transfers_onchain(
 		&incoming_transfers,
 		&wormhole_secret_bytes,
-		&subsquid_client,
 		&quantus_client,
 	)
 	.await?;
@@ -301,7 +302,8 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	// Calculate total available (only unspent)
 	let mut total_available: u128 = 0;
 	for t in &unspent_transfers {
-		total_available += parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
+		let amount = parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
+		total_available = checked_add_amount(total_available, amount, "total available transfers")?;
 	}
 
 	// Determine amount to withdraw
@@ -330,7 +332,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			break;
 		}
 		selected_transfers.push(t);
-		selected_total += amt;
+		selected_total = checked_add_amount(selected_total, amt, "selected transfers")?;
 	}
 
 	if config.dry_run {
@@ -366,17 +368,19 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			.await
 			.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
 	} else {
-		// Use latest block
-		let best_block = quantus_client
-			.get_latest_block()
+		// Prove against the latest finalized block. Best-block proofs can be
+		// invalidated by reorgs before finality (same class as recursive flows).
+		use subxt::ext::jsonrpsee::{core::client::ClientT, rpc_params};
+		let finalized_hash: subxt::utils::H256 = quantus_client
+			.rpc_client()
+			.request("chain_getFinalizedHead", rpc_params![])
 			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get latest block: {}", e)))?;
-		quantus_client
-			.client()
-			.blocks()
-			.at(best_block)
-			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
+			.map_err(|e| {
+				CollectRewardsError::from(format!("Failed to get finalized block hash: {}", e))
+			})?;
+		quantus_client.client().blocks().at(finalized_hash).await.map_err(|e| {
+			CollectRewardsError::from(format!("Failed to get finalized block: {}", e))
+		})?
 	};
 	let proof_block_hash = proof_block.hash();
 
@@ -440,7 +444,9 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			)));
 		}
 
-		let input = wormhole_lib::ProofGenerationInput {
+		// generate_proof zeroizes input.secret before returning; each iteration
+		// rebuilds the input from wormhole_secret_bytes.
+		let mut input = wormhole_lib::ProofGenerationInput {
 			secret: wormhole_secret_bytes,
 			transfer_count,
 			wormhole_address: wormhole_address_bytes,
@@ -465,7 +471,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		// Generate proof
 		let prover_path = bins_dir.join("prover.bin");
 		let common_path = bins_dir.join("common.bin");
-		let result = wormhole_lib::generate_proof(&input, &prover_path, &common_path)
+		let result = wormhole_lib::generate_proof(&mut input, &prover_path, &common_path)
 			.map_err(|e| CollectRewardsError::from(e.message))?;
 
 		proof_bytes_list.push(result.proof_bytes);
@@ -495,8 +501,10 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		let (block_hash, tx_hash, transfer_events) =
 			submit_and_get_events(&quantus_client, aggregated_proof, bins_dir).await?;
 
-		let batch_amount: u128 = transfer_events.iter().map(|e| e.amount).sum();
-		total_withdrawn += batch_amount;
+		let batch_amount = transfer_events.iter().try_fold(0_u128, |acc, e| {
+			checked_add_amount(acc, e.amount, "batch withdrawal events")
+		})?;
+		total_withdrawn = checked_add_amount(total_withdrawn, batch_amount, "total withdrawn")?;
 
 		progress.on_batch_submitted(batch_idx + 1, batches.len(), batch_amount);
 
@@ -541,11 +549,11 @@ pub async fn query_pending_transfers(
 	let wormhole_secret = derive_wormhole_from_mnemonic(mnemonic, None, &path)
 		.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 
-	let wormhole_address = AccountId32::from(wormhole_secret.address).to_ss58check();
+	let wormhole_address = AccountId32::from(*wormhole_secret.address()).to_ss58check();
 
 	// Query Subsquid using privacy-preserving hash prefix
 	let subsquid_client = SubsquidClient::new(subsquid_url.to_string())?;
-	let address_hash = compute_address_hash(&wormhole_secret.address);
+	let address_hash = compute_address_hash(wormhole_secret.address());
 	let prefix = get_hash_prefix(&address_hash, 8); // 8 hex chars for good privacy
 
 	let params = TransferQueryParams::new();
@@ -557,16 +565,21 @@ pub async fn query_pending_transfers(
 	let incoming_transfers: Vec<_> =
 		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
 
+	let secret_bytes: [u8; 32] = *wormhole_secret.secret().as_bytes();
+	let unspent_transfers =
+		filter_unspent_transfers_by_indexer(&incoming_transfers, &secret_bytes, &subsquid_client)
+			.await?;
+
 	let mut total_available: u128 = 0;
 	let mut pending = Vec::new();
 
-	for t in &incoming_transfers {
+	for t in &unspent_transfers {
 		let ctx = format!("transfer {}", t.id);
 		let amount = parse_transfer_amount(&t.amount, &ctx)?;
 		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
 		let transfer_count = parse_transfer_count(&t.transfer_count, &ctx)?;
 
-		total_available += amount;
+		total_available = checked_add_amount(total_available, amount, "pending transfers")?;
 
 		pending.push(PendingTransfer {
 			block_height: t.block_height,
@@ -585,6 +598,10 @@ pub async fn query_pending_transfers(
 /// Query pending transfers for an already-known wormhole address.
 ///
 /// Use this when you already have the wormhole address and don't need to derive it.
+///
+/// Address-only discovery cannot reconcile spent nullifiers. When any incoming
+/// transfers are present, this returns an error directing callers to use a
+/// secret-bearing API (`query_pending_transfers` / `collect_rewards`).
 ///
 /// # Arguments
 /// * `wormhole_address_bytes` - The 32-byte wormhole address
@@ -610,34 +627,28 @@ pub async fn query_pending_transfers_for_address(
 	let incoming_transfers: Vec<_> =
 		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
 
-	let mut total_available: u128 = 0;
-	let mut pending = Vec::new();
-
-	for t in &incoming_transfers {
-		let ctx = format!("transfer {}", t.id);
-		let amount = parse_transfer_amount(&t.amount, &ctx)?;
-		let leaf_index = parse_leaf_index(&t.leaf_index, &ctx)?;
-		let transfer_count = parse_transfer_count(&t.transfer_count, &ctx)?;
-
-		total_available += amount;
-
-		pending.push(PendingTransfer {
-			block_height: t.block_height,
-			block_hash: t.block_id.clone(),
-			amount,
-			leaf_index,
-			transfer_count,
-			wormhole_address: wormhole_address.clone(),
-			funding_account: t.from_id.clone(),
-		});
+	if !incoming_transfers.is_empty() {
+		return Err(CollectRewardsError::from(
+			"Cannot determine available withdrawals for an address without the wormhole secret; use query_pending_transfers or collect_rewards so spent nullifiers can be reconciled"
+				.to_string(),
+		));
 	}
 
-	Ok(QueryPendingTransfersResult { wormhole_address, transfers: pending, total_available })
+	Ok(QueryPendingTransfersResult { wormhole_address, transfers: vec![], total_available: 0 })
 }
 
 // ============================================================================
 // Internal Helper Functions
 // ============================================================================
+
+fn checked_add_amount(acc: u128, amount: u128, context: &str) -> Result<u128> {
+	acc.checked_add(amount).ok_or_else(|| {
+		CollectRewardsError::from(format!(
+			"Transfer amount overflow while accumulating {}",
+			context
+		))
+	})
+}
 
 /// Parse a transfer amount string to u128
 fn parse_transfer_amount(amount_str: &str, context: &str) -> Result<u128> {
@@ -803,6 +814,7 @@ async fn submit_and_get_events(
 	let inputs = qp_wormhole_verifier::parse_private_batch_public_inputs(&proof).map_err(|e| {
 		CollectRewardsError::from(format!("Failed to parse public inputs: {:?}", e))
 	})?;
+	validate_pre_submission_nullifier_count(inputs.nullifiers.len())?;
 
 	// Check asset_id (must be 0 for native)
 	if inputs.asset_id != 0 {
@@ -812,9 +824,8 @@ async fn submit_and_get_events(
 		)));
 	}
 
-	// Check volume fee BPS (should be 10 for testnet)
-	// Note: We can't query the chain config directly, but 10 is the expected value
-	const EXPECTED_VOLUME_FEE_BPS: u32 = 10;
+	// Must match on-chain VolumeFeeRateBps (currently 4 bps).
+	const EXPECTED_VOLUME_FEE_BPS: u32 = crate::wormhole_lib::VOLUME_FEE_BPS;
 	if inputs.volume_fee_bps != EXPECTED_VOLUME_FEE_BPS {
 		return Err(CollectRewardsError::from(format!(
 			"Pre-validation failed: InvalidVolumeFeeRate (got {}, expected {})",
@@ -855,27 +866,29 @@ async fn submit_and_get_events(
 		},
 	}
 
-	// Check nullifiers aren't already used
+	// Check nullifiers against one fresh best-chain snapshot immediately before submission
+	let best_block = quantus_client.get_latest_block().await.map_err(|e| {
+		CollectRewardsError::from(format!(
+			"Failed to get best block for pre-submission nullifier check: {}",
+			e
+		))
+	})?;
+	let storage = quantus_client.client().storage().at(best_block);
+
 	for (i, nullifier) in inputs.nullifiers.iter().enumerate() {
 		let nullifier_bytes: [u8; 32] = (*nullifier).as_ref().try_into().map_err(|_| {
 			CollectRewardsError::from(format!("Failed to convert nullifier {} to bytes", i))
 		})?;
 
-		// Query UsedNullifiers storage
 		let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier_bytes);
-		let is_used = quantus_client
-			.client()
-			.storage()
-			.at_latest()
-			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?
-			.fetch(&storage_key)
-			.await
-			.map_err(|e| {
-				CollectRewardsError::from(format!("Failed to query nullifier {}: {}", i, e))
-			})?;
+		let is_used = storage.fetch(&storage_key).await.map_err(|e| {
+			CollectRewardsError::from(format!(
+				"Failed to query nullifier {} at best block {:?}: {}",
+				i, best_block, e
+			))
+		})?;
 
-		if is_used.is_some() {
+		if matches!(is_used, Some(true)) {
 			return Err(CollectRewardsError::from(format!(
 				"Pre-validation failed: NullifierAlreadyUsed - Nullifier {} (0x{}) has already been spent",
 				i,
@@ -892,10 +905,9 @@ async fn submit_and_get_events(
 			CollectRewardsError::from(format!("Failed to create unsigned tx: {}", e))
 		})?;
 
-	let mut tx_progress = unsigned_tx
-		.submit_and_watch()
-		.await
-		.map_err(|e| CollectRewardsError::from(format!("Failed to submit tx: {}", e)))?;
+	let mut tx_progress = unsigned_tx.submit_and_watch().await.map_err(|e| {
+		CollectRewardsError::from(format!("Failed to submit wormhole withdrawal: {}", e))
+	})?;
 
 	// Wait for inclusion
 	let (block_hash, tx_hash) = loop {
@@ -907,11 +919,17 @@ async fn submit_and_get_events(
 				break (tx_in_block.block_hash(), tx_in_block.extrinsic_hash());
 			},
 			Some(Ok(TxStatus::Error { message })) | Some(Ok(TxStatus::Invalid { message })) => {
-				return Err(CollectRewardsError::from(format!("Transaction failed: {}", message)));
+				return Err(CollectRewardsError::from(format!(
+					"Wormhole withdrawal was rejected before inclusion: {}",
+					message
+				)));
 			},
 			Some(Ok(_)) => continue,
 			Some(Err(e)) => {
-				return Err(CollectRewardsError::from(format!("Transaction error: {}", e)));
+				return Err(CollectRewardsError::from(format!(
+					"Wormhole withdrawal status error: {}",
+					e
+				)));
 			},
 			None => {
 				return Err(CollectRewardsError::from(
@@ -948,8 +966,11 @@ async fn submit_and_get_events(
 			CollectRewardsError::from("Could not find extrinsic in block".to_string())
 		})?;
 
+	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
+
 	let mut transfer_events = Vec::new();
 	let mut found_proof_verified = false;
+	let mut dispatch_error = None;
 
 	for event_result in events.iter() {
 		let event = event_result
@@ -957,6 +978,14 @@ async fn submit_and_get_events(
 
 		if let subxt::events::Phase::ApplyExtrinsic(ext_idx) = event.phase() {
 			if ext_idx == our_ext_idx {
+				if let Ok(Some(ExtrinsicFailed { dispatch_error: error, .. })) =
+					event.as_event::<ExtrinsicFailed>()
+				{
+					dispatch_error = Some(crate::cli::common::format_dispatch_error(
+						&error,
+						&quantus_client.client().metadata(),
+					));
+				}
 				if let Ok(Some(_)) = event.as_event::<wormhole::events::ProofVerified>() {
 					found_proof_verified = true;
 				}
@@ -969,19 +998,75 @@ async fn submit_and_get_events(
 	}
 
 	if !found_proof_verified {
+		if let Some(error) = dispatch_error {
+			return Err(CollectRewardsError::from(format!(
+				"Wormhole withdrawal failed on-chain: {}",
+				error
+			)));
+		}
 		return Err(CollectRewardsError::from(
-			"Proof verification failed - no ProofVerified event".to_string(),
+			"Wormhole withdrawal was included but emitted neither Wormhole::ProofVerified nor System::ExtrinsicFailed"
+				.to_string(),
 		));
 	}
 
 	Ok((block_hash, tx_hash, transfer_events))
 }
 
-/// Filter out transfers whose nullifiers have already been spent (on-chain check).
-///
-/// For each transfer, computes the nullifier from (secret, transfer_count)
-/// and checks on-chain storage to see if it's been consumed by a previous withdrawal.
-/// This is more reliable than Subsquid as it queries the chain directly.
+fn validate_pre_submission_nullifier_count(count: usize) -> Result<()> {
+	if count > MAX_PRE_SUBMISSION_NULLIFIER_QUERIES {
+		return Err(CollectRewardsError::from(format!(
+			"Pre-validation failed: proof contains {} nullifiers; maximum supported per batch is {}",
+			count, MAX_PRE_SUBMISSION_NULLIFIER_QUERIES
+		)));
+	}
+
+	Ok(())
+}
+
+/// Filter transfers against spent nullifiers reported by the indexer.
+async fn filter_unspent_transfers_by_indexer(
+	transfers: &[Transfer],
+	secret_bytes: &[u8; 32],
+	subsquid_client: &SubsquidClient,
+) -> Result<Vec<Transfer>> {
+	if transfers.is_empty() {
+		return Ok(vec![]);
+	}
+
+	let mut seen_nullifiers = std::collections::HashSet::new();
+	let mut transfers_with_nullifiers = Vec::new();
+	let mut nullifier_pairs = Vec::new();
+
+	for transfer in transfers {
+		let ctx = format!("transfer {}", transfer.id);
+		let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
+		let nullifier =
+			wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
+				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
+			})?;
+
+		if !seen_nullifiers.insert(nullifier) {
+			continue;
+		}
+
+		let nullifier_hex = hex::encode(nullifier);
+		let nullifier_hash = compute_address_hash(&nullifier);
+		nullifier_pairs.push((nullifier_hex.clone(), nullifier_hash));
+		transfers_with_nullifiers.push((transfer.clone(), nullifier_hex));
+	}
+
+	let spent = subsquid_client.check_nullifiers_spent(&nullifier_pairs, 8).await?;
+
+	Ok(transfers_with_nullifiers
+		.into_iter()
+		.filter_map(|(transfer, nullifier_hex)| {
+			(!spent.contains(&nullifier_hex)).then_some(transfer)
+		})
+		.collect())
+}
+
+/// Filter transfers against `UsedNullifiers` at one pinned best-chain snapshot.
 async fn filter_unspent_transfers_onchain(
 	transfers: &[Transfer],
 	secret_bytes: &[u8; 32],
@@ -991,13 +1076,12 @@ async fn filter_unspent_transfers_onchain(
 		return Ok(vec![]);
 	}
 
+	let best_block = quantus_client.get_latest_block().await.map_err(|e| {
+		CollectRewardsError::from(format!("Failed to get best block for nullifier check: {}", e))
+	})?;
+	let storage = quantus_client.client().storage().at(best_block);
+	let mut seen_nullifiers = std::collections::HashSet::new();
 	let mut unspent = Vec::new();
-	let storage = quantus_client
-		.client()
-		.storage()
-		.at_latest()
-		.await
-		.map_err(|e| CollectRewardsError::from(format!("Failed to get storage: {}", e)))?;
 
 	for transfer in transfers {
 		let ctx = format!("transfer {}", transfer.id);
@@ -1008,82 +1092,22 @@ async fn filter_unspent_transfers_onchain(
 				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
 			})?;
 
-		// Query on-chain UsedNullifiers storage
+		if !seen_nullifiers.insert(nullifier) {
+			continue;
+		}
+
 		let storage_key = quantus_node::api::storage().wormhole().used_nullifiers(nullifier);
 		let is_used = storage.fetch(&storage_key).await.map_err(|e| {
 			CollectRewardsError::from(format!(
-				"Failed to query nullifier for transfer_count {}: {}",
-				transfer_count, e
+				"Failed to query nullifier for transfer_count {} at best block {:?}: {}",
+				transfer_count, best_block, e
 			))
 		})?;
 
-		if is_used.is_none() {
+		if !matches!(is_used, Some(true)) {
 			unspent.push(transfer.clone());
 		}
 	}
-
-	Ok(unspent)
-}
-
-/// Filter out transfers whose nullifiers have already been spent.
-///
-/// For each transfer, computes the nullifier from (secret, transfer_count)
-/// and checks Subsquid to see if it's been consumed by a previous withdrawal.
-/// If Subsquid query fails, falls back to on-chain checking.
-async fn filter_unspent_transfers_with_fallback(
-	transfers: &[Transfer],
-	secret_bytes: &[u8; 32],
-	subsquid_client: &SubsquidClient,
-	quantus_client: &QuantusClient,
-) -> Result<Vec<Transfer>> {
-	use std::collections::HashSet;
-
-	if transfers.is_empty() {
-		return Ok(vec![]);
-	}
-
-	// Compute nullifiers for all transfers
-	// Map: nullifier_hex -> (nullifier_hash, transfer)
-	let mut nullifier_map: std::collections::HashMap<String, (String, &Transfer)> =
-		std::collections::HashMap::new();
-
-	for transfer in transfers {
-		let ctx = format!("transfer {}", transfer.id);
-		let transfer_count = parse_transfer_count(&transfer.transfer_count, &ctx)?;
-
-		let nullifier =
-			wormhole_lib::compute_nullifier(secret_bytes, transfer_count).map_err(|e| {
-				CollectRewardsError::from(format!("Failed to compute nullifier: {}", e.message))
-			})?;
-
-		let nullifier_hex = hex::encode(nullifier);
-		let nullifier_hash = compute_address_hash(&nullifier);
-		nullifier_map.insert(nullifier_hex, (nullifier_hash, transfer));
-	}
-
-	// Build list for Subsquid query
-	let nullifier_pairs: Vec<(String, String)> = nullifier_map
-		.iter()
-		.map(|(nul_hex, (nul_hash, _))| (nul_hex.clone(), nul_hash.clone()))
-		.collect();
-
-	// Try Subsquid first, fall back to on-chain if it fails
-	let spent_nullifiers: HashSet<String> =
-		match subsquid_client.check_nullifiers_spent(&nullifier_pairs, 8).await {
-			Ok(spent) => spent,
-			Err(_) => {
-				// Fall back to on-chain checking
-				return filter_unspent_transfers_onchain(transfers, secret_bytes, quantus_client)
-					.await;
-			},
-		};
-
-	// Filter to only unspent transfers
-	let unspent: Vec<Transfer> = nullifier_map
-		.into_iter()
-		.filter(|(nul_hex, _)| !spent_nullifiers.contains(nul_hex))
-		.map(|(_, (_, transfer))| transfer.clone())
-		.collect();
 
 	Ok(unspent)
 }
@@ -1097,6 +1121,25 @@ mod tests {
 		let err = CollectRewardsError::from("test error".to_string());
 		assert_eq!(err.message, "test error");
 		assert_eq!(format!("{}", err), "test error");
+	}
+
+	#[test]
+	fn checked_add_amount_rejects_indexer_overflow() {
+		let err = checked_add_amount(u128::MAX, 2, "pending transfers")
+			.expect_err("untrusted transfer totals must not wrap on overflow");
+		assert!(err.message.contains("overflow"), "unexpected overflow error: {}", err.message);
+		assert_eq!(checked_add_amount(10, 5, "pending transfers").unwrap(), 15);
+	}
+
+	#[test]
+	fn test_pre_submission_nullifier_query_count_is_bounded() {
+		assert!(
+			validate_pre_submission_nullifier_count(MAX_PRE_SUBMISSION_NULLIFIER_QUERIES).is_ok()
+		);
+
+		let err = validate_pre_submission_nullifier_count(MAX_PRE_SUBMISSION_NULLIFIER_QUERIES + 1)
+			.unwrap_err();
+		assert!(err.message.contains("maximum supported per batch is 7"));
 	}
 
 	#[test]
@@ -1217,5 +1260,205 @@ mod tests {
 		assert_eq!(m_address, s_address);
 		assert_eq!(m_address_bytes, s_address_bytes);
 		assert_eq!(m_secret_bytes, s_secret_bytes);
+	}
+
+	fn read_http_request(stream: &mut std::net::TcpStream) -> String {
+		use std::{io::Read, time::Duration};
+
+		stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+		let mut buf = Vec::new();
+		let mut tmp = [0u8; 1024];
+		let mut header_end = None;
+		let mut content_len = 0usize;
+
+		loop {
+			let n = stream.read(&mut tmp).unwrap();
+			assert_ne!(n, 0, "mock indexer connection closed before request was complete");
+			buf.extend_from_slice(&tmp[..n]);
+
+			if header_end.is_none() {
+				if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+					header_end = Some(pos + 4);
+					let headers = String::from_utf8_lossy(&buf[..pos]);
+					for line in headers.lines() {
+						if let Some((name, value)) = line.split_once(':') {
+							if name.eq_ignore_ascii_case("content-length") {
+								content_len = value.trim().parse().unwrap();
+							}
+						}
+					}
+				}
+			}
+
+			if let Some(end) = header_end {
+				if buf.len() >= end + content_len {
+					break;
+				}
+			}
+		}
+
+		String::from_utf8(buf).unwrap()
+	}
+
+	fn write_json_response(stream: &mut std::net::TcpStream, body: serde_json::Value) {
+		use std::io::Write;
+		let body = body.to_string();
+		write!(
+			stream,
+			"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+			body.len(),
+			body
+		)
+		.unwrap();
+	}
+
+	/// #159890: address-only queries must not report availability without secret reconciliation.
+	#[tokio::test]
+	async fn pending_transfer_query_for_address_refuses_without_secret() {
+		use serde_json::json;
+		use std::{net::TcpListener, thread};
+
+		let secret = [7u8; 32];
+		let wormhole_address = wormhole_lib::compute_wormhole_address(&secret).unwrap();
+		let address_hash = compute_address_hash(&wormhole_address);
+
+		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+		let mock_url = format!("http://{}", listener.local_addr().unwrap());
+		thread::spawn(move || {
+			let (mut stream, _) = listener.accept().unwrap();
+			let _ = read_http_request(&mut stream);
+			write_json_response(
+				&mut stream,
+				json!({
+					"data": {
+						"transfers": [{
+							"id": "spent-transfer",
+							"block_id": "0xspentblock",
+							"block": { "height": 11 },
+							"timestamp": "2026-01-01T00:00:00Z",
+							"extrinsic_id": "0xspentextrinsic",
+							"from_id": "miner-a",
+							"to_id": "wormhole",
+							"amount": "100",
+							"fee": "0",
+							"from_hash": "from-hash-a",
+							"to_hash": address_hash,
+							"leaf_index": "40",
+							"transfer_count": "5"
+						}],
+						"meta": { "aggregate": { "count": 1 } }
+					}
+				}),
+			);
+		});
+
+		let err = query_pending_transfers_for_address(&wormhole_address, &mock_url)
+			.await
+			.expect_err("address-only query must refuse when transfers exist");
+		assert!(
+			err.message.contains("without the wormhole secret"),
+			"unexpected error: {}",
+			err.message
+		);
+	}
+
+	/// #159890: mnemonic pending-transfer query excludes spent nullifiers via indexer.
+	#[tokio::test]
+	async fn query_pending_transfers_excludes_spent_nullifiers() {
+		use serde_json::json;
+		use std::{net::TcpListener, thread};
+
+		let path = format!("m/44'/{}/0'/1'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
+		let wormhole_secret = derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path).unwrap();
+		let secret_bytes: [u8; 32] = *wormhole_secret.secret().as_bytes();
+		let address_hash = compute_address_hash(wormhole_secret.address());
+
+		let spent_transfer_count = 5u64;
+		let spent_nullifier =
+			wormhole_lib::compute_nullifier(&secret_bytes, spent_transfer_count).unwrap();
+		let spent_nullifier_hex = hex::encode(spent_nullifier);
+		let spent_nullifier_hash = compute_address_hash(&spent_nullifier);
+
+		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+		let mock_url = format!("http://{}", listener.local_addr().unwrap());
+		let address_hash_for_server = address_hash.clone();
+		let spent_hex_for_server = spent_nullifier_hex.clone();
+		let spent_hash_for_server = spent_nullifier_hash.clone();
+
+		thread::spawn(move || {
+			for _ in 0..2 {
+				let (mut stream, _) = listener.accept().unwrap();
+				let request = read_http_request(&mut stream);
+				let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+				if body.contains("TransfersByHashPrefix") {
+					write_json_response(
+						&mut stream,
+						json!({
+							"data": {
+								"transfers": [
+									{
+										"id": "spent-transfer",
+										"block_id": "0xspentblock",
+										"block": { "height": 11 },
+										"timestamp": "2026-01-01T00:00:00Z",
+										"extrinsic_id": "0xspentextrinsic",
+										"from_id": "miner-a",
+										"to_id": "wormhole",
+										"amount": "100",
+										"fee": "0",
+										"from_hash": "from-hash-a",
+										"to_hash": address_hash_for_server,
+										"leaf_index": "40",
+										"transfer_count": "5"
+									},
+									{
+										"id": "unspent-transfer",
+										"block_id": "0xunspentblock",
+										"block": { "height": 12 },
+										"timestamp": "2026-01-01T00:00:01Z",
+										"extrinsic_id": "0xunspentextrinsic",
+										"from_id": "miner-b",
+										"to_id": "wormhole",
+										"amount": "7",
+										"fee": "0",
+										"from_hash": "from-hash-b",
+										"to_hash": address_hash_for_server,
+										"leaf_index": "41",
+										"transfer_count": "6"
+									}
+								],
+								"meta": { "aggregate": { "count": 2 } }
+							}
+						}),
+					);
+				} else if body.contains("NullifiersByPrefix") {
+					write_json_response(
+						&mut stream,
+						json!({
+							"data": {
+								"nullifiers": [{
+									"nullifier": spent_hex_for_server,
+									"nullifier_hash": spent_hash_for_server,
+									"block": { "height": 20 },
+									"timestamp": "2026-01-01T00:00:02Z",
+									"wormholeExtrinsic": { "extrinsic_id": "0xwithdrawal" }
+								}]
+							}
+						}),
+					);
+				} else {
+					panic!("unexpected GraphQL request body: {body}");
+				}
+			}
+		});
+
+		let reported = query_pending_transfers(TEST_MNEMONIC, 0, &mock_url)
+			.await
+			.expect("mnemonic pending query should reconcile nullifiers");
+
+		assert_eq!(reported.transfers.len(), 1);
+		assert_eq!(reported.transfers[0].transfer_count, 6);
+		assert_eq!(reported.total_available, 7);
+		assert!(!reported.transfers.iter().any(|t| t.transfer_count == spent_transfer_count));
 	}
 }

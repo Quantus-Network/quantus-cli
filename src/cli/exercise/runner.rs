@@ -4,7 +4,7 @@ use crate::{
 	chain::client::QuantusClient,
 	cli::common::{ExecutionMode, SubxtAccountId32},
 	error::{QuantusError, Result},
-	wallet::QuantumKeyPair,
+	wallet::{DilithiumScheme, QuantumKeyPair},
 };
 use rand::{rngs::StdRng, Rng};
 
@@ -15,15 +15,14 @@ pub struct ExerciseCtx {
 	pub bob: QuantumKeyPair,
 	pub charlie: QuantumKeyPair,
 	pub eph: Vec<QuantumKeyPair>,
-	/// Scaled-down base for discretionary test amounts (`unit / DISCRETIONARY_SCALE`).
-	/// Fixed chain amounts (existential deposit, deposits) are never derived from this.
+	/// One whole token in raw units. Only for amounts funded straight from the root account,
+	/// which is separate from the `--total-amount` budget.
+	pub unit: u128,
+	/// Scaled-down base for discretionary test amounts (`unit / DISCRETIONARY_SCALE`) spent by
+	/// the budgeted ephemeral accounts. Fixed chain amounts (existential deposit, pallet
+	/// deposits) are never derived from this.
 	pub test_unit: u128,
 	pub existential_deposit: u128,
-	/// Name of the funding ("root") wallet on disk, used by scenarios that load it by
-	/// name (e.g. wormhole).
-	pub root_name: String,
-	/// Resolved password for the root wallet (empty string for dev accounts).
-	pub root_password: String,
 	pub rng: StdRng,
 	pub seed: u64,
 	pub fuzz_iterations: u32,
@@ -34,11 +33,52 @@ impl ExerciseCtx {
 		ExecutionMode { finalized: false, wait_for_transaction: true }
 	}
 
+	/// Fresh keypair using an explicit Dilithium scheme.
+	pub fn fresh_keypair_with_scheme(&mut self, scheme: DilithiumScheme) -> Result<QuantumKeyPair> {
+		let seed: [u8; 32] = self.rng.random();
+		match scheme {
+			DilithiumScheme::MlDsa65 => {
+				let pair =
+					qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
+				Ok(QuantumKeyPair::from_dilithium65_pair(&pair))
+			},
+			DilithiumScheme::MlDsa87 => {
+				let pair =
+					qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
+				Ok(QuantumKeyPair::from_resonance_pair(&pair))
+			},
+		}
+	}
+
+	/// Fresh keypair alternating schemes from the seed bytes (both 65 and 87 get exercise
+	/// coverage).
 	pub fn fresh_keypair(&mut self) -> Result<QuantumKeyPair> {
 		let seed: [u8; 32] = self.rng.random();
-		let pair = qp_dilithium_crypto::types::DilithiumPair::from_seed(&seed)
-			.map_err(|e| QuantusError::Generic(format!("Failed to derive keypair: {e:?}")))?;
-		Ok(QuantumKeyPair::from_resonance_pair(&pair))
+		let scheme = if seed[0].is_multiple_of(2) {
+			DilithiumScheme::MlDsa65
+		} else {
+			DilithiumScheme::MlDsa87
+		};
+		match scheme {
+			DilithiumScheme::MlDsa65 => {
+				let pair =
+					qp_dilithium_crypto::types::Dilithium65Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
+				Ok(QuantumKeyPair::from_dilithium65_pair(&pair))
+			},
+			DilithiumScheme::MlDsa87 => {
+				let pair =
+					qp_dilithium_crypto::types::Dilithium87Pair::from_seed(&seed).map_err(|e| {
+						QuantusError::Generic(format!("Failed to derive keypair: {e:?}"))
+					})?;
+				Ok(QuantumKeyPair::from_resonance_pair(&pair))
+			},
+		}
 	}
 
 	pub async fn free_balance(&self, ss58: &str) -> Result<u128> {
@@ -46,10 +86,10 @@ impl ExerciseCtx {
 	}
 }
 
-pub fn account_id_of(keypair: &QuantumKeyPair) -> SubxtAccountId32 {
-	let account = keypair.to_account_id_32();
+pub fn account_id_of(keypair: &QuantumKeyPair) -> Result<SubxtAccountId32> {
+	let account = keypair.try_to_account_id_32()?;
 	let bytes: [u8; 32] = *account.as_ref();
-	SubxtAccountId32::from(bytes)
+	Ok(SubxtAccountId32::from(bytes))
 }
 
 pub async fn submit_ok<Call>(

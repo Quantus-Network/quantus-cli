@@ -497,6 +497,35 @@ quantus treasury info
 
 ---
 
+### Vesting
+
+Treasury-funded vesting schedules. Funds vest linearly between `start` and `end` (nothing before `cliff`). `claim` is permissionless — anyone can trigger a payout, which always goes to the schedule's stored beneficiary (this is the claim path for keyless wormhole or high-security beneficiaries). The admin calls (`create-schedule`, `end-schedule`, `retarget`) require the treasury origin; since the treasury is a multisig on real deployments, print the call data with `--call-data-only` and route it through `quantus multisig propose`.
+
+```bash
+# Inspect
+quantus vesting info
+quantus vesting list [--beneficiary qz...]
+quantus vesting show --schedule-id 0
+
+# Claim the vested payout of a schedule (any funded wallet can sign)
+quantus vesting claim --schedule-id 0 --from my_wallet
+
+# Admin: create a schedule (moments are unix ms, "now", or "+<seconds>")
+quantus vesting create-schedule \
+  --beneficiary qz... \
+  --start now --cliff +7776000 --end +31536000 \
+  --total 10000 \
+  --call-data-only   # print hex call data for a treasury multisig proposal
+
+# Admin: end early (vested part to beneficiary, rest back to treasury)
+quantus vesting end-schedule --schedule-id 3 --call-data-only
+
+# Admin: change beneficiary
+quantus vesting retarget --schedule-id 3 --new-beneficiary qz... --call-data-only
+```
+
+---
+
 ### Privacy-Preserving Transfer Queries
 
 Query transfers via a Subsquid indexer using hash-prefix queries that hide your exact address.
@@ -542,8 +571,9 @@ quantus call \
 ### Chain Exercise Suite
 
 `quantus exercise` runs a live-node smoke/fuzz suite against a node — reads, balances,
-reversible transfers, multisig, recovery, preimage, governance, negative cases, a seeded
-fuzz loop, and a wormhole round-trip. It derives a handful of ephemeral accounts, funds them
+utility, reversible transfers, multisig, recovery, preimage, governance, vesting, negative
+cases, a seeded fuzz loop, and wormhole round-trips. It derives a handful of ephemeral
+accounts, funds them
 from a **root account**, drives each pallet, and verifies on-chain state as it goes. Intended
 for CI and post-upgrade validation.
 
@@ -585,6 +615,9 @@ Key flags:
 > - The `governance` phase relies on the dev genesis tech-collective accounts, so pass
 >   `--skip governance` when using a custom `--root-account` on a public testnet.
 > - The `wormhole` phase is CPU-heavy (ZK proving) — use `--skip wormhole` for a faster run.
+> - `recovery`, `vesting` and `wormhole` fund their own dedicated accounts straight from the
+>   root account, on top of `--total-amount` (roughly 1600 tokens for a full run). Skip them
+>   or fund the root account accordingly when running on a public testnet.
 > - The suite fails fast in setup with a clear message if the root account can't cover
 >   `--total-amount` or the budget is too low for the fixed deposits.
 

@@ -5,3 +5,8 @@
 # Circuit binaries are generated at build time by build.rs
 /generated-bins/
 /generated-bins
+
+# Working files for the V12 security PR; the PR description lives on GitHub,
+# not in the repo (it would go stale immediately).
+/PR_V12_SECURITY.md
+/v12-issues.md

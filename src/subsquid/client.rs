@@ -81,8 +81,30 @@ impl SubsquidClient {
 		from_prefixes: Option<Vec<String>>,
 		params: TransferQueryParams,
 	) -> Result<Vec<Transfer>> {
-		// Hasura table query with an aggregate count so we can emulate the old
-		// server's "too many results" rejection for overly broad queries.
+		let (transfers, total_count) =
+			self.query_transfers_by_prefix_page(to_prefixes, from_prefixes, params).await?;
+
+		if total_count > SERVER_MAX_LIMIT as i64 {
+			// Same wording as the old server so query_all_transfers_by_prefix
+			// keeps binary-splitting block ranges on this marker.
+			return Err(QuantusError::Generic(format!(
+				"Query returned {} results, which exceeds the limit of {}. \
+				Please use longer hash prefixes or a narrower block range for more specific queries.",
+				total_count, SERVER_MAX_LIMIT
+			)));
+		}
+
+		Ok(transfers)
+	}
+
+	async fn query_transfers_by_prefix_page(
+		&self,
+		to_prefixes: Option<Vec<String>>,
+		from_prefixes: Option<Vec<String>>,
+		params: TransferQueryParams,
+	) -> Result<(Vec<Transfer>, i64)> {
+		// Hasura table query with an aggregate count so callers can detect when a
+		// block range needs further narrowing or offset-based pagination.
 		let query = r#"
             query TransfersByHashPrefix($where: transfer_bool_exp!, $limit: Int!, $offset: Int!) {
                 transfers: transfer(
@@ -124,18 +146,14 @@ impl SubsquidClient {
 
 		let data: HasuraTransfersData = self.execute(&request).await?;
 
-		let total_count = data.meta.aggregate.map(|a| a.count).unwrap_or(0);
-		if total_count > SERVER_MAX_LIMIT as i64 {
-			// Same wording as the old server so query_all_transfers_by_prefix
-			// keeps binary-splitting block ranges on this marker.
-			return Err(QuantusError::Generic(format!(
-				"Query returned {} results, which exceeds the limit of {}. \
-				Please use longer hash prefixes or a narrower block range for more specific queries.",
-				total_count, SERVER_MAX_LIMIT
-			)));
-		}
+		let total_count = data.meta.aggregate.map(|a| a.count).ok_or_else(|| {
+			QuantusError::Generic(
+				"Missing transfer aggregate count in indexer response".to_string(),
+			)
+		})?;
+		let transfers = data.transfers.into_iter().map(Transfer::from).collect();
 
-		Ok(data.transfers.into_iter().map(Transfer::from).collect())
+		Ok((transfers, total_count))
 	}
 
 	/// Build a Hasura `transfer_bool_exp` where-clause from prefix lists and params.
@@ -233,24 +251,24 @@ impl SubsquidClient {
 			.ok_or_else(|| QuantusError::Generic("No data in response".to_string()))
 	}
 
-	/// Fetch every transfer matching the given prefixes, paginating by block range.
+	/// Fetch every transfer matching the given prefixes.
 	///
-	/// The server caps any single query at 1000 results and rejects larger result sets
-	/// with a "Query returned N results, which exceeds the limit of 1000" error. This
-	/// method handles that by binary-splitting the `[after_block, before_block]` range
-	/// whenever the cap is hit, then concatenating results.
+	/// The server caps any single query at 1000 results. This method handles that
+	/// by binary-splitting the `[after_block, before_block]` range whenever the cap
+	/// is hit, then falling back to offset pagination if a single block still exceeds
+	/// the cap.
 	///
 	/// `base_params.after_block` / `base_params.before_block` are honored as the initial
 	/// bounds; unset means `0` / `i32::MAX` (GraphQL `Int` is signed 32-bit so we can't
-	/// exceed that). Other filters (amount, offset) are forwarded unchanged. `limit` is
-	/// always set to the server max (1000) per sub-query.
+	/// exceed that). Other filters (amount) are forwarded unchanged. `limit` is
+	/// always set to the server max (1000) per sub-query. `offset` is applied once to
+	/// the complete ordered result set, not to each block-range sub-query.
 	pub async fn query_all_transfers_by_prefix(
 		&self,
 		to_prefixes: Option<Vec<String>>,
 		from_prefixes: Option<Vec<String>>,
 		base_params: TransferQueryParams,
 	) -> Result<Vec<Transfer>> {
-		const LIMIT_EXCEEDED_MARKER: &str = "exceeds the limit";
 		const MAX_BLOCK_SENTINEL: u32 = i32::MAX as u32;
 
 		let initial_lo = base_params.after_block.unwrap_or(0);
@@ -260,6 +278,7 @@ impl SubsquidClient {
 			return Ok(vec![]);
 		}
 
+		let global_offset = base_params.offset as usize;
 		let mut all: Vec<Transfer> = Vec::new();
 		let mut stack: Vec<(u32, u32)> = vec![(initial_lo, initial_hi)];
 
@@ -268,29 +287,102 @@ impl SubsquidClient {
 				.clone()
 				.with_after_block(lo)
 				.with_before_block(hi)
-				.with_limit(SERVER_MAX_LIMIT);
+				.with_limit(SERVER_MAX_LIMIT)
+				.with_offset(0);
 
-			match self
-				.query_transfers_by_prefix(to_prefixes.clone(), from_prefixes.clone(), params)
-				.await
-			{
-				Ok(transfers) => all.extend(transfers),
-				Err(e) if e.to_string().contains(LIMIT_EXCEEDED_MARKER) => {
-					if lo == hi {
-						return Err(QuantusError::Generic(format!(
-							"More than {} transfers in single block {}: {}",
-							SERVER_MAX_LIMIT, lo, e
-						)));
-					}
-					let mid = lo + (hi - lo) / 2;
-					stack.push((mid + 1, hi));
-					stack.push((lo, mid));
-				},
-				Err(e) => return Err(e),
+			let (transfers, total_count) = self
+				.query_transfers_by_prefix_page(
+					to_prefixes.clone(),
+					from_prefixes.clone(),
+					params.clone(),
+				)
+				.await?;
+
+			if total_count <= SERVER_MAX_LIMIT as i64 {
+				// A Hasura deployment with an API row cap below our requested
+				// limit would return fewer rows than total_count and silently
+				// drop the rest; fail instead of returning a truncated set.
+				if transfers.len() as i64 != total_count {
+					return Err(QuantusError::Generic(format!(
+						"Indexer returned {} of {} transfers for blocks {}..={}; the server row cap appears lower than the requested limit of {}",
+						transfers.len(),
+						total_count,
+						lo,
+						hi,
+						SERVER_MAX_LIMIT
+					)));
+				}
+				all.extend(transfers);
+				continue;
+			}
+
+			if lo != hi {
+				let mid = lo + (hi - lo) / 2;
+				stack.push((mid + 1, hi));
+				stack.push((lo, mid));
+				continue;
+			}
+
+			// Single-block offset pagination: total_count > SERVER_MAX_LIMIT,
+			// so this first page must be exactly the server limit.
+			if transfers.len() != SERVER_MAX_LIMIT as usize {
+				return Err(QuantusError::Generic(format!(
+					"Indexer returned {} of {} transfers on the first page for block {}; the server row cap appears lower than the requested limit of {}",
+					transfers.len(),
+					total_count,
+					lo,
+					SERVER_MAX_LIMIT
+				)));
+			}
+			all.extend(transfers);
+			let total_count = u32::try_from(total_count).map_err(|_| {
+				QuantusError::Generic(format!(
+					"Transfer count {} for block {} exceeds supported pagination range",
+					total_count, lo
+				))
+			})?;
+			let mut offset = params.offset.checked_add(SERVER_MAX_LIMIT).ok_or_else(|| {
+				QuantusError::Generic(format!(
+					"Transfer pagination offset overflow for block {}",
+					lo
+				))
+			})?;
+
+			while offset < total_count {
+				let page_params = params.clone().with_offset(offset);
+				let (page, _) = self
+					.query_transfers_by_prefix_page(
+						to_prefixes.clone(),
+						from_prefixes.clone(),
+						page_params,
+					)
+					.await?;
+
+				// Every page must be exactly full except the last, which must
+				// hold the remainder; anything else means rows were dropped.
+				let expected = std::cmp::min(SERVER_MAX_LIMIT, total_count - offset) as usize;
+				if page.len() != expected {
+					return Err(QuantusError::Generic(format!(
+						"Indexer returned {} transfers at offset {} of {} for block {}, expected {}",
+						page.len(),
+						offset,
+						total_count,
+						lo,
+						expected
+					)));
+				}
+
+				all.extend(page);
+				offset = offset.checked_add(SERVER_MAX_LIMIT).ok_or_else(|| {
+					QuantusError::Generic(format!(
+						"Transfer pagination offset overflow for block {}",
+						lo
+					))
+				})?;
 			}
 		}
 
-		Ok(all)
+		Ok(all.into_iter().skip(global_offset).collect())
 	}
 
 	/// Query transfers for a set of addresses using privacy-preserving hash prefixes.
@@ -468,6 +560,18 @@ impl SubsquidClient {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use serde_json::{json, Value};
+	use std::{
+		collections::HashSet,
+		io::{Read, Write},
+		net::{TcpListener, TcpStream},
+		sync::{
+			atomic::{AtomicUsize, Ordering},
+			Arc, Mutex,
+		},
+		thread,
+		time::Duration,
+	};
 
 	#[test]
 	fn test_transfer_query_params_builder() {
@@ -483,13 +587,247 @@ mod tests {
 		assert_eq!(params.before_block, Some(2000));
 	}
 
-	// Guards the substring the paginator matches on. If the server ever changes this
-	// wording, `query_all_transfers_by_prefix` will stop triggering binary-split and
-	// this test will fail loudly.
-	#[test]
-	fn test_server_limit_error_marker() {
-		let server_message = "Query returned 1234 results, which exceeds the limit of 1000. \
-			Please use longer hash prefixes for more specific queries.";
-		assert!(server_message.contains("exceeds the limit"));
+	fn transfer_row(i: usize, block_height: i64) -> Value {
+		json!({
+			"id": format!("transfer-{i}"),
+			"block_id": format!("block-{i}"),
+			"block": { "height": block_height },
+			"timestamp": "2026-01-01T00:00:00Z",
+			"extrinsic_id": null,
+			"from_id": "qzFrom",
+			"to_id": "qzTo",
+			"amount": "1",
+			"fee": "0",
+			"from_hash": "from-hash",
+			"to_hash": "target-prefix-full-hash",
+			"leaf_index": i.to_string(),
+			"transfer_count": (i + 1).to_string()
+		})
+	}
+
+	fn read_http_request(stream: &mut TcpStream) -> String {
+		stream.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+		let mut buf = Vec::new();
+		let mut tmp = [0u8; 4096];
+		let mut header_end = None;
+		let mut content_len = 0usize;
+
+		loop {
+			let n = stream.read(&mut tmp).unwrap();
+			assert_ne!(n, 0, "mock indexer closed before request completed");
+			buf.extend_from_slice(&tmp[..n]);
+
+			if header_end.is_none() {
+				if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
+					header_end = Some(pos + 4);
+					let headers = String::from_utf8_lossy(&buf[..pos]);
+					for line in headers.lines() {
+						if let Some((name, value)) = line.split_once(':') {
+							if name.eq_ignore_ascii_case("content-length") {
+								content_len = value.trim().parse().unwrap();
+							}
+						}
+					}
+				}
+			}
+
+			if let Some(end) = header_end {
+				if buf.len() >= end + content_len {
+					break;
+				}
+			}
+		}
+
+		String::from_utf8(buf).unwrap()
+	}
+
+	fn write_json_response(stream: &mut TcpStream, body: Value) {
+		let body = body.to_string();
+		write!(
+			stream,
+			"HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+			body.len(),
+			body
+		)
+		.unwrap();
+	}
+
+	fn parse_request_vars(request: &str) -> (usize, usize, u64, u64) {
+		let body = request.split("\r\n\r\n").nth(1).unwrap_or_default();
+		let request_json: Value = serde_json::from_str(body).expect("GraphQL JSON body");
+		let variables = &request_json["variables"];
+		let height = &variables["where"]["block"]["height"];
+		let after = height["_gte"].as_u64().unwrap_or(0);
+		let before = height["_lte"].as_u64().unwrap_or(u64::from(u32::MAX));
+		let limit = variables["limit"].as_u64().expect("limit") as usize;
+		let offset = variables["offset"].as_u64().expect("offset") as usize;
+		(limit, offset, after, before)
+	}
+
+	/// #160776: missing/null aggregate must not be treated as a complete page.
+	#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+	async fn missing_aggregate_count_rejects_incomplete_prefix_page() {
+		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+		let endpoint = format!("http://{}", listener.local_addr().unwrap());
+		let rows: Arc<Vec<Value>> =
+			Arc::new((0..=1000).map(|i| transfer_row(i, i as i64)).collect());
+		let request_count = Arc::new(AtomicUsize::new(0));
+		let server_rows = Arc::clone(&rows);
+		let server_count = Arc::clone(&request_count);
+
+		thread::spawn(move || {
+			let (mut stream, _) = listener.accept().unwrap();
+			server_count.fetch_add(1, Ordering::SeqCst);
+			let request = read_http_request(&mut stream);
+			let (limit, _offset, _lo, _hi) = parse_request_vars(&request);
+			let transfers: Vec<Value> = server_rows.iter().take(limit).cloned().collect();
+			write_json_response(
+				&mut stream,
+				json!({
+					"data": {
+						"transfers": transfers,
+						"meta": { "aggregate": null }
+					}
+				}),
+			);
+		});
+
+		let client = SubsquidClient::new(endpoint).unwrap();
+		let err = client
+			.query_all_transfers_by_prefix(
+				Some(vec!["target".to_string()]),
+				None,
+				TransferQueryParams::new().with_after_block(0).with_before_block(1000),
+			)
+			.await
+			.expect_err("missing aggregate must fail closed");
+
+		assert!(
+			err.to_string().contains("Missing transfer aggregate count"),
+			"unexpected error: {err}"
+		);
+		assert_eq!(request_count.load(Ordering::SeqCst), 1);
+	}
+
+	/// #159916: a single over-limit block must be offset-paginated, not aborted.
+	#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+	async fn single_block_over_limit_is_offset_paginated() {
+		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+		let endpoint = format!("http://{}", listener.local_addr().unwrap());
+		let total = 1001usize;
+		let rows: Arc<Vec<Value>> = Arc::new((0..total).map(|i| transfer_row(i, 42)).collect());
+		let observed_offsets = Arc::new(Mutex::new(Vec::new()));
+		let server_rows = Arc::clone(&rows);
+		let server_offsets = Arc::clone(&observed_offsets);
+
+		thread::spawn(move || {
+			for _ in 0..4 {
+				let Ok((mut stream, _)) = listener.accept() else { break };
+				let request = read_http_request(&mut stream);
+				let (limit, offset, lo, hi) = parse_request_vars(&request);
+				assert_eq!(lo, 42);
+				assert_eq!(hi, 42);
+				server_offsets.lock().unwrap().push(offset);
+				let page: Vec<Value> =
+					server_rows.iter().skip(offset).take(limit).cloned().collect();
+				write_json_response(
+					&mut stream,
+					json!({
+						"data": {
+							"transfers": page,
+							"meta": { "aggregate": { "count": total as i64 } }
+						}
+					}),
+				);
+			}
+		});
+
+		let client = SubsquidClient::new(endpoint).unwrap();
+		let transfers = client
+			.query_all_transfers_by_prefix(
+				Some(vec!["target".to_string()]),
+				None,
+				TransferQueryParams::new().with_after_block(42).with_before_block(42),
+			)
+			.await
+			.expect("single-block over-limit fetch must complete via offset pages");
+
+		assert_eq!(transfers.len(), total);
+		assert_eq!(transfers.first().map(|t| t.id.as_str()), Some("transfer-0"));
+		assert_eq!(transfers.last().map(|t| t.id.as_str()), Some("transfer-1000"));
+		let offsets = observed_offsets.lock().unwrap().clone();
+		assert!(offsets.contains(&0), "expected first page at offset 0: {offsets:?}");
+		assert!(offsets.contains(&1000), "expected second page at offset 1000: {offsets:?}");
+	}
+
+	/// #160777: caller offset must apply once globally across split ranges.
+	#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+	async fn query_all_transfers_applies_offset_globally_across_split_ranges() {
+		const TOTAL_TRANSFERS: u32 = 1001;
+		const GLOBAL_OFFSET: u32 = 1;
+
+		let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+		let endpoint = format!("http://{}", listener.local_addr().unwrap());
+
+		thread::spawn(move || {
+			for stream in listener.incoming().take(32) {
+				let Ok(mut stream) = stream else { continue };
+				let request = read_http_request(&mut stream);
+				let (limit, offset, lo, hi) = parse_request_vars(&request);
+				let matching: Vec<u32> =
+					(0..TOTAL_TRANSFERS).filter(|h| *h >= lo as u32 && *h <= hi as u32).collect();
+				let aggregate_count = matching.len();
+				let page: Vec<Value> = matching
+					.into_iter()
+					.skip(offset)
+					.take(limit)
+					.map(|height| transfer_row(height as usize, height as i64))
+					.collect();
+				write_json_response(
+					&mut stream,
+					json!({
+						"data": {
+							"transfers": page,
+							"meta": { "aggregate": { "count": aggregate_count as i64 } }
+						}
+					}),
+				);
+			}
+		});
+
+		let client = SubsquidClient::new(endpoint).unwrap();
+
+		let complete = client
+			.query_all_transfers_by_prefix(
+				Some(vec!["eligible".to_string()]),
+				None,
+				TransferQueryParams::new()
+					.with_after_block(0)
+					.with_before_block(TOTAL_TRANSFERS)
+					.with_offset(0),
+			)
+			.await
+			.expect("baseline exhaustive query");
+
+		let expected: HashSet<String> =
+			complete.iter().skip(GLOBAL_OFFSET as usize).map(|t| t.id.clone()).collect();
+
+		let shifted = client
+			.query_all_transfers_by_prefix(
+				Some(vec!["eligible".to_string()]),
+				None,
+				TransferQueryParams::new()
+					.with_after_block(0)
+					.with_before_block(TOTAL_TRANSFERS)
+					.with_offset(GLOBAL_OFFSET),
+			)
+			.await
+			.expect("global offset query");
+
+		let shifted_ids: HashSet<String> = shifted.iter().map(|t| t.id.clone()).collect();
+		assert_eq!(
+			shifted_ids, expected,
+			"offset must skip once across the complete ordered result set"
+		);
 	}
 }
