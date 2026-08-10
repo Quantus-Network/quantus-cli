@@ -213,9 +213,7 @@ async fn transfer_all(ctx: &mut ExerciseCtx) -> Result<String> {
 	}
 	let recipient_after = ctx.free_balance(&recipient_ss58).await?;
 	if recipient_after == 0 {
-		return Err(QuantusError::Generic(
-			"transfer_all recipient received nothing".to_string(),
-		));
+		return Err(QuantusError::Generic("transfer_all recipient received nothing".to_string()));
 	}
 	Ok(format!(
 		"Balances::transfer_all emptied the sender; recipient received {recipient_after} raw units"

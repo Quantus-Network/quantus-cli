@@ -185,8 +185,9 @@ async fn expired_proposal_cleanup(ctx: &mut ExerciseCtx) -> Result<String> {
 	}
 
 	// Any signer (here signer_c, not the proposer) may sweep an expired proposal.
-	let remove_call =
-		quantus_subxt::api::tx().multisig().remove_expired(multisig_id.clone(), first_id);
+	let remove_call = quantus_subxt::api::tx()
+		.multisig()
+		.remove_expired(multisig_id.clone(), first_id);
 	submit_ok(ctx, &signer_c, remove_call).await?;
 
 	// The proposer reclaims deposits from all remaining expired proposals.

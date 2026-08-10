@@ -155,10 +155,17 @@ async fn referendum_metadata(ctx: &mut ExerciseCtx) -> Result<String> {
 	// Metadata must reference an on-chain preimage.
 	let metadata: [u8; 32] = rand::Rng::random(&mut ctx.rng);
 	let metadata_hash: sp_core::H256 = BlakeTwo256::hash(&metadata);
-	crate::cli::common::submit_preimage(&ctx.client, &ctx.alice, metadata.to_vec(), ctx.wait_mode())
-		.await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&ctx.alice,
+		metadata.to_vec(),
+		ctx.wait_mode(),
+	)
+	.await?;
 
-	let set = quantus_subxt::api::tx().tech_referenda().set_metadata(index, Some(metadata_hash));
+	let set = quantus_subxt::api::tx()
+		.tech_referenda()
+		.set_metadata(index, Some(metadata_hash));
 	submit_ok(ctx, &alice, set).await?;
 
 	let metadata_addr = quantus_subxt::api::storage().tech_referenda().metadata_of(index);

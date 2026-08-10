@@ -69,24 +69,29 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 		(rescuer.try_to_account_id_ss58check()?, funding),
 		(friend.try_to_account_id_ss58check()?, funding),
 	];
-	crate::cli::send::batch_transfer(&ctx.client, &ctx.alice.clone(), transfers, None, ctx.wait_mode())
-		.await?;
+	crate::cli::send::batch_transfer(
+		&ctx.client,
+		&ctx.alice.clone(),
+		transfers,
+		None,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let lost_id = account_id_of(&lost)?;
 	let rescuer_id = account_id_of(&rescuer)?;
 	let friend_id = account_id_of(&friend)?;
 
 	// 1. Make `lost` recoverable: one friend, threshold 1, no claim delay.
-	let create = quantus_subxt::api::tx().recovery().create_recovery(
-		vec![friend_id.clone()],
-		1,
-		0,
-	);
+	let create = quantus_subxt::api::tx()
+		.recovery()
+		.create_recovery(vec![friend_id.clone()], 1, 0);
 	submit_ok(ctx, &lost, create).await?;
 
 	// 2. Rescuer starts recovery; 3. friend vouches.
-	let initiate =
-		quantus_subxt::api::tx().recovery().initiate_recovery(MultiAddress::Id(lost_id.clone()));
+	let initiate = quantus_subxt::api::tx()
+		.recovery()
+		.initiate_recovery(MultiAddress::Id(lost_id.clone()));
 	submit_ok(ctx, &rescuer, initiate).await?;
 
 	let vouch = quantus_subxt::api::tx()
@@ -95,8 +100,9 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	submit_ok(ctx, &friend, vouch).await?;
 
 	// 4. Threshold met and delay elapsed (0 blocks): claim the account.
-	let claim =
-		quantus_subxt::api::tx().recovery().claim_recovery(MultiAddress::Id(lost_id.clone()));
+	let claim = quantus_subxt::api::tx()
+		.recovery()
+		.claim_recovery(MultiAddress::Id(lost_id.clone()));
 	submit_ok(ctx, &rescuer, claim).await?;
 
 	if !has_proxy(ctx, &rescuer).await? {
@@ -120,8 +126,9 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 			value: drained,
 		})
 	};
-	let as_recovered =
-		quantus_subxt::api::tx().recovery().as_recovered(MultiAddress::Id(lost_id.clone()), inner);
+	let as_recovered = quantus_subxt::api::tx()
+		.recovery()
+		.as_recovered(MultiAddress::Id(lost_id.clone()), inner);
 	submit_ok(ctx, &rescuer, as_recovered).await?;
 
 	let lost_after = ctx.free_balance(&lost_ss58).await?;
@@ -132,8 +139,9 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	}
 
 	// 6. Rescuer gives up proxy access.
-	let cancel =
-		quantus_subxt::api::tx().recovery().cancel_recovered(MultiAddress::Id(lost_id.clone()));
+	let cancel = quantus_subxt::api::tx()
+		.recovery()
+		.cancel_recovered(MultiAddress::Id(lost_id.clone()));
 	submit_ok(ctx, &rescuer, cancel).await?;
 	if has_proxy(ctx, &rescuer).await? {
 		return Err(QuantusError::Generic(
@@ -142,8 +150,9 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	}
 
 	// 7. Owner closes the (claimed) recovery attempt and collects the deposit.
-	let close =
-		quantus_subxt::api::tx().recovery().close_recovery(MultiAddress::Id(rescuer_id.clone()));
+	let close = quantus_subxt::api::tx()
+		.recovery()
+		.close_recovery(MultiAddress::Id(rescuer_id.clone()));
 	submit_ok(ctx, &lost, close).await?;
 
 	// 8. Deposit poke is a paid no-op when nothing changed; must still dispatch.

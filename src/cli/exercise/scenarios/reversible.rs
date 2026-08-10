@@ -217,8 +217,9 @@ async fn guardian_recover_funds(ctx: &mut ExerciseCtx) -> Result<String> {
 		));
 	}
 
-	let recover =
-		quantus_subxt::api::tx().reversible_transfers().recover_funds(account_id_of(&account)?);
+	let recover = quantus_subxt::api::tx()
+		.reversible_transfers()
+		.recover_funds(account_id_of(&account)?);
 	submit_ok(ctx, &ctx.alice.clone(), recover).await?;
 
 	let pending_after = pending_ids(ctx, &account).await?;

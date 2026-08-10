@@ -27,7 +27,11 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	Ok(())
 }
 
-async fn multiround(ctx: &mut ExerciseCtx, scheme: DilithiumScheme, public: bool) -> Result<String> {
+async fn multiround(
+	ctx: &mut ExerciseCtx,
+	scheme: DilithiumScheme,
+	public: bool,
+) -> Result<String> {
 	// Dev wallets (crystal_*) have no mnemonic; wormhole HD derivation requires one.
 	let wallet_name = format!("exercise_wormhole_{}_{}", scheme, ctx.seed);
 	let manager = WalletManager::new()?;
