@@ -5,8 +5,9 @@ use crate::{
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 	wallet::{
+		default_derivation_path,
 		password::{get_mnemonic_from_user, get_new_wallet_password},
-		default_derivation_path, DilithiumScheme, WalletManager,
+		DilithiumScheme, WalletManager,
 	},
 };
 use clap::Subcommand;
@@ -382,9 +383,8 @@ pub async fn handle_wallet_command(
 					.create_wallet_no_derivation_with_scheme(&name, Some(&final_password), scheme)
 					.await
 			} else {
-				let path = derivation_path
-					.as_deref()
-					.unwrap_or_else(|| default_derivation_path(scheme));
+				let path =
+					derivation_path.as_deref().unwrap_or_else(|| default_derivation_path(scheme));
 				wallet_manager
 					.create_wallet_with_scheme(&name, Some(&final_password), path, scheme)
 					.await
@@ -681,9 +681,8 @@ pub async fn handle_wallet_command(
 					)
 					.await
 			} else {
-				let path = derivation_path
-					.as_deref()
-					.unwrap_or_else(|| default_derivation_path(scheme));
+				let path =
+					derivation_path.as_deref().unwrap_or_else(|| default_derivation_path(scheme));
 				wallet_manager
 					.import_wallet_with_scheme(
 						&name,
