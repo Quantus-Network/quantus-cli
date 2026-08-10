@@ -22,6 +22,7 @@ pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
 	CompatibleRuntime { spec_version: 135, transaction_version: 3, supports_ml_dsa_65: false },
 	CompatibleRuntime { spec_version: 136, transaction_version: 3, supports_ml_dsa_65: false },
 	CompatibleRuntime { spec_version: 142, transaction_version: 3, supports_ml_dsa_65: true },
+	CompatibleRuntime { spec_version: 143, transaction_version: 3, supports_ml_dsa_65: true },
 ];
 
 /// Check whether a runtime version pair is supported by this CLI.
@@ -96,7 +97,9 @@ mod tests {
 		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 136, 3)
 			.expect("compatible quantus runtime must be accepted");
 		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 142, 3)
-			.expect("the current vesting-enabled runtime must be accepted");
+			.expect("vesting-enabled runtime must be accepted");
+		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 143, 3)
+			.expect("the current runtime must be accepted");
 	}
 
 	/// Pinned to the spec name the real Quantus runtime declares
@@ -162,6 +165,7 @@ mod tests {
 		assert!(!runtime_supports_ml_dsa_65(135, 3));
 		assert!(!runtime_supports_ml_dsa_65(136, 3));
 		assert!(runtime_supports_ml_dsa_65(142, 3));
+		assert!(runtime_supports_ml_dsa_65(143, 3));
 		assert!(!runtime_supports_ml_dsa_65(142, 2), "unknown tx version must not match");
 	}
 
@@ -174,6 +178,7 @@ mod tests {
 			"expected actionable ML-DSA-65 gate error, got: {msg}"
 		);
 		ensure_ml_dsa_65_supported(142, 3).expect("142 must allow ML-DSA-65");
+		ensure_ml_dsa_65_supported(143, 3).expect("143 must allow ML-DSA-65");
 	}
 
 	#[test]

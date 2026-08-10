@@ -54,6 +54,7 @@ pub struct ExerciseArgs {
 pub enum Phase {
 	Reads,
 	Balances,
+	Utility,
 	Reversible,
 	Multisig,
 	Recovery,
@@ -71,6 +72,7 @@ impl Phase {
 		vec![
 			Phase::Reads,
 			Phase::Balances,
+			Phase::Utility,
 			Phase::Reversible,
 			Phase::Multisig,
 			Phase::Recovery,
@@ -87,6 +89,7 @@ impl Phase {
 		match self {
 			Phase::Reads => "reads",
 			Phase::Balances => "balances",
+			Phase::Utility => "utility",
 			Phase::Reversible => "reversible",
 			Phase::Multisig => "multisig",
 			Phase::Recovery => "recovery",
@@ -194,6 +197,7 @@ async fn run_phases(
 		match phase {
 			Phase::Reads => scenarios::reads::run(ctx, report, &label).await?,
 			Phase::Balances => scenarios::balances::run(ctx, report, &label).await?,
+			Phase::Utility => scenarios::utility::run(ctx, report, &label).await?,
 			Phase::Reversible => scenarios::reversible::run(ctx, report, &label).await?,
 			Phase::Multisig => scenarios::multisig::run(ctx, report, &label).await?,
 			Phase::Recovery => scenarios::recovery::run(ctx, report, &label).await?,
