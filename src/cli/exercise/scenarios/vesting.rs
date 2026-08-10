@@ -6,6 +6,7 @@
 //! dispatches `create_schedule` / `retarget_schedule` / `end_schedule` through the
 //! propose → approve → execute flow. Assertions are made against chain state (pot
 //! and beneficiary balances, schedule storage) rather than the execute result.
+//! On chains whose treasury is not that multisig the admin steps are skipped.
 
 use crate::{
 	chain::quantus_subxt,
@@ -31,8 +32,28 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	exercise_step!(report, phase, "constants_and_schedules", constants_and_schedules(ctx));
 	exercise_step!(report, phase, "claim_missing_schedule", claim_missing_schedule(ctx));
 	exercise_step!(report, phase, "create_requires_admin_origin", create_requires_admin(ctx));
-	exercise_step!(report, phase, "admin_create_and_claim", admin_create_and_claim(ctx));
-	exercise_step!(report, phase, "retarget_and_end", retarget_and_end(ctx));
+	let started = std::time::Instant::now();
+	match dev_treasury(&ctx.client, &ctx.alice, &ctx.bob, &ctx.charlie).await {
+		Ok(Some(treasury)) => {
+			exercise_step!(
+				report,
+				phase,
+				"admin_create_and_claim",
+				admin_create_and_claim(ctx, &treasury)
+			);
+			exercise_step!(report, phase, "retarget_and_end", retarget_and_end(ctx, &treasury));
+		},
+		Ok(None) =>
+			for step in ["admin_create_and_claim", "retarget_and_end"] {
+				report.record_skip(
+					phase,
+					step,
+					"the chain's treasury is unset or not the dev Alice/Bob/Charlie multisig, \
+					 so Signed(treasury) admin calls cannot be dispatched",
+				);
+			},
+		Err(e) => report.record(phase, "dev_treasury_check", started.elapsed(), Err(e)),
+	}
 	Ok(())
 }
 
@@ -91,18 +112,21 @@ async fn create_requires_admin(ctx: &mut ExerciseCtx) -> Result<String> {
 		now + DAY_MS,
 		5 * ctx.test_unit,
 	);
-	// Alice alone is not the treasury; only Root or Signed(treasury) may create.
-	let alice = ctx.alice.clone();
-	submit_expect_failure(ctx, &alice, call, &["BadOrigin"]).await
+	// A plain signed origin is not the treasury; only Root or Signed(treasury) may create.
+	let intruder = ctx.eph[1].clone();
+	submit_expect_failure(ctx, &intruder, call, &["BadOrigin"]).await
 }
 
 /// Create a fully-vested schedule through the treasury multisig, then claim it
 /// permissionlessly from a third party and verify the beneficiary got paid.
-async fn admin_create_and_claim(ctx: &mut ExerciseCtx) -> Result<String> {
-	let treasury = ensure_treasury_multisig(ctx).await?;
+async fn admin_create_and_claim(
+	ctx: &mut ExerciseCtx,
+	treasury: &SubxtAccountId32,
+) -> Result<String> {
+	ensure_treasury_multisig(ctx, treasury).await?;
 	let total = schedule_total(&ctx.client, ctx.test_unit)?;
 	let target = treasury_funding(&ctx.client, ctx.test_unit, ctx.existential_deposit)?;
-	fund_treasury(ctx, &treasury, target).await?;
+	fund_treasury(ctx, treasury, target).await?;
 
 	let now = chain_now_ms(ctx).await?;
 	let beneficiary = ctx.eph[0].clone();
@@ -120,7 +144,7 @@ async fn admin_create_and_claim(ctx: &mut ExerciseCtx) -> Result<String> {
 		now - HOUR_MS,
 		total,
 	);
-	admin_dispatch(ctx, &treasury, &create).await?;
+	admin_dispatch(ctx, treasury, &create).await?;
 
 	let schedule_id = id_before;
 	let schedule = crate::cli::vesting::fetch_schedule(&ctx.client, schedule_id)
@@ -180,11 +204,11 @@ async fn admin_create_and_claim(ctx: &mut ExerciseCtx) -> Result<String> {
 
 /// Create a future schedule, verify it is unclaimable, retarget it, then end it
 /// early and verify the pot returns the unvested funds.
-async fn retarget_and_end(ctx: &mut ExerciseCtx) -> Result<String> {
-	let treasury = ensure_treasury_multisig(ctx).await?;
+async fn retarget_and_end(ctx: &mut ExerciseCtx, treasury: &SubxtAccountId32) -> Result<String> {
+	ensure_treasury_multisig(ctx, treasury).await?;
 	let total = schedule_total(&ctx.client, ctx.test_unit)?;
 	let target = treasury_funding(&ctx.client, ctx.test_unit, ctx.existential_deposit)?;
-	fund_treasury(ctx, &treasury, target).await?;
+	fund_treasury(ctx, treasury, target).await?;
 
 	let now = chain_now_ms(ctx).await?;
 	let pot_ss58 = pot_account_ss58();
@@ -199,7 +223,7 @@ async fn retarget_and_end(ctx: &mut ExerciseCtx) -> Result<String> {
 		now + 2 * DAY_MS,
 		total,
 	);
-	admin_dispatch(ctx, &treasury, &create).await?;
+	admin_dispatch(ctx, treasury, &create).await?;
 	let schedule_id = id_before;
 	if crate::cli::vesting::fetch_schedule(&ctx.client, schedule_id).await?.is_none() {
 		return Err(QuantusError::Generic(format!(
@@ -216,7 +240,7 @@ async fn retarget_and_end(ctx: &mut ExerciseCtx) -> Result<String> {
 	let retarget = quantus_subxt::api::tx()
 		.vesting()
 		.retarget_schedule(schedule_id, new_beneficiary.clone());
-	admin_dispatch(ctx, &treasury, &retarget).await?;
+	admin_dispatch(ctx, treasury, &retarget).await?;
 	let retargeted = crate::cli::vesting::fetch_schedule(&ctx.client, schedule_id)
 		.await?
 		.ok_or_else(|| {
@@ -237,7 +261,7 @@ async fn retarget_and_end(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	// End early: zero vested, so the pot returns the full total to the treasury.
 	let end = quantus_subxt::api::tx().vesting().end_schedule(schedule_id);
-	admin_dispatch(ctx, &treasury, &end).await?;
+	admin_dispatch(ctx, treasury, &end).await?;
 	if crate::cli::vesting::fetch_schedule(&ctx.client, schedule_id).await?.is_some() {
 		return Err(QuantusError::Generic(format!(
 			"schedule {schedule_id} still present after end_schedule"
@@ -273,13 +297,27 @@ async fn next_schedule_id(ctx: &ExerciseCtx) -> Result<u64> {
 	Ok(storage.fetch_or_default(&addr).await?)
 }
 
-async fn treasury_account(ctx: &ExerciseCtx) -> Result<SubxtAccountId32> {
-	let latest = ctx.client.get_latest_block().await?;
-	let storage = ctx.client.client().storage().at(latest);
+/// The chain's treasury account, if it is the well-known dev 2-of-3 Alice/Bob/Charlie
+/// multisig (nonce 0) the admin steps can sign for; `None` when it is unset or different.
+pub async fn dev_treasury(
+	client: &crate::chain::client::QuantusClient,
+	alice: &crate::wallet::QuantumKeyPair,
+	bob: &crate::wallet::QuantumKeyPair,
+	charlie: &crate::wallet::QuantumKeyPair,
+) -> Result<Option<SubxtAccountId32>> {
+	let latest = client.get_latest_block().await?;
+	let storage = client.client().storage().at(latest);
 	let addr = quantus_subxt::api::storage().treasury_pallet().treasury_account();
-	storage.fetch(&addr).await?.ok_or_else(|| {
-		QuantusError::Generic("treasury account not configured on this chain".to_string())
-	})
+	let Some(treasury) = storage.fetch(&addr).await? else {
+		return Ok(None);
+	};
+	let signers = vec![account_id_of(alice)?, account_id_of(bob)?, account_id_of(charlie)?];
+	let predicted = crate::cli::multisig::predict_multisig_address(
+		signers,
+		TREASURY_MULTISIG_THRESHOLD,
+		TREASURY_MULTISIG_NONCE,
+	);
+	Ok((predicted == treasury.to_quantus_ss58()).then_some(treasury))
 }
 
 /// The vesting pot: `PalletId(b"qvesting")` via `into_account_truncating`,
@@ -291,37 +329,25 @@ fn pot_account_ss58() -> String {
 	SubxtAccountId32::from(bytes).to_quantus_ss58()
 }
 
-/// Make sure the dev treasury (Alice/Bob/Charlie 2-of-3, nonce 0) is registered in
+/// Make sure the dev treasury multisig (validated by [`dev_treasury`]) is registered in
 /// the Multisig pallet so it can dispatch `Signed(treasury)` admin calls.
-async fn ensure_treasury_multisig(ctx: &mut ExerciseCtx) -> Result<SubxtAccountId32> {
-	let treasury = treasury_account(ctx).await?;
-	let signers =
-		vec![account_id_of(&ctx.alice)?, account_id_of(&ctx.bob)?, account_id_of(&ctx.charlie)?];
-
-	let predicted = crate::cli::multisig::predict_multisig_address(
-		signers.clone(),
-		TREASURY_MULTISIG_THRESHOLD,
-		TREASURY_MULTISIG_NONCE,
-	);
-	if predicted != treasury.to_quantus_ss58() {
-		return Err(QuantusError::Generic(format!(
-			"treasury {} is not the well-known dev multisig (predicted {predicted}); \
-			 vesting admin steps need a dev-preset chain",
-			treasury.to_quantus_ss58()
-		)));
-	}
-
+async fn ensure_treasury_multisig(ctx: &mut ExerciseCtx, treasury: &SubxtAccountId32) -> Result<()> {
 	if crate::cli::multisig::get_multisig_info(&ctx.client, treasury.clone())
 		.await?
 		.is_none()
 	{
+		let signers = vec![
+			account_id_of(&ctx.alice)?,
+			account_id_of(&ctx.bob)?,
+			account_id_of(&ctx.charlie)?,
+		];
 		let alice = ctx.alice.clone();
 		let create = quantus_subxt::api::tx().multisig().create_multisig(
 			signers,
 			TREASURY_MULTISIG_THRESHOLD,
 			TREASURY_MULTISIG_NONCE,
 		);
-		submit_ok(ctx, &alice, create).await?;
+		ctx.submit_budgeted(&alice, create, 0).await?;
 		if crate::cli::multisig::get_multisig_info(&ctx.client, treasury.clone())
 			.await?
 			.is_none()
@@ -331,7 +357,7 @@ async fn ensure_treasury_multisig(ctx: &mut ExerciseCtx) -> Result<SubxtAccountI
 			));
 		}
 	}
-	Ok(treasury)
+	Ok(())
 }
 
 /// Top the treasury up from Alice so `create_schedule` can move funds into the pot.
@@ -398,7 +424,7 @@ async fn admin_dispatch<Call: Payload>(
 		),
 		expiry,
 	);
-	submit_ok(ctx, &alice, propose).await?;
+	ctx.submit_budgeted(&alice, propose, 0).await?;
 
 	let proposals = crate::cli::multisig::list_proposals(&ctx.client, treasury.clone()).await?;
 	let proposal_id = proposals
@@ -416,10 +442,10 @@ async fn admin_dispatch<Call: Payload>(
 		proposal_id,
 		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
 	);
-	submit_ok(ctx, &bob, approve).await?;
+	ctx.submit_budgeted(&bob, approve, 0).await?;
 
 	let charlie = ctx.charlie.clone();
 	let execute = quantus_subxt::api::tx().multisig().execute(treasury.clone(), proposal_id);
-	submit_ok(ctx, &charlie, execute).await?;
+	ctx.submit_budgeted(&charlie, execute, 0).await?;
 	Ok(())
 }

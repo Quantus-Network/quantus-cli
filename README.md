@@ -580,12 +580,13 @@ as it goes. Intended for CI and post-upgrade validation.
 # Against a local dev node — crystal_alice is genesis-funded, so every phase runs
 quantus exercise
 
-# Against a public testnet: fund from your own wallet, spending no more than 100 tokens,
-# and skip governance (that phase needs the dev genesis tech-collective accounts, and its
-# referendum deposits alone are far larger than the rest of the suite)
+# Against a public testnet: fund from your own wallet, spending no more than 100 tokens.
+# Specifying --total-amount drops the governance phase automatically (it needs the dev
+# genesis tech-collective accounts, and its referendum deposits alone are far larger than
+# the rest of the suite)
 quantus exercise \
   --root-account my-wallet --root-password <pw> \
-  --total-amount 100 --skip governance \
+  --total-amount 100 \
   --node-url wss://a1-planck.quantus.cat
 
 # Run only specific phases, or skip the CPU-heavy wormhole phase
@@ -602,7 +603,7 @@ Key flags:
 |------|---------|-------------|
 | `--root-account <NAME>` | `crystal_alice` | Wallet that funds the run. Supply your own to run against a public testnet. |
 | `--root-password <PW>` / `--root-password-file <PATH>` | — | Password for the root wallet (or set `QUANTUS_WALLET_PASSWORD_<NAME>`). |
-| `--total-amount <TOKENS>` | `500` | Hard cap on what the whole run may draw from the root account. A ceiling, not an allocation — see below. |
+| `--total-amount <TOKENS>` | `500` | Hard cap on what the whole run may draw from the root account. A ceiling, not an allocation — see below. Specifying it drops the `governance` phase unless `--phases` lists it explicitly. |
 | `--ephemeral-accounts <N>` | `4` | Number of ephemeral accounts to derive and fund. |
 | `--phases <LIST>` / `--skip <LIST>` | all | Comma-separated phases to run / skip. |
 | `--seed <N>` | random | Reproducible fuzz seed. |
@@ -614,9 +615,10 @@ Key flags:
 #### What the run spends
 
 `--total-amount` is a hard cap on the root account's balance drop, enforced for the whole run,
-not just the initial funding: every transfer out of the root account is checked against it
-first and the run fails with the numbers rather than exceeding it. The final report ends with
-a `budget / root_account_spend` line stating what was actually spent.
+not just the initial funding: every root-paid transfer, deposit and estimated transaction fee
+is reserved against it before submission and the run fails with the numbers rather than
+exceeding it. The final report ends with a `budget / root_account_spend` line stating what was
+actually spent — and fails if the cap was exceeded.
 
 It is a ceiling, not an allocation. Ephemeral accounts are funded with what the chain's own
 deposits and fees require, not with a share of the cap, and the phases that fund dedicated
@@ -626,10 +628,13 @@ down by a fixed factor on top of that; chain-imposed amounts (existential deposi
 recovery, vesting and governance deposits) are read from the chain and never scaled.
 
 > **Notes:**
-> - `governance` submits two referenda, and their submission deposits stay locked for the whole
->   run — on the order of hundreds of tokens, dwarfing every other phase. It also relies on the
->   dev genesis tech-collective accounts. Pass `--skip governance` for a cheap run or a custom
->   `--root-account` on a public testnet.
+> - `governance` submits two referenda whose chain-fixed deposits stay locked for the whole
+>   run — on the order of a thousand tokens, dwarfing every other phase — and it relies on the
+>   dev genesis tech-collective accounts. It is therefore dropped whenever `--total-amount` is
+>   given, and when it (or `upgrade`) does run, its dev-account spend is exempt from the cap.
+> - `vesting`'s admin steps dispatch through the dev Alice/Bob/Charlie treasury multisig; on
+>   chains whose treasury is a different account they are skipped, and the permissionless
+>   vesting checks still run.
 > - The `wormhole` phase is CPU-heavy (ZK proving) — use `--skip wormhole` for a faster run. Its
 >   amount is fixed by an on-chain minimum and cannot be scaled down, so it needs ~52 tokens of
 >   headroom at once (returned afterwards).

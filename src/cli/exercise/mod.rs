@@ -28,6 +28,8 @@ const TEST_UNITS_PER_ACCOUNT: u128 = 300;
 /// Multisig proposals an ephemeral account makes across the run; each reserves a deposit
 /// (returned on execute or cancel) and pays the proposal and multisig fees.
 const MULTISIG_PROPOSALS_PER_ACCOUNT: u128 = 2;
+/// Budget cap applied when `--total-amount` is not given.
+const DEFAULT_TOTAL_AMOUNT: f64 = 500.0;
 
 #[derive(Args, Debug)]
 pub struct ExerciseArgs {
@@ -58,8 +60,9 @@ pub struct ExerciseArgs {
 
 	/// Wallet name to fund the exercise from. Defaults to the built-in `crystal_alice` dev
 	/// account (genesis-funded on `--dev` nodes). Supply a wallet of your own to run against
-	/// a public testnet. The `governance` phase still relies on the dev genesis accounts, so
-	/// pass `--skip governance` when using a custom root account.
+	/// a public testnet. The `governance` and `upgrade` phases always sign with the dev genesis
+	/// accounts (skip them on chains where those are unfunded), and vesting's admin steps skip
+	/// themselves when the chain's treasury is not the dev multisig.
 	#[arg(long)]
 	pub root_account: Option<String>,
 
@@ -71,14 +74,14 @@ pub struct ExerciseArgs {
 	#[arg(long)]
 	pub root_password_file: Option<String>,
 
-	/// Hard cap, in whole tokens, on what the whole run may draw from the root account. It is a
-	/// ceiling, not an allocation: accounts are funded with what the chain's deposits and fees
-	/// actually require, and phases that fund dedicated accounts sweep them back when done. The
-	/// run fails early rather than exceeding the cap. `governance` locks two chain-fixed
-	/// referendum submission deposits for the whole run, so it needs a far higher cap than the
-	/// other phases — `--skip governance` to run cheaply.
-	#[arg(long, default_value_t = 500.0)]
-	pub total_amount: f64,
+	/// Hard cap, in whole tokens, on what the run may draw from the root account (default 500).
+	/// It is a ceiling, not an allocation: every root-paid transfer, deposit and estimated fee
+	/// is reserved against it before submission, sweeps free it up again, and the run fails
+	/// rather than exceeding it. Specifying it drops the `governance` phase (unless explicitly
+	/// listed in --phases): its chain-fixed deposits dwarf any sensible cap and it is slow on
+	/// live testnets. When `governance`/`upgrade` do run, their dev-account spend is exempt.
+	#[arg(long)]
+	pub total_amount: Option<f64>,
 
 	#[arg(long)]
 	pub fail_fast: bool,
@@ -151,6 +154,14 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 	if let Some(skip) = &args.skip {
 		selected.retain(|p| !skip.contains(p));
 	}
+	// A capped run drops governance: its chain-fixed deposits dwarf any sensible cap and it is
+	// slow on live testnets. An explicit --phases listing overrides.
+	let governance_dropped = args.total_amount.is_some() &&
+		args.phases.is_none() &&
+		selected.contains(&Phase::Governance);
+	if governance_dropped {
+		selected.retain(|p| *p != Phase::Governance);
+	}
 	if selected.contains(&Phase::Upgrade) && args.upgrade_wasm.is_none() {
 		return Err(QuantusError::Generic(
 			"the upgrade phase requires --upgrade-wasm <path>".to_string(),
@@ -178,6 +189,13 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 	let client = QuantusClient::new(node_url).await?;
 	let (spec_version, _) = client.get_runtime_version().await?;
 	let mut report = Report::new(node_url, seed, spec_version, args.fail_fast);
+	if governance_dropped {
+		report.record_skip(
+			"governance",
+			"phase",
+			"dropped because --total-amount is set; pass --phases governance to force it",
+		);
+	}
 
 	let mut ctx = match setup(client, node_url, seed, &args, &selected, &mut report).await {
 		Ok(ctx) => ctx,
@@ -192,8 +210,10 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 
 	if selected.contains(&Phase::Upgrade) && !report.should_abort() {
 		let wasm = args.upgrade_wasm.clone().expect("checked above");
+		let before = ctx.free_balance(&ctx.root_ss58).await?;
 		scenarios::upgrade::run(&mut ctx, &mut report, "upgrade", &wasm, args.upgrade_timeout_secs)
 			.await?;
+		note_exempt_spend(&mut ctx, before).await?;
 
 		let upgrade_ok = report
 			.steps
@@ -211,12 +231,24 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 		}
 	}
 
-	let spend = ctx.budget_spent().await.map(|spent| {
-		format!(
-			"root account {} is down {spent} raw units of the {} allowed by --total-amount {}",
-			ctx.root_ss58, ctx.budget, args.total_amount
-		)
-	});
+	let exempt_note = if ctx.budget_exempt > 0 {
+		format!(" (plus {} exempt governance/upgrade spend)", ctx.budget_exempt)
+	} else {
+		String::new()
+	};
+	let spend = match ctx.budget_spent().await {
+		Ok(spent) if spent > ctx.budget => Err(QuantusError::Generic(format!(
+			"root account {} overspent: {spent} raw units drawn against the --total-amount cap \
+			 of {}{exempt_note}",
+			ctx.root_ss58, ctx.budget
+		))),
+		Ok(spent) => Ok(format!(
+			"root account {} is down {spent} raw units of the {} allowed by \
+			 --total-amount{exempt_note}",
+			ctx.root_ss58, ctx.budget
+		)),
+		Err(e) => Err(e),
+	};
 	report.record("budget", "root_account_spend", std::time::Duration::ZERO, spend);
 
 	finish(&report, &args)?;
@@ -248,7 +280,11 @@ async fn run_phases(
 			Phase::Multisig => scenarios::multisig::run(ctx, report, &label).await?,
 			Phase::Recovery => scenarios::recovery::run(ctx, report, &label).await?,
 			Phase::Preimage => scenarios::preimage::run(ctx, report, &label).await?,
-			Phase::Governance => scenarios::governance::run(ctx, report, &label).await?,
+			Phase::Governance => {
+				let before = ctx.free_balance(&ctx.root_ss58).await?;
+				scenarios::governance::run(ctx, report, &label).await?;
+				note_exempt_spend(ctx, before).await?;
+			},
 			Phase::Vesting => scenarios::vesting::run(ctx, report, &label).await?,
 			Phase::Negative => scenarios::negative::run(ctx, report, &label).await?,
 			Phase::Fuzz => scenarios::fuzz::run(ctx, report, &label).await?,
@@ -256,6 +292,14 @@ async fn run_phases(
 			Phase::Upgrade => {},
 		}
 	}
+	Ok(())
+}
+
+/// Exempt whatever the root account lost since `before` from the budget: the governance and
+/// upgrade phases spend chain-fixed deposits the cap deliberately does not cover.
+async fn note_exempt_spend(ctx: &mut ExerciseCtx, before: u128) -> Result<()> {
+	let after = ctx.free_balance(&ctx.root_ss58).await?;
+	ctx.budget_exempt = ctx.budget_exempt.saturating_add(before.saturating_sub(after));
 	Ok(())
 }
 
@@ -284,12 +328,15 @@ async fn setup(
 
 	let test_unit = unit / DISCRETIONARY_SCALE;
 
+	// Dev genesis identities, kept distinct from the funding account: governance, upgrade and
+	// the vesting treasury multisig are tied to them regardless of who funds the run.
+	let alice = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_alice());
 	let bob = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::dilithium_bob());
 	let charlie = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_charlie());
 
-	// Resolve the funding ("root") account. Defaults to the built-in crystal_alice dev
-	// account; a custom wallet can be supplied for public-testnet runs.
-	let (alice, root_name) = match &args.root_account {
+	// Resolve the funding ("root") account. Defaults to dev Alice; a custom wallet can be
+	// supplied for public-testnet runs.
+	let (root, root_name) = match &args.root_account {
 		Some(name) => {
 			let password = crate::wallet::password::get_wallet_password(
 				name,
@@ -303,15 +350,13 @@ async fn setup(
 		None => {
 			// Dev scenarios load crystal_* wallets by name from disk.
 			ensure_dev_wallets_on_disk().await?;
-			(
-				QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::crystal_alice()),
-				"crystal_alice".to_string(),
-			)
+			(alice.clone(), "crystal_alice".to_string())
 		},
 	};
 
 	let count = args.ephemeral_accounts.max(4);
-	let total_budget = (args.total_amount * unit as f64).round() as u128;
+	let total_tokens = args.total_amount.unwrap_or(DEFAULT_TOTAL_AMOUNT);
+	let total_budget = (total_tokens * unit as f64).round() as u128;
 
 	// The scaled discretionary base must stay above the existential deposit: the batch
 	// scenario creates fresh accounts holding `test_unit / 2`, which would be reaped below ED.
@@ -337,10 +382,9 @@ async fn setup(
 	let ephemeral_total = funding_per_account.saturating_mul(count as u128);
 	if ephemeral_total > total_budget {
 		return Err(QuantusError::Generic(format!(
-			"--total-amount {} is too low: funding {count} ephemeral accounts needs \
+			"--total-amount {total_tokens} is too low: funding {count} ephemeral accounts needs \
 			 {ephemeral_total} raw units ({funding_per_account} each to cover pallet deposits \
-			 and fees)",
-			args.total_amount
+			 and fees)"
 		)));
 	}
 	let reserve = total_budget.saturating_sub(ephemeral_total);
@@ -348,19 +392,14 @@ async fn setup(
 	// Phases that fund dedicated accounts have to fit in what is left. `locked` never comes
 	// back during the run and so accumulates; `returned` is swept back to the root account when
 	// the phase ends, so only the largest of those has to fit at once. Checked here to fail in
-	// setup with a number to act on rather than part-way through.
+	// setup with a number to act on rather than part-way through. Governance is absent: its
+	// dev-account spend is exempt from the budget.
 	let mut locked = 0u128;
 	let mut returned = 0u128;
 	let mut culprits: Vec<&str> = Vec::new();
-	if phases.contains(&Phase::Governance) {
-		// Two referendum submission deposits, chain-fixed and held until the referenda close —
-		// which the suite deliberately never does.
-		let submission_deposit =
-			constants.at(&quantus_subxt::api::constants().tech_referenda().submission_deposit())?;
-		locked = locked.saturating_add(submission_deposit.saturating_mul(2));
-		culprits.push("governance");
-	}
-	if phases.contains(&Phase::Vesting) {
+	if phases.contains(&Phase::Vesting) &&
+		scenarios::vesting::dev_treasury(&client, &alice, &bob, &charlie).await?.is_some()
+	{
 		locked = locked.saturating_add(scenarios::vesting::treasury_funding(
 			&client,
 			test_unit,
@@ -382,17 +421,16 @@ async fn setup(
 	let phase_needs = locked.saturating_add(returned);
 	if reserve < phase_needs {
 		return Err(QuantusError::Generic(format!(
-			"--total-amount {} leaves {reserve} raw units after funding the ephemeral accounts, \
-			 but the {} phase(s) need {phase_needs} ({locked} held for the whole run, \
-			 {returned} borrowed and swept back); raise --total-amount or skip phases",
-			args.total_amount,
+			"--total-amount {total_tokens} leaves {reserve} raw units after funding the \
+			 ephemeral accounts, but the {} phase(s) need {phase_needs} ({locked} held for the \
+			 whole run, {returned} borrowed and swept back); raise --total-amount or skip phases",
 			culprits.join("/")
 		)));
 	}
 
 	// Preflight: fail early with a clear message if the funder can't pay, instead of a raw
 	// "Inability to pay some fees" RPC rejection mid-run.
-	let root_ss58 = alice.try_to_account_id_ss58check()?;
+	let root_ss58 = root.try_to_account_id_ss58check()?;
 	let root_balance = crate::cli::send::get_balance(&client, &root_ss58).await?;
 	if root_balance < total_budget {
 		return Err(QuantusError::Generic(format!(
@@ -417,6 +455,7 @@ async fn setup(
 	let mut ctx = ExerciseCtx {
 		client,
 		node_url: node_url.to_string(),
+		root,
 		alice,
 		bob,
 		charlie,
@@ -424,6 +463,7 @@ async fn setup(
 		root_ss58,
 		root_start_balance: root_balance,
 		budget: total_budget,
+		budget_exempt: 0,
 		unit,
 		test_unit,
 		existential_deposit,

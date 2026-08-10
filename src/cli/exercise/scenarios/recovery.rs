@@ -45,17 +45,17 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 }
 
 async fn config_reads(ctx: &mut ExerciseCtx) -> Result<String> {
-	let alice = account_id_of(&ctx.alice)?;
+	let root = account_id_of(&ctx.root)?;
 	let latest = ctx.client.get_latest_block().await?;
 	let storage_at = ctx.client.client().storage().at(latest);
 
 	let recoverable = storage_at
-		.fetch(&quantus_subxt::api::storage().recovery().recoverable(alice.clone()))
+		.fetch(&quantus_subxt::api::storage().recovery().recoverable(root.clone()))
 		.await?;
-	let proxy = storage_at.fetch(&quantus_subxt::api::storage().recovery().proxy(alice)).await?;
+	let proxy = storage_at.fetch(&quantus_subxt::api::storage().recovery().proxy(root)).await?;
 
 	Ok(format!(
-		"recovery storage decodes: alice recoverable={}, proxy={}",
+		"recovery storage decodes: root recoverable={}, proxy={}",
 		recoverable.is_some(),
 		proxy.is_some()
 	))

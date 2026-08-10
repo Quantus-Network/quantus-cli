@@ -11,6 +11,10 @@ use rand::{rngs::StdRng, Rng};
 pub struct ExerciseCtx {
 	pub client: QuantusClient,
 	pub node_url: String,
+	/// Funding account the whole budget is drawn from (`--root-account`, default dev Alice).
+	pub root: QuantumKeyPair,
+	/// Dev genesis identities; the governance, upgrade and vesting-admin flows need them
+	/// regardless of which account funds the run.
 	pub alice: QuantumKeyPair,
 	pub bob: QuantumKeyPair,
 	pub charlie: QuantumKeyPair,
@@ -22,6 +26,9 @@ pub struct ExerciseCtx {
 	/// `--total-amount` in raw units: the hard cap on what the run may draw from the root
 	/// account. Anything swept back frees the budget up again.
 	pub budget: u128,
+	/// Root spend excluded from the cap: the governance and upgrade phases run on chain-fixed
+	/// deposits far beyond any sensible cap, so their draw is measured and exempted.
+	pub budget_exempt: u128,
 	/// One whole token in raw units. Only for the wormhole amount, which the chain puts a floor
 	/// under; everything else is either a chain constant or scaled to `test_unit`.
 	pub unit: u128,
@@ -40,11 +47,12 @@ impl ExerciseCtx {
 		ExecutionMode { finalized: false, wait_for_transaction: true }
 	}
 
-	/// Raw units drawn from the root account so far, net of anything swept back to it.
-	/// Fees the root account pays and deposits it has reserved count as spend.
+	/// Raw units drawn from the root account so far, net of anything swept back to it and of
+	/// the exempt governance/upgrade draw. Fees the root account pays and deposits it has
+	/// reserved count as spend.
 	pub async fn budget_spent(&self) -> Result<u128> {
 		let current = self.free_balance(&self.root_ss58).await?;
-		Ok(self.root_start_balance.saturating_sub(current))
+		Ok(self.root_start_balance.saturating_sub(current).saturating_sub(self.budget_exempt))
 	}
 
 	/// Refuse to draw more than `--total-amount` from the root account. Fails here, with the
@@ -61,32 +69,49 @@ impl ExerciseCtx {
 		Ok(())
 	}
 
-	/// Transfer from the root account against the run budget.
-	pub async fn fund_from_root(&self, dest_ss58: &str, amount: u128) -> Result<()> {
-		self.reserve(amount).await?;
-		crate::cli::send::transfer(
-			&self.client,
-			&self.alice,
-			dest_ss58,
-			amount,
-			None,
-			self.wait_mode(),
-		)
-		.await?;
-		Ok(())
+	/// Submit `call` signed by `from`. When `from` is the root account, the estimated fee plus
+	/// `reserved` (the value and deposits the call will draw from it) is reserved against the
+	/// budget first, keeping `--total-amount` a hard cap.
+	pub async fn submit_budgeted<Call>(
+		&self,
+		from: &QuantumKeyPair,
+		call: Call,
+		reserved: u128,
+	) -> Result<subxt::utils::H256>
+	where
+		Call: subxt::tx::Payload,
+	{
+		if from.try_to_account_id_ss58check()? == self.root_ss58 {
+			let fee =
+				crate::cli::send::estimate_transaction_partial_fee(&self.client, from, &call, None)
+					.await?;
+			self.reserve(reserved.saturating_add(fee)).await?;
+		}
+		submit_ok(self, from, call).await
 	}
 
-	/// Batched [`Self::fund_from_root`], charged against the budget as one total.
+	/// Root-signed submission with fee and `reserved` charged against the run budget.
+	pub async fn submit_from_root<Call>(
+		&self,
+		call: Call,
+		reserved: u128,
+	) -> Result<subxt::utils::H256>
+	where
+		Call: subxt::tx::Payload,
+	{
+		self.submit_budgeted(&self.root, call, reserved).await
+	}
+
+	/// Transfer from the root account against the run budget.
+	pub async fn fund_from_root(&self, dest_ss58: &str, amount: u128) -> Result<()> {
+		self.batch_fund_from_root(vec![(dest_ss58.to_string(), amount)]).await
+	}
+
+	/// Batched [`Self::fund_from_root`], charged against the budget (with its fee) as one total.
 	pub async fn batch_fund_from_root(&self, transfers: Vec<(String, u128)>) -> Result<()> {
-		self.reserve(transfers.iter().map(|(_, amount)| amount).sum()).await?;
-		crate::cli::send::batch_transfer(
-			&self.client,
-			&self.alice.clone(),
-			transfers,
-			None,
-			self.wait_mode(),
-		)
-		.await?;
+		let total = transfers.iter().map(|(_, amount)| amount).sum();
+		let call = crate::cli::send::build_batch_transfer_call(&transfers)?;
+		self.submit_from_root(call, total).await?;
 		Ok(())
 	}
 
@@ -99,7 +124,7 @@ impl ExerciseCtx {
 			return Ok(());
 		}
 		let call = quantus_subxt::api::tx().balances().transfer_all(
-			subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&self.alice)?),
+			subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&self.root)?),
 			false,
 		);
 		submit_ok(self, who, call).await?;
