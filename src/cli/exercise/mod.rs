@@ -36,6 +36,14 @@ pub struct ExerciseArgs {
 	#[arg(long)]
 	pub upgrade_wasm: Option<PathBuf>,
 
+	/// Self-upgrade smoke test: re-install the current on-chain runtime via
+	/// `authorize_upgrade_without_checks` + `apply_authorized_upgrade` (the
+	/// blob is too large for a referendum Lookup). Enables the upgrade phase;
+	/// requires a fast-governance node. Does not re-run other phases afterwards
+	/// (the runtime is unchanged).
+	#[arg(long, conflicts_with = "upgrade_wasm")]
+	pub self_upgrade: bool,
+
 	#[arg(long, default_value_t = 900)]
 	pub upgrade_timeout_secs: u64,
 
@@ -107,15 +115,15 @@ impl Phase {
 pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Result<()> {
 	let seed = args.seed.unwrap_or_else(rand::random);
 	let mut selected = args.phases.clone().unwrap_or_else(Phase::default_set);
-	if args.upgrade_wasm.is_some() && !selected.contains(&Phase::Upgrade) {
+	if (args.upgrade_wasm.is_some() || args.self_upgrade) && !selected.contains(&Phase::Upgrade) {
 		selected.push(Phase::Upgrade);
 	}
 	if let Some(skip) = &args.skip {
 		selected.retain(|p| !skip.contains(p));
 	}
-	if selected.contains(&Phase::Upgrade) && args.upgrade_wasm.is_none() {
+	if selected.contains(&Phase::Upgrade) && args.upgrade_wasm.is_none() && !args.self_upgrade {
 		return Err(QuantusError::Generic(
-			"the upgrade phase requires --upgrade-wasm <path>".to_string(),
+			"the upgrade phase requires --upgrade-wasm <path> or --self-upgrade".to_string(),
 		));
 	}
 
@@ -153,23 +161,36 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 	run_phases(&mut ctx, &mut report, &selected, "").await?;
 
 	if selected.contains(&Phase::Upgrade) && !report.should_abort() {
-		let wasm = args.upgrade_wasm.clone().expect("checked above");
-		scenarios::upgrade::run(&mut ctx, &mut report, "upgrade", &wasm, args.upgrade_timeout_secs)
+		let mode = match args.upgrade_wasm.clone() {
+			Some(wasm) => scenarios::upgrade::UpgradeMode::SetCode(wasm),
+			None => scenarios::upgrade::UpgradeMode::SelfNoop,
+		};
+		let is_real_upgrade = matches!(mode, scenarios::upgrade::UpgradeMode::SetCode(_));
+		scenarios::upgrade::run(&mut ctx, &mut report, "upgrade", mode, args.upgrade_timeout_secs)
 			.await?;
 
-		let upgrade_ok = report
-			.steps
-			.iter()
-			.filter(|s| s.phase == "upgrade")
-			.all(|s| s.status == report::StepStatus::Passed);
-		if upgrade_ok {
-			crate::log_status!("🔁 Re-running phases against the upgraded runtime…");
-			ctx.client = QuantusClient::new(node_url).await?;
-			let rerun: Vec<Phase> =
-				selected.iter().copied().filter(|p| *p != Phase::Upgrade).collect();
-			run_phases(&mut ctx, &mut report, &rerun, "post-upgrade:").await?;
-		} else {
-			report.record_skip("post-upgrade", "rerun", "skipped because the upgrade phase failed");
+		// Only a real set_code upgrade changes the runtime; the self-upgrade
+		// no-op re-installs the same blob, so a post-upgrade re-run would just
+		// burn time without covering any new code path.
+		if is_real_upgrade {
+			let upgrade_ok = report
+				.steps
+				.iter()
+				.filter(|s| s.phase == "upgrade")
+				.all(|s| s.status == report::StepStatus::Passed);
+			if upgrade_ok {
+				crate::log_status!("🔁 Re-running phases against the upgraded runtime…");
+				ctx.client = QuantusClient::new(node_url).await?;
+				let rerun: Vec<Phase> =
+					selected.iter().copied().filter(|p| *p != Phase::Upgrade).collect();
+				run_phases(&mut ctx, &mut report, &rerun, "post-upgrade:").await?;
+			} else {
+				report.record_skip(
+					"post-upgrade",
+					"rerun",
+					"skipped because the upgrade phase failed",
+				);
+			}
 		}
 	}
 
