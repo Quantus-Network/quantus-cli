@@ -635,6 +635,46 @@ fn enactment_block(
 	desired.max(approval_block.saturating_add(min_enactment_period))
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PreDecidingState {
+	Preparing { deposit_placed: bool },
+	WaitingForDecisionDeposit,
+	WaitingForTrackSlot,
+	Ready,
+}
+
+impl PreDecidingState {
+	fn enactment_estimate_reason(self) -> &'static str {
+		match self {
+			Self::Preparing { deposit_placed: false } =>
+				"until the prepare period ends, the decision deposit is placed, and Deciding starts",
+			Self::Preparing { deposit_placed: true } =>
+				"until the prepare period ends and Deciding starts",
+			Self::WaitingForDecisionDeposit =>
+				"until the decision deposit is placed and Deciding starts",
+			Self::WaitingForTrackSlot => "until a deciding slot opens and Deciding starts",
+			Self::Ready => "until Deciding starts",
+		}
+	}
+}
+
+fn pre_deciding_state(
+	prepare_end: u32,
+	current_block: u32,
+	deposit_placed: bool,
+	in_queue: bool,
+) -> PreDecidingState {
+	if in_queue {
+		PreDecidingState::WaitingForTrackSlot
+	} else if current_block < prepare_end {
+		PreDecidingState::Preparing { deposit_placed }
+	} else if !deposit_placed {
+		PreDecidingState::WaitingForDecisionDeposit
+	} else {
+		PreDecidingState::Ready
+	}
+}
+
 /// Get the status of a Tech Referendum
 async fn get_proposal_status(
 	quantus_client: &crate::chain::client::QuantusClient,
@@ -724,6 +764,12 @@ async fn get_proposal_status(
 					let prepare_end = status.submitted.saturating_add(track.prepare_period);
 					match &status.deciding {
 						None => {
+							let pre_deciding = pre_deciding_state(
+								prepare_end,
+								current_block,
+								status.decision_deposit.is_some(),
+								status.in_queue,
+							);
 							log_print!(
 								"   🧭 Phase: {} (1 of 3: Preparing → Deciding → Confirming)",
 								"Preparing".bright_yellow()
@@ -732,66 +778,36 @@ async fn get_proposal_status(
 								"      - Prepare period ends at {}",
 								format_block_eta(prepare_end, current_block, block_time_ms)
 							);
-							if status.in_queue {
-								log_print!(
-									"      - ⏳ Queued: waiting for a free deciding slot on this track"
-								);
-							}
 							log_print!("");
-							if prepare_end <= current_block {
-								if status.decision_deposit.is_none() {
-									log_print!(
-										"   ⏭️  Next phase: Deciding — prepare period complete, starts once the decision deposit is placed"
-									);
-									log_print!(
-										"      💡 Run: quantus tech-referenda place-decision-deposit --index {} --from <wallet>",
-										index
-									);
-								} else {
-									log_print!(
-										"   ⏭️  Next phase: Deciding — prepare period complete, transition is imminent"
-									);
-								}
-							} else {
-								log_print!(
+							match pre_deciding {
+								PreDecidingState::Preparing { deposit_placed } => log_print!(
 									"   ⏭️  Next phase: Deciding — earliest at {}{}",
 									format_block_eta(prepare_end, current_block, block_time_ms),
-									if status.decision_deposit.is_none() {
-										" (requires the decision deposit to be placed)"
-									} else {
+									if deposit_placed {
 										""
+									} else {
+										" (requires the decision deposit to be placed)"
 									}
-								);
+								),
+								PreDecidingState::WaitingForDecisionDeposit => {
+									log_print!(
+											"   ⏭️  Next phase: Deciding — prepare period complete, starts once the decision deposit is placed"
+										);
+									log_print!(
+											"      💡 Run: quantus tech-referenda place-decision-deposit --index {} --from <wallet>",
+											index
+										);
+								},
+								PreDecidingState::WaitingForTrackSlot => log_print!(
+										"   ⏭️  Next phase: Deciding — waiting for a free deciding slot on this track"
+									),
+								PreDecidingState::Ready => log_print!(
+										"   ⏭️  Next phase: Deciding — prepare period complete, waiting for the chain transition"
+									),
 							}
-							let deciding_start = prepare_end.max(current_block);
-							let earliest_approval =
-								deciding_start.saturating_add(track.confirm_period);
-							let latest_approval = deciding_start
-								.saturating_add(track.decision_period)
-								.saturating_add(track.confirm_period);
 							log_print!(
-								"   🏁 Earliest enactment: {} (confirmation starts as soon as deciding begins)",
-								format_block_eta(
-									enactment_block(
-										&status.enactment,
-										earliest_approval,
-										track.min_enactment_period
-									),
-									current_block,
-									block_time_ms
-								)
-							);
-							log_print!(
-								"   🏁 Latest enactment: {} (confirmation only starts at the decision deadline)",
-								format_block_eta(
-									enactment_block(
-										&status.enactment,
-										latest_approval,
-										track.min_enactment_period
-									),
-									current_block,
-									block_time_ms
-								)
+								"   🏁 Enactment estimate: unavailable {}",
+								pre_deciding.enactment_estimate_reason()
 							);
 						},
 						Some(deciding) => match deciding.confirming {
@@ -1045,4 +1061,31 @@ async fn refund_decision_deposit(
 	log_success!("🎉 {} Decision deposit refunded!", "FINISHED".bright_green().bold());
 	log_print!("💡 Check your balance to confirm the refund");
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::{pre_deciding_state, PreDecidingState};
+
+	#[test]
+	fn missing_deposit_blocks_pre_deciding_enactment_estimate() {
+		let state = pre_deciding_state(100, 100, false, false);
+
+		assert_eq!(state, PreDecidingState::WaitingForDecisionDeposit);
+		assert_eq!(
+			state.enactment_estimate_reason(),
+			"until the decision deposit is placed and Deciding starts"
+		);
+	}
+
+	#[test]
+	fn queued_referendum_blocks_pre_deciding_enactment_estimate() {
+		let state = pre_deciding_state(100, 200, true, true);
+
+		assert_eq!(state, PreDecidingState::WaitingForTrackSlot);
+		assert_eq!(
+			state.enactment_estimate_reason(),
+			"until a deciding slot opens and Deciding starts"
+		);
+	}
 }
