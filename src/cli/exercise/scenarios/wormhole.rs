@@ -7,6 +7,13 @@ use crate::{
 	wallet::{DilithiumScheme, WalletManager},
 };
 
+/// Whole tokens the multiround partitions across its proofs. Not scaled by
+/// `DISCRETIONARY_SCALE`: each round re-partitions the amount across `num_proofs` and deducts
+/// fees, so a scaled-down amount rounds an output below the on-chain minimum in a later round
+/// and emits no transfer event. The amount exits back to the wallet and is swept to the root
+/// account afterwards, so the run only borrows it.
+const MULTIROUND_AMOUNT_TOKENS: f64 = 50.0;
+
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
 	// Split the two runs across both signature schemes *and* both wormhole
 	// extrinsics: the private run submits Wormhole::verify_private_batch, the
@@ -52,33 +59,40 @@ async fn multiround(
 		.await?;
 
 	let run_result = async {
-		// Drawn from the root account, not the --total-amount budget, and never scaled by
-		// DISCRETIONARY_SCALE: the wormhole round-trips its amount back to this wallet.
-		let funding = 500 * ctx.unit;
-		crate::cli::send::transfer(
-			&ctx.client,
-			&ctx.alice,
-			&info.address,
-			funding,
-			None,
-			ctx.wait_mode(),
-		)
-		.await?;
+		ctx.fund_from_root(&info.address, required_funding(ctx.unit)).await?;
 		run_multiround_command(ctx, &wallet_name, scheme, public).await
 	}
 	.await;
 
-	let delete_result = manager.delete_wallet(&wallet_name);
-	match (run_result, delete_result) {
-		(Ok(msg), Ok(_)) => Ok(msg),
-		(Ok(_), Err(e)) => Err(QuantusError::Generic(format!(
-			"wormhole exercise succeeded but failed to delete wallet {wallet_name}: {e}"
-		))),
-		(Err(e), Ok(_)) => Err(e),
-		(Err(e), Err(del_e)) => Err(QuantusError::Generic(format!(
-			"{e}; also failed to delete exercise wallet {wallet_name}: {del_e}"
-		))),
+	// The multiround exits back to this wallet, so return what is left to the root account
+	// before the wallet is deleted — otherwise the funding is stranded and the budget is gone.
+	let sweep_result = async {
+		let wallet = manager.load_wallet(&wallet_name, "")?;
+		ctx.sweep_to_root(&wallet.keypair).await
 	}
+	.await;
+	let run_result = combine(run_result, sweep_result, "failed to sweep the exercise wallet");
+
+	let delete_result = manager.delete_wallet(&wallet_name).map(|_| ());
+	combine(run_result, delete_result, &format!("failed to delete exercise wallet {wallet_name}"))
+}
+
+/// Keep `primary`'s outcome, but never lose a cleanup failure.
+fn combine(primary: Result<String>, cleanup: Result<()>, what: &str) -> Result<String> {
+	match (primary, cleanup) {
+		(Ok(msg), Ok(())) => Ok(msg),
+		(Ok(_), Err(e)) =>
+			Err(QuantusError::Generic(format!("wormhole exercise succeeded but {what}: {e}"))),
+		(Err(e), Ok(())) => Err(e),
+		(Err(e), Err(cleanup_err)) =>
+			Err(QuantusError::Generic(format!("{e}; also {what}: {cleanup_err}"))),
+	}
+}
+
+/// Raw units the wormhole wallet has to hold: the multiround amount plus headroom for the
+/// per-round haircut and the transaction fees of every round.
+pub fn required_funding(unit: u128) -> u128 {
+	((MULTIROUND_AMOUNT_TOKENS * unit as f64) as u128).saturating_add(2 * unit)
 }
 
 async fn run_multiround_command(
@@ -90,10 +104,7 @@ async fn run_multiround_command(
 	let command = crate::cli::wormhole::WormholeCommands::Multiround {
 		num_proofs: 5,
 		rounds: 5,
-		// Never scaled: each round re-partitions across `num_proofs` and deducts fees, so a
-		// scaled-down amount rounds an output below the on-chain minimum in a later round
-		// and emits no transfer event. 50 DEV is the proven value.
-		amount: 50.0,
+		amount: MULTIROUND_AMOUNT_TOKENS,
 		wallet: wallet_name.to_string(),
 		password: None,
 		password_file: None,

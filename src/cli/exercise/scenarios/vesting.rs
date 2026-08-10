@@ -89,7 +89,7 @@ async fn create_requires_admin(ctx: &mut ExerciseCtx) -> Result<String> {
 		now,
 		now,
 		now + DAY_MS,
-		5 * ctx.unit,
+		5 * ctx.test_unit,
 	);
 	// Alice alone is not the treasury; only Root or Signed(treasury) may create.
 	let alice = ctx.alice.clone();
@@ -100,8 +100,9 @@ async fn create_requires_admin(ctx: &mut ExerciseCtx) -> Result<String> {
 /// permissionlessly from a third party and verify the beneficiary got paid.
 async fn admin_create_and_claim(ctx: &mut ExerciseCtx) -> Result<String> {
 	let treasury = ensure_treasury_multisig(ctx).await?;
-	let total = 5 * ctx.unit;
-	fund_treasury(ctx, &treasury, 20 * ctx.unit).await?;
+	let total = schedule_total(&ctx.client, ctx.test_unit)?;
+	let target = treasury_funding(&ctx.client, ctx.test_unit, ctx.existential_deposit)?;
+	fund_treasury(ctx, &treasury, target).await?;
 
 	let now = chain_now_ms(ctx).await?;
 	let beneficiary = ctx.eph[0].clone();
@@ -181,8 +182,9 @@ async fn admin_create_and_claim(ctx: &mut ExerciseCtx) -> Result<String> {
 /// early and verify the pot returns the unvested funds.
 async fn retarget_and_end(ctx: &mut ExerciseCtx) -> Result<String> {
 	let treasury = ensure_treasury_multisig(ctx).await?;
-	let total = 5 * ctx.unit;
-	fund_treasury(ctx, &treasury, 20 * ctx.unit).await?;
+	let total = schedule_total(&ctx.client, ctx.test_unit)?;
+	let target = treasury_funding(&ctx.client, ctx.test_unit, ctx.existential_deposit)?;
+	fund_treasury(ctx, &treasury, target).await?;
 
 	let now = chain_now_ms(ctx).await?;
 	let pot_ss58 = pot_account_ss58();
@@ -333,6 +335,34 @@ async fn ensure_treasury_multisig(ctx: &mut ExerciseCtx) -> Result<SubxtAccountI
 }
 
 /// Top the treasury up from Alice so `create_schedule` can move funds into the pot.
+/// Smallest schedule the chain accepts at the suite's test scale: at least `MinimumPayout`,
+/// rounded up to a whole `PayoutQuantum` so the pallet's alignment check passes.
+pub fn schedule_total(
+	client: &crate::chain::client::QuantusClient,
+	test_unit: u128,
+) -> Result<u128> {
+	let constants = client.client().constants();
+	let payout_quantum =
+		constants.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
+	let minimum_payout =
+		constants.at(&quantus_subxt::api::constants().vesting().minimum_payout())?;
+	if payout_quantum == 0 {
+		return Err(QuantusError::Generic("vesting PayoutQuantum is zero".to_string()));
+	}
+	Ok((5 * test_unit).max(minimum_payout).div_ceil(payout_quantum) * payout_quantum)
+}
+
+/// Balance the treasury multisig is topped up to. Unlike the other dedicated accounts this one
+/// is a multisig and is not swept back, so it stays spent for the rest of the run.
+pub fn treasury_funding(
+	client: &crate::chain::client::QuantusClient,
+	test_unit: u128,
+	existential_deposit: u128,
+) -> Result<u128> {
+	Ok(4 * schedule_total(client, test_unit)? + existential_deposit)
+}
+
+/// Top the treasury multisig up to `target_free`, charged against the run budget.
 async fn fund_treasury(
 	ctx: &mut ExerciseCtx,
 	treasury: &SubxtAccountId32,
@@ -343,16 +373,7 @@ async fn fund_treasury(
 	if free >= target_free {
 		return Ok(());
 	}
-	crate::cli::send::transfer(
-		&ctx.client,
-		&ctx.alice.clone(),
-		&treasury_ss58,
-		target_free - free,
-		None,
-		ctx.wait_mode(),
-	)
-	.await?;
-	Ok(())
+	ctx.fund_from_root(&treasury_ss58, target_free - free).await
 }
 
 /// Dispatch a call as `Signed(treasury)` through the multisig pallet:

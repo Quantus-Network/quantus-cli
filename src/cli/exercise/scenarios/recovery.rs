@@ -12,6 +12,31 @@ use crate::{
 };
 use subxt::ext::subxt_core::utils::MultiAddress;
 
+/// Dedicated accounts the lifecycle funds: the lost account, the rescuer and one friend.
+pub const LIFECYCLE_ACCOUNTS: u128 = 3;
+
+/// What each of those accounts needs, sized from the chain's own recovery deposits (the config
+/// deposit for one friend, and the rescuer's recovery deposit) so the phase fits the run budget
+/// on any chain. All of it is swept back to the root account once the deposits are released.
+pub fn account_funding(
+	client: &crate::chain::client::QuantusClient,
+	existential_deposit: u128,
+	test_unit: u128,
+) -> Result<u128> {
+	let constants = client.client().constants();
+	let config_deposit = constants
+		.at(&quantus_subxt::api::constants().recovery().config_deposit_base())?
+		.saturating_add(
+			constants.at(&quantus_subxt::api::constants().recovery().friend_deposit_factor())?,
+		);
+	let recovery_deposit =
+		constants.at(&quantus_subxt::api::constants().recovery().recovery_deposit())?;
+	Ok(config_deposit
+		.max(recovery_deposit)
+		.saturating_add(existential_deposit)
+		.saturating_add(20 * test_unit))
+}
+
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
 	exercise_step!(report, phase, "config_reads", config_reads(ctx));
 	exercise_step!(report, phase, "initiate_not_recoverable", initiate_not_recoverable(ctx));
@@ -63,20 +88,13 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	let rescuer = ctx.fresh_keypair()?;
 	let friend = ctx.fresh_keypair()?;
 
-	let funding = 200 * ctx.unit;
+	let funding = account_funding(&ctx.client, ctx.existential_deposit, ctx.test_unit)?;
 	let transfers = vec![
 		(lost.try_to_account_id_ss58check()?, funding),
 		(rescuer.try_to_account_id_ss58check()?, funding),
 		(friend.try_to_account_id_ss58check()?, funding),
 	];
-	crate::cli::send::batch_transfer(
-		&ctx.client,
-		&ctx.alice.clone(),
-		transfers,
-		None,
-		ctx.wait_mode(),
-	)
-	.await?;
+	ctx.batch_fund_from_root(transfers).await?;
 
 	let lost_id = account_id_of(&lost)?;
 	let rescuer_id = account_id_of(&rescuer)?;
@@ -114,7 +132,7 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	// 5. Dispatch as the recovered account: move funds out of `lost`.
 	// The rescuer signs and pays fees, so the *lost* account's balance is the
 	// one that changes by exactly the transferred amount.
-	let drained = 10 * ctx.unit;
+	let drained = 10 * ctx.test_unit;
 	let lost_ss58 = lost.try_to_account_id_ss58check()?;
 	let lost_before = ctx.free_balance(&lost_ss58).await?;
 	let inner = {
@@ -175,6 +193,11 @@ async fn full_lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 		return Err(QuantusError::Generic(
 			"remove_recovery succeeded but the recovery config is still present".to_string(),
 		));
+	}
+
+	// All deposits are released by now; hand the funding back to the run budget.
+	for account in [&lost, &rescuer, &friend] {
+		ctx.sweep_to_root(account).await?;
 	}
 
 	Ok("full recovery lifecycle: create, initiate, vouch, claim, as_recovered \

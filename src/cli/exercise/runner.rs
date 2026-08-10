@@ -1,7 +1,7 @@
 //! Shared context and helpers for exercise scenarios.
 
 use crate::{
-	chain::client::QuantusClient,
+	chain::{client::QuantusClient, quantus_subxt},
 	cli::common::{ExecutionMode, SubxtAccountId32},
 	error::{QuantusError, Result},
 	wallet::{DilithiumScheme, QuantumKeyPair},
@@ -15,8 +15,15 @@ pub struct ExerciseCtx {
 	pub bob: QuantumKeyPair,
 	pub charlie: QuantumKeyPair,
 	pub eph: Vec<QuantumKeyPair>,
-	/// One whole token in raw units. Only for amounts funded straight from the root account,
-	/// which is separate from the `--total-amount` budget.
+	/// SS58 of the root (funding) account.
+	pub root_ss58: String,
+	/// Root balance at the start of the run; spend is measured as the drop from it.
+	pub root_start_balance: u128,
+	/// `--total-amount` in raw units: the hard cap on what the run may draw from the root
+	/// account. Anything swept back frees the budget up again.
+	pub budget: u128,
+	/// One whole token in raw units. Only for the wormhole amount, which the chain puts a floor
+	/// under; everything else is either a chain constant or scaled to `test_unit`.
 	pub unit: u128,
 	/// Scaled-down base for discretionary test amounts (`unit / DISCRETIONARY_SCALE`) spent by
 	/// the budgeted ephemeral accounts. Fixed chain amounts (existential deposit, pallet
@@ -31,6 +38,72 @@ pub struct ExerciseCtx {
 impl ExerciseCtx {
 	pub fn wait_mode(&self) -> ExecutionMode {
 		ExecutionMode { finalized: false, wait_for_transaction: true }
+	}
+
+	/// Raw units drawn from the root account so far, net of anything swept back to it.
+	/// Fees the root account pays and deposits it has reserved count as spend.
+	pub async fn budget_spent(&self) -> Result<u128> {
+		let current = self.free_balance(&self.root_ss58).await?;
+		Ok(self.root_start_balance.saturating_sub(current))
+	}
+
+	/// Refuse to draw more than `--total-amount` from the root account. Fails here, with the
+	/// numbers, rather than mid-scenario on an "Inability to pay some fees" rejection.
+	pub async fn reserve(&self, amount: u128) -> Result<()> {
+		let spent = self.budget_spent().await?;
+		if spent.saturating_add(amount) > self.budget {
+			return Err(QuantusError::Generic(format!(
+				"--total-amount exhausted: {spent} of {} raw units already drawn from the root \
+				 account and this step needs {amount} more; raise --total-amount or skip phases",
+				self.budget
+			)));
+		}
+		Ok(())
+	}
+
+	/// Transfer from the root account against the run budget.
+	pub async fn fund_from_root(&self, dest_ss58: &str, amount: u128) -> Result<()> {
+		self.reserve(amount).await?;
+		crate::cli::send::transfer(
+			&self.client,
+			&self.alice,
+			dest_ss58,
+			amount,
+			None,
+			self.wait_mode(),
+		)
+		.await?;
+		Ok(())
+	}
+
+	/// Batched [`Self::fund_from_root`], charged against the budget as one total.
+	pub async fn batch_fund_from_root(&self, transfers: Vec<(String, u128)>) -> Result<()> {
+		self.reserve(transfers.iter().map(|(_, amount)| amount).sum()).await?;
+		crate::cli::send::batch_transfer(
+			&self.client,
+			&self.alice.clone(),
+			transfers,
+			None,
+			self.wait_mode(),
+		)
+		.await?;
+		Ok(())
+	}
+
+	/// Empty `who` back into the root account, returning what it held to the budget. Reaps the
+	/// account, so only call it once the scenario is done with it.
+	pub async fn sweep_to_root(&self, who: &QuantumKeyPair) -> Result<()> {
+		// Nothing to give back — the account was never funded, or a failed step already emptied
+		// it. `transfer_all` would only fail on a non-existent account.
+		if self.free_balance(&who.try_to_account_id_ss58check()?).await? == 0 {
+			return Ok(());
+		}
+		let call = quantus_subxt::api::tx().balances().transfer_all(
+			subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&self.alice)?),
+			false,
+		);
+		submit_ok(self, who, call).await?;
+		Ok(())
 	}
 
 	/// Fresh keypair using an explicit Dilithium scheme.

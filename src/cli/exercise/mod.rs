@@ -15,12 +15,19 @@ use report::Report;
 use runner::ExerciseCtx;
 use std::path::PathBuf;
 
-/// Divisor applied to every *discretionary* token amount the budgeted ephemeral accounts spend
-/// (transfers, multisig funding, …) so the suite can run on a small budget. Fixed, chain-imposed
-/// amounts (existential deposit, multisig/preimage/governance deposits) are read from the chain
-/// and never scaled, and neither are amounts funded straight from the root account
-/// (`recovery`, `vesting`, `wormhole`).
+/// Divisor applied to every *discretionary* token amount the scenarios move (transfers, multisig
+/// funding, …) so the suite runs on a small budget. Fixed, chain-imposed amounts (existential
+/// deposit, recovery/multisig/vesting/governance deposits) are read from the chain and never
+/// scaled — nor is the wormhole amount, which the chain puts a floor under.
 pub(crate) const DISCRETIONARY_SCALE: u128 = 100;
+
+/// Discretionary `test_unit`s an ephemeral account is expected to move across all phases. The
+/// largest single draws are the dedicated-account fundings (20 each in balances, reversible and
+/// multisig) and the fuzz loop, whose random amounts reach 100 `test_unit`s.
+const TEST_UNITS_PER_ACCOUNT: u128 = 300;
+/// Multisig proposals an ephemeral account makes across the run; each reserves a deposit
+/// (returned on execute or cancel) and pays the proposal and multisig fees.
+const MULTISIG_PROPOSALS_PER_ACCOUNT: u128 = 2;
 
 #[derive(Args, Debug)]
 pub struct ExerciseArgs {
@@ -64,13 +71,13 @@ pub struct ExerciseArgs {
 	#[arg(long)]
 	pub root_password_file: Option<String>,
 
-	/// Total budget, in whole tokens, drawn from the root account to fund the ephemeral test
-	/// accounts (split evenly across them). Fixed chain deposits (existential deposit,
-	/// multisig/preimage deposits) are covered on top and are not scaled; discretionary test
-	/// transfers are scaled down internally so a small budget suffices. The `recovery`,
-	/// `vesting` and `wormhole` phases fund dedicated accounts from the root account on top
-	/// of this budget.
-	#[arg(long, default_value_t = 40.0)]
+	/// Hard cap, in whole tokens, on what the whole run may draw from the root account. It is a
+	/// ceiling, not an allocation: accounts are funded with what the chain's deposits and fees
+	/// actually require, and phases that fund dedicated accounts sweep them back when done. The
+	/// run fails early rather than exceeding the cap. `governance` locks two chain-fixed
+	/// referendum submission deposits for the whole run, so it needs a far higher cap than the
+	/// other phases — `--skip governance` to run cheaply.
+	#[arg(long, default_value_t = 500.0)]
 	pub total_amount: f64,
 
 	#[arg(long)]
@@ -172,7 +179,7 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 	let (spec_version, _) = client.get_runtime_version().await?;
 	let mut report = Report::new(node_url, seed, spec_version, args.fail_fast);
 
-	let mut ctx = match setup(client, node_url, seed, &args, &mut report).await {
+	let mut ctx = match setup(client, node_url, seed, &args, &selected, &mut report).await {
 		Ok(ctx) => ctx,
 		Err(e) => {
 			report.record("setup", "setup", std::time::Duration::ZERO, Err(e));
@@ -203,6 +210,14 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 			report.record_skip("post-upgrade", "rerun", "skipped because the upgrade phase failed");
 		}
 	}
+
+	let spend = ctx.budget_spent().await.map(|spent| {
+		format!(
+			"root account {} is down {spent} raw units of the {} allowed by --total-amount {}",
+			ctx.root_ss58, ctx.budget, args.total_amount
+		)
+	});
+	report.record("budget", "root_account_spend", std::time::Duration::ZERO, spend);
 
 	finish(&report, &args)?;
 	if report.has_failures() {
@@ -257,6 +272,7 @@ async fn setup(
 	node_url: &str,
 	seed: u64,
 	args: &ExerciseArgs,
+	phases: &[Phase],
 	report: &mut Report,
 ) -> Result<ExerciseCtx> {
 	let started = std::time::Instant::now();
@@ -296,7 +312,6 @@ async fn setup(
 
 	let count = args.ephemeral_accounts.max(4);
 	let total_budget = (args.total_amount * unit as f64).round() as u128;
-	let funding_per_account = total_budget.checked_div(count as u128).unwrap_or(0);
 
 	// The scaled discretionary base must stay above the existential deposit: the batch
 	// scenario creates fresh accounts holding `test_unit / 2`, which would be reaped below ED.
@@ -306,16 +321,72 @@ async fn setup(
 			 ({existential_deposit}) for the built-in test scale (÷{DISCRETIONARY_SCALE})"
 		)));
 	}
-	// Each ephemeral account must also cover fixed deposits (multisig, preimage) plus its
-	// scaled discretionary spend and fees. Guard against an obviously-too-small budget.
-	let min_per_account = existential_deposit
+
+	// Fund each ephemeral account with what it actually needs — the deposits and fees the chain
+	// charges it, plus its scaled discretionary spend — rather than a share of the budget, so
+	// --total-amount stays a ceiling the run never has to reach.
+	let constants = client.client().constants();
+	let per_proposal = constants
+		.at(&quantus_subxt::api::constants().multisig().proposal_deposit())?
+		.saturating_add(constants.at(&quantus_subxt::api::constants().multisig().proposal_fee())?)
+		.saturating_add(constants.at(&quantus_subxt::api::constants().multisig().multisig_fee())?);
+	let funding_per_account = existential_deposit
 		.saturating_mul(2)
-		.saturating_add(test_unit.saturating_mul(30));
-	if funding_per_account < min_per_account {
+		.saturating_add(test_unit.saturating_mul(TEST_UNITS_PER_ACCOUNT))
+		.saturating_add(per_proposal.saturating_mul(MULTISIG_PROPOSALS_PER_ACCOUNT));
+	let ephemeral_total = funding_per_account.saturating_mul(count as u128);
+	if ephemeral_total > total_budget {
 		return Err(QuantusError::Generic(format!(
-			"--total-amount {} is too low: only {funding_per_account} raw units per account \
-			 across {count} accounts (need at least {min_per_account} each to cover deposits)",
+			"--total-amount {} is too low: funding {count} ephemeral accounts needs \
+			 {ephemeral_total} raw units ({funding_per_account} each to cover pallet deposits \
+			 and fees)",
 			args.total_amount
+		)));
+	}
+	let reserve = total_budget.saturating_sub(ephemeral_total);
+
+	// Phases that fund dedicated accounts have to fit in what is left. `locked` never comes
+	// back during the run and so accumulates; `returned` is swept back to the root account when
+	// the phase ends, so only the largest of those has to fit at once. Checked here to fail in
+	// setup with a number to act on rather than part-way through.
+	let mut locked = 0u128;
+	let mut returned = 0u128;
+	let mut culprits: Vec<&str> = Vec::new();
+	if phases.contains(&Phase::Governance) {
+		// Two referendum submission deposits, chain-fixed and held until the referenda close —
+		// which the suite deliberately never does.
+		let submission_deposit =
+			constants.at(&quantus_subxt::api::constants().tech_referenda().submission_deposit())?;
+		locked = locked.saturating_add(submission_deposit.saturating_mul(2));
+		culprits.push("governance");
+	}
+	if phases.contains(&Phase::Vesting) {
+		locked = locked.saturating_add(scenarios::vesting::treasury_funding(
+			&client,
+			test_unit,
+			existential_deposit,
+		)?);
+		culprits.push("vesting");
+	}
+	if phases.contains(&Phase::Recovery) {
+		let recovery =
+			scenarios::recovery::account_funding(&client, existential_deposit, test_unit)?
+				.saturating_mul(scenarios::recovery::LIFECYCLE_ACCOUNTS);
+		returned = returned.max(recovery);
+		culprits.push("recovery");
+	}
+	if phases.contains(&Phase::Wormhole) {
+		returned = returned.max(scenarios::wormhole::required_funding(unit));
+		culprits.push("wormhole");
+	}
+	let phase_needs = locked.saturating_add(returned);
+	if reserve < phase_needs {
+		return Err(QuantusError::Generic(format!(
+			"--total-amount {} leaves {reserve} raw units after funding the ephemeral accounts, \
+			 but the {} phase(s) need {phase_needs} ({locked} held for the whole run, \
+			 {returned} borrowed and swept back); raise --total-amount or skip phases",
+			args.total_amount,
+			culprits.join("/")
 		)));
 	}
 
@@ -336,7 +407,8 @@ async fn setup(
 		started.elapsed(),
 		Ok(format!(
 			"connected to {node_url}; token {symbol} ({decimals} decimals), ED {existential_deposit}; \
-			 funder {root_name} ({root_balance} raw), funding {count} accounts with {funding_per_account} each"
+			 funder {root_name} ({root_balance} raw), budget {total_budget}: {funding_per_account} \
+			 to each of {count} accounts, {reserve} reserve"
 		)),
 	);
 
@@ -349,6 +421,9 @@ async fn setup(
 		bob,
 		charlie,
 		eph: Vec::new(),
+		root_ss58,
+		root_start_balance: root_balance,
+		budget: total_budget,
 		unit,
 		test_unit,
 		existential_deposit,
@@ -405,14 +480,7 @@ async fn fund_ephemeral_accounts(
 
 	let transfers: Vec<(String, u128)> =
 		addresses.iter().map(|a| (a.clone(), funding_per_account)).collect();
-	crate::cli::send::batch_transfer(
-		&ctx.client,
-		&ctx.alice.clone(),
-		transfers,
-		None,
-		ctx.wait_mode(),
-	)
-	.await?;
+	ctx.batch_fund_from_root(transfers).await?;
 
 	let mut reused = 0usize;
 	for (address, before) in addresses.iter().zip(&balances_before) {

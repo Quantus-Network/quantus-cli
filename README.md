@@ -573,19 +573,19 @@ quantus call \
 `quantus exercise` runs a live-node smoke/fuzz suite against a node — reads, balances,
 utility, reversible transfers, multisig, recovery, preimage, governance, vesting, negative
 cases, a seeded fuzz loop, and wormhole round-trips. It derives a handful of ephemeral
-accounts, funds them
-from a **root account**, drives each pallet, and verifies on-chain state as it goes. Intended
-for CI and post-upgrade validation.
+accounts, funds them from a **root account**, drives each pallet, and verifies on-chain state
+as it goes. Intended for CI and post-upgrade validation.
 
 ```bash
 # Against a local dev node — crystal_alice is genesis-funded, so every phase runs
 quantus exercise
 
-# Against a public testnet: fund from your own wallet, on a small budget, and skip
-# governance (that phase needs the dev genesis tech-collective accounts)
+# Against a public testnet: fund from your own wallet, spending no more than 100 tokens,
+# and skip governance (that phase needs the dev genesis tech-collective accounts, and its
+# referendum deposits alone are far larger than the rest of the suite)
 quantus exercise \
   --root-account my-wallet --root-password <pw> \
-  --total-amount 40 --skip governance \
+  --total-amount 100 --skip governance \
   --node-url wss://a1-planck.quantus.cat
 
 # Run only specific phases, or skip the CPU-heavy wormhole phase
@@ -602,7 +602,7 @@ Key flags:
 |------|---------|-------------|
 | `--root-account <NAME>` | `crystal_alice` | Wallet that funds the run. Supply your own to run against a public testnet. |
 | `--root-password <PW>` / `--root-password-file <PATH>` | — | Password for the root wallet (or set `QUANTUS_WALLET_PASSWORD_<NAME>`). |
-| `--total-amount <TOKENS>` | `40` | Total budget drawn from the root account, split evenly across the ephemeral accounts. Discretionary test amounts are scaled to fit; fixed chain deposits (existential deposit, multisig/preimage/governance) are always covered on top. |
+| `--total-amount <TOKENS>` | `500` | Hard cap on what the whole run may draw from the root account. A ceiling, not an allocation — see below. |
 | `--ephemeral-accounts <N>` | `4` | Number of ephemeral accounts to derive and fund. |
 | `--phases <LIST>` / `--skip <LIST>` | all | Comma-separated phases to run / skip. |
 | `--seed <N>` | random | Reproducible fuzz seed. |
@@ -611,15 +611,31 @@ Key flags:
 | `--fail-fast` | off | Stop at the first failed step. |
 | `--json` | off | Emit the final report as JSON. |
 
+#### What the run spends
+
+`--total-amount` is a hard cap on the root account's balance drop, enforced for the whole run,
+not just the initial funding: every transfer out of the root account is checked against it
+first and the run fails with the numbers rather than exceeding it. The final report ends with
+a `budget / root_account_spend` line stating what was actually spent.
+
+It is a ceiling, not an allocation. Ephemeral accounts are funded with what the chain's own
+deposits and fees require, not with a share of the cap, and the phases that fund dedicated
+accounts — `recovery` and `wormhole` — sweep them back into the root account when they are
+done, so their funding is borrowed rather than spent. Discretionary test transfers are scaled
+down by a fixed factor on top of that; chain-imposed amounts (existential deposit, multisig,
+recovery, vesting and governance deposits) are read from the chain and never scaled.
+
 > **Notes:**
-> - The `governance` phase relies on the dev genesis tech-collective accounts, so pass
->   `--skip governance` when using a custom `--root-account` on a public testnet.
-> - The `wormhole` phase is CPU-heavy (ZK proving) — use `--skip wormhole` for a faster run.
-> - `recovery`, `vesting` and `wormhole` fund their own dedicated accounts straight from the
->   root account, on top of `--total-amount` (roughly 1600 tokens for a full run). Skip them
->   or fund the root account accordingly when running on a public testnet.
-> - The suite fails fast in setup with a clear message if the root account can't cover
->   `--total-amount` or the budget is too low for the fixed deposits.
+> - `governance` submits two referenda, and their submission deposits stay locked for the whole
+>   run — on the order of hundreds of tokens, dwarfing every other phase. It also relies on the
+>   dev genesis tech-collective accounts. Pass `--skip governance` for a cheap run or a custom
+>   `--root-account` on a public testnet.
+> - The `wormhole` phase is CPU-heavy (ZK proving) — use `--skip wormhole` for a faster run. Its
+>   amount is fixed by an on-chain minimum and cannot be scaled down, so it needs ~52 tokens of
+>   headroom at once (returned afterwards).
+> - Setup fails fast, with the numbers, if the root account can't cover `--total-amount`, if the
+>   cap is too low to fund the ephemeral accounts, or if a selected phase needs more headroom
+>   than the cap leaves.
 
 ### Other Commands
 
