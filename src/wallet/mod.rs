@@ -57,8 +57,20 @@ fn pair_from_master_seed(seed: &[u8], scheme: DilithiumScheme) -> Result<Quantum
 	}
 }
 
-/// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'
+/// Default derivation path for ML-DSA-87 (and legacy) Quantus wallets.
 pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0'/0'";
+
+/// Default derivation path for ML-DSA-65 wallets. Last index differs from
+/// [`DEFAULT_DERIVATION_PATH`] so the two schemes never collide for the same mnemonic.
+pub const DEFAULT_DERIVATION_PATH_ML_DSA_65: &str = "m/44'/189189'/0'/0'/1'";
+
+/// Scheme-specific default HD path: ML-DSA-65 → `.../1'`, ML-DSA-87 → `.../0'`.
+pub fn default_derivation_path(scheme: DilithiumScheme) -> &'static str {
+	match scheme {
+		DilithiumScheme::MlDsa65 => DEFAULT_DERIVATION_PATH_ML_DSA_65,
+		DilithiumScheme::MlDsa87 => DEFAULT_DERIVATION_PATH,
+	}
+}
 
 /// Wallet information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,7 +124,7 @@ impl WalletManager {
 		self.create_wallet_with_scheme(
 			name,
 			password,
-			DEFAULT_DERIVATION_PATH,
+			default_derivation_path(DilithiumScheme::MlDsa65),
 			DilithiumScheme::MlDsa65,
 		)
 		.await
@@ -298,7 +310,7 @@ impl WalletManager {
 			name,
 			mnemonic,
 			password,
-			DEFAULT_DERIVATION_PATH,
+			default_derivation_path(DilithiumScheme::MlDsa65),
 			DilithiumScheme::MlDsa65,
 		)
 		.await
@@ -1043,6 +1055,53 @@ mod tests {
 			.expect("Failed to import wallet again");
 
 		assert_eq!(imported_wallet.address, imported_wallet2.address);
+	}
+
+	#[test]
+	fn default_derivation_path_is_scheme_specific() {
+		assert_eq!(default_derivation_path(DilithiumScheme::MlDsa87), DEFAULT_DERIVATION_PATH);
+		assert_eq!(
+			default_derivation_path(DilithiumScheme::MlDsa65),
+			DEFAULT_DERIVATION_PATH_ML_DSA_65
+		);
+		assert_ne!(DEFAULT_DERIVATION_PATH, DEFAULT_DERIVATION_PATH_ML_DSA_65);
+		assert!(DEFAULT_DERIVATION_PATH.ends_with("/0'"));
+		assert!(DEFAULT_DERIVATION_PATH_ML_DSA_65.ends_with("/1'"));
+	}
+
+	#[tokio::test]
+	async fn default_paths_separate_schemes_for_same_mnemonic() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
+
+		let wallet_65 = wallet_manager
+			.import_wallet_with_scheme(
+				"scheme-65",
+				mnemonic,
+				None,
+				default_derivation_path(DilithiumScheme::MlDsa65),
+				DilithiumScheme::MlDsa65,
+			)
+			.await
+			.expect("import 65");
+		let wallet_87 = wallet_manager
+			.import_wallet_with_scheme(
+				"scheme-87",
+				mnemonic,
+				None,
+				default_derivation_path(DilithiumScheme::MlDsa87),
+				DilithiumScheme::MlDsa87,
+			)
+			.await
+			.expect("import 87");
+
+		assert_eq!(wallet_65.derivation_path, DEFAULT_DERIVATION_PATH_ML_DSA_65);
+		assert_eq!(wallet_87.derivation_path, DEFAULT_DERIVATION_PATH);
+		assert_ne!(
+			wallet_65.address, wallet_87.address,
+			"scheme-specific default paths must not collide for the same mnemonic"
+		);
 	}
 
 	#[tokio::test]

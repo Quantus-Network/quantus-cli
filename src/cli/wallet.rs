@@ -5,8 +5,9 @@ use crate::{
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 	wallet::{
+		default_derivation_path,
 		password::{get_mnemonic_from_user, get_new_wallet_password},
-		DilithiumScheme, WalletManager, DEFAULT_DERIVATION_PATH,
+		DilithiumScheme, WalletManager,
 	},
 };
 use clap::Subcommand;
@@ -37,9 +38,10 @@ pub enum WalletCommands {
 		#[arg(long)]
 		allow_empty_password: bool,
 
-		/// Derivation path (default: m/44'/189189'/0'/0/0)
-		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
-		derivation_path: String,
+		/// Derivation path (default depends on --scheme: ML-DSA-65 →
+		/// m/44'/189189'/0'/0'/1', ML-DSA-87 → m/44'/189189'/0'/0'/0')
+		#[arg(short = 'd', long)]
+		derivation_path: Option<String>,
 
 		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
 		#[arg(long)]
@@ -99,9 +101,10 @@ pub enum WalletCommands {
 		#[arg(long)]
 		allow_empty_password: bool,
 
-		/// Derivation path (default: m/44'/189189'/0'/0/0)
-		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
-		derivation_path: String,
+		/// Derivation path (default depends on --scheme: ML-DSA-65 →
+		/// m/44'/189189'/0'/0'/1', ML-DSA-87 → m/44'/189189'/0'/0'/0')
+		#[arg(short = 'd', long)]
+		derivation_path: Option<String>,
 
 		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
 		#[arg(long)]
@@ -380,13 +383,10 @@ pub async fn handle_wallet_command(
 					.create_wallet_no_derivation_with_scheme(&name, Some(&final_password), scheme)
 					.await
 			} else {
+				let path =
+					derivation_path.as_deref().unwrap_or_else(|| default_derivation_path(scheme));
 				wallet_manager
-					.create_wallet_with_scheme(
-						&name,
-						Some(&final_password),
-						&derivation_path,
-						scheme,
-					)
+					.create_wallet_with_scheme(&name, Some(&final_password), path, scheme)
 					.await
 			};
 
@@ -681,12 +681,14 @@ pub async fn handle_wallet_command(
 					)
 					.await
 			} else {
+				let path =
+					derivation_path.as_deref().unwrap_or_else(|| default_derivation_path(scheme));
 				wallet_manager
 					.import_wallet_with_scheme(
 						&name,
 						&mnemonic_phrase,
 						Some(&final_password),
-						&derivation_path,
+						path,
 						scheme,
 					)
 					.await
@@ -1046,5 +1048,37 @@ mod tests {
 			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		]);
 		assert!(result.is_err(), "wallet from-seed must not accept --seed on the command line");
+	}
+
+	#[test]
+	fn wallet_scheme_cli_uses_hyphen_before_security_level() {
+		let parsed = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"create",
+			"--name",
+			"poc",
+			"--scheme",
+			"ml-dsa-87",
+			"--allow-empty-password",
+		])
+		.expect("ml-dsa-87 must parse");
+		match parsed.command {
+			crate::cli::Commands::Wallet(WalletCommands::Create { scheme, .. }) =>
+				assert_eq!(scheme, DilithiumScheme::MlDsa87),
+			other => panic!("expected Wallet(Create), got {other:?}"),
+		}
+
+		let legacy = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"create",
+			"--name",
+			"poc",
+			"--scheme",
+			"ml-dsa87",
+			"--allow-empty-password",
+		]);
+		assert!(legacy.is_err(), "unhyphenated ml-dsa87 must not parse");
 	}
 }

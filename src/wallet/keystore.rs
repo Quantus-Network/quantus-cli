@@ -42,10 +42,13 @@ use sp_runtime::traits::IdentifyAccount;
 /// CLI create/import defaults to [`Self::MlDsa65`]. Missing `scheme` when
 /// deserializing older encrypted wallets defaults to [`Self::MlDsa87`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
-#[clap(rename_all = "kebab-case")]
-#[serde(rename_all = "kebab-case")]
 pub enum DilithiumScheme {
+	/// Clap's kebab-case would emit `ml-dsa65` (no hyphen before digits); name it explicitly.
+	#[value(name = "ml-dsa-65")]
+	#[serde(rename = "ml-dsa-65", alias = "ml-dsa65")]
 	MlDsa65,
+	#[value(name = "ml-dsa-87")]
+	#[serde(rename = "ml-dsa-87", alias = "ml-dsa87")]
 	MlDsa87,
 }
 
@@ -888,6 +891,21 @@ mod tests {
 		let mut secret = vec![1u8, 2, 3, 4, 5];
 		zeroize_bytes(&mut secret);
 		assert!(secret.iter().all(|&b| b == 0));
+	}
+
+	#[test]
+	fn dilithium_scheme_serde_uses_hyphenated_names() {
+		assert_eq!(serde_json::to_string(&DilithiumScheme::MlDsa65).unwrap(), "\"ml-dsa-65\"");
+		assert_eq!(serde_json::to_string(&DilithiumScheme::MlDsa87).unwrap(), "\"ml-dsa-87\"");
+		assert_eq!(
+			serde_json::from_str::<DilithiumScheme>("\"ml-dsa-65\"").unwrap(),
+			DilithiumScheme::MlDsa65
+		);
+		assert_eq!(
+			serde_json::from_str::<DilithiumScheme>("\"ml-dsa87\"").unwrap(),
+			DilithiumScheme::MlDsa87,
+			"legacy unhyphenated alias must still deserialize"
+		);
 	}
 
 	#[test]
