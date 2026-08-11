@@ -356,6 +356,12 @@ fn write_mnemonic_to_protected_file(
 	Ok(())
 }
 
+/// Colored checkphrase for a real address; None for placeholders like "[Wrong password]"
+fn checkphrase_line(address: &str) -> Option<String> {
+	(!address.starts_with('['))
+		.then(|| crate::wallet::checkphrase::checkphrase(address).bright_blue().to_string())
+}
+
 /// Handle wallet commands
 pub async fn handle_wallet_command(
 	command: WalletCommands,
@@ -394,6 +400,9 @@ pub async fn handle_wallet_command(
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!(
 						"Derivation path: {}",
@@ -435,6 +444,9 @@ pub async fn handle_wallet_command(
 									wallet.name.bright_green()
 								);
 								log_print!("   Address: {}", wallet.address.bright_cyan());
+								if let Some(checkphrase) = checkphrase_line(&wallet.address) {
+									log_print!("   Checkphrase: {}", checkphrase);
+								}
 								log_print!("   Type: {}", wallet.key_type.bright_yellow());
 								log_print!(
 									"   Derivation Path: {}",
@@ -465,6 +477,9 @@ pub async fn handle_wallet_command(
 						log_print!("Wallet Details:\n");
 						log_print!("Name: {}", wallet_info.name.bright_green());
 						log_print!("Address: {}", wallet_info.address.bright_cyan());
+						if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+							log_print!("Checkphrase: {}", checkphrase);
+						}
 						log_print!("Key Type: {}", wallet_info.key_type.bright_yellow());
 						log_print!(
 							"Derivation Path: {}",
@@ -699,6 +714,9 @@ pub async fn handle_wallet_command(
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!(
 						"Derivation path: {}",
@@ -756,6 +774,9 @@ pub async fn handle_wallet_command(
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!(
 						"Created: {}",
@@ -795,6 +816,9 @@ pub async fn handle_wallet_command(
 								wallet.name.bright_green()
 							);
 							log_print!("   Address: {}", wallet.address.bright_cyan());
+							if let Some(checkphrase) = checkphrase_line(&wallet.address) {
+								log_print!("   Checkphrase: {}", checkphrase);
+							}
 							log_print!("   Type: {}", wallet.key_type.bright_yellow());
 							log_print!(
 								"   Created: {}",
@@ -857,6 +881,9 @@ pub async fn handle_wallet_command(
 				log_print!("Wallet to delete:");
 				log_print!("  Name: {}", wallet_info.name.bright_green());
 				log_print!("  Address: {}", wallet_info.address.bright_cyan());
+				if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+					log_print!("  Checkphrase: {}", checkphrase);
+				}
 				log_print!("  Type: {}", wallet_info.key_type.bright_yellow());
 				log_print!(
 					"  Created: {}",
