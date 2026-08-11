@@ -146,7 +146,7 @@ jobs:
           ref: ${{ needs.create-tag.outputs.version }}
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: cargo install cargo-audit --locked --version 0.22.1
 
       - name: Run security audit
         run: cargo audit

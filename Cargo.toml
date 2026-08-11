@@ -60,17 +60,21 @@ blake3 = "1.8"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 # Self-update: download and replace the running binary from GitHub releases.
-# Pinned to 0.43.x: it shares the same reqwest (0.12) and indicatif (0.18) as the
-# rest of the crate, avoiding duplicate dependencies. The only change in 0.44 is a
-# bump to reqwest 0.13, which would force a second reqwest build with no real gain.
-self_update = { version = "0.43", default-features = false, features = [
+# 1.0.0-rc.x is required for quick-xml >= 0.41 (RUSTSEC-2026-0194 / 0195); stable
+# 0.44 still pins quick-xml ^0.38. Pulls reqwest 0.13 alongside our 0.12.
+self_update = { version = "1.0.0-rc.6", default-features = false, features = [
 	"archive-tar",
 	"archive-zip",
-	"compression-flate2",
+	"compression-tar-gz",
 	"compression-zip-deflate",
+	"github",
+	"progress-bar",
 	"reqwest",
 	"rustls",
 ] }
+# 1.0 stopped re-exporting these; the update flow uses them directly.
+self-replace = "1"
+tempfile = "3"
 
 # Force patched version of bytes (RUSTSEC-2026-0007)
 bytes = "1.11.1"
@@ -80,6 +84,9 @@ quinn-proto = "0.11.14"
 
 # Force patched version of rustls-webpki (RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104)
 rustls-webpki = "0.103.13"
+
+# Force patched event-listener (RUSTSEC-2026-0221); smoldot allows ^5.3
+event-listener = "5.4.2"
 
 # Blockchain deps: align with chain workspace
 codec = { package = "parity-scale-codec", version = "3.7", features = ["derive"] }
