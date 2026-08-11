@@ -52,7 +52,10 @@ impl ExerciseCtx {
 	/// reserved count as spend.
 	pub async fn budget_spent(&self) -> Result<u128> {
 		let current = self.free_balance(&self.root_ss58).await?;
-		Ok(self.root_start_balance.saturating_sub(current).saturating_sub(self.budget_exempt))
+		Ok(self
+			.root_start_balance
+			.saturating_sub(current)
+			.saturating_sub(self.budget_exempt))
 	}
 
 	/// Refuse to draw more than `--total-amount` from the root account. Fails here, with the

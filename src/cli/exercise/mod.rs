@@ -398,7 +398,9 @@ async fn setup(
 	let mut returned = 0u128;
 	let mut culprits: Vec<&str> = Vec::new();
 	if phases.contains(&Phase::Vesting) &&
-		scenarios::vesting::dev_treasury(&client, &alice, &bob, &charlie).await?.is_some()
+		scenarios::vesting::dev_treasury(&client, &alice, &bob, &charlie)
+			.await?
+			.is_some()
 	{
 		locked = locked.saturating_add(scenarios::vesting::treasury_funding(
 			&client,

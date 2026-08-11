@@ -331,7 +331,10 @@ fn pot_account_ss58() -> String {
 
 /// Make sure the dev treasury multisig (validated by [`dev_treasury`]) is registered in
 /// the Multisig pallet so it can dispatch `Signed(treasury)` admin calls.
-async fn ensure_treasury_multisig(ctx: &mut ExerciseCtx, treasury: &SubxtAccountId32) -> Result<()> {
+async fn ensure_treasury_multisig(
+	ctx: &mut ExerciseCtx,
+	treasury: &SubxtAccountId32,
+) -> Result<()> {
 	if crate::cli::multisig::get_multisig_info(&ctx.client, treasury.clone())
 		.await?
 		.is_none()
