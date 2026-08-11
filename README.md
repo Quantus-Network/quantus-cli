@@ -377,11 +377,11 @@ quantus wallet create --name my_wallet_87 --scheme ml-dsa-87
 # Create with an explicit derivation path
 quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0'/1'"
 
-# Import from mnemonic
-quantus wallet import --name recovered_wallet --mnemonic "word1 word2 ... word24"
+# Import from mnemonic (phrase is read from a hidden prompt — never pass it on the CLI)
+quantus wallet import --name recovered_wallet
 
-# Import as ML-DSA-87
-quantus wallet import --name recovered_87 --scheme ml-dsa-87 --mnemonic "word1 word2 ... word24"
+# Import as ML-DSA-87 (same secure prompt)
+quantus wallet import --name recovered_87 --scheme ml-dsa-87
 
 # Create from raw 32-byte seed
 quantus wallet from-seed --name raw_wallet --seed <64-hex-chars>
