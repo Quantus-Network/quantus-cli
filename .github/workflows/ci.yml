@@ -109,7 +109,7 @@ jobs:
         run: SKIP_CIRCUIT_BUILD=1 cargo doc --locked --no-deps --document-private-items
 
   security-audit:
-    name: 🔐 Security Audit (non-blocking)
+    name: 🔐 Security Audit
     needs: fast-checks
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -132,11 +132,8 @@ jobs:
           if ! command -v cargo-audit >/dev/null 2>&1; then
             cargo install cargo-audit --locked --version 0.22.1
           fi
-      - name: Run cargo audit (informational only)
-        # Only this step is non-blocking — every other step in this job
-        # (checkout, caches, cargo-audit install) must fail loudly so we
-        # don't silently skip the audit.
-        continue-on-error: true
+      # Blocking so advisories fail PRs/main before the release publish workflow.
+      - name: Run cargo audit
         run: cargo audit
 
   examples:
