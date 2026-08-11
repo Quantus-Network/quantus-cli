@@ -9,7 +9,7 @@ license = "Apache-2.0"
 name = "quantus-cli"
 readme = "README.md"
 repository = "https://github.com/Quantus-Network/quantus-cli"
-version = "2.0.0"
+version = "2.1.0"
 
 [lib]
 name = "quantus_cli"
