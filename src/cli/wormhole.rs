@@ -53,9 +53,8 @@ pub type Hash256 = [u8; 32];
 /// This is the client-side representation of the proof returned by `zkTree_getMerkleProof`.
 /// Siblings are unsorted - the client computes position hints by sorting siblings + current hash.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Fields used for deserialization and future use when ZK trie is deployed
 pub struct ZkMerkleProofRpc {
-	/// Index of the leaf
+	/// Index of the leaf (checked against the requested index in [`get_zk_merkle_proof`]).
 	pub leaf_index: u64,
 	/// The leaf data (SCALE-encoded ZkLeaf)
 	pub leaf_data: Vec<u8>,
@@ -66,7 +65,7 @@ pub struct ZkMerkleProofRpc {
 	pub siblings: Vec<[Hash256; 3]>,
 	/// Current tree root
 	pub root: Hash256,
-	/// Current tree depth
+	/// Current tree depth (must equal `siblings.len()`; enforced in Deserialize).
 	pub depth: u8,
 }
 
@@ -200,7 +199,6 @@ mod siblings_format {
 /// The `at_block` parameter is critical for ZK proof generation. The tree root changes
 /// with each block, so the Merkle proof MUST be fetched at the same block whose header
 /// you're including in the ZK proof.
-#[allow(dead_code)] // Will be used when ZK tree is deployed to production
 pub async fn get_zk_merkle_proof(
 	quantus_client: &QuantusClient,
 	leaf_index: u64,
@@ -218,12 +216,24 @@ pub async fn get_zk_merkle_proof(
 			))
 		})?;
 
-	proof.ok_or_else(|| {
+	let proof = proof.ok_or_else(|| {
 		crate::error::QuantusError::Generic(format!(
 			"Leaf index {} not found in ZK tree at block {:?}",
 			leaf_index, at_block
 		))
-	})
+	})?;
+
+	if proof.leaf_index != leaf_index {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"ZK Merkle proof leaf_index mismatch: requested {}, got {}",
+			leaf_index, proof.leaf_index
+		)));
+	}
+	// `depth` is part of the RPC surface for SDK callers; Deserialize already
+	// enforces depth == siblings.len().
+	debug_assert_eq!(proof.depth as usize, proof.siblings.len());
+
+	Ok(proof)
 }
 
 /// Compute sorted siblings and position hints from unsorted siblings.
@@ -920,24 +930,6 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "/tmp/wormhole_dissolve")]
 		output_dir: String,
 	},
-	/// Fuzz test the leaf verification by attempting invalid proofs
-	Fuzz {
-		/// Wallet name to use for funding
-		#[arg(short, long)]
-		wallet: String,
-
-		/// Password for the wallet
-		#[arg(short, long, hide = true)]
-		password: Option<String>,
-
-		/// Read password from file
-		#[arg(long)]
-		password_file: Option<String>,
-
-		/// Amount in DEV to use for the test transfer (default: 1.0)
-		#[arg(short, long, default_value = "1.0")]
-		amount: f64,
-	},
 	/// Collect miner rewards from a wormhole address.
 	///
 	/// This command queries Subsquid for pending transfers to your wormhole address,
@@ -1187,18 +1179,6 @@ pub async fn handle_wormhole_command(
 				execution_mode,
 			)
 			.await
-		},
-		WormholeCommands::Fuzz { wallet: _, password: _, password_file: _, amount: _ } => {
-			// TODO: Re-enable fuzz tests once ZK tree is deployed to a test chain.
-			// The fuzz tests need to be rewritten to use zkTree_getMerkleProof RPC
-			// instead of the old state_getReadProof storage proofs.
-			// See run_fuzz_test() and try_generate_fuzz_proof() below for the old implementation.
-			Err(crate::error::QuantusError::Generic(
-				"Fuzz testing is temporarily disabled during the migration to ZK tree proofs. \
-				 The fuzz tests require a chain with pallet-zk-tree deployed and the \
-				 zkTree_getMerkleProof RPC endpoint available."
-					.to_string(),
-			))
 		},
 		WormholeCommands::CollectRewards {
 			wallet,
@@ -3019,27 +2999,9 @@ async fn generate_proof(
 			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
 		})?;
 
-	// Fetch ZK Merkle proof from chain via RPC using the leaf_index
-	// CRITICAL: We MUST fetch the proof at the same block we're proving against.
+	// CRITICAL: fetch the ZK Merkle proof at the same block we're proving against.
 	// The tree root changes with each block, so proof must match header.zk_tree_root.
-	let proof_params = rpc_params![leaf_index, block_hash];
-	let zk_proof: Option<ZkMerkleProofRpc> = quantus_client
-		.rpc_client()
-		.request("zkTree_getMerkleProof", proof_params)
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to get ZK Merkle proof at block {:?}: {}",
-				block_hash, e
-			))
-		})?;
-
-	let zk_proof = zk_proof.ok_or_else(|| {
-		crate::error::QuantusError::Generic(format!(
-			"No ZK Merkle proof found for leaf_index {}",
-			leaf_index
-		))
-	})?;
+	let zk_proof = get_zk_merkle_proof(quantus_client, leaf_index, block_hash).await?;
 
 	// Decode the input amount from the leaf data
 	// The leaf data is SCALE-encoded ZkLeaf: (to: AccountId, transfer_count: u64, asset_id:
@@ -4294,36 +4256,28 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 }
 
 // =============================================================================
-// FUZZ TEST FUNCTIONS - TEMPORARILY DISABLED
+// Wormhole negative-proof fuzz (not implemented)
 // =============================================================================
 //
-// The fuzz tests below are temporarily disabled during the migration from MPT
-// storage proofs to ZK tree Merkle proofs. To re-enable:
+// There used to be a `wormhole fuzz` command that mutated leaf / Merkle fields and
+// checked the verifier rejected them. That path targeted the pre-migration MPT
+// storage proofs (`state_getReadProof`) and was deleted rather than left as a
+// stub that always failed.
 //
-// 1. Deploy pallet-zk-tree to a test chain
-// 2. Update run_fuzz_test() to use zkTree_getMerkleProof RPC instead of state_getReadProof
-// 3. Update try_generate_fuzz_proof() to use the new PrivateCircuitInputs fields:
-//    - zk_tree_root: [u8; 32]
-//    - zk_merkle_siblings: Vec<[[u8; 32]; 3]>
-//    - zk_merkle_positions: Vec<u8>
-// 4. Note: The ZK leaf no longer contains `from` (funding_account) - it's now: (to: AccountId,
-//    transfer_count: u64, asset_id: u32, amount: u32)
-// 5. Update generate_fuzz_cases() to remove from-address fuzzing since it's no longer in the leaf
+// Happy-path proving already uses the live ZK tree (`zkTree_getMerkleProof` via
+// [`get_zk_merkle_proof`], then [`compute_merkle_positions`]). To bring negative
+// fuzzing back:
 //
-// See qp-zk-circuits/wormhole/tests/src/prover/prover_tests.rs for examples of
-// how to construct ZK Merkle proofs for testing.
+// 1. Fund a real transfer and fetch a valid `ZkMerkleProofRpc` at a fixed block.
+// 2. Mutate circuit inputs that the verifier must reject (wrong siblings / positions, wrong
+//    `zk_tree_root`, wrong leaf amount / transfer_count, spent nullifier, etc.). The leaf shape is
+//    `(to, transfer_count, asset_id, amount)` — there is no funding `from` field to fuzz.
+// 3. Assert local verification fails (and optionally that an on-chain `verify_*_batch` extrinsic is
+//    rejected).
+//
+// Circuit construction examples live in
+// `qp-zk-circuits/wormhole/tests/src/prover/prover_tests.rs`.
 // =============================================================================
-
-// TODO: Re-enable fuzz tests once ZK tree is deployed
-// The old implementation used:
-// - state_getReadProof RPC to fetch MPT storage proofs
-// - prepare_proof_for_circuit() to process proofs
-// - PrivateCircuitInputs with funding_account and storage_proof fields
-//
-// The new implementation should:
-// - Use zkTree_getMerkleProof RPC
-// - Directly use ZkMerkleProofRpc response (siblings, positions)
-// - Use PrivateCircuitInputs with zk_tree_root, zk_merkle_siblings, zk_merkle_positions
 
 /// Check if nullifiers have been spent by querying Subsquid.
 ///

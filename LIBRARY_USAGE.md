@@ -757,7 +757,7 @@ cargo run --example multisig_library_usage
 
 ## Key Features
 
-- **Quantum-safe cryptography**: Uses Dilithium ML-DSA-87 for all cryptographic operations
+- **Quantum-safe cryptography**: Dilithium ML-DSA signatures — default **ML-DSA-65**, optional **ML-DSA-87** (`DilithiumScheme`)
 - **Wallet management**: Create, import, export, and manage multiple wallets
 - **Blockchain interaction**: Query balances, send transactions, get system info
 - **Thread-safe**: Safe to use in multi-threaded applications

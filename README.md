@@ -368,14 +368,20 @@ quantus developer create-test-wallets
 ### Wallet Management
 
 ```bash
-# Create a new quantum-safe wallet
+# Create a new quantum-safe wallet (default scheme: ml-dsa-65, HD path …/1')
 quantus wallet create --name my_wallet
 
-# Create with explicit derivation path
-quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0/0"
+# ML-DSA-87 (HD path defaults to …/0' when --derivation-path is omitted)
+quantus wallet create --name my_wallet_87 --scheme ml-dsa-87
+
+# Create with an explicit derivation path
+quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0'/1'"
 
 # Import from mnemonic
 quantus wallet import --name recovered_wallet --mnemonic "word1 word2 ... word24"
+
+# Import as ML-DSA-87
+quantus wallet import --name recovered_87 --scheme ml-dsa-87 --mnemonic "word1 word2 ... word24"
 
 # Create from raw 32-byte seed
 quantus wallet from-seed --name raw_wallet --seed <64-hex-chars>
@@ -595,6 +601,12 @@ quantus exercise --skip wormhole
 
 # Reproduce a fuzz failure from its seed; emit the report as JSON
 quantus exercise --seed 12345 --json
+
+# Runtime upgrade smoke (fast-governance node only). Mutually exclusive:
+#   --self-upgrade  re-installs the current on-chain :code (no WASM file; no post-upgrade re-run)
+#   --upgrade-wasm  installs a candidate WASM, then re-runs the other phases against it
+quantus exercise --phases upgrade --self-upgrade
+quantus exercise --phases upgrade --upgrade-wasm path/to/runtime.wasm
 ```
 
 Key flags:
@@ -608,7 +620,9 @@ Key flags:
 | `--phases <LIST>` / `--skip <LIST>` | all | Comma-separated phases to run / skip. |
 | `--seed <N>` | random | Reproducible fuzz seed. |
 | `--fuzz-iterations <N>` | `25` | Number of fuzz iterations. |
-| `--upgrade-wasm <PATH>` | — | Enable the runtime-upgrade phase with the given WASM (fast-governance node only). |
+| `--upgrade-wasm <PATH>` | — | Enable the runtime-upgrade phase with the given WASM (fast-governance node only). Re-runs other phases after a successful upgrade. |
+| `--self-upgrade` | off | No-WASM upgrade smoke test: authorize/apply the current on-chain runtime blob via tech-referenda (fast-governance node only). Conflicts with `--upgrade-wasm`. Does not re-run other phases (runtime unchanged). Not the same as `quantus update` (CLI binary self-update). |
+| `--upgrade-timeout-secs <N>` | `900` | How long to wait for the upgrade referendum / code write. |
 | `--fail-fast` | off | Stop at the first failed step. |
 | `--json` | off | Emit the final report as JSON. |
 
@@ -889,7 +903,7 @@ For more details, see `quantus multisig --help` and explore subcommands with `--
 ## 🏗️ Architecture
 
 ### Quantum-Safe Cryptography
-- **Dilithium (ML-DSA-87)**: Post-quantum digital signatures
+- **Dilithium (ML-DSA)**: Post-quantum digital signatures — default **ML-DSA-65** (`--scheme ml-dsa-65`), with **ML-DSA-87** available (`--scheme ml-dsa-87`). Each scheme has its own default HD path (`…/1'` vs `…/0'`) so the same mnemonic does not collide across schemes.
 - **Secure Storage**: AES-256-GCM + Argon2 encryption for wallet files
 - **Future-Proof**: Ready for ML-KEM key encapsulation
 
@@ -964,7 +978,7 @@ The project includes a script to regenerate SubXT types and metadata when the bl
 1. **Updates metadata**: Downloads the latest chain metadata to `src/quantus_metadata.scale`
 2. **Generates types**: Creates type-safe Rust code in `src/chain/quantus_subxt.rs`
 3. **Formats code**: Automatically formats the generated code with `cargo fmt`
-4. **Prompts compatibility update**: Reminds you to update the supported runtime/transaction pair in `src/config/mod.rs`
+4. **Prompts compatibility update**: Reminds you to add the new runtime/transaction pair to the allowlist in `src/config/mod.rs` (newer unlisted specs warn rather than hard-fail)
 
 **When to use:**
 - After updating the Quantus runtime
@@ -1005,4 +1019,4 @@ After regeneration, re-run:
 quantus compatibility-check --node-url <node>
 ```
 
-The checked-in compatibility gate now requires both the runtime `spec_version` and `transaction_version` to match a supported pair.
+The compatibility gate accepts exact `spec_version` / `transaction_version` pairs listed in `src/config/mod.rs`. A Quantus node whose `spec_version` is **newer** than the highest listed pair connects with a warning (extrinsics may still fail if the runtime has moved on). Wrong `specName` values and older/unknown pairs outside the table are still rejected.
