@@ -109,7 +109,7 @@ fn configure_updater() -> self_update::backends::github::UpdateBuilder {
 		// `{{ version }}` is substituted without the leading `v`, so it is
 		// added back as a literal here.
 		.bin_path_in_archive("quantus-cli-v{{ version }}-{{ target }}/{{ bin }}")
-		.identifier(ASSET_IDENTIFIER)
+		.asset_identifier(ASSET_IDENTIFIER)
 		.current_version(env!("CARGO_PKG_VERSION"));
 	builder
 }
@@ -120,12 +120,15 @@ fn configure_updater() -> self_update::backends::github::UpdateBuilder {
 /// Blocking: `self_update` performs synchronous I/O, so call this off the async
 /// runtime's worker threads (e.g. via `spawn_blocking`).
 pub fn latest_stable_version() -> crate::error::Result<String> {
-	let release = configure_updater()
+	let releases = configure_updater()
 		.build()
 		.map_err(map_self_update_err)?
 		.get_latest_release()
 		.map_err(map_self_update_err)?;
-	Ok(release.version.trim_start_matches('v').to_string())
+	let release = releases.latest().ok_or_else(|| {
+		QuantusError::Generic("No GitHub releases found for Quantus CLI".to_string())
+	})?;
+	Ok(release.version().trim_start_matches('v').to_string())
 }
 
 /// Semver comparison that surfaces unparseable release tags as errors instead
@@ -222,28 +225,31 @@ fn run_update(
 
 	let target_tag = version.map(|v| if v.starts_with('v') { v } else { format!("v{v}") });
 	if let Some(ref tag) = target_tag {
-		builder.target_version_tag(tag);
+		builder.release_tag(tag);
 	}
 
 	let updater = builder.build().map_err(map_self_update_err)?;
 	let release = if let Some(ref tag) = target_tag {
 		updater.get_release_version(tag).map_err(map_self_update_err)?
 	} else {
-		let latest = updater.get_latest_release().map_err(map_self_update_err)?;
-		if !version_is_newer(current, &latest.version)? {
-			return Ok(UpdateOutcome::AlreadyLatest(latest.version));
+		let releases = updater.get_latest_release().map_err(map_self_update_err)?;
+		let latest = releases.latest().cloned().ok_or_else(|| {
+			QuantusError::Generic("No GitHub releases found for Quantus CLI".to_string())
+		})?;
+		if !version_is_newer(current, latest.version())? {
+			return Ok(UpdateOutcome::AlreadyLatest(latest.version().to_string()));
 		}
 		latest
 	};
 
-	install_verified_release(updater.as_ref(), &release, yes)?;
-	Ok(UpdateOutcome::Updated(release.version))
+	install_verified_release(&updater, &release, yes)?;
+	Ok(UpdateOutcome::Updated(release.version().to_string()))
 }
 
 /// Download the release archive and its published sha256sums, verify integrity,
 /// then extract and replace the running binary.
 fn install_verified_release(
-	updater: &dyn self_update::update::ReleaseUpdate,
+	updater: &impl self_update::update::ReleaseUpdate,
 	release: &self_update::update::Release,
 	yes: bool,
 ) -> crate::error::Result<()> {
@@ -254,22 +260,22 @@ fn install_verified_release(
 		))
 	})?;
 	let sums_asset = release
-		.assets
+		.assets()
 		.iter()
-		.find(|a| a.name.contains("sha256sums") && a.name.contains(&target))
+		.find(|a| a.name().contains("sha256sums") && a.name().contains(&target))
 		.cloned()
 		.ok_or_else(|| {
 			QuantusError::Generic(format!(
 				"No sha256sums asset found for target `{target}` in release v{}",
-				release.version
+				release.version()
 			))
 		})?;
 
 	log_print!("");
 	log_print!("{} release status:", BIN_NAME);
 	log_print!("  * Current exe: {:?}", updater.bin_install_path());
-	log_print!("  * New exe release: {}", archive_asset.name);
-	log_print!("  * Checksum file: {}", sums_asset.name);
+	log_print!("  * New exe release: {}", archive_asset.name());
+	log_print!("  * Checksum file: {}", sums_asset.name());
 	log_print!(
 		"\nThe new release will be downloaded, SHA-256 verified, extracted, and the existing binary will be replaced."
 	);
@@ -280,15 +286,15 @@ fn install_verified_release(
 
 	log_print!("Downloading checksums...");
 	let mut sums_bytes = Vec::new();
-	download_asset(&sums_asset.download_url, &mut sums_bytes, MAX_SUMS_ASSET_BYTES, false)?;
+	download_asset(sums_asset.download_url(), &mut sums_bytes, MAX_SUMS_ASSET_BYTES, false)?;
 	let sums_text = std::str::from_utf8(&sums_bytes).map_err(|e| {
 		QuantusError::Generic(format!("Release sha256sums file is not valid UTF-8: {e}"))
 	})?;
-	let expected_hex = expected_hash_from_sha256sums(sums_text, &archive_asset.name)?;
+	let expected_hex = expected_hash_from_sha256sums(sums_text, archive_asset.name())?;
 
-	let tmp_dir = self_update::TempDir::new()
+	let tmp_dir = tempfile::TempDir::new()
 		.map_err(|e| QuantusError::Generic(format!("Failed to create temp dir for update: {e}")))?;
-	let archive_path = tmp_dir.path().join(&archive_asset.name);
+	let archive_path = tmp_dir.path().join(archive_asset.name());
 
 	log_print!("Downloading...");
 	{
@@ -296,7 +302,7 @@ fn install_verified_release(
 			QuantusError::Generic(format!("Failed to create temp archive file: {e}"))
 		})?;
 		download_asset(
-			&archive_asset.download_url,
+			archive_asset.download_url(),
 			&mut archive_file,
 			MAX_ARCHIVE_ASSET_BYTES,
 			true,
@@ -313,10 +319,10 @@ fn install_verified_release(
 	log_print!("   Checksum OK.");
 
 	let bin_path = substitute_bin_path(
-		&updater.bin_path_in_archive(),
-		&release.version,
+		updater.bin_path_in_archive(),
+		release.version(),
 		&target,
-		&updater.bin_name(),
+		updater.bin_name(),
 	);
 
 	log_print!("Extracting archive...");
@@ -332,11 +338,11 @@ fn install_verified_release(
 		QuantusError::Generic(format!("Failed to resolve current executable path: {e}"))
 	})?;
 	if install_path == current_exe {
-		self_update::self_replace::self_replace(&new_exe)
+		self_replace::self_replace(&new_exe)
 			.map_err(|e| QuantusError::Generic(format!("Failed to replace running binary: {e}")))?;
 	} else {
 		self_update::Move::from_source(&new_exe)
-			.to_dest(&install_path)
+			.to_dest(install_path)
 			.map_err(map_self_update_err)?;
 	}
 
@@ -400,11 +406,8 @@ fn download_asset(
 	let mut limited = LimitedWriter::new(dest, max_bytes);
 	let mut download = self_update::Download::from_url(url);
 	download
-		.set_header(
-			reqwest::header::ACCEPT,
-			"application/octet-stream".parse().expect("static ACCEPT header"),
-		)
-		.show_progress(show_progress);
+		.request_header(reqwest::header::ACCEPT, "application/octet-stream")
+		.show_download_progress(show_progress);
 	download.download_to(&mut limited).map_err(map_self_update_err)
 }
 
