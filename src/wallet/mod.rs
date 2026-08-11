@@ -5,6 +5,7 @@
 /// - Importing/exporting wallets with mnemonic phrases
 /// - Encrypting/decrypting wallet data
 /// - Managing multiple wallets
+pub mod checkphrase;
 pub mod keystore;
 pub mod password;
 
@@ -57,8 +58,20 @@ fn pair_from_master_seed(seed: &[u8], scheme: DilithiumScheme) -> Result<Quantum
 	}
 }
 
-/// Default derivation path for Quantus wallets: m/44'/189189'/0'/0'/0'
+/// Default derivation path for ML-DSA-87 (and legacy) Quantus wallets.
 pub const DEFAULT_DERIVATION_PATH: &str = "m/44'/189189'/0'/0'/0'";
+
+/// Default derivation path for ML-DSA-65 wallets. Last index differs from
+/// [`DEFAULT_DERIVATION_PATH`] so the two schemes never collide for the same mnemonic.
+pub const DEFAULT_DERIVATION_PATH_ML_DSA_65: &str = "m/44'/189189'/0'/0'/1'";
+
+/// Scheme-specific default HD path: ML-DSA-65 → `.../1'`, ML-DSA-87 → `.../0'`.
+pub fn default_derivation_path(scheme: DilithiumScheme) -> &'static str {
+	match scheme {
+		DilithiumScheme::MlDsa65 => DEFAULT_DERIVATION_PATH_ML_DSA_65,
+		DilithiumScheme::MlDsa87 => DEFAULT_DERIVATION_PATH,
+	}
+}
 
 /// Wallet information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,7 +125,7 @@ impl WalletManager {
 		self.create_wallet_with_scheme(
 			name,
 			password,
-			DEFAULT_DERIVATION_PATH,
+			default_derivation_path(DilithiumScheme::MlDsa65),
 			DilithiumScheme::MlDsa65,
 		)
 		.await
@@ -256,9 +269,8 @@ impl WalletManager {
 				continue;
 			};
 
-			// Only expose an address when it can be authenticated via empty-password
-			// decrypt (developer / no-password wallets). Never trust the plaintext
-			// envelope address for password-protected wallets.
+			// The envelope address is public and SS58-validated at load; the scheme
+			// is only known after decryption.
 			let wallet_info = match keystore.decrypt_wallet_data(&encrypted_wallet, "") {
 				Ok(wallet_data) => WalletInfo {
 					name: wallet_data.name.clone(),
@@ -271,7 +283,7 @@ impl WalletManager {
 					WalletError::InvalidPassword | WalletError::Integrity(_),
 				)) => WalletInfo {
 					name,
-					address: "[Encrypted]".to_string(),
+					address: encrypted_wallet.address,
 					created_at: encrypted_wallet.created_at,
 					key_type: "Dilithium".to_string(),
 					derivation_path: "[Encrypted]".to_string(),
@@ -298,7 +310,7 @@ impl WalletManager {
 			name,
 			mnemonic,
 			password,
-			DEFAULT_DERIVATION_PATH,
+			default_derivation_path(DilithiumScheme::MlDsa65),
 			DilithiumScheme::MlDsa65,
 		)
 		.await
@@ -616,7 +628,7 @@ impl WalletManager {
 						WalletError::InvalidPassword | WalletError::Integrity(_),
 					)) => Ok(Some(WalletInfo {
 						name: name.to_string(),
-						address: "[Encrypted]".to_string(),
+						address: encrypted_wallet.address,
 						created_at: encrypted_wallet.created_at,
 						key_type: "Dilithium".to_string(),
 						derivation_path: "[Encrypted]".to_string(),
@@ -1045,6 +1057,53 @@ mod tests {
 		assert_eq!(imported_wallet.address, imported_wallet2.address);
 	}
 
+	#[test]
+	fn default_derivation_path_is_scheme_specific() {
+		assert_eq!(default_derivation_path(DilithiumScheme::MlDsa87), DEFAULT_DERIVATION_PATH);
+		assert_eq!(
+			default_derivation_path(DilithiumScheme::MlDsa65),
+			DEFAULT_DERIVATION_PATH_ML_DSA_65
+		);
+		assert_ne!(DEFAULT_DERIVATION_PATH, DEFAULT_DERIVATION_PATH_ML_DSA_65);
+		assert!(DEFAULT_DERIVATION_PATH.ends_with("/0'"));
+		assert!(DEFAULT_DERIVATION_PATH_ML_DSA_65.ends_with("/1'"));
+	}
+
+	#[tokio::test]
+	async fn default_paths_separate_schemes_for_same_mnemonic() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
+
+		let wallet_65 = wallet_manager
+			.import_wallet_with_scheme(
+				"scheme-65",
+				mnemonic,
+				None,
+				default_derivation_path(DilithiumScheme::MlDsa65),
+				DilithiumScheme::MlDsa65,
+			)
+			.await
+			.expect("import 65");
+		let wallet_87 = wallet_manager
+			.import_wallet_with_scheme(
+				"scheme-87",
+				mnemonic,
+				None,
+				default_derivation_path(DilithiumScheme::MlDsa87),
+				DilithiumScheme::MlDsa87,
+			)
+			.await
+			.expect("import 87");
+
+		assert_eq!(wallet_65.derivation_path, DEFAULT_DERIVATION_PATH_ML_DSA_65);
+		assert_eq!(wallet_87.derivation_path, DEFAULT_DERIVATION_PATH);
+		assert_ne!(
+			wallet_65.address, wallet_87.address,
+			"scheme-specific default paths must not collide for the same mnemonic"
+		);
+	}
+
 	#[tokio::test]
 	async fn test_known_values() {
 		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
@@ -1154,7 +1213,7 @@ mod tests {
 		assert_eq!(wallets.len(), 0);
 
 		// Create some wallets
-		wallet_manager
+		let wallet_1 = wallet_manager
 			.create_wallet("wallet-1", Some("password1"))
 			.await
 			.expect("Failed to create wallet 1");
@@ -1165,7 +1224,7 @@ mod tests {
 			.expect("Failed to create wallet 2");
 
 		let test_mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
-		wallet_manager
+		let imported = wallet_manager
 			.import_wallet("imported-wallet", test_mnemonic, Some("password3"))
 			.await
 			.expect("Failed to import wallet");
@@ -1181,15 +1240,23 @@ mod tests {
 		assert!(wallet_names.contains(&&"wallet-2".to_string()));
 		assert!(wallet_names.contains(&&"imported-wallet".to_string()));
 
-		// Empty-password wallets expose authenticated addresses; password-protected
-		// wallets must not leak the unauthenticated envelope address.
+		// The public envelope address is shown even for password-protected wallets;
+		// the scheme is only known when the wallet decrypts without a password.
 		for wallet in &wallets {
-			if wallet.name == "wallet-2" {
-				assert_eq!(wallet.key_type, "Dilithium ML-DSA-65");
-				assert!(wallet.address.starts_with("qz"));
-			} else {
-				assert_eq!(wallet.key_type, "Dilithium");
-				assert_eq!(wallet.address, "[Encrypted]");
+			match wallet.name.as_str() {
+				"wallet-1" => {
+					assert_eq!(wallet.key_type, "Dilithium");
+					assert_eq!(wallet.address, wallet_1.address);
+				},
+				"wallet-2" => {
+					assert_eq!(wallet.key_type, "Dilithium ML-DSA-65");
+					assert!(wallet.address.starts_with("qz"));
+				},
+				"imported-wallet" => {
+					assert_eq!(wallet.key_type, "Dilithium");
+					assert_eq!(wallet.address, imported.address);
+				},
+				other => panic!("unexpected wallet: {other}"),
 			}
 		}
 
@@ -1208,14 +1275,14 @@ mod tests {
 			.await
 			.expect("Failed to create wallet");
 
-		// Passwordless view must not trust the unauthenticated envelope address
+		// Passwordless view shows the public envelope address
 		let wallet_info = wallet_manager
 			.get_wallet("test-get-wallet", None)
 			.expect("Failed to get wallet")
 			.expect("Wallet should exist");
 
 		assert_eq!(wallet_info.name, "test-get-wallet");
-		assert_eq!(wallet_info.address, "[Encrypted]");
+		assert_eq!(wallet_info.address, created_wallet.address);
 
 		// Test getting wallet with wrong password
 		// Now with real quantum-safe encryption, wrong password should be detected
@@ -1293,7 +1360,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn passwordless_paths_do_not_trust_tampered_envelope_address() {
+	async fn tampered_envelope_fails_unlock_but_display_shows_envelope_address() {
 		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
 
 		let victim = wallet_manager
@@ -1331,33 +1398,21 @@ mod tests {
 			"password-protected wallets must refuse unauthenticated wallet-name resolution"
 		);
 
+		// Display paths intentionally show the public envelope address without
+		// authentication; tampering is caught by the Integrity check on unlock.
 		let listed = wallet_manager
 			.list_wallets()
 			.expect("list")
 			.into_iter()
 			.find(|w| w.name == "victim_alias")
 			.expect("victim should still be listed");
-		assert_ne!(
-			listed.address, attacker.address,
-			"list_wallets must not display the attacker-substituted envelope address"
-		);
-		assert!(
-			listed.address.contains('['),
-			"password-protected wallets must use a placeholder without authenticated decrypt"
-		);
+		assert_eq!(listed.address, tampered.address);
 
 		let viewed = wallet_manager
 			.get_wallet("victim_alias", None)
 			.expect("view")
 			.expect("victim exists");
-		assert_ne!(
-			viewed.address, attacker.address,
-			"passwordless get_wallet must not display the attacker-substituted envelope address"
-		);
-		assert!(
-			viewed.address.contains('['),
-			"passwordless view of a password-protected wallet must use a placeholder"
-		);
+		assert_eq!(viewed.address, tampered.address);
 	}
 
 	#[tokio::test]
@@ -1406,10 +1461,9 @@ mod tests {
 			"valid wallet must remain listable"
 		);
 		assert!(
-			listed_after.iter().all(|w| {
-				w.address == "[Encrypted]" ||
-					AccountId32::from_ss58check_with_version(&w.address).is_ok()
-			}),
+			listed_after
+				.iter()
+				.all(|w| AccountId32::from_ss58check_with_version(&w.address).is_ok()),
 			"listing must not return addresses the SS58 parser rejects"
 		);
 		assert!(

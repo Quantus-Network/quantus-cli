@@ -53,7 +53,7 @@ async fn multiround(
 		.create_wallet_with_scheme(
 			&wallet_name,
 			None,
-			crate::wallet::DEFAULT_DERIVATION_PATH,
+			crate::wallet::default_derivation_path(scheme),
 			scheme,
 		)
 		.await?;
