@@ -667,6 +667,14 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 			crate::config::EXPECTED_RUNTIME_SPEC_NAME
 		);
 		log_print!("   • All other CLI commands will refuse to talk to this node");
+	} else if crate::config::is_newer_unlisted_runtime(spec_version) {
+		log_print!(
+			"⚠️  NEWER RUNTIME - Spec {} is ahead of this CLI's tested list (up to {})",
+			spec_version.to_string().bright_yellow(),
+			crate::config::max_compatible_spec_version()
+		);
+		log_print!("   • Commands are allowed, but some may not work correctly");
+		log_print!("   • Consider updating the CLI when a release for this runtime is available");
 	} else {
 		log_error!("❌ INCOMPATIBLE - This CLI version may not work with the connected node");
 		log_print!("   • The runtime version pair is not in this CLI's supported list");

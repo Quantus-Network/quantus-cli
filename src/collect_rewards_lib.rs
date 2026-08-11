@@ -17,7 +17,7 @@ use crate::{
 		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
 	cli::wormhole::{
-		compute_merkle_positions, parse_secret_hex as parse_secret_hex_str, ZkMerkleProofRpc,
+		compute_merkle_positions, get_zk_merkle_proof, parse_secret_hex as parse_secret_hex_str,
 	},
 	subsquid::{
 		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
@@ -34,13 +34,7 @@ use qp_wormhole_aggregator::{
 use qp_zk_circuits_common::circuit::{C, D, F};
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::path::Path;
-use subxt::{
-	ext::{
-		codec::Encode,
-		jsonrpsee::{core::client::ClientT, rpc_params},
-	},
-	tx::TxStatus,
-};
+use subxt::{ext::codec::Encode, tx::TxStatus};
 
 /// Result type for collect rewards operations
 pub type Result<T> = std::result::Result<T, CollectRewardsError>;
@@ -398,11 +392,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			CollectRewardsError::from(format!("Invalid leaf_index: {}", transfer.leaf_index))
 		})?;
 
-		// Fetch ZK Merkle proof from chain
-		let proof_params = rpc_params![leaf_index, proof_block_hash];
-		let zk_proof: Option<ZkMerkleProofRpc> = quantus_client
-			.rpc_client()
-			.request("zkTree_getMerkleProof", proof_params)
+		let zk_proof = get_zk_merkle_proof(&quantus_client, leaf_index, proof_block_hash)
 			.await
 			.map_err(|e| {
 				CollectRewardsError::from(format!(
@@ -410,13 +400,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 					leaf_index, e
 				))
 			})?;
-
-		let zk_proof = zk_proof.ok_or_else(|| {
-			CollectRewardsError::from(format!(
-				"No ZK Merkle proof found for leaf_index {}",
-				leaf_index
-			))
-		})?;
 
 		// Decode transfer data from leaf
 		let (leaf_to_account, transfer_count, _leaf_asset_id, _leaf_raw_amount) =

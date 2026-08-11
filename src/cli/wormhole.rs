@@ -53,9 +53,8 @@ pub type Hash256 = [u8; 32];
 /// This is the client-side representation of the proof returned by `zkTree_getMerkleProof`.
 /// Siblings are unsorted - the client computes position hints by sorting siblings + current hash.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // Fields used for deserialization and future use when ZK trie is deployed
 pub struct ZkMerkleProofRpc {
-	/// Index of the leaf
+	/// Index of the leaf (checked against the requested index in [`get_zk_merkle_proof`]).
 	pub leaf_index: u64,
 	/// The leaf data (SCALE-encoded ZkLeaf)
 	pub leaf_data: Vec<u8>,
@@ -66,7 +65,7 @@ pub struct ZkMerkleProofRpc {
 	pub siblings: Vec<[Hash256; 3]>,
 	/// Current tree root
 	pub root: Hash256,
-	/// Current tree depth
+	/// Current tree depth (must equal `siblings.len()`; enforced in Deserialize).
 	pub depth: u8,
 }
 
@@ -200,7 +199,6 @@ mod siblings_format {
 /// The `at_block` parameter is critical for ZK proof generation. The tree root changes
 /// with each block, so the Merkle proof MUST be fetched at the same block whose header
 /// you're including in the ZK proof.
-#[allow(dead_code)] // Will be used when ZK tree is deployed to production
 pub async fn get_zk_merkle_proof(
 	quantus_client: &QuantusClient,
 	leaf_index: u64,
@@ -218,12 +216,24 @@ pub async fn get_zk_merkle_proof(
 			))
 		})?;
 
-	proof.ok_or_else(|| {
+	let proof = proof.ok_or_else(|| {
 		crate::error::QuantusError::Generic(format!(
 			"Leaf index {} not found in ZK tree at block {:?}",
 			leaf_index, at_block
 		))
-	})
+	})?;
+
+	if proof.leaf_index != leaf_index {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"ZK Merkle proof leaf_index mismatch: requested {}, got {}",
+			leaf_index, proof.leaf_index
+		)));
+	}
+	// `depth` is part of the RPC surface for SDK callers; Deserialize already
+	// enforces depth == siblings.len().
+	debug_assert_eq!(proof.depth as usize, proof.siblings.len());
+
+	Ok(proof)
 }
 
 /// Compute sorted siblings and position hints from unsorted siblings.
@@ -479,10 +489,9 @@ pub fn compute_random_output_assignments(
 	let total_output: u64 = proof_outputs.iter().map(|&x| x as u64).sum();
 
 	// Step 2: Randomly partition total output across target accounts
-	// Minimum 3 quantized units (0.03 DEV) per target. After fee deduction in the
-	// next round: compute_output_amount(3, 10) = 3 * 9990 / 10000 = 2, which is safe.
-	// With 2: compute_output_amount(2, 10) = 1, borderline.
-	// With 1: compute_output_amount(1, 10) = 0, causes circuit failure.
+	// Minimum 3 quantized units (0.03 DEV) per target. After a VOLUME_FEE_BPS
+	// haircut in the next round: compute_output_amount(3, 4) = 2, which is safe.
+	// With 1: compute_output_amount(1, 4) = 0, which drops the transfer event.
 	let min_per_target = 3u128;
 	let target_amounts_u128 = random_partition(total_output as u128, num_targets, min_per_target);
 	let target_amounts: Vec<u32> = target_amounts_u128.iter().map(|&x| x as u32).collect();
@@ -921,24 +930,6 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "/tmp/wormhole_dissolve")]
 		output_dir: String,
 	},
-	/// Fuzz test the leaf verification by attempting invalid proofs
-	Fuzz {
-		/// Wallet name to use for funding
-		#[arg(short, long)]
-		wallet: String,
-
-		/// Password for the wallet
-		#[arg(short, long, hide = true)]
-		password: Option<String>,
-
-		/// Read password from file
-		#[arg(long)]
-		password_file: Option<String>,
-
-		/// Amount in DEV to use for the test transfer (default: 1.0)
-		#[arg(short, long, default_value = "1.0")]
-		amount: f64,
-	},
 	/// Collect miner rewards from a wormhole address.
 	///
 	/// This command queries Subsquid for pending transfers to your wormhole address,
@@ -1188,18 +1179,6 @@ pub async fn handle_wormhole_command(
 				execution_mode,
 			)
 			.await
-		},
-		WormholeCommands::Fuzz { wallet: _, password: _, password_file: _, amount: _ } => {
-			// TODO: Re-enable fuzz tests once ZK tree is deployed to a test chain.
-			// The fuzz tests need to be rewritten to use zkTree_getMerkleProof RPC
-			// instead of the old state_getReadProof storage proofs.
-			// See run_fuzz_test() and try_generate_fuzz_proof() below for the old implementation.
-			Err(crate::error::QuantusError::Generic(
-				"Fuzz testing is temporarily disabled during the migration to ZK tree proofs. \
-				 The fuzz tests require a chain with pallet-zk-tree deployed and the \
-				 zkTree_getMerkleProof RPC endpoint available."
-					.to_string(),
-			))
 		},
 		WormholeCommands::CollectRewards {
 			wallet,
@@ -2120,14 +2099,15 @@ fn derive_wormhole_secret(
 		.map_err(|e| crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e)))
 }
 
-/// Calculate the amount for a given round, accounting for fees
-/// Each round deducts the on-chain volume fee (`VOLUME_FEE_BPS`)
-/// Round 1: fee applied once, Round 2: fee applied twice, etc.
+/// Approximate total still in the circuit after `round` volume-fee haircuts on
+/// `initial_amount` (applied in planck). Real per-proof fees are computed on
+/// quantized amounts, so this is for display / coarse checks only — final
+/// verification uses the on-chain minted exit totals.
 fn calculate_round_amount(initial_amount: u128, round: usize) -> u128 {
+	let keep_bps = 10000u128.saturating_sub(VOLUME_FEE_BPS as u128);
 	let mut amount = initial_amount;
 	for _ in 0..round {
-		// Output = Input * (10000 - 10) / 10000
-		amount = amount * 9990 / 10000;
+		amount = amount.saturating_mul(keep_bps) / 10000;
 	}
 	amount
 }
@@ -2290,41 +2270,44 @@ async fn execute_initial_transfers(
 	execution_mode: ExecutionMode,
 ) -> crate::error::Result<Vec<TransferInfo>> {
 	use colored::Colorize;
-	use quantus_node::api::runtime_types::{
-		pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
-	};
 
 	log_print!("{}", "Step 1: Sending batched transfer to wormhole addresses...".bright_yellow());
 
 	// Randomly partition the total amount among proofs
 	// Each partition must meet the on-chain minimum transfer amount
-	// Minimum per partition is 0.02 DEV (2 quantized units) to ensure non-trivial amounts
+	// Minimum per partition is 0.03 DEV (3 quantized units) to ensure non-trivial amounts
 	let partition_amounts = random_partition(amount, num_proofs, 3 * SCALE_DOWN_FACTOR);
+	let partitioned_total: u128 = partition_amounts.iter().sum();
+	if partitioned_total != amount {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"internal error: random_partition summed to {partitioned_total}, expected {amount}"
+		)));
+	}
 	log_print!("  Random partition of {} ({}):", amount, format_balance(amount));
 	for (i, &amt) in partition_amounts.iter().enumerate() {
 		log_print!("    Proof {}: {} ({})", i + 1, amt, format_balance(amt));
 	}
 
-	// Build batch of transfer calls
-	let mut calls = Vec::with_capacity(num_proofs);
-	for (i, secret) in secrets.iter().enumerate() {
-		let wormhole_address = SubxtAccountId(*secret.address());
-		let transfer_call = RuntimeCall::Balances(BalancesCall::transfer_allow_death {
-			dest: subxt::ext::subxt_core::utils::MultiAddress::Id(wormhole_address),
-			value: partition_amounts[i],
-		});
-		calls.push(transfer_call);
-	}
+	let transfers: Vec<(String, u128)> = secrets
+		.iter()
+		.enumerate()
+		.map(|(i, secret)| (bytes_to_quantus_ss58(secret.address()), partition_amounts[i]))
+		.collect();
 
-	// batch_all is atomic: either every wormhole funding transfer lands or none
-	// do, so the per-secret proof bookkeeping below can't diverge from chain state.
-	let batch_tx = quantus_node::api::tx().utility().batch_all(calls);
+	// Same atomic batch builder as `quantus send --batch` / exercise funding.
+	let batch_tx = crate::cli::send::build_batch_transfer_call(&transfers)?;
 
-	let quantum_keypair = QuantumKeyPair {
-		public_key: wallet.keypair.public_key.clone(),
-		private_key: wallet.keypair.private_key.clone(),
-		scheme: wallet.keypair.scheme,
-	};
+	let balance_before = get_balance(quantus_client, &wallet.wallet_address).await?;
+	crate::cli::send::ensure_balance_covers_call(
+		quantus_client,
+		&wallet.keypair,
+		&batch_tx,
+		balance_before,
+		amount,
+		None,
+		"wormhole multiround funding batch",
+	)
+	.await?;
 
 	log_print!("  Submitting batch of {} transfers...", num_proofs);
 
@@ -2363,7 +2346,7 @@ async fn execute_initial_transfers(
 	let wait_mode = wormhole_inclusion_mode(execution_mode);
 	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		quantus_client,
-		&quantum_keypair,
+		&wallet.keypair,
 		batch_tx,
 		None,
 		wait_mode,
@@ -2401,8 +2384,25 @@ async fn execute_initial_transfers(
 			leaf_index: None,
 		})
 		.collect();
-	let transfers =
-		parse_expected_transfer_events(&transfer_events, &expected_transfers, block_hash)?;
+	let parsed = parse_expected_transfer_events(&transfer_events, &expected_transfers, block_hash)?;
+
+	// Event matching alone is not enough: a wrong/no-op batch can still succeed while
+	// NativeTransferred is matched incorrectly. The free balance must show the debit.
+	let balance_after = get_balance(quantus_client, &wallet.wallet_address).await?;
+	let deducted = balance_before.saturating_sub(balance_after);
+	if deducted < amount {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Funding batch did not debit the wallet: free balance dropped by {} ({}) but \
+			 {} ({}) was transferred. Have {}, now {}. Refusing to prove against a \
+			 funding that did not leave this account.",
+			deducted,
+			format_balance(deducted),
+			amount,
+			format_balance(amount),
+			format_balance(balance_before),
+			format_balance(balance_after),
+		)));
+	}
 
 	log_success!(
 		"  {} transfers submitted in a single batch ({} block {})",
@@ -2410,8 +2410,14 @@ async fn execute_initial_transfers(
 		wait_mode.transaction_stage().status_label(),
 		hex::encode(block_hash.0)
 	);
+	log_print!(
+		"  Balance after funding: {} ({}) [deducted: {} planck]",
+		balance_after,
+		format_balance(balance_after),
+		deducted
+	);
 
-	Ok(transfers)
+	Ok(parsed)
 }
 
 /// Generate proofs for a round with random output partitioning
@@ -2581,22 +2587,22 @@ fn derive_round_secrets(
 	Ok(secrets)
 }
 
-/// Verify final balance and print summary
+/// Verify the wallet's free-balance delta matches funding out + final minted exits,
+/// allowing only extrinsic-fee slack (not a missing 100-DEV debit).
 fn verify_final_balance(
 	initial_balance: u128,
 	final_balance: u128,
 	total_sent: u128,
+	total_received: u128,
 	rounds: usize,
 	num_proofs: usize,
-) {
+) -> crate::error::Result<()> {
 	use colored::Colorize;
 
 	log_print!("{}", "Balance Verification:".bright_cyan());
 
-	// Total received in final round: apply fee deduction for each round
-	let total_received = calculate_round_amount(total_sent, rounds);
-
-	// Expected net change (may be negative due to fees)
+	// Closed loop: −funding + final exits. Volume fees make this slightly negative;
+	// extrinsic fees make the actual drop a bit larger.
 	let expected_change = total_received as i128 - total_sent as i128;
 	let actual_change = final_balance as i128 - initial_balance as i128;
 
@@ -2612,24 +2618,23 @@ fn verify_final_balance(
 	);
 	log_print!("");
 
-	// Format signed amounts for display
 	let expected_change_str = if expected_change >= 0 {
-		format!("+{}", expected_change)
+		format!("+{expected_change}")
 	} else {
-		format!("{}", expected_change)
+		format!("{expected_change}")
 	};
-	let actual_change_str = if actual_change >= 0 {
-		format!("+{}", actual_change)
-	} else {
-		format!("{}", actual_change)
-	};
+	let actual_change_str =
+		if actual_change >= 0 { format!("+{actual_change}") } else { format!("{actual_change}") };
 
-	log_print!("  Expected change: {} planck", expected_change_str);
-	log_print!("  Actual change:   {} planck", actual_change_str);
+	log_print!("  Expected change: {expected_change_str} planck");
+	log_print!("  Actual change:   {actual_change_str} planck");
 	log_print!("");
 
-	// Allow some tolerance for transaction fees
-	let tolerance = (total_sent / 100).max(1_000_000_000_000); // 1% or 1 QNT minimum
+	// Extrinsic fees for the funding batch + one verify per round. Keep this tight so a
+	// missed funding debit (~total_sent) cannot hide inside the tolerance.
+	let tolerance = 1_000_000_000_000u128 // 1 DEV
+		.saturating_mul((1 + rounds as u128).max(2))
+		.max(total_sent / 1000); // 0.1% of principal, whichever is larger
 
 	let diff = (actual_change - expected_change).unsigned_abs();
 	if diff <= tolerance {
@@ -2638,19 +2643,19 @@ fn verify_final_balance(
 			"✓".bright_green(),
 			tolerance
 		);
+		log_print!("");
+		Ok(())
 	} else {
-		log_print!(
-			"  {} Balance verification: difference of {} planck (tolerance: {} planck)",
-			"!".bright_yellow(),
-			diff,
-			tolerance
-		);
-		log_print!(
-			"    Note: Transaction fees for {} initial transfers may account for the difference",
-			num_proofs
-		);
+		log_print!("");
+		Err(crate::error::QuantusError::Generic(format!(
+			"Balance verification failed: actual change {actual_change_str} planck vs expected \
+			 {expected_change_str} planck (diff {diff}, tolerance {tolerance}). \
+			 Funding should debit ~{} and the final round should mint ~{} back \
+			 ({num_proofs} proofs, {rounds} rounds).",
+			format_balance(total_sent),
+			format_balance(total_received),
+		)))
 	}
-	log_print!("");
 }
 
 /// Run the multi-round wormhole flow
@@ -2730,6 +2735,8 @@ async fn run_multiround(
 
 	// Track transfer info for the current round
 	let mut current_transfers: Vec<TransferInfo> = Vec::new();
+	// Sum of NativeTransferred amounts minted to the wallet on the final round.
+	let mut final_exit_total: Option<u128> = None;
 
 	for round in 1..=rounds {
 		let is_final = round == rounds;
@@ -2784,17 +2791,6 @@ async fn run_multiround(
 				execution_mode,
 			)
 			.await?;
-
-			// Log balance immediately after funding transfers
-			let balance_after_funding =
-				get_balance(&quantus_client, &wallet.wallet_address).await?;
-			let funding_deducted = initial_balance.saturating_sub(balance_after_funding);
-			log_print!(
-				"  Balance after funding: {} ({}) [deducted: {} planck]",
-				balance_after_funding,
-				format_balance(balance_after_funding),
-				funding_deducted
-			);
 		} else {
 			log_print!("{}", "Step 1: Using transfer info from previous round...".bright_yellow());
 			log_print!("  Found {} transfer(s) from previous round", current_transfers.len());
@@ -2857,7 +2853,8 @@ async fn run_multiround(
 			hex::encode(extrinsic_hash.0)
 		);
 
-		// If not final round, prepare transfer info for next round
+		// If not final round, prepare transfer info for next round; on the final
+		// round record what was minted back to the funding wallet.
 		if !is_final {
 			log_print!("{}", "Step 5: Capturing transfer info for next round...".bright_yellow());
 
@@ -2896,6 +2893,17 @@ async fn run_multiround(
 				current_transfers.len(),
 				round + 1
 			);
+		} else {
+			let minted: u128 = transfer_events.iter().map(|e| e.amount).sum();
+			if minted == 0 {
+				return Err(crate::error::QuantusError::Generic(
+					"Final round produced no NativeTransferred mint events to sum for \
+					 balance verification"
+						.to_string(),
+				));
+			}
+			final_exit_total = Some(minted);
+			log_print!("  Final-round exits to wallet: {} ({})", minted, format_balance(minted));
 		}
 
 		// Log balance after this round
@@ -2925,9 +2933,22 @@ async fn run_multiround(
 	log_print!("==================================================");
 	log_print!("");
 
-	// Final balance verification
+	// Final balance verification against on-chain minted exits (not the approximate
+	// planck haircut used for the pre-run "Expected amounts" table).
 	let final_balance = get_balance(&quantus_client, &wallet.wallet_address).await?;
-	verify_final_balance(initial_balance, final_balance, amount, rounds, num_proofs);
+	let total_received = final_exit_total.ok_or_else(|| {
+		crate::error::QuantusError::Generic(
+			"internal error: final-round exit total was not recorded".to_string(),
+		)
+	})?;
+	verify_final_balance(
+		initial_balance,
+		final_balance,
+		amount,
+		total_received,
+		rounds,
+		num_proofs,
+	)?;
 
 	if keep_files {
 		log_print!("Proof files preserved in: {}", output_dir);
@@ -2978,27 +2999,9 @@ async fn generate_proof(
 			crate::error::QuantusError::Generic(format!("Failed to get block: {}", e))
 		})?;
 
-	// Fetch ZK Merkle proof from chain via RPC using the leaf_index
-	// CRITICAL: We MUST fetch the proof at the same block we're proving against.
+	// CRITICAL: fetch the ZK Merkle proof at the same block we're proving against.
 	// The tree root changes with each block, so proof must match header.zk_tree_root.
-	let proof_params = rpc_params![leaf_index, block_hash];
-	let zk_proof: Option<ZkMerkleProofRpc> = quantus_client
-		.rpc_client()
-		.request("zkTree_getMerkleProof", proof_params)
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to get ZK Merkle proof at block {:?}: {}",
-				block_hash, e
-			))
-		})?;
-
-	let zk_proof = zk_proof.ok_or_else(|| {
-		crate::error::QuantusError::Generic(format!(
-			"No ZK Merkle proof found for leaf_index {}",
-			leaf_index
-		))
-	})?;
+	let zk_proof = get_zk_merkle_proof(quantus_client, leaf_index, block_hash).await?;
 
 	// Decode the input amount from the leaf data
 	// The leaf data is SCALE-encoded ZkLeaf: (to: AccountId, transfer_count: u64, asset_id:
@@ -4253,36 +4256,28 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 }
 
 // =============================================================================
-// FUZZ TEST FUNCTIONS - TEMPORARILY DISABLED
+// Wormhole negative-proof fuzz (not implemented)
 // =============================================================================
 //
-// The fuzz tests below are temporarily disabled during the migration from MPT
-// storage proofs to ZK tree Merkle proofs. To re-enable:
+// There used to be a `wormhole fuzz` command that mutated leaf / Merkle fields and
+// checked the verifier rejected them. That path targeted the pre-migration MPT
+// storage proofs (`state_getReadProof`) and was deleted rather than left as a
+// stub that always failed.
 //
-// 1. Deploy pallet-zk-tree to a test chain
-// 2. Update run_fuzz_test() to use zkTree_getMerkleProof RPC instead of state_getReadProof
-// 3. Update try_generate_fuzz_proof() to use the new PrivateCircuitInputs fields:
-//    - zk_tree_root: [u8; 32]
-//    - zk_merkle_siblings: Vec<[[u8; 32]; 3]>
-//    - zk_merkle_positions: Vec<u8>
-// 4. Note: The ZK leaf no longer contains `from` (funding_account) - it's now: (to: AccountId,
-//    transfer_count: u64, asset_id: u32, amount: u32)
-// 5. Update generate_fuzz_cases() to remove from-address fuzzing since it's no longer in the leaf
+// Happy-path proving already uses the live ZK tree (`zkTree_getMerkleProof` via
+// [`get_zk_merkle_proof`], then [`compute_merkle_positions`]). To bring negative
+// fuzzing back:
 //
-// See qp-zk-circuits/wormhole/tests/src/prover/prover_tests.rs for examples of
-// how to construct ZK Merkle proofs for testing.
+// 1. Fund a real transfer and fetch a valid `ZkMerkleProofRpc` at a fixed block.
+// 2. Mutate circuit inputs that the verifier must reject (wrong siblings / positions, wrong
+//    `zk_tree_root`, wrong leaf amount / transfer_count, spent nullifier, etc.). The leaf shape is
+//    `(to, transfer_count, asset_id, amount)` — there is no funding `from` field to fuzz.
+// 3. Assert local verification fails (and optionally that an on-chain `verify_*_batch` extrinsic is
+//    rejected).
+//
+// Circuit construction examples live in
+// `qp-zk-circuits/wormhole/tests/src/prover/prover_tests.rs`.
 // =============================================================================
-
-// TODO: Re-enable fuzz tests once ZK tree is deployed
-// The old implementation used:
-// - state_getReadProof RPC to fetch MPT storage proofs
-// - prepare_proof_for_circuit() to process proofs
-// - PrivateCircuitInputs with funding_account and storage_proof fields
-//
-// The new implementation should:
-// - Use zkTree_getMerkleProof RPC
-// - Directly use ZkMerkleProofRpc response (siblings, positions)
-// - Use PrivateCircuitInputs with zk_tree_root, zk_merkle_siblings, zk_merkle_positions
 
 /// Check if nullifiers have been spent by querying Subsquid.
 ///
@@ -4564,6 +4559,43 @@ mod tests {
 		assert_eq!(compute_output_amount(0, 10), 0);
 		assert_eq!(compute_output_amount(1, 10), 0); // rounds down
 		assert_eq!(compute_output_amount(100, 10), 99);
+
+		// On-chain volume fee
+		assert_eq!(compute_output_amount(10_000, VOLUME_FEE_BPS), 9_996);
+	}
+
+	#[test]
+	fn calculate_round_amount_uses_on_chain_volume_fee_bps() {
+		let one = 100_000_000_000_000u128;
+		let keep = 10000u128 - VOLUME_FEE_BPS as u128;
+		assert_eq!(calculate_round_amount(one, 0), one);
+		assert_eq!(calculate_round_amount(one, 1), one * keep / 10000);
+		assert_eq!(calculate_round_amount(one, 2), one * keep / 10000 * keep / 10000);
+		// Must not silently keep the old hardcoded 10 bps haircut.
+		assert_ne!(calculate_round_amount(one, 2), one * 9990 / 10000 * 9990 / 10000);
+	}
+
+	#[test]
+	fn verify_final_balance_accepts_closed_loop_within_fee_tolerance() {
+		let sent = 100_000_000_000_000u128;
+		let received = calculate_round_amount(sent, 2);
+		let initial = 150_000_000_000_000u128;
+		// Exact closed loop (no extrinsic fees): final = initial - sent + received
+		let final_bal = initial - sent + received;
+		verify_final_balance(initial, final_bal, sent, received, 2, 2)
+			.expect("exact closed loop must pass");
+	}
+
+	#[test]
+	fn verify_final_balance_rejects_missing_funding_debit() {
+		let sent = 100_000_000_000_000u128;
+		let received = 99_890_000_000_000u128;
+		let initial = 10_990_000_000_000u128;
+		// Same pathology as the broken run: exits credited, funding never left.
+		let final_bal = initial + received;
+		let err = verify_final_balance(initial, final_bal, sent, received, 2, 2)
+			.expect_err("missing funding debit must fail verification");
+		assert!(err.to_string().contains("Balance verification failed"), "unexpected error: {err}");
 	}
 
 	#[test]

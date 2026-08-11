@@ -26,6 +26,13 @@ async fn runtime_version(ctx: &ExerciseCtx, post_upgrade: bool) -> Result<String
 	if compatible {
 		return Ok(format!("spec {spec} / tx {tx}, compatible with CLI bindings"));
 	}
+	if crate::config::is_newer_unlisted_runtime(spec) {
+		return Ok(format!(
+			"spec {spec} / tx {tx}: newer than this CLI's tested list (up to {}); \
+			 proceeding, but some commands may not work",
+			crate::config::max_compatible_spec_version()
+		));
+	}
 	if post_upgrade {
 		if crate::config::COMPATIBLE_RUNTIMES.iter().any(|r| r.transaction_version == tx) {
 			return Ok(format!(

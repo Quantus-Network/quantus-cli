@@ -140,8 +140,8 @@ impl QuantusClient {
 		// Create SubXT client using the configured RPC client
 		let client = OnlineClient::<ChainConfig>::from_rpc_client(rpc_client).await?;
 
-		// Reject nodes that do not identify as a supported Quantus runtime before the
-		// client can be used to encode or sign transactions.
+		// Reject non-Quantus / older-unsupported runtimes before encode/sign. Newer-than-table
+		// Quantus specs are allowed with a warning (see validate_runtime_identity).
 		if enforce_runtime_identity {
 			use jsonrpsee::core::client::ClientT;
 			let runtime_version: serde_json::Value = ws_client
