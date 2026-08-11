@@ -2404,8 +2404,7 @@ async fn execute_initial_transfers(
 			leaf_index: None,
 		})
 		.collect();
-	let parsed =
-		parse_expected_transfer_events(&transfer_events, &expected_transfers, block_hash)?;
+	let parsed = parse_expected_transfer_events(&transfer_events, &expected_transfers, block_hash)?;
 
 	// Event matching alone is not enough: a wrong/no-op batch can still succeed while
 	// NativeTransferred is matched incorrectly. The free balance must show the debit.
@@ -2644,11 +2643,8 @@ fn verify_final_balance(
 	} else {
 		format!("{expected_change}")
 	};
-	let actual_change_str = if actual_change >= 0 {
-		format!("+{actual_change}")
-	} else {
-		format!("{actual_change}")
-	};
+	let actual_change_str =
+		if actual_change >= 0 { format!("+{actual_change}") } else { format!("{actual_change}") };
 
 	log_print!("  Expected change: {expected_change_str} planck");
 	log_print!("  Actual change:   {actual_change_str} planck");
@@ -2927,11 +2923,7 @@ async fn run_multiround(
 				));
 			}
 			final_exit_total = Some(minted);
-			log_print!(
-				"  Final-round exits to wallet: {} ({})",
-				minted,
-				format_balance(minted)
-			);
+			log_print!("  Final-round exits to wallet: {} ({})", minted, format_balance(minted));
 		}
 
 		// Log balance after this round
@@ -4649,10 +4641,7 @@ mod tests {
 		let final_bal = initial + received;
 		let err = verify_final_balance(initial, final_bal, sent, received, 2, 2)
 			.expect_err("missing funding debit must fail verification");
-		assert!(
-			err.to_string().contains("Balance verification failed"),
-			"unexpected error: {err}"
-		);
+		assert!(err.to_string().contains("Balance verification failed"), "unexpected error: {err}");
 	}
 
 	#[test]

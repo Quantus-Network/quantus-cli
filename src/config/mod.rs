@@ -27,7 +27,11 @@ pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
 
 /// Highest `spec_version` listed in [`COMPATIBLE_RUNTIMES`].
 pub fn max_compatible_spec_version() -> u32 {
-	COMPATIBLE_RUNTIMES.iter().map(|runtime| runtime.spec_version).max().unwrap_or(0)
+	COMPATIBLE_RUNTIMES
+		.iter()
+		.map(|runtime| runtime.spec_version)
+		.max()
+		.unwrap_or(0)
 }
 
 /// Check whether a runtime version pair is an exact match in [`COMPATIBLE_RUNTIMES`].
