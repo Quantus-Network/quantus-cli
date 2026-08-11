@@ -254,7 +254,7 @@ fn install_verified_release(
 	yes: bool,
 ) -> crate::error::Result<()> {
 	let target = updater.target();
-	let archive_asset = release.asset_for(&target, Some(ASSET_IDENTIFIER)).ok_or_else(|| {
+	let archive_asset = release.asset_for(target, Some(ASSET_IDENTIFIER)).ok_or_else(|| {
 		QuantusError::Generic(format!(
 			"No release archive found for target `{target}` (looking for {ASSET_IDENTIFIER})"
 		))
@@ -262,7 +262,7 @@ fn install_verified_release(
 	let sums_asset = release
 		.assets()
 		.iter()
-		.find(|a| a.name().contains("sha256sums") && a.name().contains(&target))
+		.find(|a| a.name().contains("sha256sums") && a.name().contains(target))
 		.cloned()
 		.ok_or_else(|| {
 			QuantusError::Generic(format!(
@@ -321,7 +321,7 @@ fn install_verified_release(
 	let bin_path = substitute_bin_path(
 		updater.bin_path_in_archive(),
 		release.version(),
-		&target,
+		target,
 		updater.bin_name(),
 	);
 
