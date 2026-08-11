@@ -43,7 +43,7 @@ async fn scheme_transfer(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Resu
 	})?;
 	let recipient = ctx.fresh_keypair_with_scheme(scheme)?;
 	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 	let before = ctx.free_balance(&recipient_ss58).await?;
 	crate::cli::send::transfer(
 		&ctx.client,
@@ -66,7 +66,7 @@ async fn scheme_transfer(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Resu
 async fn single_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	let sender = ctx.eph[0].clone();
 	let before = ctx.free_balance(&recipient_ss58).await?;
@@ -94,7 +94,7 @@ async fn batch_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	for _ in 0..n {
 		recipients.push(ctx.fresh_keypair()?.try_to_account_id_ss58check()?);
 	}
-	let amount = ctx.unit / 2;
+	let amount = ctx.test_unit / 2;
 	let transfers: Vec<(String, u128)> = recipients.iter().map(|r| (r.clone(), amount)).collect();
 
 	let sender = ctx.eph[0].clone();
@@ -114,8 +114,8 @@ async fn batch_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 
 async fn transfer_with_tip(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
-	let amount = ctx.unit;
-	let tip = ctx.unit / 10;
+	let amount = ctx.test_unit;
+	let tip = ctx.test_unit / 10;
 	let sender = ctx.eph[1].clone();
 	crate::cli::send::transfer(
 		&ctx.client,
@@ -144,7 +144,7 @@ async fn transfer_manual_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&sender,
 		&recipient,
-		ctx.unit,
+		ctx.test_unit,
 		None,
 		Some(nonce as u32),
 		ctx.wait_mode(),
@@ -165,7 +165,7 @@ async fn transfer_keep_alive(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_id = account_id_of(&recipient)?;
 	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	let sender = ctx.eph[1].clone();
 	let call = quantus_subxt::api::tx()
@@ -192,7 +192,7 @@ async fn transfer_all(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&funder,
 		&sender_ss58,
-		20 * ctx.unit,
+		20 * ctx.test_unit,
 		None,
 		ctx.wait_mode(),
 	)
@@ -224,7 +224,7 @@ async fn transfer_all(ctx: &mut ExerciseCtx) -> Result<String> {
 async fn burn(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[0].clone();
 	let sender_ss58 = sender.try_to_account_id_ss58check()?;
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	let before = ctx.free_balance(&sender_ss58).await?;
 	let call = quantus_subxt::api::tx().balances().burn(amount, true);

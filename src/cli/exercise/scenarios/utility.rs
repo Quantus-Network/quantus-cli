@@ -43,7 +43,7 @@ async fn force_batch_partial(ctx: &mut ExerciseCtx) -> Result<String> {
 	let good_recipient = ctx.fresh_keypair()?;
 	let good_ss58 = good_recipient.try_to_account_id_ss58check()?;
 	let failing_recipient = ctx.fresh_keypair()?;
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	let calls = vec![
 		transfer_call(account_id_of(&good_recipient)?, amount),
@@ -73,7 +73,7 @@ async fn if_else_fallback(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[1].clone();
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	let main = transfer_call(account_id_of(&recipient)?, ABSURD_AMOUNT);
 	let fallback = transfer_call(account_id_of(&recipient)?, amount);
@@ -116,7 +116,7 @@ async fn as_derivative(ctx: &mut ExerciseCtx) -> Result<String> {
 	let derivative_ss58 = to_ss58(&derivative);
 
 	// The derivative account has to hold the funds the inner call moves.
-	let funding = 5 * ctx.unit;
+	let funding = 5 * ctx.test_unit;
 	crate::cli::send::transfer(
 		&ctx.client,
 		&sender,
@@ -129,7 +129,7 @@ async fn as_derivative(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = 2 * ctx.unit;
+	let amount = 2 * ctx.test_unit;
 	let inner = transfer_call(account_id_of(&recipient)?, amount);
 	let call = quantus_subxt::api::tx().utility().as_derivative(index, inner);
 	submit_ok(ctx, &sender, call).await?;

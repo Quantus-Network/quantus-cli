@@ -568,6 +568,80 @@ quantus call \
 
 ---
 
+### Chain Exercise Suite
+
+`quantus exercise` runs a live-node smoke/fuzz suite against a node — reads, balances,
+utility, reversible transfers, multisig, recovery, preimage, governance, vesting, negative
+cases, a seeded fuzz loop, and wormhole round-trips. It derives a handful of ephemeral
+accounts, funds them from a **root account**, drives each pallet, and verifies on-chain state
+as it goes. Intended for CI and post-upgrade validation.
+
+```bash
+# Against a local dev node — crystal_alice is genesis-funded, so every phase runs
+quantus exercise
+
+# Against a public testnet: fund from your own wallet, spending no more than 100 tokens.
+# Specifying --total-amount drops the governance phase automatically (it needs the dev
+# genesis tech-collective accounts, and its referendum deposits alone are far larger than
+# the rest of the suite)
+quantus exercise \
+  --root-account my-wallet --root-password <pw> \
+  --total-amount 100 \
+  --node-url wss://a1-planck.quantus.cat
+
+# Run only specific phases, or skip the CPU-heavy wormhole phase
+quantus exercise --phases reads,balances,multisig
+quantus exercise --skip wormhole
+
+# Reproduce a fuzz failure from its seed; emit the report as JSON
+quantus exercise --seed 12345 --json
+```
+
+Key flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--root-account <NAME>` | `crystal_alice` | Wallet that funds the run. Supply your own to run against a public testnet. |
+| `--root-password <PW>` / `--root-password-file <PATH>` | — | Password for the root wallet (or set `QUANTUS_WALLET_PASSWORD_<NAME>`). |
+| `--total-amount <TOKENS>` | `500` | Hard cap on what the whole run may draw from the root account. A ceiling, not an allocation — see below. Specifying it drops the `governance` phase unless `--phases` lists it explicitly. |
+| `--ephemeral-accounts <N>` | `4` | Number of ephemeral accounts to derive and fund. |
+| `--phases <LIST>` / `--skip <LIST>` | all | Comma-separated phases to run / skip. |
+| `--seed <N>` | random | Reproducible fuzz seed. |
+| `--fuzz-iterations <N>` | `25` | Number of fuzz iterations. |
+| `--upgrade-wasm <PATH>` | — | Enable the runtime-upgrade phase with the given WASM (fast-governance node only). |
+| `--fail-fast` | off | Stop at the first failed step. |
+| `--json` | off | Emit the final report as JSON. |
+
+#### What the run spends
+
+`--total-amount` is a hard cap on the root account's balance drop, enforced for the whole run,
+not just the initial funding: every root-paid transfer, deposit and estimated transaction fee
+is reserved against it before submission and the run fails with the numbers rather than
+exceeding it. The final report ends with a `budget / root_account_spend` line stating what was
+actually spent — and fails if the cap was exceeded.
+
+It is a ceiling, not an allocation. Ephemeral accounts are funded with what the chain's own
+deposits and fees require, not with a share of the cap, and the phases that fund dedicated
+accounts — `recovery` and `wormhole` — sweep them back into the root account when they are
+done, so their funding is borrowed rather than spent. Discretionary test transfers are scaled
+down by a fixed factor on top of that; chain-imposed amounts (existential deposit, multisig,
+recovery, vesting and governance deposits) are read from the chain and never scaled.
+
+> **Notes:**
+> - `governance` submits two referenda whose chain-fixed deposits stay locked for the whole
+>   run — on the order of a thousand tokens, dwarfing every other phase — and it relies on the
+>   dev genesis tech-collective accounts. It is therefore dropped whenever `--total-amount` is
+>   given, and when it (or `upgrade`) does run, its dev-account spend is exempt from the cap.
+> - `vesting`'s admin steps dispatch through the dev Alice/Bob/Charlie treasury multisig; on
+>   chains whose treasury is a different account they are skipped, and the permissionless
+>   vesting checks still run.
+> - The `wormhole` phase is CPU-heavy (ZK proving) — use `--skip wormhole` for a faster run. Its
+>   amount is fixed by an on-chain minimum and cannot be scaled down, so it needs ~52 tokens of
+>   headroom at once (returned afterwards).
+> - Setup fails fast, with the numbers, if the root account can't cover `--total-amount`, if the
+>   cap is too low to fund the ephemeral accounts, or if a selected phase needs more headroom
+>   than the cap leaves.
+
 ### Other Commands
 
 | Command | Description |

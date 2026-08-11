@@ -41,7 +41,7 @@ async fn pending_ids(
 async fn schedule_and_cancel(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[2].clone();
 	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
-	let amount = ctx.unit;
+	let amount = ctx.test_unit;
 
 	crate::cli::reversible::schedule_transfer_with_delay(
 		&ctx.client,
@@ -83,7 +83,7 @@ async fn schedule_with_delay(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&sender,
 		&recipient,
-		ctx.unit,
+		ctx.test_unit,
 		delay_blocks,
 		true, // delay in blocks
 		ctx.wait_mode(),
@@ -112,13 +112,13 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&funder,
 		&account_ss58,
-		10 * ctx.unit,
+		10 * ctx.test_unit,
 		None,
 		ctx.wait_mode(),
 	)
 	.await?;
 
-	let guardian = account_id_of(&ctx.alice)?;
+	let guardian = account_id_of(&ctx.root)?;
 	use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
 	let call = quantus_subxt::api::tx()
 		.reversible_transfers()
@@ -132,9 +132,9 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 	let value = ctx.client.client().storage().at(latest).fetch(&addr).await?;
 	match value {
 		Some(data) =>
-			if data.guardian != account_id_of(&ctx.alice)? {
+			if data.guardian != account_id_of(&ctx.root)? {
 				return Err(QuantusError::Generic(
-					"high-security guardian in storage does not match alice".to_string(),
+					"high-security guardian in storage does not match the root account".to_string(),
 				));
 			},
 		None =>
@@ -148,7 +148,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&account,
 		&recipient,
-		ctx.unit,
+		ctx.test_unit,
 		ctx.wait_mode(),
 	)
 	.await?;
@@ -161,7 +161,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 	};
 
 	let cancel_call = quantus_subxt::api::tx().reversible_transfers().cancel(tx_id);
-	submit_ok(ctx, &ctx.alice.clone(), cancel_call).await?;
+	ctx.submit_from_root(cancel_call, 0).await?;
 
 	let ids_after = pending_ids(ctx, &account).await?;
 	if ids_after.contains(&tx_id) {
@@ -170,7 +170,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 		)));
 	}
 
-	Ok("high-security enabled (alice as guardian), default-delay transfer scheduled, \
+	Ok("high-security enabled (root as guardian), default-delay transfer scheduled, \
 		 guardian cancelled it, storage verified"
 		.to_string())
 }
@@ -187,13 +187,13 @@ async fn guardian_recover_funds(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&funder,
 		&account_ss58,
-		20 * ctx.unit,
+		20 * ctx.test_unit,
 		None,
 		ctx.wait_mode(),
 	)
 	.await?;
 
-	let guardian = account_id_of(&ctx.alice)?;
+	let guardian = account_id_of(&ctx.root)?;
 	use quantus_subxt::api::reversible_transfers::calls::types::set_high_security::Delay;
 	let enroll = quantus_subxt::api::tx()
 		.reversible_transfers()
@@ -207,7 +207,7 @@ async fn guardian_recover_funds(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&account,
 		&recipient,
-		ctx.unit,
+		ctx.test_unit,
 		ctx.wait_mode(),
 	)
 	.await?;
@@ -220,7 +220,7 @@ async fn guardian_recover_funds(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recover = quantus_subxt::api::tx()
 		.reversible_transfers()
 		.recover_funds(account_id_of(&account)?);
-	submit_ok(ctx, &ctx.alice.clone(), recover).await?;
+	ctx.submit_from_root(recover, 0).await?;
 
 	let pending_after = pending_ids(ctx, &account).await?;
 	if !pending_after.is_empty() {

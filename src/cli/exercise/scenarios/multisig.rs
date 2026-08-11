@@ -52,7 +52,7 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 		&ctx.client,
 		&signer_a,
 		&multisig_ss58,
-		20 * ctx.unit,
+		20 * ctx.test_unit,
 		None,
 		ctx.wait_mode(),
 	)
@@ -60,7 +60,7 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	let recipient = ctx.fresh_keypair()?;
 	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = 2 * ctx.unit;
+	let amount = 2 * ctx.test_unit;
 	let inner = quantus_subxt::api::tx().balances().transfer_allow_death(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)?),
 		amount,
@@ -146,7 +146,7 @@ async fn expired_proposal_cleanup(ctx: &mut ExerciseCtx) -> Result<String> {
 	// Two proposals with a near-immediate expiry; they are never approved.
 	let inner = quantus_subxt::api::tx().balances().transfer_allow_death(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&signer_a)?),
-		ctx.unit,
+		ctx.test_unit,
 	);
 	let call_data = inner
 		.encode_call_data(&ctx.client.client().metadata())
