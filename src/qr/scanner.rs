@@ -46,6 +46,21 @@ fn decode_if_complete(parts: &[String]) -> Result<Option<Vec<u8>>> {
 	Ok(Some(bytes))
 }
 
+/// The fountain decoder locks onto the first part's stream (seqLen, checksum)
+/// and silently rejects every part of a different stream. A stale part
+/// captured first — e.g. the previous signature still animating on the device
+/// — would wedge the scan forever even though all current parts arrive. Retry
+/// completion on every suffix so dropping the oldest parts recovers the newest
+/// consistent stream.
+fn decode_any_suffix(parts: &[String]) -> Result<Option<Vec<u8>>> {
+	for start in 0..parts.len() {
+		if let Some(bytes) = decode_if_complete(&parts[start..])? {
+			return Ok(Some(bytes));
+		}
+	}
+	Ok(None)
+}
+
 /// Collect UR parts from `source` until the fountain decoder reports a complete
 /// payload, then decode it.
 pub async fn scan_ur(source: &UrSource, timeout: Duration) -> Result<Vec<u8>> {
@@ -70,7 +85,7 @@ async fn scan_ur_from_file(path: &std::path::Path, timeout: Duration) -> Result<
 				.filter(|l| is_ur_line(l))
 				.map(|l| l.trim().to_string())
 				.collect();
-			if let Some(bytes) = decode_if_complete(&parts)? {
+			if let Some(bytes) = decode_any_suffix(&parts)? {
 				return Ok(bytes);
 			}
 		}
@@ -102,7 +117,7 @@ async fn scan_ur_from_stdin() -> Result<Vec<u8>> {
 			let line = line?;
 			if is_ur_line(&line) {
 				parts.push(line.trim().to_string());
-				if let Some(bytes) = decode_if_complete(&parts)? {
+				if let Some(bytes) = decode_any_suffix(&parts)? {
 					return Ok(bytes);
 				}
 			}
@@ -380,7 +395,7 @@ mod camera {
 			}
 			if frames == 1 || frames % 15 == 0 {
 				on_status(&format!(
-					"📷 Live {img_w}x{img_h} @ {} fps — {frames} frames, no QR yet",
+					"📷 Live {img_w}x{img_h} @ {} fps — {frames} frames scanned",
 					fmt.frame_rate()
 				));
 			}
@@ -486,46 +501,104 @@ mod camera {
 		pb
 	}
 
+	#[derive(Default)]
+	struct UrCapture {
+		parts: Vec<String>,
+		seen: HashSet<String>,
+		seqs: HashSet<u32>,
+		total: Option<u32>,
+	}
+
 	/// Scan an animated (or static) UR from the camera until the fountain
-	/// decoder has a complete payload.
+	/// decoder has a complete payload. Every captured part is printed as a
+	/// persistent line (the live status stays on the spinner and never
+	/// overwrites capture progress), and an incomplete scan reports exactly
+	/// which fragments are still missing.
 	pub(super) async fn scan_ur_with_camera(index: u32, timeout: Duration) -> Result<Vec<u8>> {
 		let spinner = scan_spinner("📷 Point the camera at the QR on the cold wallet…");
 		let status = spinner.clone();
 		let progress = spinner.clone();
-
-		let mut seen: HashSet<String> = HashSet::new();
-		let mut parts: Vec<String> = Vec::new();
-		let mut total: Option<u32> = None;
+		let state = Arc::new(Mutex::new(UrCapture::default()));
+		let status_state = state.clone();
+		let sink_state = state.clone();
 
 		let result = run_scan(
 			index,
 			timeout,
-			move |msg| status.set_message(msg.to_string()),
+			move |msg| {
+				let no_parts_yet =
+					status_state.lock().map(|st| st.parts.is_empty()).unwrap_or(false);
+				if no_parts_yet {
+					status.set_message(msg.to_string());
+				}
+			},
 			move |content| {
 				if !is_ur_line(content) {
 					return None;
 				}
 				let part = content.trim().to_string();
-				if !seen.insert(part.clone()) {
+				let mut st = sink_state.lock().expect("UR capture state poisoned");
+				if !st.seen.insert(part.clone()) {
 					return None;
 				}
-				if let Some((_, t)) = ur_progress(&part) {
-					total = Some(t);
+				let seq = ur_progress(&part);
+				if let Some((s, t)) = seq {
+					st.total = Some(t);
+					st.seqs.insert(s);
 				}
-				parts.push(part);
-				let of_total = total.map(|t| format!(" (sequence of {t})")).unwrap_or_default();
-				progress.set_message(format!(
-					"📷 Captured {} UR part{}{}…",
-					parts.len(),
-					if parts.len() == 1 { "" } else { "s" },
-					of_total
-				));
-				decode_if_complete(&parts).transpose()
+				st.parts.push(part);
+				let line = match (seq, st.total) {
+					(Some((s, _)), Some(t)) =>
+						format!("📥 Part {s}/{t} — {}/{t} collected", st.seqs.len()),
+					_ => format!("📥 UR part captured ({} total)", st.parts.len()),
+				};
+				progress.println(line);
+				progress.set_message(match st.total {
+					Some(t) =>
+						format!("📷 Collecting signature QR — {}/{t} parts…", st.seqs.len()),
+					None =>
+						format!("📷 Collecting signature QR — {} parts…", st.parts.len()),
+				});
+				decode_any_suffix(&st.parts).transpose()
 			},
 		)
 		.await;
 
 		spinner.finish_and_clear();
+		let st = state.lock().expect("UR capture state poisoned");
+		if result.is_err() && !st.parts.is_empty() {
+			match st.total {
+				Some(t) => {
+					let missing: Vec<String> = (1..=t)
+						.filter(|s| !st.seqs.contains(s))
+						.map(|s| s.to_string())
+						.collect();
+					if missing.is_empty() {
+						crate::log_print!(
+							"⚠️  All {t} fragments were captured but never formed a consistent payload — was an older signature QR still animating when the scan started?"
+						);
+					} else {
+						crate::log_print!(
+							"⚠️  Scan ended with {}/{t} parts — missing: {}",
+							st.seqs.len(),
+							if missing.len() > 20 {
+								format!(
+									"{} … ({} more)",
+									missing[..20].join(", "),
+									missing.len() - 20
+								)
+							} else {
+								missing.join(", ")
+							}
+						);
+					}
+				},
+				None => crate::log_print!(
+					"⚠️  Scan ended with {} parts captured but an incomplete payload",
+					st.parts.len()
+				),
+			}
+		}
 		result
 	}
 
@@ -682,6 +755,23 @@ mod tests {
 		assert!(!is_ur_line("ur:"));
 		assert!(!is_ur_line("# comment"));
 		assert!(!is_ur_line(""));
+	}
+
+	#[test]
+	fn test_decode_any_suffix_recovers_from_stale_stream() {
+		let old_payload: Vec<u8> = (0..7500u32).map(|i| (i * 31 % 249) as u8).collect();
+		let new_payload: Vec<u8> = (0..7500u32).map(|i| (i * 37 % 251) as u8).collect();
+		let old_parts = quantus_ur::encode_bytes(&old_payload).unwrap();
+		let new_parts = quantus_ur::encode_bytes(&new_payload).unwrap();
+
+		let mut captured = old_parts[..3].to_vec();
+		captured.extend(new_parts.iter().cloned());
+		assert!(
+			!quantus_ur::is_complete(&captured),
+			"stale-first capture must wedge the plain decoder for this test to mean anything"
+		);
+		let bytes = decode_any_suffix(&captured).unwrap().expect("suffix recovery");
+		assert_eq!(bytes, new_payload);
 	}
 
 	#[tokio::test]
