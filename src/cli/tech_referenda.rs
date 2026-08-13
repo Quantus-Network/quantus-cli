@@ -604,7 +604,14 @@ fn format_blocks_duration(blocks: u64, block_time_ms: u64) -> String {
 fn format_block_eta(target_block: u32, current_block: u32, block_time_ms: u64) -> String {
 	if target_block <= current_block {
 		let ago = (current_block - target_block) as u64;
-		format!("block {} (~{} ago)", target_block, format_blocks_duration(ago, block_time_ms))
+		let at = chrono::Utc::now() -
+			chrono::Duration::milliseconds(ago.saturating_mul(block_time_ms) as i64);
+		format!(
+			"block {} (~{} ago, ≈ {})",
+			target_block,
+			format_blocks_duration(ago, block_time_ms),
+			at.format("%Y-%m-%d %H:%M UTC")
+		)
 	} else {
 		let delta = (target_block - current_block) as u64;
 		let eta = chrono::Utc::now() +
@@ -616,6 +623,40 @@ fn format_block_eta(target_block: u32, current_block: u32, block_time_ms: u64) -
 			format_blocks_duration(delta, block_time_ms),
 			eta.format("%Y-%m-%d %H:%M UTC")
 		)
+	}
+}
+
+/// Scheduler task id for a referendum's enactment call (matches pallet-referenda).
+fn enactment_task_name(index: u32) -> [u8; 32] {
+	use codec::Encode;
+	const ASSEMBLY_ID: [u8; 8] = *b"assembly";
+	sp_core::hashing::blake2_256(&(ASSEMBLY_ID, "enactment", index).encode())
+}
+
+/// Resolve the scheduled enactment block from Scheduler::Lookup, if still pending.
+async fn scheduled_enactment_block(
+	quantus_client: &crate::chain::client::QuantusClient,
+	index: u32,
+	at_block: subxt::utils::H256,
+) -> crate::error::Result<Option<u32>> {
+	use quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp;
+
+	let addr = quantus_subxt::api::storage().scheduler().lookup(enactment_task_name(index));
+	let storage_at = quantus_client.client().storage().at(at_block);
+	let Some((when, _)) = storage_at.fetch(&addr).await.map_err(|e| {
+		QuantusError::NetworkError(format!(
+			"Failed to fetch Scheduler::Lookup for referendum #{index}: {e:?}"
+		))
+	})?
+	else {
+		return Ok(None);
+	};
+
+	match when {
+		BlockNumberOrTimestamp::BlockNumber(block) => Ok(Some(block)),
+		BlockNumberOrTimestamp::Timestamp(_) => Err(QuantusError::Generic(format!(
+			"Referendum #{index} enactment is scheduled by timestamp, not block number"
+		))),
 	}
 }
 
@@ -901,11 +942,25 @@ async fn get_proposal_status(
 					log_verbose!("   - Full status: {:#?}", status);
 				},
 				ReferendumInfo::Approved(since, ..) => {
+					let current_block =
+						quantus_client.client().blocks().at(latest_block_hash).await?.number();
+					let block_time_ms = target_block_time_ms(quantus_client)?;
 					log_print!("   - Status: {}", "Approved".green());
-					log_print!("   - Approved at block: {}", since);
 					log_print!(
-						"   💡 Enactment is scheduled; check the scheduler for the exact block"
+						"   - Approved at: {}",
+						format_block_eta(since, current_block, block_time_ms)
 					);
+					match scheduled_enactment_block(quantus_client, index, latest_block_hash)
+						.await?
+					{
+						Some(when) => log_print!(
+							"   🏁 Enactment: {}",
+							format_block_eta(when, current_block, block_time_ms)
+						),
+						None => log_print!(
+							"   🏁 Enactment: already executed (no longer in the scheduler)"
+						),
+					}
 				},
 				ReferendumInfo::Rejected(since, ..) => {
 					log_print!("   - Status: {}", "Rejected".red());
@@ -1065,7 +1120,8 @@ async fn refund_decision_deposit(
 
 #[cfg(test)]
 mod tests {
-	use super::{pre_deciding_state, PreDecidingState};
+	use super::{enactment_task_name, format_block_eta, pre_deciding_state, PreDecidingState};
+	use codec::Encode;
 
 	#[test]
 	fn missing_deposit_blocks_pre_deciding_enactment_estimate() {
@@ -1087,5 +1143,26 @@ mod tests {
 			state.enactment_estimate_reason(),
 			"until a deciding slot opens and Deciding starts"
 		);
+	}
+
+	#[test]
+	fn enactment_task_name_matches_pallet_referenda_formula() {
+		const ASSEMBLY_ID: [u8; 8] = *b"assembly";
+		let index = 4u32;
+		let expected = sp_core::hashing::blake2_256(&(ASSEMBLY_ID, "enactment", index).encode());
+		assert_eq!(enactment_task_name(index), expected);
+	}
+
+	#[test]
+	fn format_block_eta_includes_absolute_time_for_past_and_future() {
+		let past = format_block_eta(100, 200, 6_000);
+		assert!(past.contains("block 100"), "{past}");
+		assert!(past.contains("ago"), "{past}");
+		assert!(past.contains("UTC"), "{past}");
+
+		let future = format_block_eta(300, 200, 6_000);
+		assert!(future.contains("block 300"), "{future}");
+		assert!(future.contains("in 100 blocks"), "{future}");
+		assert!(future.contains("UTC"), "{future}");
 	}
 }
