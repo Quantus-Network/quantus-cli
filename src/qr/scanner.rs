@@ -208,26 +208,19 @@ mod camera {
 			if w < 21 || h < 21 || luma.len() != w.saturating_mul(h) {
 				return None;
 			}
+			let buf: Vec<u8> =
+				if invert { luma.iter().map(|v| 255 - v).collect() } else { luma.to_vec() };
 			let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-				let mut prepared = rqrr::PreparedImage::prepare_from_greyscale(w, h, |x, y| {
-					let v = luma[y * w + x];
-					if invert {
-						255 - v
-					} else {
-						v
-					}
-				});
-				let mut found = Vec::new();
-				for grid in prepared.detect_grids() {
-					if let Ok((_meta, content)) = grid.decode() {
-						found.push(content);
-					}
-				}
-				found
+				let mut hints = rxing::DecodeHints::default();
+				hints.PossibleFormats = Some(HashSet::from([rxing::BarcodeFormat::QR_CODE]));
+				rxing::helpers::detect_multiple_in_luma_with_hints(
+					buf, w as u32, h as u32, &mut hints,
+				)
+				.unwrap_or_default()
 			}))
 			.unwrap_or_default();
-			for content in decoded {
-				if let Some(hit) = sink(&content) {
+			for result in decoded {
+				if let Some(hit) = sink(result.getText()) {
 					return Some(hit);
 				}
 			}
@@ -357,7 +350,7 @@ mod camera {
 			}
 			if Instant::now() >= deadline {
 				break Err(QuantusError::Generic(
-					"Timed out scanning. Keep the QR sharp in the preview window (15-25 cm, high brightness), or use --cold-response-in <file|-> / --address".to_string(),
+					"Timed out scanning. Keep the QR large and steady in the preview window (high screen brightness helps), or use --cold-response-in <file|-> / --address".to_string(),
 				));
 			}
 
@@ -598,6 +591,44 @@ mod camera {
 				}
 			}
 			(w, w, luma)
+		}
+
+		fn box_blur(luma: &[u8], w: usize, h: usize, radius: usize) -> Vec<u8> {
+			let r = radius as i32;
+			let mut out = vec![0u8; w * h];
+			for y in 0..h as i32 {
+				for x in 0..w as i32 {
+					let mut sum = 0u32;
+					let mut cnt = 0u32;
+					for dy in -r..=r {
+						for dx in -r..=r {
+							let (nx, ny) = (x + dx, y + dy);
+							if nx >= 0 && ny >= 0 && nx < w as i32 && ny < h as i32 {
+								sum += u32::from(luma[(ny as usize) * w + nx as usize]);
+								cnt += 1;
+							}
+						}
+					}
+					out[(y as usize) * w + x as usize] = (sum / cnt) as u8;
+				}
+			}
+			out
+		}
+
+		/// A fixed-focus Mac camera at phone-scanning distance defocuses the QR
+		/// well past what quirc-style decoders tolerate; this blur level is the
+		/// regression guard for that (rqrr failed it, rxing decodes it).
+		#[test]
+		fn decodes_defocused_qr() {
+			let data = "qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2";
+			let (w, h, luma) = render_qr_luma(data, false);
+			let blurred = box_blur(&luma, w, h, 5);
+			let mut found = Vec::new();
+			feed_decoded(&blurred, w, h, |s| {
+				found.push(s.to_string());
+				None::<()>
+			});
+			assert!(found.iter().any(|s| s == data), "defocused QR: {found:?}");
 		}
 
 		#[test]
