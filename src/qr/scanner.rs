@@ -138,7 +138,7 @@ mod camera {
 		collections::HashSet,
 		sync::{
 			atomic::{AtomicBool, Ordering},
-			mpsc, Arc,
+			mpsc, Arc, Mutex,
 		},
 		time::Instant,
 	};
@@ -273,10 +273,13 @@ mod camera {
 
 	/// Grab frames at the camera's highest frame rate and decode each at native
 	/// resolution. Cold-wallet UR animations run at 15–50 fps.
+	/// Preview pixels are published for the main-thread window; NSWindow must
+	/// not be created here (tokio blocking pool is not the macOS main thread).
 	fn scan_with_camera<T>(
 		index: u32,
 		timeout: Duration,
 		stop: Arc<AtomicBool>,
+		preview: Arc<Mutex<Option<Vec<u32>>>>,
 		mut on_status: impl FnMut(&str),
 		mut sink: impl FnMut(&str) -> Option<Result<T>>,
 	) -> Result<T> {
@@ -308,28 +311,11 @@ mod camera {
 			fmt.frame_rate()
 		);
 		on_status(&format!(
-			"📷 Live {}x{} @ {} fps — opening preview…",
+			"📷 Live {}x{} @ {} fps — waiting for QR…",
 			fmt.width(),
 			fmt.height(),
 			fmt.frame_rate()
 		));
-
-		let mut window = minifb::Window::new(
-			"Quantus camera — hold the QR in this view",
-			PREVIEW_W,
-			PREVIEW_H,
-			minifb::WindowOptions { resize: false, ..minifb::WindowOptions::default() },
-		)
-		.map_err(|e| {
-			crate::log_verbose!("📷 Preview window unavailable: {e}");
-			e
-		})
-		.ok();
-		if window.is_some() {
-			crate::log_print!(
-				"🖼️  Camera preview window opened — aim the QR so it is sharp in that view"
-			);
-		}
 
 		let deadline = Instant::now() + timeout;
 		let mut frames: u64 = 0;
@@ -368,22 +354,14 @@ mod camera {
 				));
 			}
 
-			if let Some(win) = window.as_mut() {
-				if !win.is_open() {
-					window = None;
-				} else {
-					let buf = rgb_preview_u32(
-						img.as_raw(),
-						img.width(),
-						img.height(),
-						PREVIEW_W,
-						PREVIEW_H,
-					);
-					if let Err(e) = win.update_with_buffer(&buf, PREVIEW_W, PREVIEW_H) {
-						crate::log_verbose!("📷 Preview update failed: {e}");
-						window = None;
-					}
-				}
+			if let Ok(mut slot) = preview.lock() {
+				*slot = Some(rgb_preview_u32(
+					img.as_raw(),
+					img.width(),
+					img.height(),
+					PREVIEW_W,
+					PREVIEW_H,
+				));
 			}
 
 			let (w, h, luma) = rgb_to_luma(img.as_raw(), img.width(), img.height());
@@ -400,6 +378,8 @@ mod camera {
 	}
 
 	/// Drive the blocking camera loop from async code, aborting on Ctrl-C.
+	/// The preview window is created and pumped on this task (the tokio
+	/// `block_on` / process main thread) so macOS AppKit is not touched off-main.
 	async fn run_scan<T: Send + 'static>(
 		index: u32,
 		timeout: Duration,
@@ -408,18 +388,58 @@ mod camera {
 	) -> Result<T> {
 		let stop = Arc::new(AtomicBool::new(false));
 		let stop_flag = stop.clone();
-		let handle = tokio::task::spawn_blocking(move || {
-			scan_with_camera(index, timeout, stop_flag, on_status, sink)
+		let preview = Arc::new(Mutex::new(None));
+		let preview_cam = preview.clone();
+		let mut window = minifb::Window::new(
+			"Quantus camera — hold the QR in this view",
+			PREVIEW_W,
+			PREVIEW_H,
+			minifb::WindowOptions { resize: false, ..minifb::WindowOptions::default() },
+		)
+		.map_err(|e| {
+			crate::log_verbose!("📷 Preview window unavailable: {e}");
+			e
+		})
+		.ok();
+		if window.is_some() {
+			crate::log_print!(
+				"🖼️  Camera preview window opened — aim the QR so it is sharp in that view"
+			);
+		}
+
+		let mut handle = tokio::task::spawn_blocking(move || {
+			scan_with_camera(index, timeout, stop_flag, preview_cam, on_status, sink)
 		});
 
-		tokio::select! {
-			result = handle => result
-				.map_err(|e| QuantusError::Generic(format!("Camera task failed: {e}")))?,
-			_ = tokio::signal::ctrl_c() => {
-				stop.store(true, Ordering::Relaxed);
-				println!();
-				Err(QuantusError::Generic("Aborted by user".to_string()))
-			},
+		loop {
+			tokio::select! {
+				result = &mut handle => {
+					return result
+						.map_err(|e| QuantusError::Generic(format!("Camera task failed: {e}")))?;
+				},
+				_ = tokio::time::sleep(Duration::from_millis(16)) => {
+					if let Some(win) = window.as_mut() {
+						if !win.is_open() {
+							window = None;
+						} else {
+							let frame = preview.lock().ok().and_then(|mut slot| slot.take());
+							if let Some(buf) = frame {
+								if let Err(e) = win.update_with_buffer(&buf, PREVIEW_W, PREVIEW_H) {
+									crate::log_verbose!("📷 Preview update failed: {e}");
+									window = None;
+								}
+							} else {
+								win.update();
+							}
+						}
+					}
+				},
+				_ = tokio::signal::ctrl_c() => {
+					stop.store(true, Ordering::Relaxed);
+					println!();
+					return Err(QuantusError::Generic("Aborted by user".to_string()));
+				},
+			}
 		}
 	}
 
