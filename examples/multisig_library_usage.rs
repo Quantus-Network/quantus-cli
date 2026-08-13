@@ -64,8 +64,15 @@ async fn main() -> Result<()> {
 	let predicted_address = predict_multisig_address(signers.clone(), threshold, nonce);
 	println!("📍 Predicted address: {}", predicted_address);
 
-	let (tx_hash, multisig_address) =
-		create_multisig(&quantus_client, &alice_keypair, signers, threshold, nonce, true).await?;
+	let (tx_hash, multisig_address) = create_multisig(
+		&quantus_client,
+		&alice_keypair.as_signer(),
+		signers,
+		threshold,
+		nonce,
+		true,
+	)
+	.await?;
 
 	println!("✅ Multisig created!");
 	println!("   Tx hash: 0x{}", hex::encode(tx_hash));
@@ -109,7 +116,7 @@ async fn main() -> Result<()> {
 
 		let propose_tx_hash = propose_transfer(
 			&quantus_client,
-			&alice_keypair,
+			&alice_keypair.as_signer(),
 			multisig_account.clone(),
 			bob_account.clone(),
 			amount,
@@ -157,7 +164,7 @@ async fn main() -> Result<()> {
 			println!("✅ Approving proposal #{}...", proposal_id);
 			let approve_tx_hash = approve_proposal(
 				&quantus_client,
-				&bob_keypair,
+				&bob_keypair.as_signer(),
 				multisig_account.clone(),
 				proposal_id,
 			)

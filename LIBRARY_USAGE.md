@@ -175,20 +175,18 @@ use quantus_cli::{
 };
 
 async fn send_transaction() -> Result<(), Box<dyn std::error::Error>> {
-    let wallet_manager = WalletManager::new()?;
     let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
-    
-    // Load sender wallet
-    let wallet_data = wallet_manager.load_wallet("my_wallet", "password")?;
-    let keypair = wallet_data.keypair;
-    
+
+    // Hot wallets decrypt locally; cold (watch-only) wallets sign over QR.
+    let signer = quantus_cli::wallet::load_signer_from_wallet("my_wallet", None, None)?;
+
     // Recipient address
     let to_address = "qzkeicNBtW2AG2E7USjDcLzAL8d9WxTZnV2cbtXoDzWxzpHC2";
 
     // Submit and wait for inclusion in a best block
     let tx_hash = transfer(
         &client,
-        &keypair,
+        &signer,
         to_address,
         1_000_000_000_000, // raw units, e.g. 1 token on a 12-decimal chain
         None,
@@ -338,7 +336,7 @@ use quantus_cli::{create_multisig, predict_multisig_address, QuantusClient};
 
 async fn create_multisig_example() -> Result<(), Box<dyn std::error::Error>> {
     let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
-    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    let signer = quantus_cli::wallet::load_signer_from_wallet("alice", None, None)?;
     
     // Parse signer addresses
     let alice_account = parse_address("qzkaf...")?;
@@ -356,7 +354,7 @@ async fn create_multisig_example() -> Result<(), Box<dyn std::error::Error>> {
     // Create multisig (wait_for_inclusion=true to get address from event)
     let (tx_hash, multisig_address) = create_multisig(
         &client,
-        &keypair,
+        &signer,
         signers,
         threshold,
         nonce, // NEW: nonce parameter for deterministic addresses
@@ -400,7 +398,7 @@ use quantus_cli::{propose_transfer, parse_multisig_amount};
 
 async fn create_proposal() -> Result<(), Box<dyn std::error::Error>> {
     let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
-    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    let signer = quantus_cli::wallet::load_signer_from_wallet("alice", None, None)?;
     
     let multisig_account = parse_address("qz...")?;
     let recipient = parse_address("qzmqr...")?;
@@ -412,7 +410,7 @@ async fn create_proposal() -> Result<(), Box<dyn std::error::Error>> {
     
     let tx_hash = propose_transfer(
         &client,
-        &keypair,
+        &signer,
         multisig_account,
         recipient,
         amount,
@@ -433,14 +431,14 @@ use quantus_cli::approve_proposal;
 
 async fn approve_example() -> Result<(), Box<dyn std::error::Error>> {
     let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
-    let keypair = quantus_cli::wallet::load_keypair_from_wallet("bob", None, None)?;
+    let signer = quantus_cli::wallet::load_signer_from_wallet("bob", None, None)?;
     
     let multisig_account = parse_address("qz...")?;
     let proposal_id = 0u32;
     
     let tx_hash = approve_proposal(
         &client,
-        &keypair,
+        &signer,
         multisig_account,
         proposal_id
     ).await?;
@@ -514,14 +512,14 @@ use quantus_cli::cancel_proposal;
 
 async fn cancel_example() -> Result<(), Box<dyn std::error::Error>> {
     let client = QuantusClient::new("ws://127.0.0.1:9944").await?;
-    let keypair = quantus_cli::wallet::load_keypair_from_wallet("alice", None, None)?;
+    let signer = quantus_cli::wallet::load_signer_from_wallet("alice", None, None)?;
     
     let multisig_account = parse_address("qz...")?;
     let proposal_id = 0u32;
     
     let tx_hash = cancel_proposal(
         &client,
-        &keypair,
+        &signer,
         multisig_account,
         proposal_id
     ).await?;

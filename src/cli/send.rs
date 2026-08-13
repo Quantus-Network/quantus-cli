@@ -438,14 +438,13 @@ where
 #[allow(dead_code)] // Used by external libraries via lib.rs export
 pub async fn transfer(
 	quantus_client: &QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	to_address: &str,
 	amount: u128,
 	tip: Option<u128>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
-	transfer_with_nonce(quantus_client, from_keypair, to_address, amount, tip, None, execution_mode)
-		.await
+	transfer_with_nonce(quantus_client, signer, to_address, amount, tip, None, execution_mode).await
 }
 
 /// Transfer tokens with manual nonce override.
@@ -453,7 +452,7 @@ pub async fn transfer(
 /// Pass `Some(0)` or `None` to omit a tip.
 pub async fn transfer_with_nonce(
 	quantus_client: &QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	to_address: &str,
 	amount: u128,
 	tip: Option<u128>,
@@ -461,7 +460,7 @@ pub async fn transfer_with_nonce(
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🚀 Creating transfer transaction...");
-	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
+	log_verbose!("   From: {}", signer.try_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 
@@ -477,7 +476,7 @@ pub async fn transfer_with_nonce(
 	// Submit the transaction with optional manual nonce
 	let tx_hash = submit_transfer_call(
 		quantus_client,
-		&crate::wallet::WalletSigner::Hot(from_keypair.clone()),
+		signer,
 		transfer_call,
 		submit_tip,
 		nonce,
@@ -562,18 +561,17 @@ where
 /// Batch transfer tokens to multiple recipients in a single transaction
 pub async fn batch_transfer(
 	quantus_client: &QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	transfers: Vec<(String, u128)>, // (to_address, amount) pairs
 	tip: Option<u128>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
-	let signer = crate::wallet::WalletSigner::Hot(from_keypair.clone());
-	validate_batch_transfer_request(quantus_client, &signer, &transfers).await?;
+	validate_batch_transfer_request(quantus_client, signer, &transfers).await?;
 	log_verbose!("✍️  Creating batch extrinsic with {} calls...", transfers.len());
 	let batch_call = build_batch_transfer_call(&transfers)?;
 	submit_prebuilt_batch_transfer_call(
 		quantus_client,
-		&signer,
+		signer,
 		&transfers,
 		batch_call,
 		tip,

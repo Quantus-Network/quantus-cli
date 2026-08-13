@@ -8,7 +8,9 @@
 
 use quantus_cli::{
 	chain::client::QuantusClient,
+	cli::common::ExecutionMode,
 	error::{QuantusError, Result},
+	transfer,
 	wallet::{QuantumKeyPair, WalletManager},
 	AccountId32,
 };
@@ -195,30 +197,16 @@ impl WalletService {
 		to_account_id: &AccountId32,
 		amount: u128,
 	) -> Result<subxt::utils::H256> {
-		use quantus_cli::chain::quantus_subxt::api;
-
-		// Convert recipient to subxt format
-		let to_account_bytes: [u8; 32] = *to_account_id.as_ref();
-		let to_subxt_account_id = subxt::utils::AccountId32::from(to_account_bytes);
-
-		// Create transfer call
-		let transfer_call =
-			api::tx().balances().transfer_allow_death(to_subxt_account_id.into(), amount);
-
-		// Convert QuantumKeyPair to DilithiumPair for signing
-		let dilithium_pair = from_keypair.to_subxt_signer()?;
-
-		// Submit transaction
-		let tx_hash = client
-			.client()
-			.tx()
-			.sign_and_submit_then_watch_default(&transfer_call, &dilithium_pair)
-			.await?
-			.wait_for_finalized_success()
-			.await?
-			.extrinsic_hash();
-
-		Ok(tx_hash)
+		let to_address = to_account_id.to_ss58check();
+		transfer(
+			client,
+			&from_keypair.as_signer(),
+			&to_address,
+			amount,
+			None,
+			ExecutionMode { wait_for_transaction: true, finalized: true },
+		)
+		.await
 	}
 }
 

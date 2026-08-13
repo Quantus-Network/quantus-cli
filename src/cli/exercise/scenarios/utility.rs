@@ -119,7 +119,7 @@ async fn as_derivative(ctx: &mut ExerciseCtx) -> Result<String> {
 	let funding = 5 * ctx.test_unit;
 	crate::cli::send::transfer(
 		&ctx.client,
-		&sender,
+		&sender.as_signer(),
 		&derivative_ss58,
 		funding,
 		None,

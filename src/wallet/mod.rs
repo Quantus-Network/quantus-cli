@@ -845,6 +845,14 @@ impl WalletSigner {
 	}
 }
 
+impl QuantumKeyPair {
+	/// Wrap this keypair as a local signer. Submission still goes through the
+	/// shared hot/cold fork in `cli::common`.
+	pub fn as_signer(&self) -> WalletSigner {
+		WalletSigner::Hot(self.clone())
+	}
+}
+
 /// Resolve a wallet into a signer without assuming it has local key material.
 /// Cold wallets resolve without a password prompt; hot wallets decrypt as usual.
 pub fn load_signer_from_wallet(

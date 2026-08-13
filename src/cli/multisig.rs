@@ -472,14 +472,6 @@ pub fn predict_multisig_address(
 	account_id.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
 }
 
-fn keypair_to_subxt_account_id(
-	keypair: &crate::wallet::QuantumKeyPair,
-) -> crate::error::Result<SubxtAccountId32> {
-	let account_id = keypair.try_to_account_id_32()?;
-	let account_bytes: [u8; 32] = *account_id.as_ref();
-	Ok(SubxtAccountId32::from(account_bytes))
-}
-
 fn signer_to_subxt_account_id(
 	signer: &crate::wallet::WalletSigner,
 ) -> crate::error::Result<SubxtAccountId32> {
@@ -549,7 +541,7 @@ fn find_matching_multisig_created_address<'a>(
 #[allow(dead_code)]
 pub async fn create_multisig(
 	quantus_client: &crate::chain::client::QuantusClient,
-	creator_keypair: &crate::wallet::QuantumKeyPair,
+	creator: &crate::wallet::WalletSigner,
 	signers: Vec<subxt::ext::subxt_core::utils::AccountId32>,
 	threshold: u32,
 	nonce: u64,
@@ -562,13 +554,12 @@ pub async fn create_multisig(
 			.create_multisig(signers.clone(), threshold, nonce);
 
 	// Submit transaction
-	let creator_account_id = keypair_to_subxt_account_id(creator_keypair)?;
+	let creator_account_id = signer_to_subxt_account_id(creator)?;
 	let execution_mode =
 		ExecutionMode { finalized: false, wait_for_transaction: wait_for_inclusion };
-	let signer = crate::wallet::WalletSigner::Hot(creator_keypair.clone());
 	let (tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		quantus_client,
-		&signer,
+		creator,
 		create_tx,
 		None,
 		execution_mode,
@@ -623,7 +614,7 @@ pub async fn create_multisig(
 #[allow(dead_code)]
 pub async fn propose_transfer(
 	quantus_client: &crate::chain::client::QuantusClient,
-	proposer_keypair: &crate::wallet::QuantumKeyPair,
+	proposer: &crate::wallet::WalletSigner,
 	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
 	to_address: subxt::ext::subxt_core::utils::AccountId32,
 	amount: u128,
@@ -655,10 +646,9 @@ pub async fn propose_transfer(
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
-	let signer = crate::wallet::WalletSigner::Hot(proposer_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		&signer,
+		proposer,
 		propose_tx,
 		None,
 		execution_mode,
@@ -675,7 +665,7 @@ pub async fn propose_transfer(
 #[allow(dead_code)]
 pub async fn propose_custom(
 	quantus_client: &crate::chain::client::QuantusClient,
-	proposer_keypair: &crate::wallet::QuantumKeyPair,
+	proposer: &crate::wallet::WalletSigner,
 	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
 	call_data: Vec<u8>,
 	expiry: u32,
@@ -689,10 +679,9 @@ pub async fn propose_custom(
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
-	let signer = crate::wallet::WalletSigner::Hot(proposer_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		&signer,
+		proposer,
 		propose_tx,
 		None,
 		execution_mode,
@@ -709,7 +698,7 @@ pub async fn propose_custom(
 #[allow(dead_code)]
 pub async fn approve_proposal(
 	quantus_client: &crate::chain::client::QuantusClient,
-	approver_keypair: &crate::wallet::QuantumKeyPair,
+	approver: &crate::wallet::WalletSigner,
 	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
 	proposal_id: u32,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -730,10 +719,9 @@ pub async fn approve_proposal(
 			.approve(multisig_address, proposal_id, proposal.call);
 
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
-	let signer = crate::wallet::WalletSigner::Hot(approver_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		&signer,
+		approver,
 		approve_tx,
 		None,
 		execution_mode,
@@ -750,17 +738,16 @@ pub async fn approve_proposal(
 #[allow(dead_code)]
 pub async fn cancel_proposal(
 	quantus_client: &crate::chain::client::QuantusClient,
-	proposer_keypair: &crate::wallet::QuantumKeyPair,
+	proposer: &crate::wallet::WalletSigner,
 	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
 	proposal_id: u32,
 ) -> crate::error::Result<subxt::utils::H256> {
 	let cancel_tx = quantus_subxt::api::tx().multisig().cancel(multisig_address, proposal_id);
 
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
-	let signer = crate::wallet::WalletSigner::Hot(proposer_keypair.clone());
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		&signer,
+		proposer,
 		cancel_tx,
 		None,
 		execution_mode,

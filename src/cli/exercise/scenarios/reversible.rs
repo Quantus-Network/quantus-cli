@@ -110,7 +110,7 @@ async fn set_high_security(ctx: &mut ExerciseCtx) -> Result<String> {
 	let funder = ctx.eph[3].clone();
 	crate::cli::send::transfer(
 		&ctx.client,
-		&funder,
+		&funder.as_signer(),
 		&account_ss58,
 		10 * ctx.test_unit,
 		None,
@@ -185,7 +185,7 @@ async fn guardian_recover_funds(ctx: &mut ExerciseCtx) -> Result<String> {
 	let funder = ctx.eph[3].clone();
 	crate::cli::send::transfer(
 		&ctx.client,
-		&funder,
+		&funder.as_signer(),
 		&account_ss58,
 		20 * ctx.test_unit,
 		None,

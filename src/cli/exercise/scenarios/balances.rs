@@ -47,7 +47,7 @@ async fn scheme_transfer(ctx: &mut ExerciseCtx, scheme: DilithiumScheme) -> Resu
 	let before = ctx.free_balance(&recipient_ss58).await?;
 	crate::cli::send::transfer(
 		&ctx.client,
-		&sender,
+		&sender.as_signer(),
 		&recipient_ss58,
 		amount,
 		None,
@@ -72,7 +72,7 @@ async fn single_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let before = ctx.free_balance(&recipient_ss58).await?;
 	crate::cli::send::transfer(
 		&ctx.client,
-		&sender,
+		&sender.as_signer(),
 		&recipient_ss58,
 		amount,
 		None,
@@ -98,8 +98,14 @@ async fn batch_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let transfers: Vec<(String, u128)> = recipients.iter().map(|r| (r.clone(), amount)).collect();
 
 	let sender = ctx.eph[0].clone();
-	crate::cli::send::batch_transfer(&ctx.client, &sender, transfers, None, ctx.wait_mode())
-		.await?;
+	crate::cli::send::batch_transfer(
+		&ctx.client,
+		&sender.as_signer(),
+		transfers,
+		None,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	for recipient in &recipients {
 		let balance = ctx.free_balance(recipient).await?;
@@ -119,7 +125,7 @@ async fn transfer_with_tip(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[1].clone();
 	crate::cli::send::transfer(
 		&ctx.client,
-		&sender,
+		&sender.as_signer(),
 		&recipient,
 		amount,
 		Some(tip),
@@ -142,7 +148,7 @@ async fn transfer_manual_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
 	crate::cli::send::transfer_with_nonce(
 		&ctx.client,
-		&sender,
+		&sender.as_signer(),
 		&recipient,
 		ctx.test_unit,
 		None,
@@ -190,7 +196,7 @@ async fn transfer_all(ctx: &mut ExerciseCtx) -> Result<String> {
 	let funder = ctx.eph[1].clone();
 	crate::cli::send::transfer(
 		&ctx.client,
-		&funder,
+		&funder.as_signer(),
 		&sender_ss58,
 		20 * ctx.test_unit,
 		None,
