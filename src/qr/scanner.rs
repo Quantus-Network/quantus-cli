@@ -161,8 +161,21 @@ mod camera {
 		}
 	}
 
-	/// Blocking camera loop: grab frames, decode QR codes with rqrr, feed every
-	/// decoded string to `sink` until it returns `Some(result)`.
+	fn rgb_to_luma(raw: &[u8], width: u32, height: u32) -> (usize, usize, Vec<u8>) {
+		let w = width as usize;
+		let h = height as usize;
+		let mut luma = Vec::with_capacity(w * h);
+		for px in raw.chunks_exact(3) {
+			luma.push(
+				((u16::from(px[0]) * 77 + u16::from(px[1]) * 150 + u16::from(px[2]) * 29) >> 8)
+					as u8,
+			);
+		}
+		(w, h, luma)
+	}
+
+	/// Grab frames at the camera's highest frame rate and decode each at native
+	/// resolution. Cold-wallet UR animations run at 15–50 fps.
 	fn scan_with_camera<T>(
 		index: u32,
 		timeout: Duration,
@@ -179,7 +192,7 @@ mod camera {
 
 		let mut camera = Camera::new(
 			CameraIndex::Index(index),
-			RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestResolution),
+			RequestedFormat::new::<RgbFormat>(RequestedFormatType::AbsoluteHighestFrameRate),
 		)
 		.map_err(|e| {
 			QuantusError::Generic(format!(
@@ -189,6 +202,13 @@ mod camera {
 		camera
 			.open_stream()
 			.map_err(|e| QuantusError::Generic(format!("Failed to start camera stream: {e}")))?;
+		let fmt = camera.camera_format();
+		crate::log_verbose!(
+			"📷 Camera {}x{} @ {} fps",
+			fmt.width(),
+			fmt.height(),
+			fmt.frame_rate()
+		);
 
 		let deadline = Instant::now() + timeout;
 		let result = 'scan: loop {
@@ -201,7 +221,6 @@ mod camera {
 				));
 			}
 
-			// frame() blocks until the sensor delivers — natural pacing.
 			let frame = match camera.frame() {
 				Ok(frame) => frame,
 				Err(e) => {
@@ -217,15 +236,12 @@ mod camera {
 				},
 			};
 
-			// Point-sample down to ~1280px so rqrr keeps up with the ~5 fps QR
-			// animation even on high-resolution cameras.
-			let (w, h) = (img.width() as usize, img.height() as usize);
-			let scale = (w.max(h) / 1280).max(1);
-			let (sw, sh) = (w / scale, h / scale);
-			let mut prepared = rqrr::PreparedImage::prepare_from_greyscale(sw, sh, |x, y| {
-				let p = img.get_pixel((x * scale) as u32, (y * scale) as u32).0;
-				((p[0] as u16 * 299 + p[1] as u16 * 587 + p[2] as u16 * 114) / 1000) as u8
-			});
+			let (w, h, luma) = rgb_to_luma(img.as_raw(), img.width(), img.height());
+			if luma.len() != w.saturating_mul(h) {
+				continue;
+			}
+			let mut prepared =
+				rqrr::PreparedImage::prepare_from_greyscale(w, h, |x, y| luma[y * w + x]);
 
 			for grid in prepared.detect_grids() {
 				if let Ok((_meta, content)) = grid.decode() {
