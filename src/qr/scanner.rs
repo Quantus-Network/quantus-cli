@@ -554,10 +554,8 @@ mod camera {
 				};
 				progress.println(line);
 				progress.set_message(match st.total {
-					Some(t) =>
-						format!("📷 Collecting signature QR — {}/{t} parts…", st.seqs.len()),
-					None =>
-						format!("📷 Collecting signature QR — {} parts…", st.parts.len()),
+					Some(t) => format!("📷 Collecting signature QR — {}/{t} parts…", st.seqs.len()),
+					None => format!("📷 Collecting signature QR — {} parts…", st.parts.len()),
 				});
 				decode_any_suffix(&st.parts).transpose()
 			},
@@ -569,10 +567,8 @@ mod camera {
 		if result.is_err() && !st.parts.is_empty() {
 			match st.total {
 				Some(t) => {
-					let missing: Vec<String> = (1..=t)
-						.filter(|s| !st.seqs.contains(s))
-						.map(|s| s.to_string())
-						.collect();
+					let missing: Vec<String> =
+						(1..=t).filter(|s| !st.seqs.contains(s)).map(|s| s.to_string()).collect();
 					if missing.is_empty() {
 						crate::log_print!(
 							"⚠️  All {t} fragments were captured but never formed a consistent payload — was an older signature QR still animating when the scan started?"
