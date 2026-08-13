@@ -481,6 +481,18 @@ where
 	Ok(tx_hash)
 }
 
+/// Reject ML-DSA-65 signers on runtimes that only decode ML-DSA-87 signatures.
+async fn ensure_keypair_scheme_supported(
+	quantus_client: &crate::chain::client::QuantusClient,
+	from_keypair: &crate::wallet::QuantumKeyPair,
+) -> crate::error::Result<()> {
+	if from_keypair.scheme != crate::wallet::DilithiumScheme::MlDsa65 {
+		return Ok(());
+	}
+	let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
+	crate::config::ensure_ml_dsa_65_supported(spec_version, transaction_version)
+}
+
 /// Like [`submit_transaction`], but also returns the hash of the block in which
 /// the transaction reached the requested stage (`None` when the transaction was
 /// only submitted without watching).
@@ -499,7 +511,10 @@ where
 	Call: subxt::tx::Payload,
 {
 	let from_keypair = match signer {
-		crate::wallet::WalletSigner::Hot(keypair) => keypair,
+		crate::wallet::WalletSigner::Hot(keypair) => {
+			crate::cli::cold_signing::warn_if_cold_flags_unused();
+			keypair
+		},
 		crate::wallet::WalletSigner::Cold { name, address } =>
 			return crate::cli::cold_signing::sign_and_submit_cold(
 				quantus_client,
@@ -513,6 +528,7 @@ where
 			)
 			.await,
 	};
+	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -677,7 +693,10 @@ where
 	Call: subxt::tx::Payload,
 {
 	let from_keypair = match signer {
-		crate::wallet::WalletSigner::Hot(keypair) => keypair,
+		crate::wallet::WalletSigner::Hot(keypair) => {
+			crate::cli::cold_signing::warn_if_cold_flags_unused();
+			keypair
+		},
 		crate::wallet::WalletSigner::Cold { name, address } =>
 			return crate::cli::cold_signing::sign_and_submit_cold(
 				quantus_client,
@@ -692,6 +711,7 @@ where
 			.await
 			.map(|(tx_hash, _included_in)| tx_hash),
 	};
+	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;

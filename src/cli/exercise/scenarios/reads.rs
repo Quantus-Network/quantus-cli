@@ -26,6 +26,13 @@ async fn runtime_version(ctx: &ExerciseCtx, post_upgrade: bool) -> Result<String
 	if compatible {
 		return Ok(format!("spec {spec} / tx {tx}, compatible with CLI bindings"));
 	}
+	if crate::config::is_newer_unlisted_runtime(spec) {
+		return Ok(format!(
+			"spec {spec} / tx {tx}: newer than this CLI's tested list (up to {}); \
+			 proceeding, but some commands may not work",
+			crate::config::max_compatible_spec_version()
+		));
+	}
 	if post_upgrade {
 		if crate::config::COMPATIBLE_RUNTIMES.iter().any(|r| r.transaction_version == tx) {
 			return Ok(format!(
@@ -100,15 +107,15 @@ async fn treasury_info(ctx: &ExerciseCtx) -> Result<String> {
 }
 
 async fn high_security_status(ctx: &ExerciseCtx) -> Result<String> {
-	let alice = crate::cli::exercise::runner::account_id_of(&ctx.alice)?;
+	let root = crate::cli::exercise::runner::account_id_of(&ctx.root)?;
 	let addr = quantus_subxt::api::storage()
 		.reversible_transfers()
-		.high_security_accounts(alice);
+		.high_security_accounts(root);
 	let latest = ctx.client.get_latest_block().await?;
 	let value = ctx.client.client().storage().at(latest).fetch(&addr).await?;
 	Ok(match value {
-		Some(_) => "alice has high-security enabled".to_string(),
-		None => "alice has high-security disabled (expected default)".to_string(),
+		Some(_) => "root account has high-security enabled".to_string(),
+		None => "root account has high-security disabled (expected default)".to_string(),
 	})
 }
 
@@ -118,12 +125,11 @@ async fn scheduler_agenda(ctx: &ExerciseCtx) -> Result<String> {
 }
 
 async fn account_balances(ctx: &ExerciseCtx) -> Result<String> {
-	let alice_ss58 = ctx.alice.try_to_account_id_ss58check()?;
-	let balance = ctx.free_balance(&alice_ss58).await?;
+	let balance = ctx.free_balance(&ctx.root_ss58).await?;
 	if balance == 0 {
 		return Err(QuantusError::Generic(
-			"alice has zero balance; is this a dev chain with the standard genesis?".to_string(),
+			"the root funding account has zero free balance".to_string(),
 		));
 	}
-	Ok(format!("alice free balance: {balance} raw units"))
+	Ok(format!("root account free balance: {balance} raw units"))
 }

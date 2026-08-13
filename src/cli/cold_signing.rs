@@ -23,7 +23,7 @@ use crate::{
 	qr::{display_ur_until_enter, render_ur_frames, scan_ur, UrSource},
 };
 use colored::Colorize;
-use qp_dilithium_crypto::types::{DilithiumSignatureScheme, DilithiumSignatureWithPublic};
+use qp_dilithium_crypto::types::{Dilithium87SignatureWithPublic, DilithiumSignatureScheme};
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::IdentifyAccount;
 use std::{io::IsTerminal, path::PathBuf, time::Duration};
@@ -40,7 +40,7 @@ pub const MORTALITY_BLOCKS: u64 = 256;
 pub const MAX_COLD_PAYLOAD: usize = 8 * 1024;
 
 /// `ML-DSA-87 signature (4627) ‖ public key (2592)` — the only valid response size.
-pub const SIGNATURE_RESPONSE_LEN: usize = DilithiumSignatureWithPublic::TOTAL_LEN;
+pub const SIGNATURE_RESPONSE_LEN: usize = Dilithium87SignatureWithPublic::TOTAL_LEN;
 
 /// How long to wait for the signed response before giving up.
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -100,6 +100,28 @@ impl ColdIo {
 	pub fn global() -> &'static ColdIo {
 		COLD_IO.get_or_init(ColdIo::default)
 	}
+
+	fn has_overrides(&self) -> bool {
+		self.request_out.is_some() || self.response_in.is_some() || self.camera_index != 0
+	}
+}
+
+/// Warn when global cold-signing flags were passed with a hot `--from`.
+pub fn warn_if_cold_flags_unused() {
+	if ColdIo::global().has_overrides() {
+		log_print!(
+			"⚠️  --cold-request-out / --cold-response-in / --camera-index are ignored for hot wallets"
+		);
+	}
+}
+
+fn require_interactive_or_request_out(interactive: bool, io: &ColdIo) -> Result<()> {
+	if !interactive && io.request_out.is_none() {
+		return Err(QuantusError::Generic(
+			"Non-interactive cold signing requires --cold-request-out so the sign request can be handed to the device".to_string(),
+		));
+	}
+	Ok(())
 }
 
 /// Why a signature response was rejected.
@@ -219,12 +241,12 @@ fn validate_signature_response(
 	raw_payload: &[u8],
 	response: &[u8],
 	expected_account: &AccountId32,
-) -> std::result::Result<DilithiumSignatureWithPublic, ResponseError> {
+) -> std::result::Result<Dilithium87SignatureWithPublic, ResponseError> {
 	if response.len() != SIGNATURE_RESPONSE_LEN {
 		return Err(ResponseError::BadLength(response.len()));
 	}
 
-	let sig_with_public = DilithiumSignatureWithPublic::from_bytes(response)
+	let sig_with_public = Dilithium87SignatureWithPublic::from_bytes(response)
 		.map_err(|e| ResponseError::Malformed(format!("{e:?}")))?;
 
 	let derived_account = sig_with_public.public().into_account();
@@ -235,7 +257,7 @@ fn validate_signature_response(
 
 	use sp_runtime::traits::Verify;
 	let msg = signable_payload(raw_payload);
-	let scheme = DilithiumSignatureScheme::Dilithium(sig_with_public.clone());
+	let scheme = DilithiumSignatureScheme::Dilithium87(sig_with_public.clone());
 	if !scheme.verify(&msg[..], expected_account) {
 		return Err(ResponseError::BadSignature);
 	}
@@ -318,6 +340,7 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 	// Skip the QR display and prompts when scripted (stdin is not a terminal);
 	// the request file above is the handoff instead.
 	let interactive = std::io::stdin().is_terminal();
+	require_interactive_or_request_out(interactive, io)?;
 	if interactive {
 		let frames = render_ur_frames(&parts)?;
 		log_print!("");
@@ -377,7 +400,7 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 		));
 	}
 
-	let signature = DilithiumSignatureScheme::Dilithium(sig_with_public);
+	let signature = DilithiumSignatureScheme::Dilithium87(sig_with_public);
 	let submittable = partial.sign_with_account_and_signature(&account, &signature);
 
 	crate::cli::common::submit_prepared_transaction(client, submittable, execution_mode).await
@@ -392,11 +415,11 @@ async fn estimate_fee_with_dummy_signature<Call: subxt::tx::Payload>(
 	ctx: &TxContext,
 	account: &AccountId32,
 ) -> Option<u128> {
-	let dummy = DilithiumSignatureWithPublic::from_bytes(&[0u8; SIGNATURE_RESPONSE_LEN]).ok()?;
+	let dummy = Dilithium87SignatureWithPublic::from_bytes(&[0u8; SIGNATURE_RESPONSE_LEN]).ok()?;
 	let mut partial =
 		client.client().tx().create_v4_partial_offline(call, build_params(ctx)).ok()?;
 	let tx = partial
-		.sign_with_account_and_signature(account, &DilithiumSignatureScheme::Dilithium(dummy));
+		.sign_with_account_and_signature(account, &DilithiumSignatureScheme::Dilithium87(dummy));
 	tx.partial_fee_estimate().await.ok()
 }
 
@@ -459,9 +482,16 @@ pub async fn handle_cold_sign_sim(
 
 	// 2. Sign exactly like the cold wallet app / Keystone firmware.
 	let keypair = crate::wallet::load_keypair_from_wallet(&wallet, password, password_file)?;
+	if keypair.scheme != crate::wallet::DilithiumScheme::MlDsa87 {
+		return Err(QuantusError::Generic(
+			"cold-sign-sim and real devices sign ML-DSA-87 only; use an ML-DSA-87 wallet"
+				.to_string(),
+		));
+	}
 	let pair = keypair.to_resonance_pair()?;
 	let msg = signable_payload(&payload);
-	let sig_with_public = <qp_dilithium_crypto::DilithiumPair as sp_core::Pair>::sign(&pair, &msg);
+	let sig_with_public =
+		<qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(&pair, &msg);
 
 	// 3. Emit the response UR.
 	let parts = quantus_ur::encode_bytes(&sig_with_public.to_bytes())
@@ -607,7 +637,7 @@ mod tests {
 		// Simulate the cold wallet: sign the signable form with alice's key
 		let alice = qp_dilithium_crypto::crystal_alice();
 		let msg = signable_payload(&raw);
-		let swp = <qp_dilithium_crypto::DilithiumPair as sp_core::Pair>::sign(&alice, &msg);
+		let swp = <qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(&alice, &msg);
 		let response = swp.to_bytes();
 		assert_eq!(response.len(), SIGNATURE_RESPONSE_LEN);
 
@@ -625,7 +655,7 @@ mod tests {
 
 		// Signed by a different key → WrongSigner (abort)
 		let bob = qp_dilithium_crypto::dilithium_bob();
-		let bob_swp = <qp_dilithium_crypto::DilithiumPair as sp_core::Pair>::sign(&bob, &msg);
+		let bob_swp = <qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(&bob, &msg);
 		let err = validate_signature_response(&raw, &bob_swp.to_bytes(), &alice_account())
 			.err()
 			.unwrap();
@@ -659,7 +689,7 @@ mod tests {
 
 		// Cold wallet signs and answers over UR
 		let alice = qp_dilithium_crypto::crystal_alice();
-		let swp = <qp_dilithium_crypto::DilithiumPair as sp_core::Pair>::sign(
+		let swp = <qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(
 			&alice,
 			&signable_payload(&received),
 		);
@@ -679,7 +709,7 @@ mod tests {
 		let mut partial = client.tx().create_v4_partial_offline(&call, build_params(&ctx)).unwrap();
 		assert_eq!(partial.signer_payload(), signable_payload(&raw));
 
-		let signature = DilithiumSignatureScheme::Dilithium(validated);
+		let signature = DilithiumSignatureScheme::Dilithium87(validated);
 		let submittable = partial.sign_with_account_and_signature(&alice_account(), &signature);
 
 		// V4 signed extrinsic: version byte 0x84 after the compact length prefix
@@ -689,5 +719,16 @@ mod tests {
 		let mut cursor = &encoded[..];
 		let _len = codec::Compact::<u32>::decode(&mut cursor).unwrap();
 		assert_eq!(cursor[0], 0b1000_0000 | 4, "signed V4 extrinsic marker");
+	}
+
+	#[test]
+	fn non_interactive_cold_signing_requires_request_out() {
+		let io = ColdIo::default();
+		assert!(require_interactive_or_request_out(false, &io).is_err());
+		assert!(require_interactive_or_request_out(true, &io).is_ok());
+
+		let with_out =
+			ColdIo { request_out: Some(PathBuf::from("/tmp/request.ur")), ..ColdIo::default() };
+		assert!(require_interactive_or_request_out(false, &with_out).is_ok());
 	}
 }

@@ -53,7 +53,10 @@ pub async fn scan_ur(source: &UrSource, timeout: Duration) -> Result<Vec<u8>> {
 		#[cfg(feature = "camera")]
 		UrSource::Camera { index } => camera::scan_ur_with_camera(*index, timeout).await,
 		UrSource::File(path) => scan_ur_from_file(path, timeout).await,
-		UrSource::StdinLines => scan_ur_from_stdin().await,
+		UrSource::StdinLines =>
+			tokio::time::timeout(timeout, scan_ur_from_stdin()).await.map_err(|_| {
+				QuantusError::Generic("Timed out waiting for a complete UR on stdin".to_string())
+			})?,
 	}
 }
 

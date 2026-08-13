@@ -72,7 +72,7 @@ fn random_amount(ctx: &mut ExerciseCtx) -> u128 {
 		2 => ed.saturating_sub(1),
 		3 => ed,
 		4 => ed.saturating_add(1),
-		5 => ctx.rng.random_range(1..=100) * ctx.unit,
+		5 => ctx.rng.random_range(1..=100) * ctx.test_unit,
 		_ => u128::MAX,
 	}
 }

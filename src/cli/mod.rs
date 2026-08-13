@@ -27,6 +27,7 @@ pub mod tech_referenda;
 pub mod transfers;
 pub mod treasury;
 pub mod update;
+pub mod vesting;
 pub mod wallet;
 pub mod wormhole;
 
@@ -111,6 +112,10 @@ pub enum Commands {
 	/// Treasury account info
 	#[command(subcommand)]
 	Treasury(treasury::TreasuryCommands),
+
+	/// Vesting schedules (treasury-funded, claimable by anyone for the beneficiary)
+	#[command(subcommand)]
+	Vesting(vesting::VestingCommands),
 
 	/// Privacy-preserving transfer queries via Subsquid indexer
 	#[command(subcommand)]
@@ -396,6 +401,8 @@ pub async fn execute_command(
 			.await,
 		Commands::Treasury(treasury_cmd) =>
 			treasury::handle_treasury_command(treasury_cmd, node_url, execution_mode).await,
+		Commands::Vesting(vesting_cmd) =>
+			vesting::handle_vesting_command(vesting_cmd, node_url, execution_mode).await,
 		Commands::Transfers(transfers_cmd) =>
 			transfers::handle_transfers_command(transfers_cmd, node_url).await,
 		Commands::Runtime(runtime_cmd) =>
@@ -477,7 +484,7 @@ pub async fn execute_command(
 		Commands::CompatibilityCheck => handle_compatibility_check(node_url).await,
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
 		Commands::Wormhole(wormhole_cmd) =>
-			wormhole::handle_wormhole_command(wormhole_cmd, node_url).await,
+			wormhole::handle_wormhole_command(wormhole_cmd, node_url, execution_mode).await,
 		Commands::Multisend {
 			from,
 			addresses_file,
@@ -680,7 +687,12 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 	log_print!("   • Expected spec name: {}", crate::config::EXPECTED_RUNTIME_SPEC_NAME);
 	log_print!("   • Supported runtime/transaction pairs:");
 	for runtime in crate::config::COMPATIBLE_RUNTIMES {
-		log_print!("     - spec {} / tx {}", runtime.spec_version, runtime.transaction_version);
+		let schemes = if runtime.supports_ml_dsa_65 { "ml-dsa-65, ml-dsa-87" } else { "ml-dsa-87" };
+		log_print!(
+			"     - spec {} / tx {} ({schemes})",
+			runtime.spec_version,
+			runtime.transaction_version
+		);
 	}
 	log_print!("   • Current Spec Name: {spec_name}");
 	log_print!("   • Current Runtime Version: {spec_version}");
@@ -698,6 +710,14 @@ async fn handle_compatibility_check(node_url: &str) -> crate::error::Result<()> 
 			crate::config::EXPECTED_RUNTIME_SPEC_NAME
 		);
 		log_print!("   • All other CLI commands will refuse to talk to this node");
+	} else if crate::config::is_newer_unlisted_runtime(spec_version) {
+		log_print!(
+			"⚠️  NEWER RUNTIME - Spec {} is ahead of this CLI's tested list (up to {})",
+			spec_version.to_string().bright_yellow(),
+			crate::config::max_compatible_spec_version()
+		);
+		log_print!("   • Commands are allowed, but some may not work correctly");
+		log_print!("   • Consider updating the CLI when a release for this runtime is available");
 	} else {
 		log_error!("❌ INCOMPATIBLE - This CLI version may not work with the connected node");
 		log_print!("   • The runtime version pair is not in this CLI's supported list");

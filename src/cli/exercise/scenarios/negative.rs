@@ -88,7 +88,7 @@ async fn stale_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 		));
 	}
 	let recipient = ctx.fresh_keypair()?;
-	let call = transfer_call(account_id_of(&recipient)?, ctx.unit);
+	let call = transfer_call(account_id_of(&recipient)?, ctx.test_unit);
 	match crate::cli::common::submit_transaction_with_nonce(
 		&ctx.client,
 		&crate::wallet::WalletSigner::Hot(sender.clone()),
@@ -119,7 +119,7 @@ async fn reversible_delay_too_short(ctx: &mut ExerciseCtx) -> Result<String> {
 	use quantus_subxt::api::reversible_transfers::calls::types::schedule_transfer_with_delay::Delay;
 	let call = quantus_subxt::api::tx().reversible_transfers().schedule_transfer_with_delay(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)?),
-		ctx.unit,
+		ctx.test_unit,
 		Delay::BlockNumber(1),
 	);
 	submit_expect_failure(ctx, &sender, call, &["DelayTooShort"]).await
@@ -130,7 +130,7 @@ async fn reversible_default_delay_not_hs(ctx: &mut ExerciseCtx) -> Result<String
 	let recipient = ctx.fresh_keypair()?;
 	let call = quantus_subxt::api::tx().reversible_transfers().schedule_transfer(
 		subxt::ext::subxt_core::utils::MultiAddress::Id(account_id_of(&recipient)?),
-		ctx.unit,
+		ctx.test_unit,
 	);
 	submit_expect_failure(ctx, &sender, call, &["AccountNotHighSecurity"]).await
 }

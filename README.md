@@ -369,14 +369,20 @@ quantus developer create-test-wallets
 ### Wallet Management
 
 ```bash
-# Create a new quantum-safe wallet
+# Create a new quantum-safe wallet (default scheme: ml-dsa-65, HD path …/1')
 quantus wallet create --name my_wallet
 
-# Create with explicit derivation path
-quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0/0"
+# ML-DSA-87 (HD path defaults to …/0' when --derivation-path is omitted)
+quantus wallet create --name my_wallet_87 --scheme ml-dsa-87
 
-# Import from mnemonic
-quantus wallet import --name recovered_wallet --mnemonic "word1 word2 ... word24"
+# Create with an explicit derivation path
+quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0'/1'"
+
+# Import from mnemonic (phrase is read from a hidden prompt — never pass it on the CLI)
+quantus wallet import --name recovered_wallet
+
+# Import as ML-DSA-87 (same secure prompt)
+quantus wallet import --name recovered_87 --scheme ml-dsa-87
 
 # Create from raw 32-byte seed
 quantus wallet from-seed --name raw_wallet --seed <64-hex-chars>
@@ -555,6 +561,35 @@ quantus treasury info
 
 ---
 
+### Vesting
+
+Treasury-funded vesting schedules. Funds vest linearly between `start` and `end` (nothing before `cliff`). `claim` is permissionless — anyone can trigger a payout, which always goes to the schedule's stored beneficiary (this is the claim path for keyless wormhole or high-security beneficiaries). The admin calls (`create-schedule`, `end-schedule`, `retarget`) require the treasury origin; since the treasury is a multisig on real deployments, print the call data with `--call-data-only` and route it through `quantus multisig propose`.
+
+```bash
+# Inspect
+quantus vesting info
+quantus vesting list [--beneficiary qz...]
+quantus vesting show --schedule-id 0
+
+# Claim the vested payout of a schedule (any funded wallet can sign)
+quantus vesting claim --schedule-id 0 --from my_wallet
+
+# Admin: create a schedule (moments are unix ms, "now", or "+<seconds>")
+quantus vesting create-schedule \
+  --beneficiary qz... \
+  --start now --cliff +7776000 --end +31536000 \
+  --total 10000 \
+  --call-data-only   # print hex call data for a treasury multisig proposal
+
+# Admin: end early (vested part to beneficiary, rest back to treasury)
+quantus vesting end-schedule --schedule-id 3 --call-data-only
+
+# Admin: change beneficiary
+quantus vesting retarget --schedule-id 3 --new-beneficiary qz... --call-data-only
+```
+
+---
+
 ### Privacy-Preserving Transfer Queries
 
 Query transfers via a Subsquid indexer using hash-prefix queries that hide your exact address.
@@ -596,6 +631,88 @@ quantus call \
 ```
 
 ---
+
+### Chain Exercise Suite
+
+`quantus exercise` runs a live-node smoke/fuzz suite against a node — reads, balances,
+utility, reversible transfers, multisig, recovery, preimage, governance, vesting, negative
+cases, a seeded fuzz loop, and wormhole round-trips. It derives a handful of ephemeral
+accounts, funds them from a **root account**, drives each pallet, and verifies on-chain state
+as it goes. Intended for CI and post-upgrade validation.
+
+```bash
+# Against a local dev node — crystal_alice is genesis-funded, so every phase runs
+quantus exercise
+
+# Against a public testnet: fund from your own wallet, spending no more than 100 tokens.
+# Specifying --total-amount drops the governance phase automatically (it needs the dev
+# genesis tech-collective accounts, and its referendum deposits alone are far larger than
+# the rest of the suite)
+quantus exercise \
+  --root-account my-wallet --root-password <pw> \
+  --total-amount 100 \
+  --node-url wss://a1-planck.quantus.cat
+
+# Run only specific phases, or skip the CPU-heavy wormhole phase
+quantus exercise --phases reads,balances,multisig
+quantus exercise --skip wormhole
+
+# Reproduce a fuzz failure from its seed; emit the report as JSON
+quantus exercise --seed 12345 --json
+
+# Runtime upgrade smoke (fast-governance node only). Mutually exclusive:
+#   --self-upgrade  re-installs the current on-chain :code (no WASM file; no post-upgrade re-run)
+#   --upgrade-wasm  installs a candidate WASM, then re-runs the other phases against it
+quantus exercise --phases upgrade --self-upgrade
+quantus exercise --phases upgrade --upgrade-wasm path/to/runtime.wasm
+```
+
+Key flags:
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--root-account <NAME>` | `crystal_alice` | Wallet that funds the run. Supply your own to run against a public testnet. |
+| `--root-password <PW>` / `--root-password-file <PATH>` | — | Password for the root wallet (or set `QUANTUS_WALLET_PASSWORD_<NAME>`). |
+| `--total-amount <TOKENS>` | `500` | Hard cap on what the whole run may draw from the root account. A ceiling, not an allocation — see below. Specifying it drops the `governance` phase unless `--phases` lists it explicitly. |
+| `--ephemeral-accounts <N>` | `4` | Number of ephemeral accounts to derive and fund. |
+| `--phases <LIST>` / `--skip <LIST>` | all | Comma-separated phases to run / skip. |
+| `--seed <N>` | random | Reproducible fuzz seed. |
+| `--fuzz-iterations <N>` | `25` | Number of fuzz iterations. |
+| `--upgrade-wasm <PATH>` | — | Enable the runtime-upgrade phase with the given WASM (fast-governance node only). Re-runs other phases after a successful upgrade. |
+| `--self-upgrade` | off | No-WASM upgrade smoke test: authorize/apply the current on-chain runtime blob via tech-referenda (fast-governance node only). Conflicts with `--upgrade-wasm`. Does not re-run other phases (runtime unchanged). Not the same as `quantus update` (CLI binary self-update). |
+| `--upgrade-timeout-secs <N>` | `900` | How long to wait for the upgrade referendum / code write. |
+| `--fail-fast` | off | Stop at the first failed step. |
+| `--json` | off | Emit the final report as JSON. |
+
+#### What the run spends
+
+`--total-amount` is a hard cap on the root account's balance drop, enforced for the whole run,
+not just the initial funding: every root-paid transfer, deposit and estimated transaction fee
+is reserved against it before submission and the run fails with the numbers rather than
+exceeding it. The final report ends with a `budget / root_account_spend` line stating what was
+actually spent — and fails if the cap was exceeded.
+
+It is a ceiling, not an allocation. Ephemeral accounts are funded with what the chain's own
+deposits and fees require, not with a share of the cap, and the phases that fund dedicated
+accounts — `recovery` and `wormhole` — sweep them back into the root account when they are
+done, so their funding is borrowed rather than spent. Discretionary test transfers are scaled
+down by a fixed factor on top of that; chain-imposed amounts (existential deposit, multisig,
+recovery, vesting and governance deposits) are read from the chain and never scaled.
+
+> **Notes:**
+> - `governance` submits two referenda whose chain-fixed deposits stay locked for the whole
+>   run — on the order of a thousand tokens, dwarfing every other phase — and it relies on the
+>   dev genesis tech-collective accounts. It is therefore dropped whenever `--total-amount` is
+>   given, and when it (or `upgrade`) does run, its dev-account spend is exempt from the cap.
+> - `vesting`'s admin steps dispatch through the dev Alice/Bob/Charlie treasury multisig; on
+>   chains whose treasury is a different account they are skipped, and the permissionless
+>   vesting checks still run.
+> - The `wormhole` phase is CPU-heavy (ZK proving) — use `--skip wormhole` for a faster run. Its
+>   amount is fixed by an on-chain minimum and cannot be scaled down, so it needs ~52 tokens of
+>   headroom at once (returned afterwards).
+> - Setup fails fast, with the numbers, if the root account can't cover `--total-amount`, if the
+>   cap is too low to fund the ephemeral accounts, or if a selected phase needs more headroom
+>   than the cap leaves.
 
 ### Other Commands
 
@@ -844,7 +961,7 @@ For more details, see `quantus multisig --help` and explore subcommands with `--
 ## 🏗️ Architecture
 
 ### Quantum-Safe Cryptography
-- **Dilithium (ML-DSA-87)**: Post-quantum digital signatures
+- **Dilithium (ML-DSA)**: Post-quantum digital signatures — default **ML-DSA-65** (`--scheme ml-dsa-65`), with **ML-DSA-87** available (`--scheme ml-dsa-87`). Each scheme has its own default HD path (`…/1'` vs `…/0'`) so the same mnemonic does not collide across schemes.
 - **Secure Storage**: AES-256-GCM + Argon2 encryption for wallet files
 - **Future-Proof**: Ready for ML-KEM key encapsulation
 
@@ -919,7 +1036,7 @@ The project includes a script to regenerate SubXT types and metadata when the bl
 1. **Updates metadata**: Downloads the latest chain metadata to `src/quantus_metadata.scale`
 2. **Generates types**: Creates type-safe Rust code in `src/chain/quantus_subxt.rs`
 3. **Formats code**: Automatically formats the generated code with `cargo fmt`
-4. **Prompts compatibility update**: Reminds you to update the supported runtime/transaction pair in `src/config/mod.rs`
+4. **Prompts compatibility update**: Reminds you to add the new runtime/transaction pair to the allowlist in `src/config/mod.rs` (newer unlisted specs warn rather than hard-fail)
 
 **When to use:**
 - After updating the Quantus runtime
@@ -960,4 +1077,4 @@ After regeneration, re-run:
 quantus compatibility-check --node-url <node>
 ```
 
-The checked-in compatibility gate now requires both the runtime `spec_version` and `transaction_version` to match a supported pair.
+The compatibility gate accepts exact `spec_version` / `transaction_version` pairs listed in `src/config/mod.rs`. A Quantus node whose `spec_version` is **newer** than the highest listed pair connects with a warning (extrinsics may still fail if the runtime has moved on). Wrong `specName` values and older/unknown pairs outside the table are still rejected.

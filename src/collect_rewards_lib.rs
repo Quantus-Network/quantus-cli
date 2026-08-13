@@ -17,7 +17,7 @@ use crate::{
 		quantus_subxt::{self as quantus_node, api::wormhole},
 	},
 	cli::wormhole::{
-		compute_merkle_positions, parse_secret_hex as parse_secret_hex_str, ZkMerkleProofRpc,
+		compute_merkle_positions, get_zk_merkle_proof, parse_secret_hex as parse_secret_hex_str,
 	},
 	subsquid::{
 		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
@@ -34,13 +34,7 @@ use qp_wormhole_aggregator::{
 use qp_zk_circuits_common::circuit::{C, D, F};
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::path::Path;
-use subxt::{
-	ext::{
-		codec::Encode,
-		jsonrpsee::{core::client::ClientT, rpc_params},
-	},
-	tx::TxStatus,
-};
+use subxt::{ext::codec::Encode, tx::TxStatus};
 
 /// Result type for collect rewards operations
 pub type Result<T> = std::result::Result<T, CollectRewardsError>;
@@ -182,8 +176,8 @@ pub fn resolve_credential(credential: &WormholeCredential) -> Result<(String, [u
 			let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
 			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
 				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
-			let address_bytes: [u8; 32] = wormhole_pair.address;
-			let secret_bytes: [u8; 32] = *wormhole_pair.secret.as_bytes();
+			let address_bytes: [u8; 32] = *wormhole_pair.address();
+			let secret_bytes: [u8; 32] = *wormhole_pair.secret().as_bytes();
 			Ok((AccountId32::from(address_bytes).to_ss58check(), address_bytes, secret_bytes))
 		},
 		WormholeCredential::Secret { hex } => {
@@ -398,11 +392,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			CollectRewardsError::from(format!("Invalid leaf_index: {}", transfer.leaf_index))
 		})?;
 
-		// Fetch ZK Merkle proof from chain
-		let proof_params = rpc_params![leaf_index, proof_block_hash];
-		let zk_proof: Option<ZkMerkleProofRpc> = quantus_client
-			.rpc_client()
-			.request("zkTree_getMerkleProof", proof_params)
+		let zk_proof = get_zk_merkle_proof(&quantus_client, leaf_index, proof_block_hash)
 			.await
 			.map_err(|e| {
 				CollectRewardsError::from(format!(
@@ -410,13 +400,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 					leaf_index, e
 				))
 			})?;
-
-		let zk_proof = zk_proof.ok_or_else(|| {
-			CollectRewardsError::from(format!(
-				"No ZK Merkle proof found for leaf_index {}",
-				leaf_index
-			))
-		})?;
 
 		// Decode transfer data from leaf
 		let (leaf_to_account, transfer_count, _leaf_asset_id, _leaf_raw_amount) =
@@ -549,11 +532,11 @@ pub async fn query_pending_transfers(
 	let wormhole_secret = derive_wormhole_from_mnemonic(mnemonic, None, &path)
 		.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 
-	let wormhole_address = AccountId32::from(wormhole_secret.address).to_ss58check();
+	let wormhole_address = AccountId32::from(*wormhole_secret.address()).to_ss58check();
 
 	// Query Subsquid using privacy-preserving hash prefix
 	let subsquid_client = SubsquidClient::new(subsquid_url.to_string())?;
-	let address_hash = compute_address_hash(&wormhole_secret.address);
+	let address_hash = compute_address_hash(wormhole_secret.address());
 	let prefix = get_hash_prefix(&address_hash, 8); // 8 hex chars for good privacy
 
 	let params = TransferQueryParams::new();
@@ -565,7 +548,7 @@ pub async fn query_pending_transfers(
 	let incoming_transfers: Vec<_> =
 		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
 
-	let secret_bytes: [u8; 32] = *wormhole_secret.secret.as_bytes();
+	let secret_bytes: [u8; 32] = *wormhole_secret.secret().as_bytes();
 	let unspent_transfers =
 		filter_unspent_transfers_by_indexer(&incoming_transfers, &secret_bytes, &subsquid_client)
 			.await?;
@@ -824,9 +807,8 @@ async fn submit_and_get_events(
 		)));
 	}
 
-	// Check volume fee BPS (should be 10 for testnet)
-	// Note: We can't query the chain config directly, but 10 is the expected value
-	const EXPECTED_VOLUME_FEE_BPS: u32 = 10;
+	// Must match on-chain VolumeFeeRateBps (currently 4 bps).
+	const EXPECTED_VOLUME_FEE_BPS: u32 = crate::wormhole_lib::VOLUME_FEE_BPS;
 	if inputs.volume_fee_bps != EXPECTED_VOLUME_FEE_BPS {
 		return Err(CollectRewardsError::from(format!(
 			"Pre-validation failed: InvalidVolumeFeeRate (got {}, expected {})",
@@ -1371,8 +1353,8 @@ mod tests {
 
 		let path = format!("m/44'/{}/0'/1'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
 		let wormhole_secret = derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path).unwrap();
-		let secret_bytes: [u8; 32] = *wormhole_secret.secret.as_bytes();
-		let address_hash = compute_address_hash(&wormhole_secret.address);
+		let secret_bytes: [u8; 32] = *wormhole_secret.secret().as_bytes();
+		let address_hash = compute_address_hash(wormhole_secret.address());
 
 		let spent_transfer_count = 5u64;
 		let spent_nullifier =

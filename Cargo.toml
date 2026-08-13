@@ -9,7 +9,7 @@ license = "Apache-2.0"
 name = "quantus-cli"
 readme = "README.md"
 repository = "https://github.com/Quantus-Network/quantus-cli"
-version = "1.6.0"
+version = "2.1.1"
 
 [lib]
 name = "quantus_cli"
@@ -31,8 +31,8 @@ clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.46", features = ["full"] }
 
 # Cold-wallet QR signing: UR encoding shared with the mobile/cold wallet apps
-# and the Keystone firmware (same tag pinned by all consumers).
-quantus_ur = { git = "https://github.com/Quantus-Network/quantus_ur.git", tag = "1.4.0" }
+# (1.6.0). Keystone firmware still encodes 1.4.0; the wire format is compatible.
+quantus_ur = { git = "https://github.com/Quantus-Network/quantus_ur.git", tag = "1.6.0" }
 # Terminal QR rendering (string renderers only; image/svg not needed)
 qrcode = { version = "0.14", default-features = false }
 # Camera capture (AVFoundation / MSMF / V4L2) + pure-Rust QR decoding
@@ -64,27 +64,32 @@ aes-gcm = "0.10" # AES-256-GCM (quantum-safe with 256-bit keys)
 argon2 = "0.5"   # Password-based key derivation (quantum-safe)
 rand = "0.9"
 
-# Quantus crypto dependencies (aligned with chain)
-qp-dilithium-crypto = { version = "0.5.0", features = ["serde"] }
-qp-rusty-crystals-dilithium = { version = "3.0.1" }
-qp-rusty-crystals-hdwallet = { version = "3.0.1" }
+# Quantus crypto dependencies (aligned with chain / dilithium-crypto 0.6.1).
+qp-dilithium-crypto = { version = "0.6.1", features = ["serde"] }
+qp-human-checkphrase = "2.2.1"
+qp-rusty-crystals-dilithium = { version = "4.1.0", features = ["ml-dsa-65", "ml-dsa-87"] }
+qp-rusty-crystals-hdwallet = { version = "4.1.0", features = ["ml-dsa-65"] }
 
 # HTTP client for Subsquid queries
 blake3 = "1.8"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 # Self-update: download and replace the running binary from GitHub releases.
-# Pinned to 0.43.x: it shares the same reqwest (0.12) and indicatif (0.18) as the
-# rest of the crate, avoiding duplicate dependencies. The only change in 0.44 is a
-# bump to reqwest 0.13, which would force a second reqwest build with no real gain.
-self_update = { version = "0.43", default-features = false, features = [
+# 1.0.0-rc.x is required for quick-xml >= 0.41 (RUSTSEC-2026-0194 / 0195); stable
+# 0.44 still pins quick-xml ^0.38. Pulls reqwest 0.13 alongside our 0.12.
+self_update = { version = "1.0.0-rc.6", default-features = false, features = [
 	"archive-tar",
 	"archive-zip",
-	"compression-flate2",
+	"compression-tar-gz",
 	"compression-zip-deflate",
+	"github",
+	"progress-bar",
 	"reqwest",
 	"rustls",
 ] }
+# 1.0 stopped re-exporting these; the update flow uses them directly.
+self-replace = "1"
+tempfile = "3"
 
 # Force patched version of bytes (RUSTSEC-2026-0007)
 bytes = "1.11.1"
@@ -94,6 +99,9 @@ quinn-proto = "0.11.14"
 
 # Force patched version of rustls-webpki (RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104)
 rustls-webpki = "0.103.13"
+
+# Force patched event-listener (RUSTSEC-2026-0221); smoldot allows ^5.3
+event-listener = "5.4.2"
 
 # Blockchain deps: align with chain workspace
 codec = { package = "parity-scale-codec", version = "3.7", features = ["derive"] }
@@ -108,27 +116,27 @@ subxt-metadata = "0.44"
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
 
-qp-plonky2 = { version = "1.5.4", default-features = false, features = ["rand", "std"] }
-qp-plonky2-verifier = { version = "1.5.4", default-features = false }
-qp-wormhole-aggregator = { version = "3.1.0", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-circuit = { version = "3.1.0", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = { version = "3.1.0" }
-qp-wormhole-inputs = { version = "3.1.0", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "3.1.0", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "3.1.0", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "3.1.0", default-features = false, features = ["std"] }
+qp-plonky2 = { version = "1.5.5", default-features = false, features = ["rand", "std"] }
+qp-plonky2-verifier = { version = "1.5.5", default-features = false }
+qp-wormhole-aggregator = { version = "4.2.0", default-features = false, features = ["rayon", "std"] }
+qp-wormhole-circuit = { version = "4.2.0", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { version = "4.2.0" }
+qp-wormhole-inputs = { version = "4.2.0", default-features = false, features = ["std"] }
+qp-wormhole-prover = { version = "4.2.0", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { version = "4.2.0", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { version = "4.2.0", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 [build-dependencies]
 hex = "0.4"
-qp-poseidon-core = "3.0.2"
-qp-wormhole-circuit-builder = { version = "3.1.0" }
+qp-poseidon-core = "3.1.0"
+qp-wormhole-circuit-builder = { version = "4.2.0" }
 sha2 = "0.10"
 
 [dev-dependencies]
-qp-poseidon-core = "3.0.2"
+qp-poseidon-core = "3.1.0"
 serial_test = "3.1"
 tempfile = "3.8.1"
 

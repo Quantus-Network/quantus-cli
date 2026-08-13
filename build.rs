@@ -1,10 +1,10 @@
 //! Build script for quantus-cli.
 //!
-//! Generates circuit binaries (leaf verifier/common + private/public-batch
-//! prover/verifier artifacts) at build time. The leaf circuit has no
-//! `prover.bin` — proving uses an in-process fresh build. This keeps the
-//! binaries consistent with the circuit crate version and eliminates the need
-//! to manually run `quantus developer build-circuits`.
+//! Generates circuit binaries (leaf + private/public-batch verifier/common/
+//! dummy-proof artifacts) at build time. No `*_prover.bin` files are emitted —
+//! provers rebuild circuits in-process. This keeps the binaries consistent with
+//! the circuit crate version and eliminates the need to manually run
+//! `quantus developer build-circuits`.
 //!
 //! Outputs are written to `OUT_DIR` (required by cargo) and, during local source
 //! builds only, atomically published to `generated-bins/` in the project root.
@@ -150,10 +150,9 @@ fn main() {
 	print_bin_hash(&build_output_dir, "dummy_proof.bin");
 	print_bin_hash(&build_output_dir, "private_batch_common.bin");
 	print_bin_hash(&build_output_dir, "private_batch_verifier.bin");
-	print_bin_hash(&build_output_dir, "private_batch_prover.bin");
+	print_bin_hash(&build_output_dir, "dummy_private_batch_proof.bin");
 	print_bin_hash(&build_output_dir, "public_batch_common.bin");
 	print_bin_hash(&build_output_dir, "public_batch_verifier.bin");
-	print_bin_hash(&build_output_dir, "public_batch_prover.bin");
 
 	// Atomically publish a real directory (not a symlink) for runtime access.
 	// Symlinks are refused by runtime `ensure_bins_dir` (#160699), and the old

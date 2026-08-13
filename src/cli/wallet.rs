@@ -5,8 +5,9 @@ use crate::{
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
 	wallet::{
+		default_derivation_path,
 		password::{get_mnemonic_from_user, get_new_wallet_password},
-		WalletManager, DEFAULT_DERIVATION_PATH,
+		DilithiumScheme, WalletManager,
 	},
 };
 use clap::Subcommand;
@@ -37,13 +38,18 @@ pub enum WalletCommands {
 		#[arg(long)]
 		allow_empty_password: bool,
 
-		/// Derivation path (default: m/44'/189189'/0'/0/0)
-		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
-		derivation_path: String,
+		/// Derivation path (default depends on --scheme: ML-DSA-65 →
+		/// m/44'/189189'/0'/0'/1', ML-DSA-87 → m/44'/189189'/0'/0'/0')
+		#[arg(short = 'd', long)]
+		derivation_path: Option<String>,
 
 		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
 		#[arg(long)]
 		no_derivation: bool,
+
+		/// Dilithium signature scheme (default: ml-dsa-65)
+		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
+		scheme: DilithiumScheme,
 	},
 
 	/// View wallet information
@@ -95,13 +101,18 @@ pub enum WalletCommands {
 		#[arg(long)]
 		allow_empty_password: bool,
 
-		/// Derivation path (default: m/44'/189189'/0'/0/0)
-		#[arg(short = 'd', long, default_value = DEFAULT_DERIVATION_PATH)]
-		derivation_path: String,
+		/// Derivation path (default depends on --scheme: ML-DSA-65 →
+		/// m/44'/189189'/0'/0'/1', ML-DSA-87 → m/44'/189189'/0'/0'/0')
+		#[arg(short = 'd', long)]
+		derivation_path: Option<String>,
 
 		/// Disable HD derivation (use master seed directly, like quantus-node --no-derivation)
 		#[arg(long)]
 		no_derivation: bool,
+
+		/// Dilithium signature scheme (default: ml-dsa-65)
+		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
+		scheme: DilithiumScheme,
 	},
 
 	/// Import a cold (hardware / air-gapped) wallet as watch-only
@@ -139,6 +150,10 @@ pub enum WalletCommands {
 		/// Allow encrypting the new wallet with an empty password (development only)
 		#[arg(long)]
 		allow_empty_password: bool,
+
+		/// Dilithium signature scheme (default: ml-dsa-65)
+		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
+		scheme: DilithiumScheme,
 	},
 
 	/// List all wallets
@@ -359,6 +374,12 @@ fn write_mnemonic_to_protected_file(
 	Ok(())
 }
 
+/// Colored checkphrase for a real address; None for placeholders like "[Wrong password]"
+fn checkphrase_line(address: &str) -> Option<String> {
+	(!address.starts_with('['))
+		.then(|| crate::wallet::checkphrase::checkphrase(address).bright_blue().to_string())
+}
+
 /// Handle wallet commands
 pub async fn handle_wallet_command(
 	command: WalletCommands,
@@ -372,6 +393,7 @@ pub async fn handle_wallet_command(
 			allow_empty_password,
 			derivation_path,
 			no_derivation,
+			scheme,
 		} => {
 			log_print!("🔐 Creating new quantum wallet...");
 
@@ -380,19 +402,15 @@ pub async fn handle_wallet_command(
 
 			let wallet_manager = WalletManager::new()?;
 
-			// Choose creation method based on flags
 			let result = if no_derivation {
-				// Use master seed directly (like quantus-node --no-derivation)
-				wallet_manager.create_wallet_no_derivation(&name, Some(&final_password)).await
-			} else if derivation_path == DEFAULT_DERIVATION_PATH {
-				wallet_manager.create_wallet(&name, Some(&final_password)).await
-			} else {
 				wallet_manager
-					.create_wallet_with_derivation_path(
-						&name,
-						Some(&final_password),
-						&derivation_path,
-					)
+					.create_wallet_no_derivation_with_scheme(&name, Some(&final_password), scheme)
+					.await
+			} else {
+				let path =
+					derivation_path.as_deref().unwrap_or_else(|| default_derivation_path(scheme));
+				wallet_manager
+					.create_wallet_with_scheme(&name, Some(&final_password), path, scheme)
 					.await
 			};
 
@@ -400,6 +418,9 @@ pub async fn handle_wallet_command(
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!(
 						"Derivation path: {}",
@@ -444,6 +465,9 @@ pub async fn handle_wallet_command(
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!("✅ Cold wallet imported (watch-only)");
 					log_print!(
@@ -479,6 +503,9 @@ pub async fn handle_wallet_command(
 									wallet.name.bright_green()
 								);
 								log_print!("   Address: {}", wallet.address.bright_cyan());
+								if let Some(checkphrase) = checkphrase_line(&wallet.address) {
+									log_print!("   Checkphrase: {}", checkphrase);
+								}
 								log_print!("   Type: {}", wallet.key_type.bright_yellow());
 								log_print!(
 									"   Derivation Path: {}",
@@ -509,6 +536,9 @@ pub async fn handle_wallet_command(
 						log_print!("Wallet Details:\n");
 						log_print!("Name: {}", wallet_info.name.bright_green());
 						log_print!("Address: {}", wallet_info.address.bright_cyan());
+						if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+							log_print!("Checkphrase: {}", checkphrase);
+						}
 						log_print!("Key Type: {}", wallet_info.key_type.bright_yellow());
 						log_print!(
 							"Derivation Path: {}",
@@ -695,6 +725,7 @@ pub async fn handle_wallet_command(
 			allow_empty_password,
 			derivation_path,
 			no_derivation,
+			scheme,
 		} => {
 			log_print!("📥 Importing wallet...");
 
@@ -714,23 +745,25 @@ pub async fn handle_wallet_command(
 			// Always read mnemonic from a hidden prompt so it never appears in process argv.
 			let mut mnemonic_phrase = get_mnemonic_from_user()?;
 
-			// Choose import method based on flags
 			let result = if no_derivation {
-				// Use master seed directly (like quantus-node --no-derivation)
 				wallet_manager
-					.import_wallet_no_derivation(&name, &mnemonic_phrase, Some(&final_password))
-					.await
-			} else if derivation_path == DEFAULT_DERIVATION_PATH {
-				wallet_manager
-					.import_wallet(&name, &mnemonic_phrase, Some(&final_password))
-					.await
-			} else {
-				wallet_manager
-					.import_wallet_with_derivation_path(
+					.import_wallet_no_derivation_with_scheme(
 						&name,
 						&mnemonic_phrase,
 						Some(&final_password),
-						&derivation_path,
+						scheme,
+					)
+					.await
+			} else {
+				let path =
+					derivation_path.as_deref().unwrap_or_else(|| default_derivation_path(scheme));
+				wallet_manager
+					.import_wallet_with_scheme(
+						&name,
+						&mnemonic_phrase,
+						Some(&final_password),
+						path,
+						scheme,
 					)
 					.await
 			};
@@ -740,6 +773,9 @@ pub async fn handle_wallet_command(
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!(
 						"Derivation path: {}",
@@ -760,7 +796,13 @@ pub async fn handle_wallet_command(
 			Ok(())
 		},
 
-		WalletCommands::FromSeed { name, password, password_file, allow_empty_password } => {
+		WalletCommands::FromSeed {
+			name,
+			password,
+			password_file,
+			allow_empty_password,
+			scheme,
+		} => {
 			log_print!("🌱 Creating wallet from seed...");
 
 			let wallet_manager = WalletManager::new()?;
@@ -783,7 +825,7 @@ pub async fn handle_wallet_command(
 			crate::wallet::keystore::zeroize_string(&mut seed_raw);
 
 			let result = wallet_manager
-				.create_wallet_from_seed(&name, &seed, Some(&final_password))
+				.create_wallet_from_seed_with_scheme(&name, &seed, Some(&final_password), scheme)
 				.await;
 			crate::wallet::keystore::zeroize_string(&mut seed);
 
@@ -791,6 +833,9 @@ pub async fn handle_wallet_command(
 				Ok(wallet_info) => {
 					log_success!("Wallet name: {}", name.bright_green());
 					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
 					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
 					log_success!(
 						"Created: {}",
@@ -830,6 +875,9 @@ pub async fn handle_wallet_command(
 								wallet.name.bright_green()
 							);
 							log_print!("   Address: {}", wallet.address.bright_cyan());
+							if let Some(checkphrase) = checkphrase_line(&wallet.address) {
+								log_print!("   Checkphrase: {}", checkphrase);
+							}
 							log_print!("   Type: {}", wallet.key_type.bright_yellow());
 							log_print!(
 								"   Created: {}",
@@ -892,6 +940,9 @@ pub async fn handle_wallet_command(
 				log_print!("Wallet to delete:");
 				log_print!("  Name: {}", wallet_info.name.bright_green());
 				log_print!("  Address: {}", wallet_info.address.bright_cyan());
+				if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+					log_print!("  Checkphrase: {}", checkphrase);
+				}
 				log_print!("  Type: {}", wallet_info.key_type.bright_yellow());
 				log_print!(
 					"  Created: {}",
@@ -1080,5 +1131,37 @@ mod tests {
 			"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 		]);
 		assert!(result.is_err(), "wallet from-seed must not accept --seed on the command line");
+	}
+
+	#[test]
+	fn wallet_scheme_cli_uses_hyphen_before_security_level() {
+		let parsed = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"create",
+			"--name",
+			"poc",
+			"--scheme",
+			"ml-dsa-87",
+			"--allow-empty-password",
+		])
+		.expect("ml-dsa-87 must parse");
+		match parsed.command {
+			crate::cli::Commands::Wallet(WalletCommands::Create { scheme, .. }) =>
+				assert_eq!(scheme, DilithiumScheme::MlDsa87),
+			other => panic!("expected Wallet(Create), got {other:?}"),
+		}
+
+		let legacy = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"create",
+			"--name",
+			"poc",
+			"--scheme",
+			"ml-dsa87",
+			"--allow-empty-password",
+		]);
+		assert!(legacy.is_err(), "unhyphenated ml-dsa87 must not parse");
 	}
 }

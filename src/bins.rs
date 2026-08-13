@@ -10,15 +10,15 @@
 //! storage location and regenerates the binaries there on demand.
 //!
 //! Resolution order:
-//! 1. `QUANTUS_BINS_DIR` env var (explicit override; also how local dev opts in to
-//!    `./generated-bins`).
-//! 2. `~/.quantus/generated-bins/` (default for installed binaries).
+//! 1. `QUANTUS_BINS_DIR` env var (optional override, including `./generated-bins`).
+//! 2. `~/.quantus/generated-bins/` (default; generated on demand).
 //!
-//! `./generated-bins/` in the current working directory is detected but never
-//! trusted implicitly: the manifest is unsigned and lives in the directory it
-//! authenticates, so an attacker-prepared checkout could ship a
-//! self-consistent artifact set that passes verification. Resolution fails
-//! with an explicit opt-in instruction instead.
+//! `./generated-bins/` in the current working directory is never used unless
+//! pointed at explicitly via `QUANTUS_BINS_DIR`. The manifest is unsigned and
+//! lives in the directory it authenticates, so an attacker-prepared checkout
+//! could ship a self-consistent artifact set that passes verification. When
+//! CWD artifacts are present without an override they are ignored — resolution
+//! falls through to the per-user store instead of requiring an env var.
 
 use crate::{
 	error::{QuantusError, Result},
@@ -44,15 +44,13 @@ pub const BINS_DIR_ENV: &str = "QUANTUS_BINS_DIR";
 
 /// Files that must be present for all wormhole operations to succeed.
 ///
-/// Note: there is no leaf `prover.bin` — qp-wormhole-circuit-builder 3.1.0+ does
-/// not emit one; leaf proofs use `qp_wormhole_prover::build_fresh()`.
+/// No `*_prover.bin` artifacts: circuit-builder 4.2.0+ never emits them;
+/// leaf / private-batch / public-batch provers rebuild from source.
 const REQUIRED_FILES: &[&str] = &[
 	"verifier.bin",
 	"common.bin",
-	"private_batch_prover.bin",
 	"private_batch_verifier.bin",
 	"private_batch_common.bin",
-	"public_batch_prover.bin",
 	"public_batch_verifier.bin",
 	"public_batch_common.bin",
 	"dummy_proof.bin",
@@ -74,24 +72,15 @@ struct ArtifactManifest {
 /// This never generates anything; see [`ensure_bins_dir`] for the full
 /// resolve-and-generate flow.
 ///
-/// Fails if `./generated-bins` exists in the current working directory without
-/// an explicit `QUANTUS_BINS_DIR` opt-in — see the module docs for why the CWD
-/// source cannot be trusted implicitly.
+/// `cwd_dir` is only used for tests; production ignores CWD artifacts unless
+/// they are selected via [`BINS_DIR_ENV`].
 pub fn resolve_bins_dir() -> Result<PathBuf> {
 	resolve_bins_dir_from(std::env::var(BINS_DIR_ENV).ok(), Path::new("generated-bins"))
 }
 
-fn resolve_bins_dir_from(env_override: Option<String>, cwd_dir: &Path) -> Result<PathBuf> {
+fn resolve_bins_dir_from(env_override: Option<String>, _cwd_dir: &Path) -> Result<PathBuf> {
 	if let Some(dir) = env_override {
 		return Ok(PathBuf::from(dir));
-	}
-
-	if cwd_dir.join("config.json").exists() {
-		return Err(QuantusError::Generic(format!(
-			"Found circuit artifacts in ./{dir} but refusing to trust the current working directory implicitly. Set {env}=./{dir} to use them, or run from another directory to use the per-user artifact store",
-			dir = cwd_dir.display(),
-			env = BINS_DIR_ENV,
-		)));
 	}
 
 	Ok(user_bins_dir())
@@ -198,8 +187,10 @@ fn remove_stale_artifact_files(dir: &Path) -> Result<()> {
 	names.extend(MANIFESTED_FILES.iter().copied());
 	names.insert(MANIFEST_FILE);
 	names.insert(VERSION_MARKER);
-	// Legacy leaf prover emitted by pre-3.1.0 circuit builders.
+	// Legacy prover artifacts no longer emitted by circuit-builder 4.2.0+.
 	names.insert("prover.bin");
+	names.insert("private_batch_prover.bin");
+	names.insert("public_batch_prover.bin");
 
 	for name in names {
 		let path = dir.join(name);
@@ -502,17 +493,18 @@ mod tests {
 	}
 
 	#[test]
-	fn cwd_artifacts_are_refused_without_explicit_opt_in() {
+	fn cwd_artifacts_are_ignored_without_explicit_opt_in() {
 		// #160697 follow-up: an attacker-prepared checkout can ship a
 		// self-consistent ./generated-bins; it must never be trusted implicitly.
+		// Prefer the per-user store over requiring QUANTUS_BINS_DIR.
 		let tmp = TempDir::new().unwrap();
 		let cwd_dir = tmp.path().join("generated-bins");
 		fs::create_dir_all(&cwd_dir).unwrap();
 		fs::write(cwd_dir.join("config.json"), b"{}").unwrap();
 
-		let err = resolve_bins_dir_from(None, &cwd_dir)
-			.expect_err("CWD artifacts must require explicit opt-in");
-		assert!(err.to_string().contains(BINS_DIR_ENV), "unexpected error: {err}");
+		let resolved = resolve_bins_dir_from(None, &cwd_dir)
+			.expect("CWD artifacts must be ignored, not fatal");
+		assert_eq!(resolved, user_bins_dir());
 	}
 
 	#[test]

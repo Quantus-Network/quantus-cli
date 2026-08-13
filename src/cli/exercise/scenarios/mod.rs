@@ -10,4 +10,6 @@ pub mod reads;
 pub mod recovery;
 pub mod reversible;
 pub mod upgrade;
+pub mod utility;
+pub mod vesting;
 pub mod wormhole;

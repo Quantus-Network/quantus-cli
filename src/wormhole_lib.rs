@@ -12,6 +12,7 @@
 use qp_wormhole_circuit::{
 	inputs::{CircuitInputs, PrivateCircuitInputs},
 	nullifier::Nullifier,
+	sensitive::Secret,
 };
 use qp_wormhole_inputs::PublicCircuitInputs;
 use qp_zk_circuits_common::{
@@ -31,8 +32,9 @@ pub const NATIVE_ASSET_ID: u32 = 0;
 /// Scale down factor for quantizing amounts (10^10 to go from 12 to 2 decimal places)
 pub const SCALE_DOWN_FACTOR: u128 = 10_000_000_000;
 
-/// Volume fee rate in basis points (10 bps = 0.1%)
-pub const VOLUME_FEE_BPS: u32 = 10;
+/// Volume fee rate in basis points (must match on-chain `VolumeFeeRateBps`).
+/// Runtime currently sets 4 bps (0.04%).
+pub const VOLUME_FEE_BPS: u32 = 4;
 
 /// Result type for wormhole library operations
 pub type Result<T> = std::result::Result<T, WormholeLibError>;
@@ -88,7 +90,11 @@ struct ZeroizingCircuitInputs(CircuitInputs);
 
 impl Drop for ZeroizingCircuitInputs {
 	fn drop(&mut self) {
-		zeroize_bytes_digest(&mut self.0.private.secret);
+		// `Secret` zeroizes on drop; replace now so the embedded copy is wiped
+		// even if the outer `CircuitInputs` value is moved elsewhere later.
+		self.0.private.secret = Secret::from(
+			BytesDigest::try_from([0u8; 32]).expect("all-zero digest is always valid"),
+		);
 	}
 }
 
@@ -320,7 +326,7 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 			block_number: input.block_number,
 		},
 		private: PrivateCircuitInputs {
-			secret: secret_digest.0,
+			secret: Secret::from(secret_digest.0),
 			transfer_count: input.transfer_count,
 			unspendable_account: unspendable_bytes,
 			parent_hash,
