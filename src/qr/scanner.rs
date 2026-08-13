@@ -251,6 +251,38 @@ mod camera {
 		None
 	}
 
+	/// Mac cameras typically deliver NV12 (420 bi-planar). nokhwa mis-tags that
+	/// as YUYV, and YUYV→RGB on NV12 bytes produces the doubled/posterized mess
+	/// in the preview. Detect NV12 by buffer size and convert it correctly.
+	fn frame_to_rgb(frame: &nokhwa::Buffer) -> std::result::Result<(u32, u32, Vec<u8>), String> {
+		use nokhwa::{pixel_format::RgbFormat, utils::nv12_to_rgb};
+		let res = frame.resolution();
+		let w = res.width();
+		let h = res.height();
+		let raw = frame.buffer();
+		let nv12_len = (w as usize).saturating_mul(h as usize).saturating_mul(3) / 2;
+		let rgb = if raw.len() == nv12_len {
+			nv12_to_rgb(res, raw, false).map_err(|e| format!("{e}"))?
+		} else {
+			frame
+				.decode_image::<RgbFormat>()
+				.map(|img| img.into_raw())
+				.map_err(|e| format!("{e}"))?
+		};
+		let expected = (w as usize).saturating_mul(h as usize).saturating_mul(3);
+		if rgb.len() != expected {
+			return Err(format!(
+				"RGB size {} != {}x{}x3 (src {:?}, raw {})",
+				rgb.len(),
+				w,
+				h,
+				frame.source_frame_format(),
+				raw.len()
+			));
+		}
+		Ok((w, h, rgb))
+	}
+
 	fn rgb_preview_u32(raw: &[u8], sw: u32, sh: u32, dw: usize, dh: usize) -> Vec<u32> {
 		let mut out = vec![0u32; dw * dh];
 		if sw == 0 || sh == 0 {
@@ -336,35 +368,35 @@ mod camera {
 					continue;
 				},
 			};
-			let img = match frame.decode_image::<RgbFormat>() {
-				Ok(img) => img,
+			let (img_w, img_h, rgb) = match frame_to_rgb(&frame) {
+				Ok(rgb) => rgb,
 				Err(e) => {
 					crate::log_verbose!("📷 Failed to decode camera frame: {e}");
 					continue;
 				},
 			};
 			frames += 1;
+			if frames == 1 {
+				crate::log_verbose!(
+					"📷 Frame format {:?} raw {} bytes → RGB {}x{}",
+					frame.source_frame_format(),
+					frame.buffer().len(),
+					img_w,
+					img_h
+				);
+			}
 			if frames == 1 || frames % 15 == 0 {
 				on_status(&format!(
-					"📷 Live {}x{} @ {} fps — {} frames, no QR yet",
-					img.width(),
-					img.height(),
-					fmt.frame_rate(),
-					frames
+					"📷 Live {img_w}x{img_h} @ {} fps — {frames} frames, no QR yet",
+					fmt.frame_rate()
 				));
 			}
 
 			if let Ok(mut slot) = preview.lock() {
-				*slot = Some(rgb_preview_u32(
-					img.as_raw(),
-					img.width(),
-					img.height(),
-					PREVIEW_W,
-					PREVIEW_H,
-				));
+				*slot = Some(rgb_preview_u32(&rgb, img_w, img_h, PREVIEW_W, PREVIEW_H));
 			}
 
-			let (w, h, luma) = rgb_to_luma(img.as_raw(), img.width(), img.height());
+			let (w, h, luma) = rgb_to_luma(&rgb, img_w, img_h);
 			if luma.len() != w.saturating_mul(h) {
 				continue;
 			}
@@ -410,6 +442,9 @@ mod camera {
 		let mut handle = tokio::task::spawn_blocking(move || {
 			scan_with_camera(index, timeout, stop_flag, preview_cam, on_status, sink)
 		});
+		// AppKit draws asynchronously; keep the last buffer alive so the view
+		// never paints a freed pointer (that flashed as garbage).
+		let mut displayed = vec![0u32; PREVIEW_W * PREVIEW_H];
 
 		loop {
 			tokio::select! {
@@ -422,14 +457,15 @@ mod camera {
 						if !win.is_open() {
 							window = None;
 						} else {
-							let frame = preview.lock().ok().and_then(|mut slot| slot.take());
-							if let Some(buf) = frame {
-								if let Err(e) = win.update_with_buffer(&buf, PREVIEW_W, PREVIEW_H) {
-									crate::log_verbose!("📷 Preview update failed: {e}");
-									window = None;
-								}
-							} else {
-								win.update();
+							if let Some(buf) = preview.lock().ok().and_then(|mut slot| slot.take())
+							{
+								displayed = buf;
+							}
+							if let Err(e) =
+								win.update_with_buffer(&displayed, PREVIEW_W, PREVIEW_H)
+							{
+								crate::log_verbose!("📷 Preview update failed: {e}");
+								window = None;
 							}
 						}
 					}
