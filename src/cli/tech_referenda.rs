@@ -958,7 +958,7 @@ async fn get_proposal_status(
 							format_block_eta(when, current_block, block_time_ms)
 						),
 						None => log_print!(
-							"   🏁 Enactment: already executed (no longer in the scheduler)"
+							"   🏁 Enactment: no longer scheduled; execution outcome unavailable"
 						),
 					}
 				},
