@@ -269,6 +269,7 @@ impl WalletManager {
 		use sp_core::crypto::{AccountId32, Ss58Codec};
 
 		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
@@ -288,7 +289,7 @@ impl WalletManager {
 		}
 
 		let encrypted_wallet = keystore::EncryptedWallet::new_cold(name, address.trim());
-		keystore.save_wallet(&encrypted_wallet)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {
 			name: name.to_string(),
@@ -1548,6 +1549,40 @@ mod tests {
 			wallet_manager.create_cold_wallet("frosty", &address),
 			Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))
 		));
+	}
+
+	/// Cold import must never replace a wallet created concurrently: the
+	/// creation lock plus the no-replace save make exactly one creator win,
+	/// and an existing wallet's file (with its encrypted keys) stays intact.
+	#[tokio::test]
+	async fn test_cold_import_cannot_replace_concurrent_creation() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let address = cold_test_address();
+
+		wallet_manager.create_wallet("victim", Some("pw")).await.unwrap();
+		let file = wallet_manager.wallets_dir.join("victim.json");
+		let before = fs::read_to_string(&file).unwrap();
+		assert!(matches!(
+			wallet_manager.create_cold_wallet("victim", &address),
+			Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))
+		));
+		assert_eq!(
+			fs::read_to_string(&file).unwrap(),
+			before,
+			"cold import must not touch the existing wallet file"
+		);
+		wallet_manager
+			.load_wallet("victim", "pw")
+			.expect("hot wallet keys must survive");
+
+		let outcomes: Vec<bool> = std::thread::scope(|s| {
+			let handles: Vec<_> = (0..8)
+				.map(|_| s.spawn(|| wallet_manager.create_cold_wallet("racer", &address).is_ok()))
+				.collect();
+			handles.into_iter().map(|h| h.join().unwrap()).collect()
+		});
+		assert_eq!(outcomes.iter().filter(|&&ok| ok).count(), 1, "exactly one creator may win");
+		assert_eq!(wallet_manager.wallet_type("racer").unwrap(), Some(keystore::WalletType::Cold));
 	}
 
 	#[test]

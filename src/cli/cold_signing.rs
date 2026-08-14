@@ -331,6 +331,17 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 	let parts = quantus_ur::encode_bytes(&raw_payload)
 		.map_err(|e| QuantusError::Generic(format!("Failed to UR-encode payload: {e:?}")))?;
 
+	// A response file existing before this request is handed out is necessarily
+	// from an earlier session (the response depends on this request); together
+	// with consume-on-read in the scanner this keeps every roundtrip fresh.
+	if let Some(UrSource::File(path)) = &io.response_in {
+		match std::fs::remove_file(path) {
+			Ok(()) => log_print!("🧹 Removed stale response file {}", path.display()),
+			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
+			Err(e) => return Err(e.into()),
+		}
+	}
+
 	if let Some(path) = &io.request_out {
 		let content = parts.join("\n") + "\n";
 		std::fs::write(path, content)?;

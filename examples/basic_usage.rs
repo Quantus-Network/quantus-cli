@@ -10,7 +10,6 @@ use quantus_cli::{
 	chain::client::QuantusClient, cli::common::ExecutionMode, error::Result, transfer,
 	wallet::WalletManager, AccountId32,
 };
-use sp_core::crypto::Ss58Codec;
 
 #[tokio::main]
 async fn main() -> Result<()> {

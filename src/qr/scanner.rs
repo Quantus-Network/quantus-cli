@@ -15,7 +15,9 @@ pub enum UrSource {
 	#[cfg(feature = "camera")]
 	Camera { index: u32 },
 	/// Read UR parts (one per line) from a file, polling until it exists and
-	/// holds a complete set. Enables scripted/headless flows.
+	/// holds a complete set. The file is consumed (deleted) after a successful
+	/// read so a later roundtrip on the same path can never pick up a stale
+	/// session. Enables scripted/headless flows.
 	File(PathBuf),
 	/// Read UR parts from stdin, one per line, until complete or EOF.
 	StdinLines,
@@ -33,8 +35,10 @@ pub(crate) fn ur_progress(part: &str) -> Option<(u32, u32)> {
 }
 
 fn is_ur_line(line: &str) -> bool {
-	let trimmed = line.trim();
-	trimmed.len() > 3 && trimmed[..3].eq_ignore_ascii_case("ur:")
+	// Byte-wise prefix check: QR/file input is untrusted and may start with
+	// multi-byte characters, so `trimmed[..3]` could slice off a char boundary.
+	let trimmed = line.trim().as_bytes();
+	trimmed.len() > 3 && trimmed[..3].eq_ignore_ascii_case(b"ur:")
 }
 
 fn decode_if_complete(parts: &[String]) -> Result<Option<Vec<u8>>> {
@@ -75,7 +79,9 @@ pub async fn scan_ur(source: &UrSource, timeout: Duration) -> Result<Vec<u8>> {
 	}
 }
 
-/// Poll `path` until it contains a complete set of UR parts (one per line).
+/// Poll `path` until it contains a complete set of UR parts (one per line),
+/// then consume the file so the same path cannot serve a stale session to the
+/// next roundtrip.
 async fn scan_ur_from_file(path: &std::path::Path, timeout: Duration) -> Result<Vec<u8>> {
 	let deadline = tokio::time::Instant::now() + timeout;
 	loop {
@@ -86,6 +92,12 @@ async fn scan_ur_from_file(path: &std::path::Path, timeout: Duration) -> Result<
 				.map(|l| l.trim().to_string())
 				.collect();
 			if let Some(bytes) = decode_any_suffix(&parts)? {
+				if let Err(e) = std::fs::remove_file(path) {
+					crate::log_print!(
+						"⚠️  Could not consume UR file {}: {e} — remove it manually before the next roundtrip",
+						path.display()
+					);
+				}
 				return Ok(bytes);
 			}
 		}
@@ -226,8 +238,10 @@ mod camera {
 			let buf: Vec<u8> =
 				if invert { luma.iter().map(|v| 255 - v).collect() } else { luma.to_vec() };
 			let decoded = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-				let mut hints = rxing::DecodeHints::default();
-				hints.PossibleFormats = Some(HashSet::from([rxing::BarcodeFormat::QR_CODE]));
+				let mut hints = rxing::DecodeHints {
+					PossibleFormats: Some(HashSet::from([rxing::BarcodeFormat::QR_CODE])),
+					..Default::default()
+				};
 				rxing::helpers::detect_multiple_in_luma_with_hints(
 					buf, w as u32, h as u32, &mut hints,
 				)
@@ -393,7 +407,7 @@ mod camera {
 					img_h
 				);
 			}
-			if frames == 1 || frames % 15 == 0 {
+			if frames == 1 || frames.is_multiple_of(15) {
 				on_status(&format!(
 					"📷 Live {img_w}x{img_h} @ {} fps — {frames} frames scanned",
 					fmt.frame_rate()
@@ -753,6 +767,15 @@ mod tests {
 		assert!(!is_ur_line(""));
 	}
 
+	/// Untrusted QR/file input may start with multi-byte characters; a byte
+	/// slice off a UTF-8 boundary must not panic the scanner.
+	#[test]
+	fn test_is_ur_line_non_ascii_no_panic() {
+		assert!(!is_ur_line("ééééé"));
+		assert!(!is_ur_line("🧊🧊"));
+		assert!(!is_ur_line("日本語のテキスト"));
+	}
+
 	#[test]
 	fn test_decode_any_suffix_recovers_from_stale_stream() {
 		let old_payload: Vec<u8> = (0..7500u32).map(|i| (i * 31 % 249) as u8).collect();
@@ -781,6 +804,36 @@ mod tests {
 
 		let decoded = scan_ur(&UrSource::File(path), Duration::from_secs(5)).await.expect("decode");
 		assert_eq!(decoded, payload);
+	}
+
+	/// Two consecutive exchanges over the same configured path: the first read
+	/// consumes the file, and the second must wait for a fresh session instead
+	/// of replaying the stale one.
+	#[tokio::test]
+	async fn test_scan_ur_from_file_consumes_file_between_sessions() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("response.ur");
+
+		let payload_a: Vec<u8> = (0..7219u32).map(|i| (i % 251) as u8).collect();
+		let parts_a = quantus_ur::encode_bytes(&payload_a).unwrap();
+		std::fs::write(&path, parts_a.join("\n")).unwrap();
+		let got = scan_ur(&UrSource::File(path.clone()), Duration::from_secs(5)).await.unwrap();
+		assert_eq!(got, payload_a);
+		assert!(!path.exists(), "file must be consumed after a successful read");
+
+		let payload_b: Vec<u8> = (0..7219u32).map(|i| ((i * 3) % 251) as u8).collect();
+		let parts_b = quantus_ur::encode_bytes(&payload_b).unwrap();
+		let writer = {
+			let path = path.clone();
+			tokio::spawn(async move {
+				tokio::time::sleep(Duration::from_millis(300)).await;
+				std::fs::write(&path, parts_b.join("\n")).unwrap();
+			})
+		};
+		let got = scan_ur(&UrSource::File(path.clone()), Duration::from_secs(5)).await.unwrap();
+		assert_eq!(got, payload_b, "second exchange must return the fresh session");
+		writer.await.unwrap();
+		assert!(!path.exists());
 	}
 
 	#[tokio::test]
