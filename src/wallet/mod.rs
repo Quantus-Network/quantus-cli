@@ -274,7 +274,7 @@ impl WalletManager {
 			return Err(WalletError::AlreadyExists.into());
 		}
 
-		let (_, format) =
+		let (account, format) =
 			AccountId32::from_ss58check_with_version(address.trim()).map_err(|_| {
 				crate::error::QuantusError::Generic(format!(
 					"'{}' is not a valid SS58 address",
@@ -288,7 +288,12 @@ impl WalletManager {
 			)));
 		}
 
-		let encrypted_wallet = keystore::EncryptedWallet::new_cold(name, address.trim());
+		// Store the canonical re-encoding: load_wallet rejects non-canonical
+		// SS58, so persisting the pasted string verbatim could create a wallet
+		// that can never be loaded.
+		let canonical =
+			account.to_ss58check_with_version(crate::cli::address_format::quantus_ss58_format());
+		let encrypted_wallet = keystore::EncryptedWallet::new_cold(name, &canonical);
 		keystore.save_new_wallet(&encrypted_wallet)?;
 
 		Ok(WalletInfo {

@@ -54,10 +54,10 @@ fn decode_if_complete(parts: &[String]) -> Result<Option<Vec<u8>>> {
 /// and silently rejects every part of a different stream. A stale part
 /// captured first — e.g. the previous signature still animating on the device
 /// — would wedge the scan forever even though all current parts arrive. Retry
-/// completion on every suffix so dropping the oldest parts recovers the newest
-/// consistent stream.
+/// completion on every suffix, shortest (newest) first: when both a stale and
+/// a current stream are complete in the capture, the newest must win.
 fn decode_any_suffix(parts: &[String]) -> Result<Option<Vec<u8>>> {
-	for start in 0..parts.len() {
+	for start in (0..parts.len()).rev() {
 		if let Some(bytes) = decode_if_complete(&parts[start..])? {
 			return Ok(Some(bytes));
 		}
@@ -791,6 +791,14 @@ mod tests {
 		);
 		let bytes = decode_any_suffix(&captured).unwrap().expect("suffix recovery");
 		assert_eq!(bytes, new_payload);
+
+		// A COMPLETE stale stream followed by a complete current one: the
+		// newest stream must win, not the first complete suffix.
+		let mut captured = old_parts.clone();
+		captured.extend(new_parts.iter().cloned());
+		assert!(quantus_ur::is_complete(&captured[..old_parts.len()]));
+		let bytes = decode_any_suffix(&captured).unwrap().expect("both streams complete");
+		assert_eq!(bytes, new_payload, "newest complete stream must win over the stale one");
 	}
 
 	#[tokio::test]
