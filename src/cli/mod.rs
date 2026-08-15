@@ -5,6 +5,7 @@ use colored::Colorize;
 pub mod address_format;
 pub mod batch;
 pub mod block;
+pub mod cold_signing;
 pub mod common;
 pub mod events;
 pub mod exercise;
@@ -317,6 +318,33 @@ pub enum Commands {
 pub enum DeveloperCommands {
 	/// Create standard test wallets (crystal_alice, crystal_bob, crystal_charlie)
 	CreateTestWallets,
+
+	/// Simulate the cold-wallet side of QR signing using a local hot wallet.
+	/// Reads a sign-request UR, signs it per the cold-wallet protocol, and
+	/// emits the response UR. Unlike real devices, no genesis-hash allowlist
+	/// is enforced, so it works against dev nodes.
+	#[command(hide = true)]
+	ColdSignSim {
+		/// Hot wallet that plays the cold wallet's role
+		#[arg(long)]
+		wallet: String,
+
+		/// File with the request UR parts, one per line (polls until complete; stdin if omitted)
+		#[arg(long)]
+		request_file: Option<String>,
+
+		/// File to write the response UR parts to (stdout if omitted)
+		#[arg(long)]
+		response_file: Option<String>,
+
+		/// Password for the wallet
+		#[arg(short, long)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
 }
 
 /// Execute a CLI command
@@ -515,7 +543,7 @@ async fn handle_generic_call_command(
 		return Ok(());
 	}
 
-	let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	let args_vec = if let Some(args_str) = args {
 		serde_json::from_str(&args_str).map_err(|e| {
@@ -529,7 +557,7 @@ async fn handle_generic_call_command(
 		&pallet,
 		&call,
 		args_vec,
-		&keypair,
+		&signer,
 		tip,
 		node_url,
 		execution_mode,
@@ -589,6 +617,21 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 
 			Ok(())
 		},
+		DeveloperCommands::ColdSignSim {
+			wallet,
+			request_file,
+			response_file,
+			password,
+			password_file,
+		} =>
+			cold_signing::handle_cold_sign_sim(
+				wallet,
+				request_file,
+				response_file,
+				password,
+				password_file,
+			)
+			.await,
 	}
 }
 

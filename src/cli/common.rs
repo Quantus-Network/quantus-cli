@@ -461,9 +461,13 @@ pub async fn get_fresh_nonce_with_client(
 /// By default, returns immediately after the node accepts the transaction submission.
 /// With `wait_for_transaction=true`, waits until the transaction is in a best block.
 /// With `finalized=true`, waits until the transaction is in a finalized block.
+///
+/// Cold (watch-only) signers are routed to the QR signing flow instead of local
+/// signing; there is no retry loop there, since a QR-signed extrinsic can never
+/// be silently rebuilt.
 pub async fn submit_transaction<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	call: Call,
 	tip: Option<u128>,
 	execution_mode: ExecutionMode,
@@ -471,14 +475,9 @@ pub async fn submit_transaction<Call>(
 where
 	Call: subxt::tx::Payload,
 {
-	let (tx_hash, _included_in) = submit_transaction_with_inclusion_block(
-		quantus_client,
-		from_keypair,
-		call,
-		tip,
-		execution_mode,
-	)
-	.await?;
+	let (tx_hash, _included_in) =
+		submit_transaction_with_inclusion_block(quantus_client, signer, call, tip, execution_mode)
+			.await?;
 	Ok(tx_hash)
 }
 
@@ -503,7 +502,7 @@ async fn ensure_keypair_scheme_supported(
 /// block by the time the watch returns.
 pub async fn submit_transaction_with_inclusion_block<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	call: Call,
 	tip: Option<u128>,
 	execution_mode: ExecutionMode,
@@ -511,8 +510,25 @@ pub async fn submit_transaction_with_inclusion_block<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	let from_keypair = match signer {
+		crate::wallet::WalletSigner::Hot(keypair) => {
+			crate::cli::cold_signing::warn_if_cold_flags_unused();
+			keypair
+		},
+		crate::wallet::WalletSigner::Cold { name, address } =>
+			return crate::cli::cold_signing::sign_and_submit_cold(
+				quantus_client,
+				name,
+				address,
+				&call,
+				tip,
+				None,
+				execution_mode,
+				crate::cli::cold_signing::ColdIo::global(),
+			)
+			.await,
+	};
 	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
-
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -620,10 +636,54 @@ where
 	}
 }
 
+/// Submit an already-signed transaction, honoring the execution mode.
+///
+/// Used by the cold-wallet flow: unlike `submit_transaction` there is NO retry
+/// loop, because a QR-signed extrinsic can never be rebuilt or resigned behind
+/// the user's back — a stale nonce or expired mortality means asking the user
+/// to run the command (and sign) again.
+pub async fn submit_prepared_transaction(
+	quantus_client: &crate::chain::client::QuantusClient,
+	tx: subxt::tx::SubmittableTransaction<ChainConfig, OnlineClient<ChainConfig>>,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<(subxt::utils::H256, Option<subxt::utils::H256>)> {
+	let map_err = |e: subxt::Error| {
+		let msg = format!("{e:?}");
+		let stale = msg.contains("Transaction is outdated") ||
+			msg.contains("Invalid Transaction") ||
+			msg.contains("Transaction has a bad signature") ||
+			msg.contains("Priority is too low");
+		if stale {
+			crate::error::QuantusError::NetworkError(format!(
+				"Transaction rejected: {msg}. The signed transaction may have expired or the account nonce changed while signing — run the command again to generate a fresh QR"
+			))
+		} else {
+			crate::error::QuantusError::NetworkError(format!("Failed to submit transaction: {msg}"))
+		}
+	};
+
+	if execution_mode.should_watch_transaction() {
+		let mut tx_progress = tx.submit_and_watch().await.map_err(map_err)?;
+		let tx_hash = tx_progress.extrinsic_hash();
+		let included_in = wait_tx_inclusion(
+			&mut tx_progress,
+			quantus_client.client(),
+			&tx_hash,
+			execution_mode.transaction_stage(),
+		)
+		.await?;
+		Ok((tx_hash, Some(included_in)))
+	} else {
+		let tx_hash = tx.submit().await.map_err(map_err)?;
+		crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
+		Ok((tx_hash, None))
+	}
+}
+
 /// Submit transaction with manual nonce (no retry logic - use exact nonce provided)
 pub async fn submit_transaction_with_nonce<Call>(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	call: Call,
 	tip: Option<u128>,
 	nonce: u32,
@@ -632,8 +692,26 @@ pub async fn submit_transaction_with_nonce<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	let from_keypair = match signer {
+		crate::wallet::WalletSigner::Hot(keypair) => {
+			crate::cli::cold_signing::warn_if_cold_flags_unused();
+			keypair
+		},
+		crate::wallet::WalletSigner::Cold { name, address } =>
+			return crate::cli::cold_signing::sign_and_submit_cold(
+				quantus_client,
+				name,
+				address,
+				&call,
+				tip,
+				Some(nonce),
+				execution_mode,
+				crate::cli::cold_signing::ColdIo::global(),
+			)
+			.await
+			.map(|(tx_hash, _included_in)| tx_hash),
+	};
 	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
-
 	let signer = from_keypair.to_subxt_signer().map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
@@ -951,7 +1029,7 @@ async fn verify_preimage_on_chain(
 
 pub async fn submit_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
-	keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	encoded_call: Vec<u8>,
 	execution_mode: ExecutionMode,
 ) -> Result<()> {
@@ -966,7 +1044,7 @@ pub async fn submit_preimage(
 
 	match submit_transaction_with_inclusion_block(
 		quantus_client,
-		keypair,
+		signer,
 		note_preimage_tx,
 		None,
 		wait_mode,

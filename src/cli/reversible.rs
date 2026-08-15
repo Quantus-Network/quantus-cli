@@ -111,13 +111,13 @@ pub enum ReversibleCommands {
 /// Schedule a transfer with default delay
 pub async fn schedule_transfer(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	from_signer: &crate::wallet::WalletSigner,
 	to_address: &str,
 	amount: u128,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
 	log_verbose!("🔄 Creating reversible transfer...");
-	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
+	log_verbose!("   From: {}", from_signer.try_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 
@@ -141,7 +141,7 @@ pub async fn schedule_transfer(
 	// Submit the transaction
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		from_keypair,
+		from_signer,
 		transfer_call,
 		None,
 		execution_mode,
@@ -156,7 +156,7 @@ pub async fn schedule_transfer(
 /// Cancel a pending reversible transaction
 pub async fn cancel_transaction(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	from_signer: &crate::wallet::WalletSigner,
 	tx_id: &str,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<subxt::utils::H256> {
@@ -176,7 +176,7 @@ pub async fn cancel_transaction(
 	// Submit the transaction
 	let tx_hash_result = crate::cli::common::submit_transaction(
 		quantus_client,
-		from_keypair,
+		from_signer,
 		cancel_call,
 		None,
 		execution_mode,
@@ -191,7 +191,7 @@ pub async fn cancel_transaction(
 /// Schedule a transfer with custom delay
 pub async fn schedule_transfer_with_delay(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &crate::wallet::QuantumKeyPair,
+	from_signer: &crate::wallet::WalletSigner,
 	to_address: &str,
 	amount: u128,
 	delay: u64,
@@ -200,7 +200,7 @@ pub async fn schedule_transfer_with_delay(
 ) -> Result<subxt::utils::H256> {
 	let unit_str = if unit_blocks { "blocks" } else { "seconds" };
 	log_verbose!("🔄 Creating reversible transfer with custom delay ...");
-	log_verbose!("   From: {}", from_keypair.try_to_account_id_ss58check()?.bright_cyan());
+	log_verbose!("   From: {}", from_signer.try_account_id_ss58check()?.bright_cyan());
 	log_verbose!("   To: {}", to_address.bright_green());
 	log_verbose!("   Amount: {}", amount);
 	log_verbose!("   Delay: {} {}", delay, unit_str);
@@ -234,7 +234,7 @@ pub async fn schedule_transfer_with_delay(
 	// Submit the transaction
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		from_keypair,
+		from_signer,
 		transfer_call,
 		None,
 		execution_mode,
@@ -282,12 +282,12 @@ pub async fn handle_reversible_command(
 
 			// Get password securely for decryption
 			log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
-			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 			// Submit transaction
 			let tx_hash = schedule_transfer(
 				&quantus_client,
-				&keypair,
+				&signer,
 				&resolved_address,
 				raw_amount,
 				execution_mode,
@@ -311,11 +311,11 @@ pub async fn handle_reversible_command(
 
 			// Get password securely for decryption
 			log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
-			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 			// Submit cancel transaction
 			let tx_hash =
-				cancel_transaction(&quantus_client, &keypair, &tx_id, execution_mode).await?;
+				cancel_transaction(&quantus_client, &signer, &tx_id, execution_mode).await?;
 
 			log_print!(
 				"✅ {} Cancel transaction submitted! Hash: {:?}",
@@ -355,12 +355,12 @@ pub async fn handle_reversible_command(
 
 			// Get password securely for decryption
 			log_verbose!("📦 Using wallet: {}", from.bright_blue().bold());
-			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 			// Submit transaction
 			let tx_hash = schedule_transfer_with_delay(
 				&quantus_client,
-				&keypair,
+				&signer,
 				&resolved_address,
 				raw_amount,
 				delay,
@@ -401,9 +401,8 @@ async fn list_pending_transactions(
 		},
 		(None, Some(wallet)) => {
 			// Load wallet and get its address
-			let keypair =
-				crate::wallet::load_keypair_from_wallet(&wallet, password, password_file)?;
-			keypair.try_to_account_id_ss58check()?
+			let signer = crate::wallet::load_signer_from_wallet(&wallet, password, password_file)?;
+			signer.try_account_id_ss58check()?
 		},
 		(None, None) => {
 			return Err(crate::error::QuantusError::Generic(

@@ -175,7 +175,7 @@ async fn main() -> Result<()> {
 	println!("[2/9] depositing {} planck -> wormhole address...", amount_planck);
 	let tx_hash = transfer(
 		&client,
-		&funder_kp,
+		&funder_kp.as_signer(),
 		&wh_ss58,
 		amount_planck,
 		None,

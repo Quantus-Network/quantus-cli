@@ -258,8 +258,8 @@ async fn submit_runtime_upgrade(
 	let preimage_hash_parsed: sp_core::H256 = sp_core::H256::from_str(hash_str)
 		.map_err(|_| QuantusError::Generic("Invalid preimage hash format".to_string()))?;
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from, password, password_file)?;
 
 	// Check if preimage exists and get its length
 	log_print!("🔍 Checking preimage status...");
@@ -321,7 +321,7 @@ async fn submit_runtime_upgrade(
 			.submit(origin_caller, proposal, enactment);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
+		submit_transaction(quantus_client, &signer, submit_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Runtime upgrade proposal submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -363,8 +363,8 @@ async fn submit_runtime_upgrade_with_preimage(
 
 	log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from, password, password_file)?;
 
 	// Build a static payload for System::set_code and encode full call data (pallet + call + args)
 	let set_code_payload = quantus_subxt::api::tx().system().set_code(wasm_code.clone());
@@ -380,7 +380,7 @@ async fn submit_runtime_upgrade_with_preimage(
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
 	let call_len = encoded_call.len() as u32;
-	crate::cli::common::submit_preimage(quantus_client, &keypair, encoded_call, execution_mode)
+	crate::cli::common::submit_preimage(quantus_client, &signer, encoded_call, execution_mode)
 		.await?;
 
 	// Build TechReferenda::submit call using Lookup preimage reference
@@ -411,7 +411,7 @@ async fn submit_runtime_upgrade_with_preimage(
 			.submit(origin_caller, proposal, enactment);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
+		submit_transaction(quantus_client, &signer, submit_call, None, execution_mode).await?;
 	log_success!("Runtime upgrade proposal submitted! Hash: {:?}", tx_hash);
 
 	log_print!("💡 Use 'quantus tech-referenda list' to see active proposals");
@@ -437,8 +437,8 @@ async fn submit_treasury_portion_with_preimage(
 	);
 	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from, password, password_file)?;
 
 	// Build a static payload for TreasuryPallet::set_treasury_portion and encode full call data
 	// Note: runtime_types::Permill is a tuple struct (u32 parts-per-million).
@@ -458,7 +458,7 @@ async fn submit_treasury_portion_with_preimage(
 	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
 
 	let call_len = encoded_call.len() as u32;
-	crate::cli::common::submit_preimage(quantus_client, &keypair, encoded_call, execution_mode)
+	crate::cli::common::submit_preimage(quantus_client, &signer, encoded_call, execution_mode)
 		.await?;
 
 	// Build TechReferenda::submit call using Lookup preimage reference
@@ -489,7 +489,7 @@ async fn submit_treasury_portion_with_preimage(
 			.submit(origin_caller, proposal, enactment);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, submit_call, None, execution_mode).await?;
+		submit_transaction(quantus_client, &signer, submit_call, None, execution_mode).await?;
 	log_success!("Treasury portion proposal submitted! Hash: {:?}", tx_hash);
 
 	log_print!("💡 Use 'quantus tech-referenda list' to see active proposals");
@@ -999,11 +999,11 @@ async fn place_decision_deposit(
 	log_print!("📋 Placing decision deposit for Tech Referendum #{}", index);
 	log_print!("   🔑 Placed by: {}", from.bright_yellow());
 
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	let signer = crate::wallet::load_signer_from_wallet(from, password, password_file)?;
 
 	let deposit_call = quantus_subxt::api::tx().tech_referenda().place_decision_deposit(index);
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, deposit_call, None, execution_mode).await?;
+		submit_transaction(quantus_client, &signer, deposit_call, None, execution_mode).await?;
 	log_success!("✅ Decision deposit placed! Hash: {:?}", tx_hash.to_string().bright_yellow());
 	Ok(())
 }
@@ -1068,14 +1068,14 @@ async fn refund_submission_deposit(
 	log_print!("💰 Refunding submission deposit for Tech Referendum #{}", index);
 	log_print!("   🔑 Refund to: {}", from.bright_yellow());
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from, password, password_file)?;
 
 	// Create refund_submission_deposit call for TechReferenda instance
 	let refund_call = quantus_subxt::api::tx().tech_referenda().refund_submission_deposit(index);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, refund_call, None, execution_mode).await?;
+		submit_transaction(quantus_client, &signer, refund_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Refund transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),
@@ -1099,14 +1099,14 @@ async fn refund_decision_deposit(
 	log_print!("💰 Refunding decision deposit for Tech Referendum #{}", index);
 	log_print!("   🔑 Refund to: {}", from.bright_yellow());
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from, password, password_file)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from, password, password_file)?;
 
 	// Create refund_decision_deposit call for TechReferenda instance
 	let refund_call = quantus_subxt::api::tx().tech_referenda().refund_decision_deposit(index);
 
 	let tx_hash =
-		submit_transaction(quantus_client, &keypair, refund_call, None, execution_mode).await?;
+		submit_transaction(quantus_client, &signer, refund_call, None, execution_mode).await?;
 	log_print!(
 		"✅ {} Refund transaction submitted! Hash: {:?}",
 		"SUCCESS".bright_green().bold(),

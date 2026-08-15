@@ -309,8 +309,8 @@ async fn request_preimage(
 	log_print!("🚀 Requesting preimage for hash: {}", hash_str.bright_cyan());
 	log_print!("   👤 From: {}", from_str.bright_yellow());
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from_str, None, None)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from_str, None, None)?;
 
 	// Create request_preimage call
 	let request_call = quantus_subxt::api::tx().preimage().request_preimage(preimage_hash);
@@ -318,7 +318,7 @@ async fn request_preimage(
 	// Submit transaction
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		&keypair,
+		&signer,
 		request_call,
 		None,
 		execution_mode,
@@ -346,8 +346,8 @@ async fn note_preimage(
 	log_print!("📝 Noting preimage for content length: {} bytes", content.len());
 	log_print!("   👤 From: {}", from_str.bright_yellow());
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from_str, None, None)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from_str, None, None)?;
 
 	// Create note_preimage call
 	let note_call = quantus_subxt::api::tx().preimage().note_preimage(content);
@@ -355,7 +355,7 @@ async fn note_preimage(
 	// Submit transaction
 	let tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		&keypair,
+		&signer,
 		note_call,
 		None,
 		execution_mode,
@@ -392,8 +392,8 @@ async fn create_preimage(
 
 	log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 
-	// Load wallet keypair
-	let keypair = crate::wallet::load_keypair_from_wallet(from_str, password, password_file)?;
+	// Load wallet signer
+	let signer = crate::wallet::load_signer_from_wallet(from_str, password, password_file)?;
 
 	// Build a static payload for System::set_code and encode full call data (pallet + call + args)
 	let set_code_payload = quantus_subxt::api::tx().system().set_code(wasm_code.clone());
@@ -416,7 +416,7 @@ async fn create_preimage(
 	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
 	let preimage_tx_hash = crate::cli::common::submit_transaction(
 		quantus_client,
-		&keypair,
+		&signer,
 		note_preimage_tx,
 		None,
 		execution_mode,

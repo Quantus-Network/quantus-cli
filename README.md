@@ -5,6 +5,7 @@ A modern command line interface for interacting with the Quantus Network, featur
 ## 🌟 Features
 
 - **Quantum-Safe Wallets**: Built with Dilithium post-quantum cryptography
+- **Cold Wallet Signing**: Air-gapped signing over QR codes with Keystone or the Quantus cold wallet app
 - **SubXT Integration**: Modern Substrate client with type-safe API
 - **Generic Pallet Calls**: Call ANY blockchain function using metadata-driven parsing
 - **Real Chain Operations**: Send tokens, query balances, explore metadata
@@ -395,6 +396,63 @@ quantus wallet view --name my_wallet
 # Export mnemonic
 quantus wallet export --name my_wallet --format mnemonic
 ```
+
+---
+
+### Cold Wallets (Keystone / Quantus Cold Wallet App)
+
+Pair the CLI with an air-gapped signer — a Keystone 3 hardware wallet or the
+Quantus cold wallet app. The CLI stores only the address (watch-only); every
+transaction is signed on the device by exchanging QR codes.
+
+```bash
+# Import by scanning the device's address QR with the laptop camera
+quantus wallet import-cold --name my_cold
+
+# Or paste the address directly (no camera needed)
+quantus wallet import-cold --name my_cold --address qz...
+
+# Any extrinsic command works with a cold wallet: the CLI shows the
+# transaction as a QR, then scans the device's animated signature QR
+quantus send --from my_cold --to <address> --amount 10.5 --wait-for-transaction
+quantus multisig approve --from my_cold --address qz... --proposal-id 0
+```
+
+The signing flow (identical for every command — commands don't know whether
+the wallet is hot or cold; the shared submit stage branches on the wallet
+type):
+
+1. The CLI displays the transaction as a `ur:quantus-sign-request` QR
+   (animated if the payload is large). Scan it with the cold wallet, review
+   the details on the device, and press Enter in the CLI.
+2. Sign on the device — it shows an animated QR containing the signature.
+3. Confirm in the CLI, then point the laptop camera at the device's screen.
+   The CLI verifies the signature against the stored address before
+   submitting; a response signed by any other key is rejected.
+
+Notes:
+
+- The transaction stays valid for 256 blocks after the QR is generated; if it
+  expires or the account's nonce changes before submission, re-run the
+  command to sign a fresh QR.
+- Commands that submit several extrinsics (e.g. `runtime update`,
+  `tech-referenda submit-with-preimage`) do one QR roundtrip per extrinsic.
+- Wormhole operations are not cold-compatible: they derive secrets from the
+  wallet's mnemonic and submit unsigned extrinsics.
+- **macOS camera permission**: the permission prompt is attributed to your
+  terminal app (Terminal, iTerm, VS Code, …) — grant it under System
+  Settings > Privacy & Security > Camera.
+- **Headless / no camera**: `--cold-response-in <file>` (or `-` for stdin)
+  reads the response UR parts (one per line) instead of scanning, and the
+  hidden `--cold-request-out <file>` writes the request UR parts for
+  scripted flows. Both are global flags that work with any command. Builds
+  without the default `camera` feature (`cargo build --no-default-features`)
+  support only this path.
+- Real devices only sign for known networks (Planck / Heisenberg genesis
+  hashes) and whitelisted calls — balance transfers, reversible transfers,
+  and (cold wallet app only) multisig. Test against a dev node with the
+  hidden `quantus developer cold-sign-sim` command, which plays the cold
+  wallet side using a local hot wallet.
 
 ---
 

@@ -34,7 +34,13 @@ async fn note_and_verify(ctx: &mut ExerciseCtx) -> Result<String> {
 	let expected_hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 
 	let keypair = ctx.eph[3].clone();
-	crate::cli::common::submit_preimage(&ctx.client, &keypair, encoded, ctx.wait_mode()).await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(keypair.clone()),
+		encoded,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let status_addr = quantus_subxt::api::storage().preimage().request_status_for(expected_hash);
 	let latest = ctx.client.get_latest_block().await?;
@@ -60,7 +66,13 @@ async fn unnote_preimage(ctx: &mut ExerciseCtx) -> Result<String> {
 	let hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 
 	let keypair = ctx.eph[3].clone();
-	crate::cli::common::submit_preimage(&ctx.client, &keypair, encoded, ctx.wait_mode()).await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(keypair.clone()),
+		encoded,
+		ctx.wait_mode(),
+	)
+	.await?;
 	if !preimage_status_exists(ctx, hash).await? {
 		return Err(QuantusError::Generic(format!(
 			"preimage {hash:?} missing from storage before unnote"
@@ -84,7 +96,13 @@ async fn ensure_updated(ctx: &mut ExerciseCtx) -> Result<String> {
 	let encoded = unique_remark_call_data(ctx)?;
 	let hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 	let keypair = ctx.eph[3].clone();
-	crate::cli::common::submit_preimage(&ctx.client, &keypair, encoded, ctx.wait_mode()).await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(keypair.clone()),
+		encoded,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let call = quantus_subxt::api::tx().preimage().ensure_updated(vec![hash]);
 	submit_ok(ctx, &keypair, call).await?;

@@ -2300,7 +2300,7 @@ async fn execute_initial_transfers(
 	let balance_before = get_balance(quantus_client, &wallet.wallet_address).await?;
 	crate::cli::send::ensure_balance_covers_call(
 		quantus_client,
-		&wallet.keypair,
+		&crate::wallet::WalletSigner::Hot(wallet.keypair.clone()),
 		&batch_tx,
 		balance_before,
 		amount,
@@ -2346,7 +2346,7 @@ async fn execute_initial_transfers(
 	let wait_mode = wormhole_inclusion_mode(execution_mode);
 	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		quantus_client,
-		&wallet.keypair,
+		&crate::wallet::WalletSigner::Hot(wallet.keypair.clone()),
 		batch_tx,
 		None,
 		wait_mode,
@@ -3804,7 +3804,7 @@ async fn run_dissolve(
 
 	let (_tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		&quantus_client,
-		&quantum_keypair,
+		&crate::wallet::WalletSigner::Hot(quantum_keypair.clone()),
 		transfer_tx,
 		None,
 		wormhole_inclusion_mode(execution_mode),

@@ -115,6 +115,24 @@ pub enum WalletCommands {
 		scheme: DilithiumScheme,
 	},
 
+	/// Import a cold (hardware / air-gapped) wallet as watch-only
+	///
+	/// Pairs the CLI with a Keystone device or the Quantus cold wallet app.
+	/// Only the address is stored; transactions are signed by scanning QR codes.
+	ImportCold {
+		/// Wallet name
+		#[arg(short, long)]
+		name: String,
+
+		/// SS58 address (qz…). Omit to scan the device's address QR with the camera
+		#[arg(short, long)]
+		address: Option<String>,
+
+		/// Camera device index used when scanning the address QR
+		#[arg(long, default_value_t = 0)]
+		camera_index: u32,
+	},
+
 	/// Create wallet from 32-byte seed
 	FromSeed {
 		/// Wallet name
@@ -421,6 +439,47 @@ pub async fn handle_wallet_command(
 			}
 
 			Ok(())
+		},
+
+		WalletCommands::ImportCold { name, address, camera_index } => {
+			let wallet_manager = WalletManager::new()?;
+
+			let address = match address {
+				Some(address) => address,
+				None => {
+					log_print!("📷 Point the camera at the address QR shown on your cold wallet");
+					let address = crate::qr::scan_quantus_address(camera_index).await?;
+					log_print!("📇 Scanned address: {}", address.bright_cyan());
+					print!("Import this address as '{name}'? [Enter to confirm / q to abort]: ");
+					io::stdout().flush()?;
+					let mut input = String::new();
+					io::stdin().read_line(&mut input)?;
+					if input.trim().eq_ignore_ascii_case("q") {
+						return Err(QuantusError::Generic("Import aborted".to_string()));
+					}
+					address
+				},
+			};
+
+			match wallet_manager.create_cold_wallet(&name, &address) {
+				Ok(wallet_info) => {
+					log_success!("Wallet name: {}", name.bright_green());
+					log_success!("Address: {}", wallet_info.address.bright_cyan());
+					if let Some(checkphrase) = checkphrase_line(&wallet_info.address) {
+						log_success!("Checkphrase: {}", checkphrase);
+					}
+					log_success!("Key type: {}", wallet_info.key_type.bright_yellow());
+					log_success!("✅ Cold wallet imported (watch-only)");
+					log_print!(
+						"ℹ️  Use `{name}` with any extrinsic command (`--from {name}`): the CLI shows a QR for the cold wallet and scans its signed response."
+					);
+					Ok(())
+				},
+				Err(e) => {
+					log_error!("{}", format!("❌ Failed to import cold wallet: {e}").red());
+					Err(e)
+				},
+			}
 		},
 
 		WalletCommands::View { name, all } => {
@@ -939,12 +998,9 @@ pub async fn handle_wallet_command(
 						.map_err(|e| QuantusError::Generic(format!("Invalid address: {e:?}")))?;
 					addr
 				},
-				(None, Some(wallet_name)) => {
-					// Load wallet and get its address
-					let keypair =
-						crate::wallet::load_keypair_from_wallet(&wallet_name, password, None)?;
-					keypair.try_to_account_id_ss58check()?
-				},
+				(None, Some(wallet_name)) =>
+					crate::wallet::load_signer_from_wallet(&wallet_name, password, None)?
+						.try_account_id_ss58check()?,
 				(None, None) => {
 					// This case should be prevented by clap's `required_unless_present`
 					unreachable!("Either --address or --wallet must be provided");

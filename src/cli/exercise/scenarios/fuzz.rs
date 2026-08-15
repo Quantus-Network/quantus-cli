@@ -101,9 +101,14 @@ async fn fuzz_transfer(ctx: &mut ExerciseCtx) -> Result<String> {
 	let call = quantus_subxt::api::tx()
 		.balances()
 		.transfer_allow_death(subxt::ext::subxt_core::utils::MultiAddress::Id(to), amount);
-	let result =
-		crate::cli::common::submit_transaction(&ctx.client, &sender, call, None, ctx.wait_mode())
-			.await;
+	let result = crate::cli::common::submit_transaction(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(sender.clone()),
+		call,
+		None,
+		ctx.wait_mode(),
+	)
+	.await;
 	classify(result, &format!("transfer of {amount}"))
 }
 
@@ -113,9 +118,14 @@ async fn fuzz_remark(ctx: &mut ExerciseCtx) -> Result<String> {
 	let mut payload = vec![0u8; len];
 	ctx.rng.fill(payload.as_mut_slice());
 	let call = quantus_subxt::api::tx().system().remark(payload);
-	let result =
-		crate::cli::common::submit_transaction(&ctx.client, &sender, call, None, ctx.wait_mode())
-			.await;
+	let result = crate::cli::common::submit_transaction(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(sender.clone()),
+		call,
+		None,
+		ctx.wait_mode(),
+	)
+	.await;
 	classify(result, &format!("remark of {len} bytes"))
 }
 
@@ -135,9 +145,14 @@ async fn fuzz_batch(ctx: &mut ExerciseCtx) -> Result<String> {
 		}));
 	}
 	let call = quantus_subxt::api::tx().utility().batch(calls);
-	let result =
-		crate::cli::common::submit_transaction(&ctx.client, &sender, call, None, ctx.wait_mode())
-			.await;
+	let result = crate::cli::common::submit_transaction(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(sender.clone()),
+		call,
+		None,
+		ctx.wait_mode(),
+	)
+	.await;
 	// Batch succeeds even when inner calls fail.
 	classify(result, &format!("batch of {n} transfers"))
 }
@@ -159,9 +174,14 @@ async fn fuzz_reversible(ctx: &mut ExerciseCtx) -> Result<String> {
 		amount,
 		delay,
 	);
-	let result =
-		crate::cli::common::submit_transaction(&ctx.client, &sender, call, None, ctx.wait_mode())
-			.await;
+	let result = crate::cli::common::submit_transaction(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(sender.clone()),
+		call,
+		None,
+		ctx.wait_mode(),
+	)
+	.await;
 	classify(result, &format!("reversible transfer of {amount}"))
 }
 

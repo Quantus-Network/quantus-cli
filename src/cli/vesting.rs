@@ -168,8 +168,8 @@ pub async fn handle_vesting_command(
 		VestingCommands::List { beneficiary } => list_schedules(&quantus_client, beneficiary).await,
 		VestingCommands::Show { schedule_id } => show_schedule(&quantus_client, schedule_id).await,
 		VestingCommands::Claim { schedule_id, from, password, password_file } => {
-			let keypair = crate::wallet::load_keypair_from_wallet(&from, password, password_file)?;
-			claim(&quantus_client, &keypair, schedule_id, execution_mode).await
+			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
+			claim(&quantus_client, &signer, schedule_id, execution_mode).await
 		},
 		VestingCommands::CreateSchedule {
 			beneficiary,
@@ -200,13 +200,13 @@ pub async fn handle_vesting_command(
 			if call_data_only {
 				return print_call_data(&quantus_client, &call);
 			}
-			let keypair = load_admin_keypair(from, password, password_file)?;
+			let signer = load_admin_signer(from, password, password_file)?;
 			log_print!("🪙 Creating vesting schedule...");
 			log_print!("   Beneficiary: {}", beneficiary.bright_cyan());
 			log_print!("   Start: {}   Cliff: {}   End: {}", start_ms, cliff_ms, end_ms);
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&keypair,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -226,11 +226,11 @@ pub async fn handle_vesting_command(
 			if call_data_only {
 				return print_call_data(&quantus_client, &call);
 			}
-			let keypair = load_admin_keypair(from, password, password_file)?;
+			let signer = load_admin_signer(from, password, password_file)?;
 			log_print!("🪙 Ending vesting schedule #{schedule_id}...");
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&keypair,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -255,14 +255,14 @@ pub async fn handle_vesting_command(
 			if call_data_only {
 				return print_call_data(&quantus_client, &call);
 			}
-			let keypair = load_admin_keypair(from, password, password_file)?;
+			let signer = load_admin_signer(from, password, password_file)?;
 			log_print!(
 				"🪙 Retargeting schedule #{schedule_id} to {}...",
 				new_beneficiary.bright_cyan()
 			);
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&keypair,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -274,17 +274,17 @@ pub async fn handle_vesting_command(
 	}
 }
 
-fn load_admin_keypair(
+fn load_admin_signer(
 	from: Option<String>,
 	password: Option<String>,
 	password_file: Option<String>,
-) -> Result<crate::wallet::QuantumKeyPair> {
+) -> Result<crate::wallet::WalletSigner> {
 	let from = from.ok_or_else(|| {
 		QuantusError::Generic(
 			"--from is required when submitting (or pass --call-data-only)".into(),
 		)
 	})?;
-	crate::wallet::load_keypair_from_wallet(&from, password, password_file)
+	crate::wallet::load_signer_from_wallet(&from, password, password_file)
 }
 
 fn print_call_data<Call: Payload>(
@@ -467,7 +467,7 @@ async fn print_schedule(
 
 async fn claim(
 	quantus_client: &crate::chain::client::QuantusClient,
-	keypair: &crate::wallet::QuantumKeyPair,
+	signer: &crate::wallet::WalletSigner,
 	schedule_id: u64,
 	execution_mode: ExecutionMode,
 ) -> Result<()> {
@@ -477,7 +477,7 @@ async fn claim(
 	let wait_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
 	let (tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
 		quantus_client,
-		keypair,
+		signer,
 		call,
 		None,
 		wait_mode,

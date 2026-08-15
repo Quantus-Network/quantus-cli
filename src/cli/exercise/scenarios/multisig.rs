@@ -50,7 +50,7 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 
 	crate::cli::send::transfer(
 		&ctx.client,
-		&signer_a,
+		&signer_a.as_signer(),
 		&multisig_ss58,
 		20 * ctx.test_unit,
 		None,

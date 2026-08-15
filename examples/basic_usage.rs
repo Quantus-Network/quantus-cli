@@ -7,12 +7,9 @@
 //! 4. Query blockchain data
 
 use quantus_cli::{
-	chain::client::QuantusClient,
-	error::Result,
-	wallet::{QuantumKeyPair, WalletManager},
-	AccountId32,
+	chain::client::QuantusClient, cli::common::ExecutionMode, error::Result, transfer,
+	wallet::WalletManager, AccountId32,
 };
-use sp_core::crypto::Ss58Codec;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -79,36 +76,19 @@ async fn get_account_balance(client: &QuantusClient, account_id: &AccountId32) -
 #[allow(dead_code)]
 async fn send_tokens(
 	client: &QuantusClient,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &quantus_cli::wallet::QuantumKeyPair,
 	to_address: &str,
 	amount: u128,
 ) -> Result<subxt::utils::H256> {
-	use quantus_cli::chain::quantus_subxt::api;
-
-	// Parse recipient address
-	let to_account_id = AccountId32::from_ss58check(to_address)
-		.map_err(|e| quantus_cli::error::QuantusError::Generic(format!("Invalid address: {e}")))?;
-	let to_account_bytes: [u8; 32] = *to_account_id.as_ref();
-	let to_subxt_account_id = subxt::utils::AccountId32::from(to_account_bytes);
-
-	// Create transfer call
-	let transfer_call =
-		api::tx().balances().transfer_allow_death(to_subxt_account_id.into(), amount);
-
-	// Convert QuantumKeyPair to DilithiumPair for signing
-	let dilithium_pair = from_keypair.to_subxt_signer()?;
-
-	// Submit transaction
-	let tx_hash = client
-		.client()
-		.tx()
-		.sign_and_submit_then_watch_default(&transfer_call, &dilithium_pair)
-		.await?
-		.wait_for_finalized_success()
-		.await?
-		.extrinsic_hash();
-
-	Ok(tx_hash)
+	transfer(
+		client,
+		&from_keypair.as_signer(),
+		to_address,
+		amount,
+		None,
+		ExecutionMode { wait_for_transaction: true, finalized: true },
+	)
+	.await
 }
 
 /// Example of creating a wallet from mnemonic

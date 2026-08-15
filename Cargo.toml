@@ -19,10 +19,28 @@ path = "src/lib.rs"
 name = "quantus"
 path = "src/main.rs"
 
+[features]
+default = ["camera"]
+# Camera capture + QR decoding for cold-wallet signing. Disable for headless
+# builds; UR input via --cold-response-in <file|-> keeps working without it.
+camera = ["dep:minifb", "dep:nokhwa", "dep:rxing"]
+
 [dependencies]
 # CLI and async runtime
 clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1.46", features = ["full"] }
+
+# Cold-wallet QR signing: UR encoding shared with the mobile/cold wallet apps
+# (1.6.0). Keystone firmware still encodes 1.4.0; the wire format is compatible.
+quantus_ur = { git = "https://github.com/Quantus-Network/quantus_ur.git", tag = "1.6.0" }
+# Terminal QR rendering (string renderers only; image/svg not needed)
+qrcode = { version = "0.14", default-features = false }
+# Camera capture (AVFoundation / MSMF / V4L2) + pure-Rust QR decoding.
+# rxing (ZXing port) over rqrr: its adaptive binarizer decodes the defocused
+# frames a fixed-focus Mac camera produces at phone-scanning distance.
+minifb = { version = "0.28", optional = true }
+nokhwa = { version = "0.10", features = ["input-native"], optional = true }
+rxing = { version = "0.8", default-features = false, features = ["encoding_rs"], optional = true }
 
 # Serialization and configuration
 serde = { version = "1.0", features = ["derive"] }

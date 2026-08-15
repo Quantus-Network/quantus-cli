@@ -16,6 +16,7 @@ mod collect_rewards_lib;
 mod config;
 mod error;
 mod log;
+mod qr;
 mod subsquid;
 mod version_check;
 mod wallet;
@@ -52,6 +53,19 @@ struct Cli {
 	/// Default: false
 	#[arg(long, global = true, default_value = "false")]
 	wait_for_transaction: bool,
+
+	/// (cold wallets) Also write the sign-request UR parts to this file
+	#[arg(long, global = true)]
+	cold_request_out: Option<String>,
+
+	/// (cold wallets) Read the signature response UR parts from this file, or "-" for stdin,
+	/// instead of scanning with the camera
+	#[arg(long, global = true)]
+	cold_response_in: Option<String>,
+
+	/// Camera device index for cold-wallet QR scanning
+	#[arg(long, global = true, default_value_t = 0)]
+	camera_index: u32,
 }
 
 #[tokio::main]
@@ -77,6 +91,15 @@ async fn main() -> Result<(), QuantusError> {
 		finalized: cli.finalized_tx,
 		wait_for_transaction: cli.wait_for_transaction,
 	};
+
+	// Cold-wallet QR I/O config for the submit stage (used only when the
+	// signing wallet is watch-only).
+	cli::cold_signing::ColdIo::from_flags(
+		cli.cold_request_out,
+		cli.cold_response_in,
+		cli.camera_index,
+	)
+	.install();
 
 	// Warm the update-version cache in the background so it runs concurrently
 	// with the command and never adds latency: we never block the command on

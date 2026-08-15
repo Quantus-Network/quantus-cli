@@ -68,8 +68,13 @@ pub async fn run(
 async fn submit_root_referendum(ctx: &mut ExerciseCtx, encoded_call: Vec<u8>) -> Result<u32> {
 	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded_call);
 	let call_len = encoded_call.len() as u32;
-	crate::cli::common::submit_preimage(&ctx.client, &ctx.alice, encoded_call, ctx.wait_mode())
-		.await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(ctx.alice.clone()),
+		encoded_call,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let latest = ctx.client.get_latest_block().await?;
 	let count_addr = quantus_subxt::api::storage().tech_referenda().referendum_count();
@@ -102,6 +107,9 @@ async fn cast_collective_ayes(ctx: &ExerciseCtx, index: u32) -> Result<()> {
 	let charlie = ctx.charlie.clone();
 	let mode = ctx.wait_mode();
 
+	let alice = crate::wallet::WalletSigner::Hot(alice);
+	let bob = crate::wallet::WalletSigner::Hot(bob);
+	let charlie = crate::wallet::WalletSigner::Hot(charlie);
 	let (r_a, r_b, r_c) = tokio::join!(
 		crate::cli::tech_collective::vote_on_referendum(client, &alice, index, true, mode),
 		crate::cli::tech_collective::vote_on_referendum(client, &bob, index, true, mode),

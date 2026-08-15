@@ -76,7 +76,7 @@ async fn main() -> Result<()> {
 
 	let tx_hash = quantus_cli::cli::common::submit_transaction(
 		&quantus_client,
-		&alice_keypair,
+		&quantus_cli::wallet::WalletSigner::Hot(alice_keypair),
 		create_tx,
 		None,
 		execution_mode,

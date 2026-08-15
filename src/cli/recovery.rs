@@ -177,9 +177,8 @@ pub async fn handle_recovery_command(
 
 	match command {
 		RecoveryCommands::Initiate { rescuer, lost, password, password_file } => {
-			let rescuer_key =
-				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
-			let rescuer_addr = rescuer_key.try_to_account_id_ss58check()?;
+			let signer = crate::wallet::load_signer_from_wallet(&rescuer, password, password_file)?;
+			let rescuer_addr = signer.try_account_id_ss58check()?;
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 			let lost_id = resolve_to_subxt_account_id(&lost)?;
@@ -189,7 +188,7 @@ pub async fn handle_recovery_command(
 
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&rescuer_key,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -204,8 +203,7 @@ pub async fn handle_recovery_command(
 		},
 
 		RecoveryCommands::Vouch { friend, lost, rescuer, password, password_file } => {
-			let friend_key =
-				crate::wallet::load_keypair_from_wallet(&friend, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&friend, password, password_file)?;
 			let lost_id = resolve_to_subxt_account_id(&lost)?;
 			let rescuer_id = resolve_to_subxt_account_id(&rescuer)?;
 			let call = quantus_subxt::api::tx().recovery().vouch_recovery(
@@ -214,7 +212,7 @@ pub async fn handle_recovery_command(
 			);
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&friend_key,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -229,15 +227,14 @@ pub async fn handle_recovery_command(
 		},
 
 		RecoveryCommands::Claim { rescuer, lost, password, password_file } => {
-			let rescuer_key =
-				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&rescuer, password, password_file)?;
 			let lost_id = resolve_to_subxt_account_id(&lost)?;
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.claim_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&rescuer_key,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -262,9 +259,8 @@ pub async fn handle_recovery_command(
 		} => {
 			use quantus_subxt::api::runtime_types::pallet_balances::pallet::Call as BalancesCall;
 
-			let rescuer_key =
-				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
-			let rescuer_addr = rescuer_key.try_to_account_id_ss58check()?;
+			let signer = crate::wallet::load_signer_from_wallet(&rescuer, password, password_file)?;
+			let rescuer_addr = signer.try_account_id_ss58check()?;
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 
@@ -334,7 +330,7 @@ pub async fn handle_recovery_command(
 
 			let tx_hash = match crate::cli::common::submit_transaction(
 				&quantus_client,
-				&rescuer_key,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -361,10 +357,9 @@ pub async fn handle_recovery_command(
 		} => {
 			use quantus_subxt::api::runtime_types::pallet_balances::pallet::Call as BalancesCall;
 
-			let rescuer_key =
-				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&rescuer, password, password_file)?;
 
-			let rescuer_addr = rescuer_key.try_to_account_id_ss58check()?;
+			let rescuer_addr = signer.try_account_id_ss58check()?;
 			log_print!("🔑 Rescuer: {}", rescuer);
 			log_print!("🔑 Rescuer address: {}", rescuer_addr);
 
@@ -433,7 +428,7 @@ pub async fn handle_recovery_command(
 
 			let tx_hash = match crate::cli::common::submit_transaction(
 				&quantus_client,
-				&rescuer_key,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -450,14 +445,14 @@ pub async fn handle_recovery_command(
 		},
 
 		RecoveryCommands::Close { lost, rescuer, password, password_file } => {
-			let lost_key = crate::wallet::load_keypair_from_wallet(&lost, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&lost, password, password_file)?;
 			let rescuer_id = resolve_to_subxt_account_id(&rescuer)?;
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.close_recovery(subxt::ext::subxt_core::utils::MultiAddress::Id(rescuer_id));
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&lost_key,
+				&signer,
 				call,
 				None,
 				execution_mode,
@@ -474,15 +469,14 @@ pub async fn handle_recovery_command(
 		},
 
 		RecoveryCommands::CancelProxy { rescuer, lost, password, password_file } => {
-			let rescuer_key =
-				crate::wallet::load_keypair_from_wallet(&rescuer, password, password_file)?;
+			let signer = crate::wallet::load_signer_from_wallet(&rescuer, password, password_file)?;
 			let lost_id = resolve_to_subxt_account_id(&lost)?;
 			let call = quantus_subxt::api::tx()
 				.recovery()
 				.cancel_recovered(subxt::ext::subxt_core::utils::MultiAddress::Id(lost_id));
 			let tx_hash = crate::cli::common::submit_transaction(
 				&quantus_client,
-				&rescuer_key,
+				&signer,
 				call,
 				None,
 				execution_mode,

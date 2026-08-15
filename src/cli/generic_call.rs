@@ -1,7 +1,7 @@
 //! `quantus call` subcommand - generic pallet calls
 use crate::{
 	chain::quantus_subxt, error::QuantusError, log_error, log_print, log_success, log_verbose,
-	wallet::QuantumKeyPair,
+	wallet::WalletSigner,
 };
 use colored::Colorize;
 use serde_json::Value;
@@ -57,22 +57,17 @@ pub async fn execute_generic_call(
 	pallet: &str,
 	call: &str,
 	args: Vec<Value>,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &WalletSigner,
 	tip: Option<String>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	log_print!("🚀 Executing generic call");
 	log_print!("Pallet: {}", pallet.bright_green());
 	log_print!("Call: {}", call.bright_cyan());
-	log_print!("From: {}", from_keypair.try_to_account_id_ss58check()?.bright_yellow());
+	log_print!("From: {}", from_keypair.try_account_id_ss58check()?.bright_yellow());
 	if let Some(tip) = &tip {
 		log_print!("Tip: {}", tip.bright_magenta());
 	}
-
-	// Convert our QuantumKeyPair to subxt Signer
-	let _signer = from_keypair
-		.to_subxt_signer()
-		.map_err(|e| QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}")))?;
 
 	// Validate pallet/call exists in metadata
 	let metadata = quantus_client.client().metadata();
@@ -170,7 +165,7 @@ pub async fn execute_generic_call(
 /// Submit balance transfer
 async fn submit_balance_transfer(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &WalletSigner,
 	args: &[Value],
 	keep_alive: bool,
 	tip: Option<u128>,
@@ -229,7 +224,7 @@ async fn submit_balance_transfer(
 /// Submit system remark
 async fn submit_system_remark(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &WalletSigner,
 	args: &[Value],
 	tip: Option<u128>,
 	execution_mode: crate::cli::common::ExecutionMode,
@@ -259,7 +254,7 @@ async fn submit_system_remark(
 /// Submit tech collective add member
 async fn submit_tech_collective_add_member(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &WalletSigner,
 	args: &[Value],
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -292,7 +287,7 @@ async fn submit_tech_collective_add_member(
 /// Submit tech collective remove member
 async fn submit_tech_collective_remove_member(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &WalletSigner,
 	args: &[Value],
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -336,7 +331,7 @@ async fn submit_tech_collective_remove_member(
 /// Submit tech collective vote
 async fn submit_tech_collective_vote(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &WalletSigner,
 	args: &[Value],
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -364,7 +359,7 @@ async fn submit_tech_collective_vote(
 /// Submit reversible transfer
 async fn submit_reversible_transfer(
 	quantus_client: &crate::chain::client::QuantusClient,
-	from_keypair: &QuantumKeyPair,
+	from_keypair: &WalletSigner,
 	args: &[Value],
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
@@ -408,7 +403,7 @@ pub async fn handle_generic_call(
 	pallet: &str,
 	call: &str,
 	args: Vec<Value>,
-	keypair: &QuantumKeyPair,
+	keypair: &WalletSigner,
 	tip: Option<String>,
 	node_url: &str,
 	execution_mode: crate::cli::common::ExecutionMode,

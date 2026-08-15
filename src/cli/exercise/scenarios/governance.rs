@@ -56,7 +56,13 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 	let preimage_hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 	let call_len = encoded.len() as u32;
 
-	crate::cli::common::submit_preimage(&ctx.client, &ctx.alice, encoded, ctx.wait_mode()).await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(ctx.alice.clone()),
+		encoded,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let count_addr = quantus_subxt::api::storage().tech_referenda().referendum_count();
 	let index = storage_at.fetch(&count_addr).await?.unwrap_or(0);
@@ -71,7 +77,7 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 	for voter in [ctx.alice.clone(), ctx.bob.clone(), ctx.charlie.clone()] {
 		crate::cli::tech_collective::vote_on_referendum(
 			&ctx.client,
-			&voter,
+			&crate::wallet::WalletSigner::Hot(voter.clone()),
 			index,
 			true,
 			ctx.wait_mode(),
@@ -143,7 +149,13 @@ async fn referendum_metadata(ctx: &mut ExerciseCtx) -> Result<String> {
 		.map_err(|e| QuantusError::Generic(format!("failed to encode remark call: {e:?}")))?;
 	let proposal_hash: sp_core::H256 = BlakeTwo256::hash(&encoded);
 	let call_len = encoded.len() as u32;
-	crate::cli::common::submit_preimage(&ctx.client, &ctx.alice, encoded, ctx.wait_mode()).await?;
+	crate::cli::common::submit_preimage(
+		&ctx.client,
+		&crate::wallet::WalletSigner::Hot(ctx.alice.clone()),
+		encoded,
+		ctx.wait_mode(),
+	)
+	.await?;
 
 	let latest = ctx.client.get_latest_block().await?;
 	let count_addr = quantus_subxt::api::storage().tech_referenda().referendum_count();
@@ -157,7 +169,7 @@ async fn referendum_metadata(ctx: &mut ExerciseCtx) -> Result<String> {
 	let metadata_hash: sp_core::H256 = BlakeTwo256::hash(&metadata);
 	crate::cli::common::submit_preimage(
 		&ctx.client,
-		&ctx.alice,
+		&crate::wallet::WalletSigner::Hot(ctx.alice.clone()),
 		metadata.to_vec(),
 		ctx.wait_mode(),
 	)

@@ -74,6 +74,9 @@ pub enum WalletError {
 	#[error("Decryption failed. Check your password.")]
 	Decryption,
 
+	#[error("'{0}' is a cold (watch-only) wallet with no local key material. Extrinsics sign via QR; this operation needs a hot wallet")]
+	ColdWalletNoKeys(String),
+
 	#[error("Wallet integrity check failed: {0}")]
 	Integrity(String),
 }

@@ -91,7 +91,7 @@ async fn stale_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 	let call = transfer_call(account_id_of(&recipient)?, ctx.test_unit);
 	match crate::cli::common::submit_transaction_with_nonce(
 		&ctx.client,
-		&sender,
+		&crate::wallet::WalletSigner::Hot(sender.clone()),
 		call,
 		None,
 		0,

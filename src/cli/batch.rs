@@ -146,9 +146,9 @@ async fn handle_batch_send_command(
 	};
 
 	// Load wallet
-	let keypair = crate::wallet::load_keypair_from_wallet(&from_wallet, password, password_file)?;
-	let from_account_id = keypair.try_to_account_id_ss58check()?;
-	validate_batch_transfer_request(&quantus_client, &keypair, &transfers).await?;
+	let signer = crate::wallet::load_signer_from_wallet(&from_wallet, password, password_file)?;
+	let from_account_id = signer.try_account_id_ss58check()?;
+	validate_batch_transfer_request(&quantus_client, &signer, &transfers).await?;
 
 	let effective_tip = crate::cli::send::effective_tip_amount(tip_amount);
 	let submit_tip = crate::cli::send::positive_tip_amount(tip_amount);
@@ -164,7 +164,7 @@ async fn handle_batch_send_command(
 	let batch_call = build_batch_transfer_call(&transfers)?;
 	ensure_balance_covers_call(
 		&quantus_client,
-		&keypair,
+		&signer,
 		&batch_call,
 		balance,
 		exact_required,
@@ -176,7 +176,7 @@ async fn handle_batch_send_command(
 	// Submit batch transaction
 	let tx_hash = submit_prebuilt_batch_transfer_call(
 		&quantus_client,
-		&keypair,
+		&signer,
 		&transfers,
 		batch_call,
 		tip_amount,

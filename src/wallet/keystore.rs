@@ -394,11 +394,27 @@ impl QuantumKeyPair {
 	}
 }
 
+/// Kind of wallet stored in a wallet file.
+///
+/// `Cold` wallets are watch-only: the private key lives on an air-gapped
+/// device (Keystone or the Quantus cold wallet app) and signing happens over
+/// QR codes. Their files carry an address but no key material.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum WalletType {
+	#[default]
+	Hot,
+	Cold,
+}
+
 /// Quantum-safe encrypted wallet data structure
 #[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct EncryptedWallet {
 	pub name: String,
 	pub address: String, // SS58-encoded address (public, not encrypted)
+	/// Wallet kind; absent in files written by older versions, which are all hot.
+	#[serde(default)]
+	pub wallet_type: WalletType,
 	pub encrypted_data: Vec<u8>,
 	pub kyber_ciphertext: Vec<u8>, // Reserved for future ML-KEM implementation
 	pub kyber_public_key: Vec<u8>, // Reserved for future ML-KEM implementation
@@ -409,6 +425,25 @@ pub struct EncryptedWallet {
 	pub aes_nonce: Vec<u8>,      // AES-GCM nonce
 	pub encryption_version: u32, // Version for future crypto upgrades
 	pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
+impl EncryptedWallet {
+	/// Create a watch-only cold wallet entry: address only, no key material.
+	pub fn new_cold(name: &str, address: &str) -> Self {
+		Self {
+			name: name.to_string(),
+			address: address.to_string(),
+			wallet_type: WalletType::Cold,
+			encrypted_data: vec![],
+			kyber_ciphertext: vec![],
+			kyber_public_key: vec![],
+			argon2_salt: vec![],
+			argon2_params: String::new(),
+			aes_nonce: vec![],
+			encryption_version: 0,
+			created_at: chrono::Utc::now(),
+		}
+	}
 }
 
 /// Wallet data structure (before encryption)
@@ -704,6 +739,7 @@ impl Keystore {
 		Ok(EncryptedWallet {
 			name: data.name.clone(),
 			address: data.keypair.try_to_account_id_ss58check()?, // Store public address
+			wallet_type: WalletType::Hot,
 			encrypted_data,
 			kyber_ciphertext: vec![], // Reserved for future ML-KEM implementation
 			kyber_public_key: vec![], // Reserved for future ML-KEM implementation
@@ -721,6 +757,10 @@ impl Keystore {
 		encrypted: &EncryptedWallet,
 		password: &str,
 	) -> Result<WalletData> {
+		if encrypted.wallet_type == WalletType::Cold {
+			return Err(WalletError::ColdWalletNoKeys(encrypted.name.clone()).into());
+		}
+
 		// Only known wallet encryption formats may be decrypted with these rules.
 		match encrypted.encryption_version {
 			1 | 2 => {},
@@ -1395,6 +1435,7 @@ mod tests {
 		EncryptedWallet {
 			name: data.name.clone(),
 			address: data.keypair.try_to_account_id_ss58check().expect("valid keypair"),
+			wallet_type: WalletType::Hot,
 			encrypted_data,
 			kyber_ciphertext: vec![],
 			kyber_public_key: vec![],
@@ -1508,6 +1549,7 @@ mod tests {
 		EncryptedWallet {
 			name: data.name.clone(),
 			address: data.keypair.try_to_account_id_ss58check().expect("valid keypair"),
+			wallet_type: WalletType::Hot,
 			encrypted_data,
 			kyber_ciphertext: vec![],
 			kyber_public_key: vec![],
