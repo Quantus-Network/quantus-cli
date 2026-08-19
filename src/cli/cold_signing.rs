@@ -20,7 +20,7 @@ use crate::{
 	chain::client::{ChainConfig, QuantusClient},
 	error::{QuantusError, Result},
 	log_print, log_verbose,
-	qr::{display_ur_until_enter, render_ur_frames, scan_ur, UrSource},
+	qr::{display_ur_until_enter, render_ur_frames, scan_ur, SignRequest, UrSource},
 };
 use colored::Colorize;
 use qp_dilithium_crypto::types::{Dilithium87SignatureWithPublic, DilithiumSignatureScheme};
@@ -327,8 +327,12 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 		}
 	}
 
-	// 2. Encode as UR and hand it to the cold wallet.
-	let parts = quantus_ur::encode_bytes(&raw_payload)
+	// 2. Address the payload to the account that must sign it, encode as UR, and
+	// hand it to the cold wallet. Without the envelope a signer holding several
+	// accounts cannot tell which key this wants, and one holding none of them
+	// cannot tell that it holds the wrong key.
+	let request = SignRequest::new(cold_address_ss58, raw_payload.clone());
+	let parts = quantus_ur::encode_bytes(&request.encode())
 		.map_err(|e| QuantusError::Generic(format!("Failed to UR-encode payload: {e:?}")))?;
 
 	// A response file existing before this request is handed out is necessarily
@@ -479,7 +483,8 @@ pub async fn handle_cold_sign_sim(
 		Some(path) => UrSource::File(PathBuf::from(path)),
 		None => UrSource::StdinLines,
 	};
-	let payload = scan_ur(&request_source, Duration::from_secs(60)).await?;
+	let request = SignRequest::decode(&scan_ur(&request_source, Duration::from_secs(60)).await?)?;
+	let payload = request.payload.clone();
 
 	if payload.len() < 2 {
 		return Err(QuantusError::Generic(format!(
@@ -488,11 +493,20 @@ pub async fn handle_cold_sign_sim(
 		)));
 	}
 	log_print!("🧾 Sign request: {} bytes", payload.len());
+	log_print!("   Signer:       {}", request.signer.bright_cyan());
 	log_print!("   Pallet index: {}, call index: {}", payload[0], payload[1]);
 	log_verbose!("   Payload hex: 0x{}", hex::encode(&payload));
 
-	// 2. Sign exactly like the cold wallet app / Keystone firmware.
+	// 2. Sign exactly like the cold wallet app / Keystone firmware, which
+	// includes refusing a request addressed to an account they do not hold.
 	let keypair = crate::wallet::load_keypair_from_wallet(&wallet, password, password_file)?;
+	let signing_address = keypair.try_to_account_id_ss58check()?;
+	if signing_address != request.signer {
+		return Err(QuantusError::Generic(format!(
+			"This request is for {}, but wallet '{wallet}' is {signing_address}. Nothing was signed.",
+			request.signer
+		)));
+	}
 	if keypair.scheme != crate::wallet::DilithiumScheme::MlDsa87 {
 		return Err(QuantusError::Generic(
 			"cold-sign-sim and real devices sign ML-DSA-87 only; use an ML-DSA-87 wallet"
@@ -693,9 +707,18 @@ mod tests {
 		let call = transfer_call();
 		let raw = build_raw_signer_payload(&state, &call, &ctx).unwrap();
 
-		// CLI → UR → cold wallet
-		let request_parts = quantus_ur::encode_bytes(&raw).unwrap();
-		let received = quantus_ur::decode_bytes(&request_parts).unwrap();
+		// CLI → UR → cold wallet, through the envelope that names the signer, so
+		// this asserts the wire format the wallets actually read.
+		let alice_address = {
+			use sp_core::crypto::Ss58Codec;
+			alice_account().to_ss58check()
+		};
+		let request = SignRequest::new(alice_address.clone(), raw.clone());
+		let request_parts = quantus_ur::encode_bytes(&request.encode()).unwrap();
+		let received_request =
+			SignRequest::decode(&quantus_ur::decode_bytes(&request_parts).unwrap()).unwrap();
+		assert_eq!(received_request.signer, alice_address, "the request must name its signer");
+		let received = received_request.payload;
 		assert_eq!(received, raw);
 
 		// Cold wallet signs and answers over UR
