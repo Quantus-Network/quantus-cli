@@ -20,6 +20,7 @@ pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
 pub mod send;
+pub mod signing_qr;
 pub mod storage;
 pub mod system;
 pub mod tech_collective;
@@ -65,6 +66,33 @@ pub enum Commands {
 		tip: Option<String>,
 
 		/// Manual nonce override (use with caution - must be exact next nonce for account)
+		#[arg(long)]
+		nonce: Option<u32>,
+	},
+
+	/// Print the QR a cold wallet scans to sign a call for an account, and stop
+	SigningQr {
+		/// Address (or wallet name) of the account that must sign
+		#[arg(short, long)]
+		from: String,
+
+		/// Recipient of the sample transfer (defaults to the signer itself)
+		#[arg(short, long)]
+		to: Option<String>,
+
+		/// Amount for the sample transfer (e.g., "10", "10.5", "0.0001")
+		#[arg(short, long, default_value = "1.5")]
+		amount: String,
+
+		/// Hex-encoded call to sign instead of the sample transfer
+		#[arg(long)]
+		call_data: Option<String>,
+
+		/// Optional tip amount (e.g., "1", "0.5")
+		#[arg(long)]
+		tip: Option<String>,
+
+		/// Manual nonce override (defaults to the account's next nonce on chain)
 		#[arg(long)]
 		nonce: Option<u32>,
 	},
@@ -369,6 +397,9 @@ pub async fn execute_command(
 				execution_mode,
 			)
 			.await,
+		Commands::SigningQr { from, to, amount, call_data, tip, nonce } =>
+			signing_qr::handle_signing_qr_command(from, to, amount, call_data, tip, nonce, node_url)
+				.await,
 		Commands::Batch(batch_cmd) =>
 			batch::handle_batch_command(batch_cmd, node_url, execution_mode).await,
 		Commands::Reversible(reversible_cmd) =>
