@@ -381,6 +381,9 @@ quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0'/1'
 # Import from mnemonic (phrase is read from a hidden prompt — never pass it on the CLI)
 quantus wallet import --name recovered_wallet
 
+# Import from a mnemonic file (owner-only on Unix; never pass the phrase on argv)
+quantus wallet import --name recovered_wallet --mnemonic-file ./mnemonic.txt
+
 # Import as ML-DSA-87 (same secure prompt)
 quantus wallet import --name recovered_87 --scheme ml-dsa-87
 

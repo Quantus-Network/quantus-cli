@@ -1,10 +1,10 @@
 use crate::{error::Result, log_print, log_verbose, wallet::WalletManager};
 use colored::Colorize;
 
-/// Ensure a password file is a regular file owned by the current user with
+/// Ensure a secret file is a regular file owned by the current user with
 /// no group/other access bits set before reading its contents.
 #[cfg(unix)]
-fn validate_password_file_permissions(file_path: &str) -> Result<()> {
+fn validate_owner_only_file(file_path: &str, kind: &str) -> Result<()> {
 	use std::os::unix::fs::MetadataExt;
 
 	unsafe extern "C" {
@@ -13,13 +13,13 @@ fn validate_password_file_permissions(file_path: &str) -> Result<()> {
 
 	let metadata = std::fs::metadata(file_path).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
-			"Failed to inspect password file '{file_path}': {e}"
+			"Failed to inspect {kind} file '{file_path}': {e}"
 		))
 	})?;
 
 	if !metadata.is_file() {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Password file '{file_path}' is not a regular file"
+			"{kind} file '{file_path}' is not a regular file"
 		)));
 	}
 
@@ -27,14 +27,14 @@ fn validate_password_file_permissions(file_path: &str) -> Result<()> {
 	let effective_uid = unsafe { geteuid() };
 	if metadata.uid() != effective_uid {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Password file '{file_path}' must be owned by the current user"
+			"{kind} file '{file_path}' must be owned by the current user"
 		)));
 	}
 
 	let mode = metadata.mode() & 0o777;
 	if mode & 0o077 != 0 {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Password file '{file_path}' must not be accessible by group or other users (mode {mode:o})"
+			"{kind} file '{file_path}' must not be accessible by group or other users (mode {mode:o})"
 		)));
 	}
 
@@ -42,8 +42,21 @@ fn validate_password_file_permissions(file_path: &str) -> Result<()> {
 }
 
 #[cfg(not(unix))]
-fn validate_password_file_permissions(_file_path: &str) -> Result<()> {
+fn validate_owner_only_file(_file_path: &str, _kind: &str) -> Result<()> {
 	Ok(())
+}
+
+fn read_owner_only_file(file_path: &str, kind: &str) -> Result<String> {
+	log_verbose!("🔑 Reading {kind} from file: {file_path}");
+	validate_owner_only_file(file_path, kind)?;
+	let mut raw = std::fs::read_to_string(file_path).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to read {kind} file '{file_path}': {e}"
+		))
+	})?;
+	let value = raw.trim().to_string();
+	crate::wallet::keystore::zeroize_string(&mut raw);
+	Ok(value)
 }
 
 fn reject_raw_cli_password(password: &Option<String>) -> Result<()> {
@@ -56,16 +69,21 @@ fn reject_raw_cli_password(password: &Option<String>) -> Result<()> {
 }
 
 fn read_password_file(file_path: &str) -> Result<String> {
-	log_verbose!("🔑 Reading password from file: {}", file_path);
-	validate_password_file_permissions(file_path)?;
-	let mut raw = std::fs::read_to_string(file_path).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to read password file '{file_path}': {e}"
-		))
-	})?;
-	let pwd = raw.trim().to_string();
-	crate::wallet::keystore::zeroize_string(&mut raw);
-	Ok(pwd)
+	read_owner_only_file(file_path, "password")
+}
+
+/// Read a mnemonic phrase from a file (never from argv).
+///
+/// On Unix the file must be a regular file owned by the current user with no
+/// group/other access bits, matching `--password-file`.
+pub fn read_mnemonic_file(file_path: &str) -> Result<String> {
+	let mnemonic = read_owner_only_file(file_path, "mnemonic")?;
+	if mnemonic.is_empty() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Mnemonic file '{file_path}' is empty"
+		)));
+	}
+	Ok(mnemonic)
 }
 
 /// Look up a wallet password from the environment without prompting.
@@ -270,7 +288,7 @@ mod tests {
 		#[test]
 		fn rejects_group_or_world_readable_password_file() {
 			let (_dir, path) = write_password_file(0o644);
-			let err = validate_password_file_permissions(&path).unwrap_err();
+			let err = validate_owner_only_file(&path, "password").unwrap_err();
 			let msg = err.to_string();
 			assert!(
 				msg.contains("must not be accessible by group or other"),
@@ -281,8 +299,47 @@ mod tests {
 		#[test]
 		fn accepts_owner_only_password_file() {
 			let (_dir, path) = write_password_file(0o600);
-			validate_password_file_permissions(&path)
+			validate_owner_only_file(&path, "password")
 				.expect("owner-only password file owned by self should be accepted");
+		}
+
+		fn write_mnemonic_file(contents: &str, mode: u32) -> (tempfile::TempDir, String) {
+			let dir = tempfile::tempdir().expect("temp dir");
+			let path = dir.path().join("mnemonic.txt");
+			fs::write(&path, contents).expect("write mnemonic file");
+			fs::set_permissions(&path, fs::Permissions::from_mode(mode))
+				.expect("set mnemonic file mode");
+			let path_str = path.to_string_lossy().into_owned();
+			(dir, path_str)
+		}
+
+		#[test]
+		fn read_mnemonic_file_rejects_group_or_world_readable() {
+			let phrase = "word ".repeat(24);
+			let (_dir, path) = write_mnemonic_file(phrase.trim(), 0o644);
+			let err = read_mnemonic_file(&path).unwrap_err();
+			let msg = err.to_string();
+			assert!(
+				msg.contains("must not be accessible by group or other"),
+				"expected restrictive-mode rejection, got: {msg}"
+			);
+		}
+
+		#[test]
+		fn read_mnemonic_file_rejects_empty() {
+			let (_dir, path) = write_mnemonic_file("   \n", 0o600);
+			let err = read_mnemonic_file(&path).unwrap_err();
+			assert!(
+				err.to_string().contains("is empty"),
+				"expected empty-file rejection, got: {err}"
+			);
+		}
+
+		#[test]
+		fn read_mnemonic_file_accepts_owner_only() {
+			let phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+			let (_dir, path) = write_mnemonic_file(&format!("{phrase}\n"), 0o600);
+			assert_eq!(read_mnemonic_file(&path).expect("owner-only mnemonic file"), phrase);
 		}
 	}
 }

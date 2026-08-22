@@ -321,17 +321,6 @@ fn read_secret_hex_file(path: &str) -> Result<String, String> {
 	Ok(secret_hex)
 }
 
-/// Read a mnemonic phrase from a file (never from argv).
-fn read_mnemonic_file(path: &str) -> Result<String, String> {
-	let mnemonic = std::fs::read_to_string(path)
-		.map_err(|e| format!("Failed to read mnemonic file: {}", e))?;
-	let mnemonic = mnemonic.trim().to_string();
-	if mnemonic.is_empty() {
-		return Err("Mnemonic file is empty".to_string());
-	}
-	Ok(mnemonic)
-}
-
 /// Parse an exit account from either hex or SS58 format
 pub fn parse_exit_account(exit_account_str: &str) -> Result<[u8; 32], String> {
 	if let Some(hex_str) = exit_account_str.strip_prefix("0x") {
@@ -4085,8 +4074,7 @@ async fn run_collect_rewards(
 			Some(wallet.wallet_address),
 		)
 	} else if let Some(mnemonic_file) = mnemonic_file_arg {
-		let mnemonic =
-			read_mnemonic_file(&mnemonic_file).map_err(crate::error::QuantusError::Generic)?;
+		let mnemonic = password::read_mnemonic_file(&mnemonic_file)?;
 		(WormholeCredential::Mnemonic { phrase: mnemonic, wormhole_index }, None)
 	} else if let Some(secret_file) = secret_file_arg {
 		// Use provided secret file directly (no HD derivation)
