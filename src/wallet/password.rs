@@ -47,7 +47,7 @@ fn validate_owner_only_file(_file: &std::fs::File, _file_path: &str, _kind: &str
 	Ok(())
 }
 
-fn read_secret_file(file_path: &str, kind: &str, owner_only: bool) -> Result<String> {
+fn read_secret_file(file_path: &str, kind: &str) -> Result<String> {
 	use std::io::Read;
 
 	log_verbose!("🔑 Reading {kind} from file: {file_path}");
@@ -56,9 +56,7 @@ fn read_secret_file(file_path: &str, kind: &str, owner_only: bool) -> Result<Str
 			"Failed to open {kind} file '{file_path}': {e}"
 		))
 	})?;
-	if owner_only {
-		validate_owner_only_file(&file, file_path, kind)?;
-	}
+	validate_owner_only_file(&file, file_path, kind)?;
 	let mut raw = String::new();
 	file.read_to_string(&mut raw).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
@@ -80,15 +78,17 @@ fn reject_raw_cli_password(password: &Option<String>) -> Result<()> {
 }
 
 fn read_password_file(file_path: &str) -> Result<String> {
-	read_secret_file(file_path, "password", true)
+	read_secret_file(file_path, "password")
 }
 
 /// Read a mnemonic phrase from a file (never from argv).
 ///
-/// A leading UTF-8 BOM is stripped and interior whitespace (e.g. one word per
-/// line) is normalized to single spaces so the stored phrase is a single line.
+/// On Unix the file must be a regular file owned by the current user with no
+/// group/other access bits, matching `--password-file`. A leading UTF-8 BOM is
+/// stripped and interior whitespace (e.g. one word per line) is normalized to
+/// single spaces so the stored phrase is a single line.
 pub fn read_mnemonic_file(file_path: &str) -> Result<String> {
-	let mut raw = read_secret_file(file_path, "mnemonic", false)?;
+	let mut raw = read_secret_file(file_path, "mnemonic")?;
 	let mnemonic = raw
 		.trim_start_matches('\u{feff}')
 		.split_whitespace()
@@ -291,6 +291,12 @@ mod tests {
 		let dir = tempfile::tempdir().expect("temp dir");
 		let path = dir.path().join("secret.txt");
 		std::fs::write(&path, contents).expect("write secret file");
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+				.expect("set secret file mode");
+		}
 		let path_str = path.to_string_lossy().into_owned();
 		(dir, path_str)
 	}
@@ -353,13 +359,16 @@ mod tests {
 			);
 		}
 
-		/// Mnemonic files never enforced permissions before the shared helper
-		/// existed, so they must keep accepting group/world-readable files.
 		#[test]
-		fn read_mnemonic_file_accepts_group_or_world_readable() {
+		fn read_mnemonic_file_rejects_group_or_world_readable() {
 			let phrase = "abandon abandon about";
 			let (_dir, path) = write_secret_file_with_mode(&format!("{phrase}\n"), 0o644);
-			assert_eq!(read_mnemonic_file(&path).expect("world-readable mnemonic file"), phrase);
+			let err = read_mnemonic_file(&path).unwrap_err();
+			let msg = err.to_string();
+			assert!(
+				msg.contains("must not be accessible by group or other"),
+				"expected restrictive-mode rejection, got: {msg}"
+			);
 		}
 	}
 }

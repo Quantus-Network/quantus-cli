@@ -289,7 +289,7 @@ quantus wormhole collect-rewards --wallet my_wallet --dry-run
 ```
 
 - `--wallet`: Wallet name for HD derivation of the wormhole secret and default exit address.
-- `--mnemonic-file`: Alternative to `--wallet`; derive wormhole secrets from the mnemonic in the file.
+- `--mnemonic-file`: Alternative to `--wallet`; derive wormhole secrets from the mnemonic in the file. On Unix the file must be a regular file owned by you with no group/other access (`chmod 600`), like `--password-file`.
 - `--destination`: Destination address for withdrawn funds (required with `--mnemonic-file`, defaults to wallet address).
 - `--amount`: Amount in DEV to withdraw (default: withdraw all available).
 - `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
@@ -381,7 +381,7 @@ quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0'/1'
 # Import from mnemonic (phrase is read from a hidden prompt — never pass it on the CLI)
 quantus wallet import --name recovered_wallet
 
-# Import from a mnemonic file (never pass the phrase on argv)
+# Import from a mnemonic file (owner-only on Unix, chmod 600; never pass the phrase on argv)
 quantus wallet import --name recovered_wallet --mnemonic-file ./mnemonic.txt
 
 # Import as ML-DSA-87 (same secure prompt)

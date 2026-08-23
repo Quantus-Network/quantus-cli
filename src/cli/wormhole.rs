@@ -931,7 +931,9 @@ pub enum WormholeCommands {
 		wallet: Option<String>,
 
 		/// File containing a mnemonic phrase for HD derivation (alternative to --wallet).
-		/// The phrase is never accepted on argv.
+		/// The phrase is never accepted on argv. On Unix the file must be a regular file
+		/// owned by the current user with no group/other access bits (chmod 600), like
+		/// --password-file.
 		#[arg(long, required_unless_present_any = ["wallet", "secret_file"], conflicts_with_all = ["wallet", "secret_file"])]
 		mnemonic_file: Option<String>,
 
