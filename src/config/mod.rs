@@ -23,6 +23,10 @@ pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
 	CompatibleRuntime { spec_version: 136, transaction_version: 3, supports_ml_dsa_65: false },
 	CompatibleRuntime { spec_version: 142, transaction_version: 3, supports_ml_dsa_65: true },
 	CompatibleRuntime { spec_version: 143, transaction_version: 3, supports_ml_dsa_65: true },
+	CompatibleRuntime { spec_version: 144, transaction_version: 3, supports_ml_dsa_65: true },
+	CompatibleRuntime { spec_version: 145, transaction_version: 4, supports_ml_dsa_65: true },
+	CompatibleRuntime { spec_version: 146, transaction_version: 5, supports_ml_dsa_65: true },
+	CompatibleRuntime { spec_version: 147, transaction_version: 6, supports_ml_dsa_65: true },
 ];
 
 /// Highest `spec_version` listed in [`COMPATIBLE_RUNTIMES`].
@@ -135,6 +139,8 @@ mod tests {
 			.expect("vesting-enabled runtime must be accepted");
 		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 143, 3)
 			.expect("the current runtime must be accepted");
+		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 147, 6)
+			.expect("the fast-upgrade runtime must be accepted");
 	}
 
 	/// Pinned to the spec name the real Quantus runtime declares
@@ -208,6 +214,7 @@ mod tests {
 		assert!(!runtime_supports_ml_dsa_65(136, 3));
 		assert!(runtime_supports_ml_dsa_65(142, 3));
 		assert!(runtime_supports_ml_dsa_65(143, 3));
+		assert!(runtime_supports_ml_dsa_65(147, 6));
 		assert!(!runtime_supports_ml_dsa_65(142, 2), "unknown tx version must not match");
 		assert!(
 			runtime_supports_ml_dsa_65(max_compatible_spec_version() + 1, 3),
