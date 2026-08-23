@@ -20,7 +20,9 @@ fn validate_owner_only_file(file: &std::fs::File, file_path: &str, kind: &str) -
 
 	if !metadata.is_file() {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Refusing to read {kind} file '{file_path}': not a regular file"
+			"🔒 Refusing to read {kind} file '{file_path}': it is not a regular file.\n\
+			 Secret files must be plain files owned by you with permissions 600 \
+			 (FIFOs, devices, and process substitution are not accepted)."
 		)));
 	}
 
@@ -28,14 +30,20 @@ fn validate_owner_only_file(file: &std::fs::File, file_path: &str, kind: &str) -
 	let effective_uid = unsafe { geteuid() };
 	if metadata.uid() != effective_uid {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Refusing to read {kind} file '{file_path}': it must be owned by the current user"
+			"🔒 Refusing to read {kind} file '{file_path}': it is not owned by the current user.\n\
+			 Secret files must belong to the user running quantus. Fix it with:\n\
+			 \n\
+			 \tchown $(id -un) '{file_path}'"
 		)));
 	}
 
 	let mode = metadata.mode() & 0o777;
 	if mode & 0o077 != 0 {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Refusing to read {kind} file '{file_path}': it must not be accessible by group or other users (mode {mode:o})"
+			"🔒 Refusing to read {kind} file '{file_path}': it is accessible by other users (permissions {mode:o}).\n\
+			 Secret files must be readable only by you. Fix it with:\n\
+			 \n\
+			 \tchmod 600 '{file_path}'"
 		)));
 	}
 
@@ -47,7 +55,9 @@ fn validate_owner_only_file(_file: &std::fs::File, _file_path: &str, _kind: &str
 	Ok(())
 }
 
-fn read_secret_file(file_path: &str, kind: &str) -> Result<String> {
+/// Read a trimmed secret from a file, requiring (on Unix) a regular file owned
+/// by the current user with no group/other access bits.
+pub(crate) fn read_secret_file(file_path: &str, kind: &str) -> Result<String> {
 	use std::io::Read;
 
 	log_verbose!("🔑 Reading {kind} from file: {file_path}");
@@ -345,8 +355,8 @@ mod tests {
 			let err = read_password_file(&path).unwrap_err();
 			let msg = err.to_string();
 			assert!(
-				msg.contains("must not be accessible by group or other"),
-				"expected restrictive-mode rejection, got: {msg}"
+				msg.contains("accessible by other users") && msg.contains("chmod 600"),
+				"expected restrictive-mode rejection with fix hint, got: {msg}"
 			);
 		}
 
@@ -366,8 +376,8 @@ mod tests {
 			let err = read_mnemonic_file(&path).unwrap_err();
 			let msg = err.to_string();
 			assert!(
-				msg.contains("must not be accessible by group or other"),
-				"expected restrictive-mode rejection, got: {msg}"
+				msg.contains("accessible by other users") && msg.contains("chmod 600"),
+				"expected restrictive-mode rejection with fix hint, got: {msg}"
 			);
 		}
 	}
