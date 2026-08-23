@@ -746,13 +746,17 @@ fn format_dispatch_error(
 pub enum WormholeCommands {
 	/// Derive the unspendable wormhole address from a secret file
 	Address {
-		/// File containing the secret (32-byte hex string) used to derive the unspendable account
+		/// File containing the secret (32-byte hex string) used to derive the unspendable
+		/// account. On Unix the file must be a regular file owned by the current user with
+		/// no group/other access bits (chmod 600), like --password-file.
 		#[arg(long)]
 		secret_file: String,
 	},
 	/// Generate a wormhole proof from an existing transfer
 	Prove {
-		/// File containing the secret (32-byte hex string) used for the transfer
+		/// File containing the secret (32-byte hex string) used for the transfer.
+		/// On Unix the file must be a regular file owned by the current user with
+		/// no group/other access bits (chmod 600), like --password-file.
 		#[arg(long)]
 		secret_file: String,
 

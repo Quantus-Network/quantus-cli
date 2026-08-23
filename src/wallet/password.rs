@@ -8,10 +8,6 @@ use colored::Colorize;
 fn validate_owner_only_file(file: &std::fs::File, file_path: &str, kind: &str) -> Result<()> {
 	use std::os::unix::fs::MetadataExt;
 
-	unsafe extern "C" {
-		fn geteuid() -> u32;
-	}
-
 	let metadata = file.metadata().map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Failed to inspect {kind} file '{file_path}': {e}"
@@ -27,32 +23,57 @@ fn validate_owner_only_file(file: &std::fs::File, file_path: &str, kind: &str) -
 	}
 
 	// SAFETY: geteuid is a POSIX libc function with no preconditions.
-	let effective_uid = unsafe { geteuid() };
+	let effective_uid = unsafe { libc::geteuid() };
 	if metadata.uid() != effective_uid {
+		let quoted = shell_quote(file_path);
 		return Err(crate::error::QuantusError::Generic(format!(
 			"🔒 Refusing to read {kind} file '{file_path}': it is not owned by the current user.\n\
 			 Secret files must belong to the user running quantus. Fix it with:\n\
 			 \n\
-			 \tchown $(id -un) '{file_path}'"
+			 \tchown $(id -un) -- {quoted}"
 		)));
 	}
 
 	let mode = metadata.mode() & 0o777;
 	if mode & 0o077 != 0 {
+		let quoted = shell_quote(file_path);
 		return Err(crate::error::QuantusError::Generic(format!(
 			"🔒 Refusing to read {kind} file '{file_path}': it is accessible by other users (permissions {mode:o}).\n\
 			 Secret files must be readable only by you. Fix it with:\n\
 			 \n\
-			 \tchmod 600 '{file_path}'"
+			 \tchmod 600 -- {quoted}"
 		)));
 	}
 
 	Ok(())
 }
 
+/// Quote a path for safe copy/paste into a POSIX shell command.
+#[cfg(unix)]
+fn shell_quote(path: &str) -> String {
+	format!("'{}'", path.replace('\'', r"'\''"))
+}
+
 #[cfg(not(unix))]
 fn validate_owner_only_file(_file: &std::fs::File, _file_path: &str, _kind: &str) -> Result<()> {
 	Ok(())
+}
+
+/// Open without blocking: a plain `File::open` on a FIFO with no writer hangs
+/// forever, before the regular-file check ever runs. O_NONBLOCK is a no-op for
+/// regular files, and non-regular files are rejected right after fstat.
+#[cfg(unix)]
+fn open_secret_file(file_path: &str) -> std::io::Result<std::fs::File> {
+	use std::os::unix::fs::OpenOptionsExt;
+	std::fs::OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_NONBLOCK)
+		.open(file_path)
+}
+
+#[cfg(not(unix))]
+fn open_secret_file(file_path: &str) -> std::io::Result<std::fs::File> {
+	std::fs::File::open(file_path)
 }
 
 /// Read a trimmed secret from a file, requiring (on Unix) a regular file owned
@@ -61,7 +82,7 @@ pub(crate) fn read_secret_file(file_path: &str, kind: &str) -> Result<String> {
 	use std::io::Read;
 
 	log_verbose!("🔑 Reading {kind} from file: {file_path}");
-	let mut file = std::fs::File::open(file_path).map_err(|e| {
+	let mut file = open_secret_file(file_path).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Failed to open {kind} file '{file_path}': {e}"
 		))
@@ -366,6 +387,36 @@ mod tests {
 			assert_eq!(
 				read_password_file(&path).expect("owner-only password file"),
 				"correct horse battery staple"
+			);
+		}
+
+		#[test]
+		fn read_secret_file_rejects_fifo_without_blocking() {
+			let dir = tempfile::tempdir().expect("temp dir");
+			let path = dir.path().join("secret.fifo");
+			let c_path = std::ffi::CString::new(path.to_str().expect("utf-8 path")).unwrap();
+			// SAFETY: c_path is a valid NUL-terminated path.
+			let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+			assert_eq!(rc, 0, "mkfifo failed");
+			let err = read_secret_file(path.to_str().unwrap(), "secret").unwrap_err();
+			assert!(
+				err.to_string().contains("not a regular file"),
+				"expected non-regular-file rejection, got: {err}"
+			);
+		}
+
+		#[test]
+		fn fix_hints_shell_quote_hostile_paths() {
+			let dir = tempfile::tempdir().expect("temp dir");
+			let path = dir.path().join("owner'; touch pwned;'.txt");
+			fs::write(&path, "secret\n").expect("write secret file");
+			fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
+				.expect("set secret file mode");
+			let err = read_secret_file(path.to_str().unwrap(), "secret").unwrap_err();
+			let msg = err.to_string();
+			assert!(
+				msg.contains(r"chmod 600 -- ") && msg.contains(r"owner'\''; touch pwned;'\''.txt"),
+				"expected shell-quoted fix hint, got: {msg}"
 			);
 		}
 
