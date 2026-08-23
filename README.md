@@ -593,6 +593,41 @@ quantus vesting retarget --schedule-id 3 --new-beneficiary qz... --call-data-onl
 
 ---
 
+### Runtime Upgrades
+
+Runtime upgrades use the restricted `FastUpgrade` governance track. The proposal contains only
+`System::authorize_upgrade(blake2_256(wasm))`, so it stays below the referendum's 4 KiB proposal
+limit. The full WASM is supplied only after the authorization enacts.
+
+```bash
+# Note the small authorization preimage and submit the FastUpgrade referendum
+quantus runtime update \
+  --wasm-file /path/to/quantus-runtime.compact.compressed.wasm \
+  --from <tech-collective-wallet> \
+  --node-url <endpoint>
+
+# Place the decision deposit, collect 8-of-10 ayes, then wait for enactment
+quantus tech-referenda list --node-url <endpoint>
+quantus tech-referenda place-decision-deposit \
+  --index <referendum-index> --from <funded-wallet> --node-url <endpoint>
+quantus tech-collective vote \
+  --referendum-index <referendum-index> --vote aye \
+  --from <member-wallet> --node-url <endpoint>
+
+# Anyone can submit the exact authorized WASM after enactment
+quantus runtime apply \
+  --wasm-file /path/to/quantus-runtime.compact.compressed.wasm \
+  --from <funded-wallet> \
+  --node-url <endpoint>
+```
+
+`runtime apply` verifies the on-chain authorization hash before submitting and verifies `:code`
+at the inclusion block afterward. It always waits for inclusion even without
+`--wait-for-transaction`. Because the apply extrinsic carries the full WASM, use a hot wallet in
+normal operation rather than QR signing.
+
+---
+
 ### Privacy-Preserving Transfer Queries
 
 Query transfers via a Subsquid indexer using hash-prefix queries that hide your exact address.
