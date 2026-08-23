@@ -279,9 +279,9 @@ quantus wormhole collect-rewards --wallet my_wallet --password ""
 # Collect a specific amount
 quantus wormhole collect-rewards --wallet my_wallet --amount 50.0
 
-# Use a mnemonic directly (requires --destination)
+# Use a mnemonic file (requires --destination; the phrase is never accepted on argv)
 quantus wormhole collect-rewards \
-  --mnemonic "word1 word2 ... word24" \
+  --mnemonic-file ./mnemonic.txt \
   --destination <SS58-address>
 
 # Dry run to see available transfers without submitting
@@ -289,8 +289,8 @@ quantus wormhole collect-rewards --wallet my_wallet --dry-run
 ```
 
 - `--wallet`: Wallet name for HD derivation of the wormhole secret and default exit address.
-- `--mnemonic`: Alternative to `--wallet`; derive wormhole secrets from a mnemonic directly.
-- `--destination`: Destination address for withdrawn funds (required with `--mnemonic`, defaults to wallet address).
+- `--mnemonic-file`: Alternative to `--wallet`; derive wormhole secrets from the mnemonic in the file.
+- `--destination`: Destination address for withdrawn funds (required with `--mnemonic-file`, defaults to wallet address).
 - `--amount`: Amount in DEV to withdraw (default: withdraw all available).
 - `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
 - `--subsquid-url`: Subsquid indexer URL (default: `https://sub2.quantus.com/v1/graphql`).
@@ -381,7 +381,7 @@ quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0'/1'
 # Import from mnemonic (phrase is read from a hidden prompt — never pass it on the CLI)
 quantus wallet import --name recovered_wallet
 
-# Import from a mnemonic file (owner-only on Unix; never pass the phrase on argv)
+# Import from a mnemonic file (never pass the phrase on argv)
 quantus wallet import --name recovered_wallet --mnemonic-file ./mnemonic.txt
 
 # Import as ML-DSA-87 (same secure prompt)

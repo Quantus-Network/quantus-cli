@@ -737,22 +737,28 @@ pub async fn handle_wallet_command(
 
 			let wallet_manager = WalletManager::new()?;
 
-			// New-wallet password policy: confirmed prompt, no silent empty
-			// default. Resolve (and reject rejected forms like a raw
-			// --password) before collecting the mnemonic, so a doomed
-			// invocation doesn't collect the secret first.
+			// Phrase never appears in process argv: file or hidden prompt.
+			// The file is read up front so a bad path fails before the
+			// password ceremony; the interactive prompt runs after it, so a
+			// doomed invocation doesn't collect the secret first.
+			let mut file_mnemonic = mnemonic_file.as_deref().map(read_mnemonic_file).transpose()?;
+
+			// New-wallet password policy: confirmed prompt, no silent empty default.
 			let final_password = crate::wallet::password::get_new_wallet_password(
 				&name,
 				password,
 				password_file,
 				allow_empty_password,
-			)?;
+			)
+			.inspect_err(|_| {
+				if let Some(m) = file_mnemonic.as_mut() {
+					crate::wallet::keystore::zeroize_string(m);
+				}
+			})?;
 
-			// Phrase never appears in process argv: file or hidden prompt.
-			let mut mnemonic_phrase = if let Some(path) = mnemonic_file {
-				read_mnemonic_file(&path)?
-			} else {
-				get_mnemonic_from_user()?
+			let mut mnemonic_phrase = match file_mnemonic {
+				Some(mnemonic) => mnemonic,
+				None => get_mnemonic_from_user()?,
 			};
 
 			let result = if no_derivation {
@@ -1048,13 +1054,19 @@ mod tests {
 		command: crate::cli::Commands,
 	}
 
+	fn temp_home() -> TempDir {
+		let home = TempDir::new().expect("temp HOME");
+		std::env::set_var("HOME", home.path());
+		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD");
+		home
+	}
+
 	#[tokio::test]
 	#[serial]
 	async fn wallet_export_without_output_refuses_stdout_mnemonic() {
 		// #159469: export must not emit the recovery secret via log_print/stdout.
-		let home = TempDir::new().expect("temp HOME");
-		std::env::set_var("HOME", home.path());
-		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
+		let _home = temp_home();
 
 		let manager = WalletManager::new().expect("wallet manager");
 		manager.create_wallet("export-leak", Some("")).await.expect("create wallet");
@@ -1080,10 +1092,7 @@ mod tests {
 	#[tokio::test]
 	#[serial]
 	async fn wallet_export_writes_mnemonic_to_protected_file_not_stdout_path() {
-		let home = TempDir::new().expect("temp HOME");
-		std::env::set_var("HOME", home.path());
-		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
-		std::env::remove_var("QUANTUS_WALLET_PASSWORD");
+		let home = temp_home();
 		std::env::remove_var("QUANTUS_WALLET_PASSWORD_EXPORT_FILE");
 
 		let manager = WalletManager::new().expect("wallet manager");
@@ -1156,16 +1165,13 @@ mod tests {
 	#[tokio::test]
 	#[serial]
 	async fn wallet_import_from_mnemonic_file_matches_source_address() {
-		let home = TempDir::new().expect("temp HOME");
-		std::env::set_var("HOME", home.path());
-		std::env::set_var("QUANTUS_NO_UPDATE_CHECK", "1");
-		std::env::remove_var("QUANTUS_WALLET_PASSWORD");
+		let home = temp_home();
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD_SRC");
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD_IMPORTED");
 
 		let manager = WalletManager::new().expect("wallet manager");
-		manager.create_wallet("src", Some("")).await.expect("create source wallet");
+		let source = manager.create_wallet("src", Some("")).await.expect("create source wallet");
 		let mnemonic = manager.export_mnemonic("src", None).expect("export mnemonic");
-		let source = manager.load_wallet("src", "").expect("load source");
-		let expected = source.keypair.try_to_account_id_ss58check().expect("source address");
 
 		let mnemonic_path = home.path().join("mnemonic.txt");
 		write_mnemonic_to_protected_file(&mnemonic_path, &mnemonic).expect("write mnemonic file");
@@ -1189,7 +1195,7 @@ mod tests {
 		let imported = manager.load_wallet("imported", "").expect("load imported");
 		assert_eq!(
 			imported.keypair.try_to_account_id_ss58check().expect("imported address"),
-			expected
+			source.address
 		);
 		assert_eq!(imported.mnemonic.as_deref(), Some(mnemonic.trim()));
 	}
