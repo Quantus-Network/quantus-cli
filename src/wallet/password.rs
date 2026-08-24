@@ -1,49 +1,102 @@
 use crate::{error::Result, log_print, log_verbose, wallet::WalletManager};
 use colored::Colorize;
 
-/// Ensure a password file is a regular file owned by the current user with
-/// no group/other access bits set before reading its contents.
+/// Ensure an already-opened secret file is a regular file owned by the current
+/// user with no group/other access bits set. Checking the handle (fstat) rather
+/// than the path avoids validating a different file than the one read.
 #[cfg(unix)]
-fn validate_password_file_permissions(file_path: &str) -> Result<()> {
+fn validate_owner_only_file(file: &std::fs::File, file_path: &str, kind: &str) -> Result<()> {
 	use std::os::unix::fs::MetadataExt;
 
-	unsafe extern "C" {
-		fn geteuid() -> u32;
-	}
-
-	let metadata = std::fs::metadata(file_path).map_err(|e| {
+	let metadata = file.metadata().map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
-			"Failed to inspect password file '{file_path}': {e}"
+			"Failed to inspect {kind} file '{file_path}': {e}"
 		))
 	})?;
 
 	if !metadata.is_file() {
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Password file '{file_path}' is not a regular file"
+			"🔒 Refusing to read {kind} file '{file_path}': it is not a regular file.\n\
+			 Secret files must be plain files owned by you with permissions 600 \
+			 (FIFOs, devices, and process substitution are not accepted)."
 		)));
 	}
 
 	// SAFETY: geteuid is a POSIX libc function with no preconditions.
-	let effective_uid = unsafe { geteuid() };
+	let effective_uid = unsafe { libc::geteuid() };
 	if metadata.uid() != effective_uid {
+		let quoted = shell_quote(file_path);
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Password file '{file_path}' must be owned by the current user"
+			"🔒 Refusing to read {kind} file '{file_path}': it is not owned by the current user.\n\
+			 Secret files must belong to the user running quantus. Fix it with:\n\
+			 \n\
+			 \tchown $(id -un) -- {quoted}"
 		)));
 	}
 
 	let mode = metadata.mode() & 0o777;
 	if mode & 0o077 != 0 {
+		let quoted = shell_quote(file_path);
 		return Err(crate::error::QuantusError::Generic(format!(
-			"Password file '{file_path}' must not be accessible by group or other users (mode {mode:o})"
+			"🔒 Refusing to read {kind} file '{file_path}': it is accessible by other users (permissions {mode:o}).\n\
+			 Secret files must be readable only by you. Fix it with:\n\
+			 \n\
+			 \tchmod 600 -- {quoted}"
 		)));
 	}
 
 	Ok(())
 }
 
+/// Quote a path for safe copy/paste into a POSIX shell command.
+#[cfg(unix)]
+fn shell_quote(path: &str) -> String {
+	format!("'{}'", path.replace('\'', r"'\''"))
+}
+
 #[cfg(not(unix))]
-fn validate_password_file_permissions(_file_path: &str) -> Result<()> {
+fn validate_owner_only_file(_file: &std::fs::File, _file_path: &str, _kind: &str) -> Result<()> {
 	Ok(())
+}
+
+/// Open without blocking: a plain `File::open` on a FIFO with no writer hangs
+/// forever, before the regular-file check ever runs. O_NONBLOCK is a no-op for
+/// regular files, and non-regular files are rejected right after fstat.
+#[cfg(unix)]
+fn open_secret_file(file_path: &str) -> std::io::Result<std::fs::File> {
+	use std::os::unix::fs::OpenOptionsExt;
+	std::fs::OpenOptions::new()
+		.read(true)
+		.custom_flags(libc::O_NONBLOCK)
+		.open(file_path)
+}
+
+#[cfg(not(unix))]
+fn open_secret_file(file_path: &str) -> std::io::Result<std::fs::File> {
+	std::fs::File::open(file_path)
+}
+
+/// Read a trimmed secret from a file, requiring (on Unix) a regular file owned
+/// by the current user with no group/other access bits.
+pub(crate) fn read_secret_file(file_path: &str, kind: &str) -> Result<String> {
+	use std::io::Read;
+
+	log_verbose!("🔑 Reading {kind} from file: {file_path}");
+	let mut file = open_secret_file(file_path).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to open {kind} file '{file_path}': {e}"
+		))
+	})?;
+	validate_owner_only_file(&file, file_path, kind)?;
+	let mut raw = String::new();
+	file.read_to_string(&mut raw).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to read {kind} file '{file_path}': {e}"
+		))
+	})?;
+	let value = raw.trim().to_string();
+	crate::wallet::keystore::zeroize_string(&mut raw);
+	Ok(value)
 }
 
 fn reject_raw_cli_password(password: &Option<String>) -> Result<()> {
@@ -56,16 +109,29 @@ fn reject_raw_cli_password(password: &Option<String>) -> Result<()> {
 }
 
 fn read_password_file(file_path: &str) -> Result<String> {
-	log_verbose!("🔑 Reading password from file: {}", file_path);
-	validate_password_file_permissions(file_path)?;
-	let mut raw = std::fs::read_to_string(file_path).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to read password file '{file_path}': {e}"
-		))
-	})?;
-	let pwd = raw.trim().to_string();
+	read_secret_file(file_path, "password")
+}
+
+/// Read a mnemonic phrase from a file (never from argv).
+///
+/// On Unix the file must be a regular file owned by the current user with no
+/// group/other access bits, matching `--password-file`. A leading UTF-8 BOM is
+/// stripped and interior whitespace (e.g. one word per line) is normalized to
+/// single spaces so the stored phrase is a single line.
+pub fn read_mnemonic_file(file_path: &str) -> Result<String> {
+	let mut raw = read_secret_file(file_path, "mnemonic")?;
+	let mnemonic = raw
+		.trim_start_matches('\u{feff}')
+		.split_whitespace()
+		.collect::<Vec<_>>()
+		.join(" ");
 	crate::wallet::keystore::zeroize_string(&mut raw);
-	Ok(pwd)
+	if mnemonic.is_empty() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Mnemonic file '{file_path}' is empty"
+		)));
+	}
+	Ok(mnemonic)
 }
 
 /// Look up a wallet password from the environment without prompting.
@@ -252,37 +318,118 @@ mod tests {
 		}
 	}
 
+	fn write_secret_file(contents: &str) -> (tempfile::TempDir, String) {
+		let dir = tempfile::tempdir().expect("temp dir");
+		let path = dir.path().join("secret.txt");
+		std::fs::write(&path, contents).expect("write secret file");
+		#[cfg(unix)]
+		{
+			use std::os::unix::fs::PermissionsExt;
+			std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
+				.expect("set secret file mode");
+		}
+		let path_str = path.to_string_lossy().into_owned();
+		(dir, path_str)
+	}
+
+	#[test]
+	fn read_mnemonic_file_rejects_empty() {
+		let (_dir, path) = write_secret_file("   \n");
+		let err = read_mnemonic_file(&path).unwrap_err();
+		assert!(err.to_string().contains("is empty"), "expected empty-file rejection, got: {err}");
+	}
+
+	#[test]
+	fn read_mnemonic_file_reads_phrase() {
+		let phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+		let (_dir, path) = write_secret_file(&format!("{phrase}\n"));
+		assert_eq!(read_mnemonic_file(&path).expect("mnemonic file"), phrase);
+	}
+
+	#[test]
+	fn read_mnemonic_file_normalizes_interior_whitespace() {
+		let (_dir, path) = write_secret_file("word1\nword2\r\n  word3\tword4\n");
+		assert_eq!(read_mnemonic_file(&path).unwrap(), "word1 word2 word3 word4");
+	}
+
+	#[test]
+	fn read_mnemonic_file_strips_utf8_bom() {
+		let (_dir, path) = write_secret_file("\u{feff}word1 word2\n");
+		assert_eq!(read_mnemonic_file(&path).unwrap(), "word1 word2");
+	}
+
 	#[cfg(unix)]
-	mod password_file_permissions {
+	mod secret_file_permissions {
 		use super::*;
 		use std::{fs, os::unix::fs::PermissionsExt};
 
-		fn write_password_file(mode: u32) -> (tempfile::TempDir, String) {
-			let dir = tempfile::tempdir().expect("temp dir");
-			let path = dir.path().join("wallet-password.txt");
-			fs::write(&path, "correct horse battery staple\n").expect("write password file");
+		fn write_secret_file_with_mode(contents: &str, mode: u32) -> (tempfile::TempDir, String) {
+			let (dir, path) = super::write_secret_file(contents);
 			fs::set_permissions(&path, fs::Permissions::from_mode(mode))
-				.expect("set password file mode");
-			let path_str = path.to_string_lossy().into_owned();
-			(dir, path_str)
+				.expect("set secret file mode");
+			(dir, path)
 		}
 
 		#[test]
 		fn rejects_group_or_world_readable_password_file() {
-			let (_dir, path) = write_password_file(0o644);
-			let err = validate_password_file_permissions(&path).unwrap_err();
+			let (_dir, path) = write_secret_file_with_mode("correct horse battery staple\n", 0o644);
+			let err = read_password_file(&path).unwrap_err();
 			let msg = err.to_string();
 			assert!(
-				msg.contains("must not be accessible by group or other"),
-				"expected restrictive-mode rejection, got: {msg}"
+				msg.contains("accessible by other users") && msg.contains("chmod 600"),
+				"expected restrictive-mode rejection with fix hint, got: {msg}"
 			);
 		}
 
 		#[test]
 		fn accepts_owner_only_password_file() {
-			let (_dir, path) = write_password_file(0o600);
-			validate_password_file_permissions(&path)
-				.expect("owner-only password file owned by self should be accepted");
+			let (_dir, path) = write_secret_file_with_mode("correct horse battery staple\n", 0o600);
+			assert_eq!(
+				read_password_file(&path).expect("owner-only password file"),
+				"correct horse battery staple"
+			);
+		}
+
+		#[test]
+		fn read_secret_file_rejects_fifo_without_blocking() {
+			let dir = tempfile::tempdir().expect("temp dir");
+			let path = dir.path().join("secret.fifo");
+			let c_path = std::ffi::CString::new(path.to_str().expect("utf-8 path")).unwrap();
+			// SAFETY: c_path is a valid NUL-terminated path.
+			let rc = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
+			assert_eq!(rc, 0, "mkfifo failed");
+			let err = read_secret_file(path.to_str().unwrap(), "secret").unwrap_err();
+			assert!(
+				err.to_string().contains("not a regular file"),
+				"expected non-regular-file rejection, got: {err}"
+			);
+		}
+
+		#[test]
+		fn fix_hints_shell_quote_hostile_paths() {
+			let dir = tempfile::tempdir().expect("temp dir");
+			let path = dir.path().join("owner'; touch pwned;'.txt");
+			fs::write(&path, "secret\n").expect("write secret file");
+			fs::set_permissions(&path, fs::Permissions::from_mode(0o644))
+				.expect("set secret file mode");
+			let err = read_secret_file(path.to_str().unwrap(), "secret").unwrap_err();
+			let msg = err.to_string();
+			assert!(
+				msg.contains(r"chmod 600 -- ") && msg.contains(r"owner'\''; touch pwned;'\''.txt"),
+				"expected shell-quoted fix hint, got: {msg}"
+			);
+		}
+
+		#[test]
+		fn read_mnemonic_file_rejects_group_or_world_readable() {
+			let phrase = "abandon abandon about";
+			let (_dir, path) = write_secret_file_with_mode(&format!("{phrase}\n"), 0o644);
+			let err = read_mnemonic_file(&path).unwrap_err();
+			let msg = err.to_string();
+			assert!(
+				msg.contains("accessible by other users") && msg.contains("chmod 600"),
+				"expected restrictive-mode rejection with fix hint, got: {msg}"
+			);
 		}
 	}
 }

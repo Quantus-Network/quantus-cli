@@ -159,8 +159,10 @@ The `wormhole` commands implement a ZK-proof-based privacy layer. Funds are sent
 Derive the unspendable wormhole address from a secret. This is step one of a private transfer -- it shows the address you need to send funds to.
 
 ```bash
-quantus wormhole address --secret 0x<64-hex-chars>
+quantus wormhole address --secret-file ./secret.hex
 ```
+
+- `--secret-file`: File containing the 32-byte hex secret. On Unix the file must be a regular file owned by you with no group/other access (`chmod 600`), like `--password-file`.
 
 Output:
 ```
@@ -184,7 +186,7 @@ Generate a ZK proof for an existing wormhole transfer. The proof demonstrates kn
 
 ```bash
 quantus wormhole prove \
-  --secret 0x<secret> \
+  --secret-file ./secret.hex \
   --amount 100000000000000 \
   --exit-account <SS58-or-hex> \
   --block 0x<block-hash> \
@@ -193,6 +195,7 @@ quantus wormhole prove \
   --output proof.hex
 ```
 
+- `--secret-file`: File containing the 32-byte hex secret. On Unix the file must be a regular file owned by you with no group/other access (`chmod 600`), like `--password-file`.
 - `--exit-account`: The destination address that will receive funds after on-chain verification (SS58 or `0x`-prefixed hex).
 - `--block`: Block hash where the transfer was included.
 - `--transfer-count`: Transfer count from the `NativeTransferred` event.
@@ -279,9 +282,9 @@ quantus wormhole collect-rewards --wallet my_wallet --password ""
 # Collect a specific amount
 quantus wormhole collect-rewards --wallet my_wallet --amount 50.0
 
-# Use a mnemonic directly (requires --destination)
+# Use a mnemonic file (requires --destination; the phrase is never accepted on argv)
 quantus wormhole collect-rewards \
-  --mnemonic "word1 word2 ... word24" \
+  --mnemonic-file ./mnemonic.txt \
   --destination <SS58-address>
 
 # Dry run to see available transfers without submitting
@@ -289,8 +292,9 @@ quantus wormhole collect-rewards --wallet my_wallet --dry-run
 ```
 
 - `--wallet`: Wallet name for HD derivation of the wormhole secret and default exit address.
-- `--mnemonic`: Alternative to `--wallet`; derive wormhole secrets from a mnemonic directly.
-- `--destination`: Destination address for withdrawn funds (required with `--mnemonic`, defaults to wallet address).
+- `--mnemonic-file`: Alternative to `--wallet`; derive wormhole secrets from the mnemonic in the file. On Unix the file must be a regular file owned by you with no group/other access (`chmod 600`), like `--password-file`.
+- `--secret-file`: Alternative to `--wallet`/`--mnemonic-file`; file containing the direct 32-byte hex wormhole secret, with the same owner-only requirement on Unix.
+- `--destination`: Destination address for withdrawn funds (required with `--mnemonic-file` or `--secret-file`, defaults to wallet address).
 - `--amount`: Amount in DEV to withdraw (default: withdraw all available).
 - `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
 - `--subsquid-url`: Subsquid indexer URL (default: `https://sub2.quantus.com/v1/graphql`).
@@ -308,12 +312,12 @@ quantus wormhole check-nullifier --wallet my_wallet --transfer-counts 0
 # Check a range of transfer counts
 quantus wormhole check-nullifier --wallet my_wallet --transfer-counts 0-10
 
-# Check using a secret directly
-quantus wormhole check-nullifier --secret 0x<64-hex-chars> --transfer-counts 0-5
+# Check using a secret file directly
+quantus wormhole check-nullifier --secret-file ./secret.hex --transfer-counts 0-5
 ```
 
 - `--wallet`: Wallet name for HD derivation of the wormhole secret.
-- `--secret`: 32-byte hex secret (alternative to `--wallet`).
+- `--secret-file`: File containing the 32-byte hex secret (alternative to `--wallet`). On Unix the file must be a regular file owned by you with no group/other access (`chmod 600`), like `--password-file`.
 - `--transfer-counts`: Single number or range (e.g., `0-10`) of transfer counts to check.
 - `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
 - `--subsquid-url`: Subsquid indexer URL (default: `https://sub2.quantus.com/v1/graphql`).
@@ -380,6 +384,9 @@ quantus wallet create --name my_wallet --derivation-path "m/44'/189189'/0'/0'/1'
 
 # Import from mnemonic (phrase is read from a hidden prompt — never pass it on the CLI)
 quantus wallet import --name recovered_wallet
+
+# Import from a mnemonic file (owner-only on Unix, chmod 600; never pass the phrase on argv)
+quantus wallet import --name recovered_wallet --mnemonic-file ./mnemonic.txt
 
 # Import as ML-DSA-87 (same secure prompt)
 quantus wallet import --name recovered_87 --scheme ml-dsa-87
