@@ -48,7 +48,7 @@ pub enum PreimageCommands {
 		#[arg(long)]
 		from: String,
 	},
-	/// Create a preimage from WASM file (like in tech-referenda)
+	/// Create a System::authorize_upgrade preimage from a WASM file
 	#[command(name = "create")]
 	Create {
 		/// WASM file path
@@ -370,7 +370,7 @@ async fn note_preimage(
 	Ok(())
 }
 
-/// Create a preimage from WASM file (like in tech-referenda)
+/// Create a System::authorize_upgrade preimage from a WASM file
 async fn create_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_file: std::path::PathBuf,
@@ -382,55 +382,25 @@ async fn create_preimage(
 	log_print!("📦 Creating preimage from WASM file: {}", wasm_file.display());
 	log_print!("   👤 From: {}", from_str.bright_yellow());
 
-	if !wasm_file.exists() {
-		return Err(QuantusError::Generic(format!("WASM file not found: {}", wasm_file.display())));
-	}
-
-	// Read WASM file
-	let wasm_code = std::fs::read(&wasm_file)
-		.map_err(|e| QuantusError::Generic(format!("Failed to read WASM file: {}", e)))?;
-
+	let wasm_code = crate::cli::runtime::read_wasm_file(&wasm_file)?;
 	log_print!("📊 WASM file size: {} bytes", wasm_code.len());
-
-	// Load wallet signer
 	let signer = crate::wallet::load_signer_from_wallet(from_str, password, password_file)?;
-
-	// Build a static payload for System::set_code and encode full call data (pallet + call + args)
-	let set_code_payload = quantus_subxt::api::tx().system().set_code(wasm_code.clone());
-	let metadata = quantus_client.client().metadata();
-	let encoded_call = <_ as subxt::tx::Payload>::encode_call_data(&set_code_payload, &metadata)
-		.map_err(|e| QuantusError::Generic(format!("Failed to encode call data: {:?}", e)))?;
-
-	log_verbose!("📝 Encoded call size: {} bytes", encoded_call.len());
-
-	let preimage_hash: sp_core::H256 =
-		<sp_runtime::traits::BlakeTwo256 as sp_runtime::traits::Hash>::hash(&encoded_call);
-
-	log_print!("🔗 Preimage hash: {:?}", preimage_hash);
-
-	// Submit Preimage::note_preimage with bounded bytes
-	type PreimageBytes = quantus_subxt::api::preimage::calls::types::note_preimage::Bytes;
-	let bounded_bytes: PreimageBytes = encoded_call.clone();
-
-	log_print!("📝 Submitting preimage...");
-	let note_preimage_tx = quantus_subxt::api::tx().preimage().note_preimage(bounded_bytes);
-	let preimage_tx_hash = crate::cli::common::submit_transaction(
+	let authorization = crate::cli::runtime::build_runtime_authorization(
+		&quantus_client.client().metadata(),
+		&wasm_code,
+	)?;
+	log_print!("🔐 Runtime code hash: {:?}", authorization.code_hash);
+	log_print!("🔗 Preimage hash: {:?}", authorization.preimage_hash);
+	crate::cli::common::submit_preimage(
 		quantus_client,
 		&signer,
-		note_preimage_tx,
-		None,
+		authorization.encoded_call,
 		execution_mode,
 	)
 	.await?;
-	log_print!("✅ Preimage transaction submitted: {:?}", preimage_tx_hash);
-
-	// Wait for preimage transaction confirmation
-	log_print!("⏳ Waiting for preimage transaction confirmation...");
-	log_print!("✅ Preimage transaction confirmed!");
 
 	log_print!("🎯 Preimage created successfully!");
-	log_print!("   🔗 Hash: {:?}", preimage_hash);
-	log_print!("   📏 Size: {} bytes", encoded_call.len());
+	log_print!("   🔗 Hash: {:?}", authorization.preimage_hash);
 
 	Ok(())
 }
