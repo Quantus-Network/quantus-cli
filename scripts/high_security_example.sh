@@ -3,7 +3,6 @@
 # High Security Example Script
 # This script demonstrates the high security features of the Quantus blockchain.
 # It sets up a guardian for an account and demonstrates the reversible transfer functionality.
-# It also demonstrates the recovery pallet functionality.
 
 # set this to your binary
 alias quantus="./target/release/quantus --node-url ws://127.0.0.1:9944"
@@ -34,21 +33,6 @@ quantus reversible list-pending --from crystal_alice
 
 # Interceptor account charlie reverses transaction 
 quantus reversible cancel --tx-id 0xb8ee1f940e13fbc171481d1b06967760bf1d39f06dbcdb595c02c420aec6a45e --from crystal_charlie
-
-# Check balances of Alice, Bob, and Charlie
-quantus balance --address crystal_alice
-quantus balance --address crystal_bob
-quantus balance --address crystal_charlie
-
-# activate the recovery first vouch then claim.
-ququantus recovery initiate --rescuer crystal_charlie --lost crystal_alice
-quantus recovery active --rescuer crystal_charlie --lost crystal_alice
-quantus recovery vouch --rescuer crystal_charlie --lost crystal_alice --friend crystal_charlie
-quantus recovery claim --rescuer crystal_charlie --lost crystal_alice
-quantus recovery proxy-of --rescuer crystal_charlie
-
-# Charlie pulls all money from Alice's account
-quantus recovery recover-all --rescuer crystal_charlie --lost crystal_alice --dest crystal_charlie
 
 # Check balances of Alice, Bob, and Charlie
 quantus balance --address crystal_alice

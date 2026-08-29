@@ -540,23 +540,6 @@ quantus high-security entrusted --from alice
 
 ---
 
-### Account Recovery
-
-Social recovery using trusted friends.
-
-```bash
-# Initiate recovery
-quantus recovery initiate --rescuer bob --lost alice
-
-# Friend vouches
-quantus recovery vouch --friend charlie --lost alice --rescuer bob
-
-# Claim after threshold met
-quantus recovery claim --rescuer bob --lost alice
-```
-
----
-
 ### Treasury
 
 Treasury is the account that receives a configurable portion of mining rewards. No special spend/proposal flow — just view its state.
@@ -677,7 +660,7 @@ quantus call \
 ### Chain Exercise Suite
 
 `quantus exercise` runs a live-node smoke/fuzz suite against a node — reads, balances,
-utility, reversible transfers, multisig, recovery, preimage, governance, vesting, negative
+utility, reversible transfers, multisig, preimage, governance, vesting, negative
 cases, a seeded fuzz loop, and wormhole round-trips. It derives a handful of ephemeral
 accounts, funds them from a **root account**, drives each pallet, and verifies on-chain state
 as it goes. Intended for CI and post-upgrade validation.
@@ -736,10 +719,10 @@ actually spent — and fails if the cap was exceeded.
 
 It is a ceiling, not an allocation. Ephemeral accounts are funded with what the chain's own
 deposits and fees require, not with a share of the cap, and the phases that fund dedicated
-accounts — `recovery` and `wormhole` — sweep them back into the root account when they are
+accounts — `wormhole` — sweep them back into the root account when they are
 done, so their funding is borrowed rather than spent. Discretionary test transfers are scaled
 down by a fixed factor on top of that; chain-imposed amounts (existential deposit, multisig,
-recovery, vesting and governance deposits) are read from the chain and never scaled.
+vesting and governance deposits) are read from the chain and never scaled.
 
 > **Notes:**
 > - `governance` submits two referenda whose chain-fixed deposits stay locked for the whole

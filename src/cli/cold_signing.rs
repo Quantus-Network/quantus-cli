@@ -582,6 +582,42 @@ mod tests {
 			.transfer_allow_death(MultiAddress::Id(dest), 1_000_000_000_000u128)
 	}
 
+	fn multisig_execute_call(inner_amount: u128) -> impl subxt::tx::Payload {
+		let dest: subxt::utils::AccountId32 =
+			subxt::utils::AccountId32(*b"01234567890123456789012345678901");
+		let inner = api::runtime_types::quantus_runtime::RuntimeCall::Balances(
+			api::runtime_types::pallet_balances::pallet::Call::transfer_allow_death {
+				dest: MultiAddress::Id(dest),
+				value: inner_amount,
+			},
+		);
+		api::tx().multisig().execute(subxt::utils::AccountId32([0x99u8; 32]), 7, inner)
+	}
+
+	/// The hardware flow signs whatever `build_raw_signer_payload` produces, so the
+	/// executed call has to be inside it for the device to display it.
+	#[test]
+	fn test_cold_payload_carries_the_executed_call() {
+		let raw = build_raw_signer_payload(
+			&test_client_state(),
+			&multisig_execute_call(1_000_000_000_000),
+			&test_ctx(),
+		)
+		.unwrap();
+
+		assert_eq!(raw[0], 19, "Multisig pallet index");
+		assert_eq!(raw[1], 6, "execute call index");
+		assert_eq!(&raw[2..34], &[0x99u8; 32], "multisig address");
+		assert_eq!(&raw[34..38], 7u32.to_le_bytes(), "proposal id");
+
+		// The inner call follows inline — no compact length prefix, unlike approve.
+		assert_eq!(raw[38], 2, "Balances pallet index");
+		assert_eq!(raw[39], 0, "transfer_allow_death call index");
+		assert_eq!(raw[40], 0, "MultiAddress::Id tag");
+		assert_eq!(&raw[41..73], b"01234567890123456789012345678901");
+		assert_eq!(&raw[73..79], &[0x07u8, 0x00, 0x10, 0xa5, 0xd4, 0xe8], "compact amount");
+	}
+
 	/// The raw payload must follow the exact field layout the cold-wallet
 	/// parsers expect (see quantus_payload_parser.dart / Keystone parser.rs).
 	#[test]

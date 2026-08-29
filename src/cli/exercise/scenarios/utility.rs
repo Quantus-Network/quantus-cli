@@ -1,8 +1,8 @@
-//! Utility pallet scenarios: force_batch, if_else, as_derivative.
+//! Utility pallet scenarios.
 //!
-//! `Utility::batch` is covered by the fuzz phase and `batch_all` backs every
-//! CLI batch transfer; `dispatch_as`, `dispatch_as_fallible`, and `with_weight`
-//! are root-only and unreachable from the outside.
+//! `batch_all` is the pallet's only dispatchable, and it backs every CLI batch
+//! transfer. Both halves of its contract are exercised: all items apply on
+//! success, and none apply when any item fails.
 
 use crate::{
 	chain::quantus_subxt,
@@ -13,16 +13,14 @@ use crate::{
 	error::{QuantusError, Result},
 	exercise_step,
 };
-use codec::Encode;
 use quantus_subxt::api::runtime_types::{
 	pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
 };
 use subxt::ext::subxt_core::utils::MultiAddress;
 
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
-	exercise_step!(report, phase, "force_batch_partial_failure", force_batch_partial(ctx));
-	exercise_step!(report, phase, "if_else_fallback", if_else_fallback(ctx));
-	exercise_step!(report, phase, "as_derivative", as_derivative(ctx));
+	exercise_step!(report, phase, "batch_all_applies_every_item", batch_all_applies(ctx));
+	exercise_step!(report, phase, "batch_all_rolls_back_on_failure", batch_all_rolls_back(ctx));
 	Ok(())
 }
 
@@ -37,119 +35,54 @@ fn transfer_call(dest: crate::cli::common::SubxtAccountId32, value: u128) -> Run
 /// syntactically valid.
 const ABSURD_AMOUNT: u128 = u128::MAX / 2;
 
-/// `force_batch` keeps executing after an item fails; the good item must land.
-async fn force_batch_partial(ctx: &mut ExerciseCtx) -> Result<String> {
+/// Every item of a successful `batch_all` must apply.
+async fn batch_all_applies(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[0].clone();
-	let good_recipient = ctx.fresh_keypair()?;
-	let good_ss58 = good_recipient.try_to_account_id_ss58check()?;
-	let failing_recipient = ctx.fresh_keypair()?;
+	let first = ctx.fresh_keypair()?;
+	let second = ctx.fresh_keypair()?;
+	let first_ss58 = first.try_to_account_id_ss58check()?;
+	let second_ss58 = second.try_to_account_id_ss58check()?;
 	let amount = ctx.test_unit;
 
 	let calls = vec![
-		transfer_call(account_id_of(&good_recipient)?, amount),
-		transfer_call(account_id_of(&failing_recipient)?, ABSURD_AMOUNT),
+		transfer_call(account_id_of(&first)?, amount),
+		transfer_call(account_id_of(&second)?, amount),
 	];
-	let call = quantus_subxt::api::tx().utility().force_batch(calls);
+	let call = quantus_subxt::api::tx().utility().batch_all(calls);
 	submit_ok(ctx, &sender, call).await?;
+
+	for (ss58, label) in [(&first_ss58, "first"), (&second_ss58, "second")] {
+		let balance = ctx.free_balance(ss58).await?;
+		if balance != amount {
+			return Err(QuantusError::Generic(format!(
+				"batch_all {label} item not applied: recipient has {balance}, expected {amount}"
+			)));
+		}
+	}
+	Ok("Utility::batch_all applied both transfers and both were verified".to_string())
+}
+
+/// `batch_all` is atomic: a failing item must roll back the items before it.
+async fn batch_all_rolls_back(ctx: &mut ExerciseCtx) -> Result<String> {
+	let sender = ctx.eph[1].clone();
+	let good = ctx.fresh_keypair()?;
+	let good_ss58 = good.try_to_account_id_ss58check()?;
+	let doomed = ctx.fresh_keypair()?;
+
+	let calls = vec![
+		transfer_call(account_id_of(&good)?, ctx.test_unit),
+		transfer_call(account_id_of(&doomed)?, ABSURD_AMOUNT),
+	];
+	let call = quantus_subxt::api::tx().utility().batch_all(calls);
+	// The extrinsic is included; the batch itself dispatches an error, so the
+	// state change from the first item must not survive.
+	let _ = submit_ok(ctx, &sender, call).await;
 
 	let good_balance = ctx.free_balance(&good_ss58).await?;
-	if good_balance != amount {
+	if good_balance != 0 {
 		return Err(QuantusError::Generic(format!(
-			"force_batch good item not applied: recipient has {good_balance}, expected {amount}"
+			"batch_all did not roll back: recipient has {good_balance}, expected 0"
 		)));
 	}
-	let failing_balance =
-		ctx.free_balance(&failing_recipient.try_to_account_id_ss58check()?).await?;
-	if failing_balance != 0 {
-		return Err(QuantusError::Generic(format!(
-			"force_batch failing item unexpectedly transferred {failing_balance}"
-		)));
-	}
-	Ok("Utility::force_batch survived a failing item; good transfer verified".to_string())
-}
-
-/// `if_else` dispatches the fallback when the main call fails.
-async fn if_else_fallback(ctx: &mut ExerciseCtx) -> Result<String> {
-	let sender = ctx.eph[1].clone();
-	let recipient = ctx.fresh_keypair()?;
-	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = ctx.test_unit;
-
-	let main = transfer_call(account_id_of(&recipient)?, ABSURD_AMOUNT);
-	let fallback = transfer_call(account_id_of(&recipient)?, amount);
-	let call = quantus_subxt::api::tx().utility().if_else(main, fallback);
-	submit_ok(ctx, &sender, call).await?;
-
-	let balance = ctx.free_balance(&recipient_ss58).await?;
-	if balance != amount {
-		return Err(QuantusError::Generic(format!(
-			"if_else fallback not applied: recipient has {balance}, expected {amount}"
-		)));
-	}
-	Ok("Utility::if_else main call failed, fallback transfer executed and verified".to_string())
-}
-
-/// Derivative (pseudonym) account of `who` at `index`, as computed by
-/// `pallet_utility::derivative_account_id`.
-fn derivative_account(
-	who: &crate::cli::common::SubxtAccountId32,
-	index: u16,
-) -> crate::cli::common::SubxtAccountId32 {
-	let who_bytes: &[u8; 32] = who.as_ref();
-	let entropy = sp_core::hashing::blake2_256(&(b"modlpy/utilisuba", who_bytes, index).encode());
-	crate::cli::common::SubxtAccountId32::from(entropy)
-}
-
-fn to_ss58(account: &crate::cli::common::SubxtAccountId32) -> String {
-	use sp_core::crypto::Ss58Codec;
-	let bytes: [u8; 32] = *account.as_ref();
-	sp_core::crypto::AccountId32::from(bytes)
-		.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189))
-}
-
-/// `as_derivative` must dispatch the inner call from the caller's derivative
-/// account, not from the caller itself.
-async fn as_derivative(ctx: &mut ExerciseCtx) -> Result<String> {
-	let sender = ctx.eph[2].clone();
-	let index: u16 = 42;
-	let derivative = derivative_account(&account_id_of(&sender)?, index);
-	let derivative_ss58 = to_ss58(&derivative);
-
-	// The derivative account has to hold the funds the inner call moves.
-	let funding = 5 * ctx.test_unit;
-	crate::cli::send::transfer(
-		&ctx.client,
-		&sender.as_signer(),
-		&derivative_ss58,
-		funding,
-		None,
-		ctx.wait_mode(),
-	)
-	.await?;
-
-	let recipient = ctx.fresh_keypair()?;
-	let recipient_ss58 = recipient.try_to_account_id_ss58check()?;
-	let amount = 2 * ctx.test_unit;
-	let inner = transfer_call(account_id_of(&recipient)?, amount);
-	let call = quantus_subxt::api::tx().utility().as_derivative(index, inner);
-	submit_ok(ctx, &sender, call).await?;
-
-	let received = ctx.free_balance(&recipient_ss58).await?;
-	if received != amount {
-		return Err(QuantusError::Generic(format!(
-			"as_derivative transfer not applied: recipient has {received}, expected {amount}"
-		)));
-	}
-	let derivative_after = ctx.free_balance(&derivative_ss58).await?;
-	if derivative_after != funding - amount {
-		return Err(QuantusError::Generic(format!(
-			"derivative account balance is {derivative_after}, expected {} — the inner \
-			 call did not draw from the derivative account",
-			funding - amount
-		)));
-	}
-	Ok(format!(
-		"Utility::as_derivative (index {index}) transferred from the derivative account; \
-		 both balances verified"
-	))
+	Ok("Utility::batch_all rolled back the successful item when a later item failed".to_string())
 }

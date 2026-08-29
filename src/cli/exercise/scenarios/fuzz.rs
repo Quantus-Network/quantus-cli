@@ -144,7 +144,7 @@ async fn fuzz_batch(ctx: &mut ExerciseCtx) -> Result<String> {
 			value: amount,
 		}));
 	}
-	let call = quantus_subxt::api::tx().utility().batch(calls);
+	let call = quantus_subxt::api::tx().utility().batch_all(calls);
 	let result = crate::cli::common::submit_transaction(
 		&ctx.client,
 		&crate::wallet::WalletSigner::Hot(sender.clone()),

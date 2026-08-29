@@ -443,12 +443,18 @@ async fn admin_dispatch<Call: Payload>(
 	let approve = quantus_subxt::api::tx().multisig().approve(
 		treasury.clone(),
 		proposal_id,
-		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(
+			call_data.clone(),
+		),
 	);
 	ctx.submit_budgeted(&bob, approve, 0).await?;
 
 	let charlie = ctx.charlie.clone();
-	let execute = quantus_subxt::api::tx().multisig().execute(treasury.clone(), proposal_id);
+	let execute = quantus_subxt::api::tx().multisig().execute(
+		treasury.clone(),
+		proposal_id,
+		crate::cli::multisig::decode_proposal_call(&call_data)?,
+	);
 	ctx.submit_budgeted(&charlie, execute, 0).await?;
 	Ok(())
 }

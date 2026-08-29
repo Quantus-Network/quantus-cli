@@ -276,37 +276,45 @@ async fn fetch_high_security_status(
 	Ok(Some((guardian_ss58, delay_str)))
 }
 
-/// Fetch list of accounts for which this account is guardian (guardian_index).
-/// Returns an empty vec when the storage entry is absent (`None`), and an error on failure.
-async fn fetch_guardian_for_list(
+/// Accounts that entrust [`guardian_ss58`] as their high-security guardian.
+///
+/// The runtime keeps no guardian -> accounts reverse index, so this walks the
+/// `HighSecurityAccounts` map and keeps the entries naming this guardian.
+pub(crate) async fn fetch_entrusted_accounts(
 	quantus_client: &crate::chain::client::QuantusClient,
-	account_ss58: &str,
+	guardian_ss58: &str,
 ) -> crate::error::Result<Vec<String>> {
-	let account_id_sp = SpAccountId32::from_ss58check(account_ss58)
-		.map_err(|e| QuantusError::Generic(format!("Invalid SS58 for guardian_index: {e:?}")))?;
-	let account_bytes: [u8; 32] = *account_id_sp.as_ref();
-	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+	let guardian_sp = SpAccountId32::from_ss58check(guardian_ss58)
+		.map_err(|e| QuantusError::Generic(format!("Invalid SS58 for guardian: {e:?}")))?;
+	let guardian_bytes: [u8; 32] = *guardian_sp.as_ref();
+	let guardian = subxt::ext::subxt_core::utils::AccountId32::from(guardian_bytes);
 
-	let storage_addr =
-		quantus_subxt::api::storage().reversible_transfers().guardian_index(account_id);
 	let latest = quantus_client.get_latest_block().await?;
-	let value = quantus_client
-		.client()
-		.storage()
-		.at(latest)
-		.fetch(&storage_addr)
-		.await
-		.map_err(|e| QuantusError::NetworkError(format!("Fetch guardian_index: {e:?}")))?;
+	let query = quantus_subxt::api::storage()
+		.reversible_transfers()
+		.high_security_accounts_iter();
+	let mut entries =
+		quantus_client.client().storage().at(latest).iter(query).await.map_err(|e| {
+			QuantusError::NetworkError(format!("Iter high_security_accounts: {e:?}"))
+		})?;
 
-	let list: Vec<String> = value
-		.map(|bounded| {
-			bounded
-				.0
-				.iter()
-				.map(|a: &subxt::ext::subxt_core::utils::AccountId32| a.to_quantus_ss58())
-				.collect()
-		})
-		.unwrap_or_default();
+	let mut list = Vec::new();
+	while let Some(entry) = entries.next().await {
+		let entry = entry.map_err(|e| {
+			QuantusError::NetworkError(format!("Read high_security_accounts: {e:?}"))
+		})?;
+		if entry.value.guardian != guardian {
+			continue;
+		}
+		// Blake2_128Concat: the storage key ends with the unhashed AccountId32.
+		let key = entry.key_bytes;
+		let account_bytes: [u8; 32] = key[key.len() - 32..].try_into().map_err(|_| {
+			QuantusError::Generic("high_security_accounts key shorter than an account".to_string())
+		})?;
+		list.push(
+			subxt::ext::subxt_core::utils::AccountId32::from(account_bytes).to_quantus_ss58(),
+		);
+	}
 	Ok(list)
 }
 
@@ -604,7 +612,7 @@ pub async fn handle_wallet_command(
 
 								// Guardian for: accounts that have this wallet as their interceptor
 								if let Ok(entrusted) =
-									fetch_guardian_for_list(&quantus_client, &wallet_info.address)
+									fetch_entrusted_accounts(&quantus_client, &wallet_info.address)
 										.await
 								{
 									if entrusted.is_empty() {
