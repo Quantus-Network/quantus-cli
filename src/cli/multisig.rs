@@ -1817,17 +1817,12 @@ async fn handle_approve(
 	Ok(())
 }
 
-/// Largest encoded call a multisig proposal may carry.
+/// Largest inner call a multisig proposal may carry, mirroring the runtime's
+/// `pallet_multisig::Config::MaxCallSize` (`BoundedVec<u8, MaxCallSize>`, 10 KiB).
 ///
-/// Sized by the biggest call we ever expect to put through a multisig: a `batch_all` of 32
-/// transfers — double the 16 a batch is expected to carry — which is 1667 bytes at the
-/// worst-case encoding of every field, or 1707 inside a multisig wrapper. The chain's own
-/// `MaxCallSize` is 10 KiB; this is deliberately tighter, because a call a signer cannot
-/// review is one they cannot meaningfully approve.
-pub(crate) const MAX_CALL_BYTES: usize = 2 * 1024;
-
-/// The limit has to clear the call it was sized for, or it is not the limit we documented.
-const _: () = assert!(MAX_CALL_BYTES > 1707);
+/// Deliberately the chain's number rather than a tighter one of our own: a limit below it
+/// would refuse proposals the chain accepts, leaving a multisig no signer could act on.
+pub(crate) const MAX_CALL_BYTES: usize = 10 * 1024;
 
 /// Rejects a proposal call larger than a signer will review.
 pub(crate) fn check_call_size(len: usize) -> crate::error::Result<()> {
