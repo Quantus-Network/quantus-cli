@@ -562,8 +562,9 @@ mod camera {
 				}
 				st.parts.push(part);
 				let line = match (seq, st.total) {
-					(Some((s, _)), Some(t)) =>
-						format!("📥 Part {s}/{t} — {}/{t} collected", st.seqs.len()),
+					(Some((s, _)), Some(t)) => {
+						format!("📥 Part {s}/{t} — {}/{t} collected", st.seqs.len())
+					},
 					_ => format!("📥 UR part captured ({} total)", st.parts.len()),
 				};
 				progress.println(line);

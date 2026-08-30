@@ -1236,8 +1236,9 @@ mod tests {
 		])
 		.expect("ml-dsa-87 must parse");
 		match parsed.command {
-			crate::cli::Commands::Wallet(WalletCommands::Create { scheme, .. }) =>
-				assert_eq!(scheme, DilithiumScheme::MlDsa87),
+			crate::cli::Commands::Wallet(WalletCommands::Create { scheme, .. }) => {
+				assert_eq!(scheme, DilithiumScheme::MlDsa87)
+			},
 			other => panic!("expected Wallet(Create), got {other:?}"),
 		}
 
