@@ -20,7 +20,7 @@ runs:
         # This installs the channel + every component/target listed in the file.
         rustup toolchain install
         rustup target add wasm32-unknown-unknown
-        rustup component add rustfmt --toolchain nightly
+        rustup toolchain install nightly-2026-08-31 --profile minimal --component rustfmt
         rustup component add clippy rust-src
       shell: bash
     - name: Set LIBCLANG_PATH for clang-sys (bindgen/rocksdb etc.)

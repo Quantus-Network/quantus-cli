@@ -4348,8 +4348,9 @@ async fn run_check_nullifier(
 	log_print!("  Subsquid URL: {}", subsquid_url);
 	log_print!("");
 
-	// Compute nullifiers for each transfer count
-	let mut nullifiers_to_check: Vec<(String, String, u64)> = Vec::new(); // (nullifier_hex, nullifier_hash, transfer_count)
+	// Compute nullifiers for each transfer count:
+	// (nullifier_hex, nullifier_hash, transfer_count)
+	let mut nullifiers_to_check: Vec<(String, String, u64)> = Vec::new();
 
 	for tc in &transfer_counts {
 		let nullifier = wormhole_lib::compute_nullifier(&secret, *tc).map_err(|e| {
