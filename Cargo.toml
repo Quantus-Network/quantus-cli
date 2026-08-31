@@ -121,13 +121,13 @@ anyhow = "1.0"
 
 qp-plonky2 = { version = "1.5.5", default-features = false, features = ["rand", "std"] }
 qp-plonky2-verifier = { version = "1.5.5", default-features = false }
-qp-wormhole-aggregator = { version = "4.2.0", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-circuit = { version = "4.2.0", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = { version = "4.2.0" }
-qp-wormhole-inputs = { version = "4.2.0", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "4.2.0", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "4.2.0", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "4.2.0", default-features = false, features = ["std"] }
+qp-wormhole-aggregator = { version = "4.3.0", default-features = false, features = ["rayon", "std"] }
+qp-wormhole-circuit = { version = "4.3.0", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { version = "4.3.0" }
+qp-wormhole-inputs = { version = "4.3.0", default-features = false, features = ["std"] }
+qp-wormhole-prover = { version = "4.3.0", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { version = "4.3.0", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { version = "4.3.0", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -135,7 +135,7 @@ libc = "0.2"
 [build-dependencies]
 hex = "0.4"
 qp-poseidon-core = "3.1.0"
-qp-wormhole-circuit-builder = { version = "4.2.0" }
+qp-wormhole-circuit-builder = { version = "4.3.0" }
 sha2 = "0.10"
 
 [dev-dependencies]
