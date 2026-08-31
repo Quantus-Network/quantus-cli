@@ -606,8 +606,9 @@ mod tests {
 		expected_tail.extend(codec::Encode::encode(&codec::Compact(7u64)));
 		expected_tail.extend(codec::Encode::encode(&codec::Compact(0u128)));
 		expected_tail.push(0u8); // CheckMetadataHash mode = disabled
-						   // Implicit: specVersion, txVersion (LE u32), genesis, era anchor block hash,
-						   // metadataHash Option = None
+
+		// Implicit: specVersion, txVersion (LE u32), genesis, era anchor block hash,
+		// metadataHash Option = None
 		expected_tail.extend(136u32.to_le_bytes());
 		expected_tail.extend(3u32.to_le_bytes());
 		expected_tail.extend([0x49u8; 32]);
