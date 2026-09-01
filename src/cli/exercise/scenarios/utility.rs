@@ -33,10 +33,6 @@ fn transfer_call(dest: crate::cli::common::SubxtAccountId32, value: u128) -> Run
 	})
 }
 
-/// An impossible transfer amount, guaranteeing the call fails while staying
-/// syntactically valid.
-const ABSURD_AMOUNT: u128 = u128::MAX / 2;
-
 /// Every item of a successful `batch_all` must apply.
 async fn batch_all_applies(ctx: &mut ExerciseCtx) -> Result<String> {
 	let sender = ctx.eph[0].clone();
@@ -70,10 +66,16 @@ async fn batch_all_rolls_back(ctx: &mut ExerciseCtx) -> Result<String> {
 	let good = ctx.fresh_keypair()?;
 	let good_ss58 = good.try_to_account_id_ss58check()?;
 	let doomed = ctx.fresh_keypair()?;
+	// Twice what the sender holds. An amount near `u128::MAX` underflows the balance
+	// arithmetic instead, which is a different failure than the one asserted below.
+	let beyond_balance = ctx
+		.free_balance(&sender.try_to_account_id_ss58check()?)
+		.await?
+		.saturating_mul(2);
 
 	let calls = vec![
 		transfer_call(account_id_of(&good)?, ctx.test_unit),
-		transfer_call(account_id_of(&doomed)?, ABSURD_AMOUNT),
+		transfer_call(account_id_of(&doomed)?, beyond_balance),
 	];
 	let call = quantus_subxt::api::tx().utility().batch_all(calls);
 	// The extrinsic must be included and fail on the second item. Anything else

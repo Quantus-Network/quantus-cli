@@ -351,24 +351,13 @@ impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 	}
 
 	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
-		use sp_core::Pair;
 		match self {
-			Self::MlDsa65(pair) => {
-				let signature_with_public =
-					<qp_dilithium_crypto::types::Dilithium65Pair as Pair>::sign(
-						pair,
-						signer_payload,
-					);
-				DilithiumSignatureScheme::Dilithium65(signature_with_public)
-			},
-			Self::MlDsa87(pair) => {
-				let signature_with_public =
-					<qp_dilithium_crypto::types::Dilithium87Pair as Pair>::sign(
-						pair,
-						signer_payload,
-					);
-				DilithiumSignatureScheme::Dilithium87(signature_with_public)
-			},
+			Self::MlDsa65(pair) => DilithiumSignatureScheme::Dilithium65(
+				crate::chain::signing::sign_ml_dsa_65(pair, signer_payload),
+			),
+			Self::MlDsa87(pair) => DilithiumSignatureScheme::Dilithium87(
+				crate::chain::signing::sign_ml_dsa_87(pair, signer_payload),
+			),
 		}
 	}
 }
@@ -382,12 +371,10 @@ impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium87P
 	}
 
 	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
-		let signature_with_public =
-			<qp_dilithium_crypto::types::Dilithium87Pair as sp_core::Pair>::sign(
-				self,
-				signer_payload,
-			);
-		DilithiumSignatureScheme::Dilithium87(signature_with_public)
+		DilithiumSignatureScheme::Dilithium87(crate::chain::signing::sign_ml_dsa_87(
+			self,
+			signer_payload,
+		))
 	}
 }
 
@@ -400,12 +387,10 @@ impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium65P
 	}
 
 	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
-		let signature_with_public =
-			<qp_dilithium_crypto::types::Dilithium65Pair as sp_core::Pair>::sign(
-				self,
-				signer_payload,
-			);
-		DilithiumSignatureScheme::Dilithium65(signature_with_public)
+		DilithiumSignatureScheme::Dilithium65(crate::chain::signing::sign_ml_dsa_65(
+			self,
+			signer_payload,
+		))
 	}
 }
 

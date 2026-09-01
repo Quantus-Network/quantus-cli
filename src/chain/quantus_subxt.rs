@@ -6,7 +6,7 @@ pub mod api {
 	mod root_mod {
 		pub use super::*;
 	}
-	pub static PALLETS: [&str; 17usize] = [
+	pub static PALLETS: [&str; 18usize] = [
 		"System",
 		"Timestamp",
 		"Balances",
@@ -24,6 +24,7 @@ pub mod api {
 		"Wormhole",
 		"ZkTree",
 		"Vesting",
+		"Origins",
 	];
 	pub static RUNTIME_APIS: [&str; 12usize] = [
 		"Core",
@@ -1563,10 +1564,10 @@ pub mod api {
 						"query_call_info",
 						types::QueryCallInfo { call, len },
 						[
-							33u8, 109u8, 175u8, 85u8, 20u8, 153u8, 151u8, 189u8, 126u8, 196u8,
-							149u8, 212u8, 162u8, 199u8, 191u8, 186u8, 212u8, 236u8, 156u8, 228u8,
-							186u8, 107u8, 35u8, 45u8, 42u8, 211u8, 162u8, 216u8, 60u8, 118u8, 1u8,
-							57u8,
+							12u8, 157u8, 57u8, 49u8, 239u8, 52u8, 103u8, 58u8, 85u8, 132u8, 31u8,
+							91u8, 207u8, 48u8, 250u8, 51u8, 254u8, 177u8, 134u8, 227u8, 206u8,
+							215u8, 171u8, 181u8, 61u8, 206u8, 39u8, 27u8, 229u8, 251u8, 140u8,
+							40u8,
 						],
 					)
 				}
@@ -1584,10 +1585,9 @@ pub mod api {
 						"query_call_fee_details",
 						types::QueryCallFeeDetails { call, len },
 						[
-							24u8, 88u8, 218u8, 4u8, 208u8, 93u8, 194u8, 26u8, 151u8, 224u8, 30u8,
-							60u8, 203u8, 199u8, 216u8, 240u8, 23u8, 63u8, 103u8, 167u8, 119u8,
-							116u8, 247u8, 178u8, 176u8, 26u8, 13u8, 144u8, 159u8, 70u8, 93u8,
-							203u8,
+							143u8, 71u8, 61u8, 109u8, 233u8, 212u8, 170u8, 7u8, 109u8, 202u8, 95u8,
+							64u8, 92u8, 188u8, 81u8, 236u8, 213u8, 134u8, 88u8, 241u8, 167u8, 12u8,
+							197u8, 20u8, 0u8, 248u8, 250u8, 20u8, 30u8, 35u8, 251u8, 235u8,
 						],
 					)
 				}
@@ -2050,9 +2050,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				242u8, 240u8, 161u8, 192u8, 242u8, 107u8, 204u8, 96u8, 136u8, 211u8, 182u8, 7u8,
-				219u8, 19u8, 152u8, 31u8, 252u8, 248u8, 142u8, 12u8, 102u8, 87u8, 171u8, 13u8,
-				85u8, 174u8, 223u8, 78u8, 90u8, 165u8, 158u8, 228u8,
+				104u8, 196u8, 70u8, 218u8, 94u8, 164u8, 163u8, 152u8, 189u8, 155u8, 196u8, 185u8,
+				189u8, 151u8, 104u8, 118u8, 115u8, 242u8, 115u8, 237u8, 14u8, 237u8, 29u8, 140u8,
+				142u8, 27u8, 239u8, 20u8, 232u8, 27u8, 158u8, 180u8,
 			]
 	}
 	pub mod system {
@@ -2284,7 +2284,7 @@ pub mod api {
 				#[doc = "Authorize an upgrade to a given `code_hash` for the runtime. The runtime can be supplied"]
 				#[doc = "later."]
 				#[doc = ""]
-				#[doc = "This call requires Root origin."]
+				#[doc = "This call requires `Config::AuthorizeUpgradeOrigin` (Root by default)."]
 				pub struct AuthorizeUpgrade {
 					pub code_hash: authorize_upgrade::CodeHash,
 				}
@@ -2509,7 +2509,7 @@ pub mod api {
 				#[doc = "Authorize an upgrade to a given `code_hash` for the runtime. The runtime can be supplied"]
 				#[doc = "later."]
 				#[doc = ""]
-				#[doc = "This call requires Root origin."]
+				#[doc = "This call requires `Config::AuthorizeUpgradeOrigin` (Root by default)."]
 				pub fn authorize_upgrade(
 					&self,
 					code_hash: types::authorize_upgrade::CodeHash,
@@ -5462,7 +5462,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "No miner in the digest; the credit stays in [`CollectedFees`] for the next block."]
+			#[doc = "No miner in the digest; the credit stays in `CollectedFees` for the next block."]
 			pub struct PayoutDeferred {
 				pub amount: payout_deferred::Amount,
 			}
@@ -5481,7 +5481,7 @@ pub mod api {
 			)]
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
-			#[doc = "Miner mint failed; the credit stays in [`CollectedFees`] for retry."]
+			#[doc = "Miner mint failed; the credit stays in `CollectedFees` for retry."]
 			pub struct MinerMintFailed {
 				pub miner: miner_mint_failed::Miner,
 				pub reward: miner_mint_failed::Reward,
@@ -6467,10 +6467,10 @@ pub mod api {
 						"Agenda",
 						(),
 						[
-							30u8, 205u8, 116u8, 231u8, 62u8, 200u8, 225u8, 69u8, 50u8, 106u8,
-							175u8, 47u8, 182u8, 175u8, 231u8, 114u8, 176u8, 58u8, 24u8, 230u8,
-							81u8, 228u8, 217u8, 72u8, 171u8, 222u8, 251u8, 218u8, 73u8, 28u8,
-							239u8, 137u8,
+							236u8, 151u8, 101u8, 220u8, 138u8, 113u8, 158u8, 157u8, 32u8, 123u8,
+							20u8, 193u8, 254u8, 54u8, 115u8, 166u8, 242u8, 66u8, 163u8, 35u8,
+							233u8, 20u8, 39u8, 45u8, 203u8, 77u8, 235u8, 206u8, 90u8, 242u8, 246u8,
+							248u8,
 						],
 					)
 				}
@@ -6492,10 +6492,10 @@ pub mod api {
 						"Agenda",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							30u8, 205u8, 116u8, 231u8, 62u8, 200u8, 225u8, 69u8, 50u8, 106u8,
-							175u8, 47u8, 182u8, 175u8, 231u8, 114u8, 176u8, 58u8, 24u8, 230u8,
-							81u8, 228u8, 217u8, 72u8, 171u8, 222u8, 251u8, 218u8, 73u8, 28u8,
-							239u8, 137u8,
+							236u8, 151u8, 101u8, 220u8, 138u8, 113u8, 158u8, 157u8, 32u8, 123u8,
+							20u8, 193u8, 254u8, 54u8, 115u8, 166u8, 242u8, 66u8, 163u8, 35u8,
+							233u8, 20u8, 39u8, 45u8, 203u8, 77u8, 235u8, 206u8, 90u8, 242u8, 246u8,
+							248u8,
 						],
 					)
 				}
@@ -6736,10 +6736,9 @@ pub mod api {
 						"batch_all",
 						types::BatchAll { calls },
 						[
-							120u8, 103u8, 239u8, 120u8, 123u8, 60u8, 116u8, 102u8, 54u8, 213u8,
-							153u8, 164u8, 181u8, 162u8, 53u8, 227u8, 52u8, 6u8, 232u8, 210u8, 11u8,
-							135u8, 155u8, 249u8, 131u8, 170u8, 84u8, 116u8, 115u8, 71u8, 185u8,
-							231u8,
+							247u8, 236u8, 10u8, 207u8, 195u8, 134u8, 5u8, 127u8, 88u8, 61u8, 50u8,
+							171u8, 93u8, 203u8, 242u8, 77u8, 28u8, 56u8, 112u8, 139u8, 74u8, 202u8,
+							140u8, 11u8, 59u8, 5u8, 219u8, 50u8, 163u8, 140u8, 156u8, 98u8,
 						],
 					)
 				}
@@ -6929,7 +6928,7 @@ pub mod api {
 				#[doc = "This extrinsic is called automatically by the Scheduler pallet when the"]
 				#[doc = "delay period expires. It must be signed by this pallet's account (not a user)."]
 				#[doc = "The pallet account is set as the origin when scheduling via"]
-				#[doc = "[`do_schedule_transfer_inner`](Self::do_schedule_transfer_inner)."]
+				#[doc = "`do_schedule_transfer_inner`."]
 				#[doc = ""]
 				#[doc = "# Parameters"]
 				#[doc = ""]
@@ -7177,7 +7176,7 @@ pub mod api {
 				#[doc = "This extrinsic is called automatically by the Scheduler pallet when the"]
 				#[doc = "delay period expires. It must be signed by this pallet's account (not a user)."]
 				#[doc = "The pallet account is set as the origin when scheduling via"]
-				#[doc = "[`do_schedule_transfer_inner`](Self::do_schedule_transfer_inner)."]
+				#[doc = "`do_schedule_transfer_inner`."]
 				#[doc = ""]
 				#[doc = "# Parameters"]
 				#[doc = ""]
@@ -9163,9 +9162,10 @@ pub mod api {
 							enactment_moment,
 						},
 						[
-							0u8, 18u8, 14u8, 253u8, 33u8, 212u8, 33u8, 173u8, 241u8, 29u8, 88u8,
-							160u8, 111u8, 21u8, 6u8, 234u8, 249u8, 230u8, 222u8, 119u8, 161u8,
-							114u8, 43u8, 126u8, 164u8, 140u8, 199u8, 39u8, 2u8, 64u8, 132u8, 34u8,
+							77u8, 138u8, 116u8, 64u8, 111u8, 244u8, 178u8, 158u8, 153u8, 237u8,
+							196u8, 161u8, 37u8, 232u8, 110u8, 248u8, 57u8, 0u8, 51u8, 95u8, 106u8,
+							137u8, 251u8, 132u8, 74u8, 235u8, 128u8, 96u8, 123u8, 206u8, 144u8,
+							253u8,
 						],
 					)
 				}
@@ -9892,9 +9892,10 @@ pub mod api {
 						"ReferendumInfoFor",
 						(),
 						[
-							242u8, 125u8, 226u8, 99u8, 67u8, 226u8, 43u8, 159u8, 222u8, 238u8,
-							72u8, 38u8, 45u8, 26u8, 95u8, 64u8, 141u8, 140u8, 37u8, 44u8, 101u8,
-							67u8, 46u8, 66u8, 45u8, 93u8, 41u8, 156u8, 63u8, 59u8, 9u8, 29u8,
+							168u8, 40u8, 151u8, 146u8, 101u8, 43u8, 126u8, 25u8, 73u8, 166u8,
+							190u8, 90u8, 228u8, 58u8, 28u8, 12u8, 61u8, 36u8, 23u8, 149u8, 126u8,
+							255u8, 146u8, 186u8, 228u8, 231u8, 220u8, 236u8, 60u8, 100u8, 82u8,
+							155u8,
 						],
 					)
 				}
@@ -9916,9 +9917,10 @@ pub mod api {
 						"ReferendumInfoFor",
 						::subxt::ext::subxt_core::storage::address::StaticStorageKey::new(_0),
 						[
-							242u8, 125u8, 226u8, 99u8, 67u8, 226u8, 43u8, 159u8, 222u8, 238u8,
-							72u8, 38u8, 45u8, 26u8, 95u8, 64u8, 141u8, 140u8, 37u8, 44u8, 101u8,
-							67u8, 46u8, 66u8, 45u8, 93u8, 41u8, 156u8, 63u8, 59u8, 9u8, 29u8,
+							168u8, 40u8, 151u8, 146u8, 101u8, 43u8, 126u8, 25u8, 73u8, 166u8,
+							190u8, 90u8, 228u8, 58u8, 28u8, 12u8, 61u8, 36u8, 23u8, 149u8, 126u8,
+							255u8, 146u8, 186u8, 228u8, 231u8, 220u8, 236u8, 60u8, 100u8, 82u8,
+							155u8,
 						],
 					)
 				}
@@ -10916,9 +10918,9 @@ pub mod api {
 							call: ::subxt::ext::subxt_core::alloc::boxed::Box::new(call),
 						},
 						[
-							167u8, 47u8, 21u8, 112u8, 52u8, 132u8, 255u8, 119u8, 118u8, 198u8,
-							164u8, 58u8, 36u8, 95u8, 126u8, 165u8, 255u8, 146u8, 87u8, 66u8, 2u8,
-							29u8, 233u8, 114u8, 13u8, 99u8, 107u8, 78u8, 75u8, 197u8, 239u8, 60u8,
+							117u8, 4u8, 99u8, 249u8, 60u8, 156u8, 233u8, 92u8, 234u8, 175u8, 145u8,
+							14u8, 31u8, 130u8, 227u8, 177u8, 181u8, 127u8, 108u8, 148u8, 159u8,
+							5u8, 118u8, 164u8, 87u8, 109u8, 74u8, 253u8, 34u8, 206u8, 25u8, 193u8,
 						],
 					)
 				}
@@ -12742,6 +12744,9 @@ pub mod api {
 			}
 		}
 	}
+	pub mod origins {
+		use super::{root_mod, runtime_types};
+	}
 	pub mod runtime_types {
 		use super::runtime_types;
 		pub mod bounded_collections {
@@ -13314,7 +13319,7 @@ pub mod api {
 					#[doc = "Authorize an upgrade to a given `code_hash` for the runtime. The runtime can be supplied"]
 					#[doc = "later."]
 					#[doc = ""]
-					#[doc = "This call requires Root origin."]
+					#[doc = "This call requires `Config::AuthorizeUpgradeOrigin` (Root by default)."]
 					authorize_upgrade { code_hash: ::subxt::ext::subxt_core::utils::H256 },
 					#[codec(index = 10)]
 					#[doc = "Authorize an upgrade to a given `code_hash` for the runtime. The runtime can be supplied"]
@@ -13965,10 +13970,10 @@ pub mod api {
 						total: ::core::primitive::u128,
 					},
 					#[codec(index = 2)]
-					#[doc = "No miner in the digest; the credit stays in [`CollectedFees`] for the next block."]
+					#[doc = "No miner in the digest; the credit stays in `CollectedFees` for the next block."]
 					PayoutDeferred { amount: ::core::primitive::u128 },
 					#[codec(index = 3)]
-					#[doc = "Miner mint failed; the credit stays in [`CollectedFees`] for retry."]
+					#[doc = "Miner mint failed; the credit stays in `CollectedFees` for retry."]
 					MinerMintFailed {
 						miner: ::subxt::ext::subxt_core::utils::AccountId32,
 						reward: ::core::primitive::u128,
@@ -15384,7 +15389,7 @@ pub mod api {
 					#[doc = "This extrinsic is called automatically by the Scheduler pallet when the"]
 					#[doc = "delay period expires. It must be signed by this pallet's account (not a user)."]
 					#[doc = "The pallet account is set as the origin when scheduling via"]
-					#[doc = "[`do_schedule_transfer_inner`](Self::do_schedule_transfer_inner)."]
+					#[doc = "`do_schedule_transfer_inner`."]
 					#[doc = ""]
 					#[doc = "# Parameters"]
 					#[doc = ""]
@@ -15530,6 +15535,9 @@ pub mod api {
 					#[doc = "Zero-amount transfers cannot be scheduled: there is nothing to hold,"]
 					#[doc = "execute, or reverse."]
 					ZeroAmount,
+					#[codec(index = 15)]
+					#[doc = "The high-security account already used its transaction quota for the current window."]
+					HighSecurityTxQuotaExceeded,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -16710,6 +16718,29 @@ pub mod api {
 						pub amount: ::core::primitive::u128,
 					}
 				}
+				pub mod origins {
+					use super::runtime_types;
+					pub mod pallet_custom_origins {
+						use super::runtime_types;
+						#[derive(
+							:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+							:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+							Debug,
+							codec :: Decode,
+							codec :: Encode,
+						)]
+						#[decode_as_type(
+							crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+						)]
+						#[encode_as_type(
+							crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+						)]
+						pub enum Origin {
+							#[codec(index = 0)]
+							FastUpgrade,
+						}
+					}
+				}
 			}
 			pub mod transaction_extensions {
 				use super::runtime_types;
@@ -16748,13 +16779,7 @@ pub mod api {
 			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
 			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
 			pub enum OriginCaller {
-				#[codec(index = 0)]
-				system(
-					runtime_types::frame_support::dispatch::RawOrigin<
-						::subxt::ext::subxt_core::utils::AccountId32,
-					>,
-				),
-			}
+				# [codec (index = 0)] system (runtime_types :: frame_support :: dispatch :: RawOrigin < :: subxt :: ext :: subxt_core :: utils :: AccountId32 > ,) , # [codec (index = 23)] Origins (runtime_types :: quantus_runtime :: governance :: origins :: pallet_custom_origins :: Origin ,) , }
 			#[derive(
 				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
 				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,

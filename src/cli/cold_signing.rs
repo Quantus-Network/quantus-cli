@@ -255,10 +255,8 @@ fn validate_signature_response(
 		return Err(ResponseError::WrongSigner { got: derived_account.to_quantus_ss58() });
 	}
 
-	use sp_runtime::traits::Verify;
 	let msg = signable_payload(raw_payload);
-	let scheme = DilithiumSignatureScheme::Dilithium87(sig_with_public.clone());
-	if !scheme.verify(&msg[..], expected_account) {
+	if !crate::chain::signing::verify_ml_dsa_87(&sig_with_public, &msg) {
 		return Err(ResponseError::BadSignature);
 	}
 
@@ -515,8 +513,7 @@ pub async fn handle_cold_sign_sim(
 	}
 	let pair = keypair.to_resonance_pair()?;
 	let msg = signable_payload(&payload);
-	let sig_with_public =
-		<qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(&pair, &msg);
+	let sig_with_public = crate::chain::signing::sign_ml_dsa_87(&pair, &msg);
 
 	// 3. Emit the response UR.
 	let parts = quantus_ur::encode_bytes(&sig_with_public.to_bytes())
@@ -699,7 +696,7 @@ mod tests {
 		// Simulate the cold wallet: sign the signable form with alice's key
 		let alice = qp_dilithium_crypto::crystal_alice();
 		let msg = signable_payload(&raw);
-		let swp = <qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(&alice, &msg);
+		let swp = crate::chain::signing::sign_ml_dsa_87(&alice, &msg);
 		let response = swp.to_bytes();
 		assert_eq!(response.len(), SIGNATURE_RESPONSE_LEN);
 
@@ -717,7 +714,7 @@ mod tests {
 
 		// Signed by a different key → WrongSigner (abort)
 		let bob = qp_dilithium_crypto::dilithium_bob();
-		let bob_swp = <qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(&bob, &msg);
+		let bob_swp = crate::chain::signing::sign_ml_dsa_87(&bob, &msg);
 		let err = validate_signature_response(&raw, &bob_swp.to_bytes(), &alice_account())
 			.err()
 			.unwrap();
@@ -760,10 +757,7 @@ mod tests {
 
 		// Cold wallet signs and answers over UR
 		let alice = qp_dilithium_crypto::crystal_alice();
-		let swp = <qp_dilithium_crypto::Dilithium87Pair as sp_core::Pair>::sign(
-			&alice,
-			&signable_payload(&received),
-		);
+		let swp = crate::chain::signing::sign_ml_dsa_87(&alice, &signable_payload(&received));
 		let response_parts = quantus_ur::encode_bytes(&swp.to_bytes()).unwrap();
 		assert!(response_parts.len() > 1, "7219-byte response must be multi-part");
 
