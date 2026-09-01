@@ -215,6 +215,9 @@ where
 	.await
 }
 
+/// Error fragments a balances transfer beyond the sender's spendable balance fails with.
+pub const INSUFFICIENT_FUNDS_ERRORS: &[&str] = &["FundsUnavailable", "InsufficientBalance"];
+
 pub async fn submit_expect_failure<Call>(
 	ctx: &ExerciseCtx,
 	from: &QuantumKeyPair,

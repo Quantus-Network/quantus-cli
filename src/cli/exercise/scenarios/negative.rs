@@ -4,7 +4,7 @@ use crate::{
 	chain::quantus_subxt,
 	cli::exercise::{
 		report::Report,
-		runner::{account_id_of, submit_expect_failure, ExerciseCtx},
+		runner::{account_id_of, submit_expect_failure, ExerciseCtx, INSUFFICIENT_FUNDS_ERRORS},
 	},
 	error::{QuantusError, Result},
 	exercise_step,
@@ -43,7 +43,7 @@ async fn transfer_over_balance(ctx: &mut ExerciseCtx) -> Result<String> {
 	let recipient = ctx.fresh_keypair()?;
 	let balance = ctx.free_balance(&sender.try_to_account_id_ss58check()?).await?;
 	let call = transfer_call(account_id_of(&recipient)?, balance.saturating_mul(2));
-	submit_expect_failure(ctx, &sender, call, &["FundsUnavailable", "InsufficientBalance"]).await
+	submit_expect_failure(ctx, &sender, call, INSUFFICIENT_FUNDS_ERRORS).await
 }
 
 async fn transfer_below_ed(ctx: &mut ExerciseCtx) -> Result<String> {

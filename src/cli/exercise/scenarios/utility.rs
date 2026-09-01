@@ -8,7 +8,9 @@ use crate::{
 	chain::quantus_subxt,
 	cli::exercise::{
 		report::Report,
-		runner::{account_id_of, submit_ok, ExerciseCtx},
+		runner::{
+			account_id_of, submit_expect_failure, submit_ok, ExerciseCtx, INSUFFICIENT_FUNDS_ERRORS,
+		},
 	},
 	error::{QuantusError, Result},
 	exercise_step,
@@ -74,9 +76,10 @@ async fn batch_all_rolls_back(ctx: &mut ExerciseCtx) -> Result<String> {
 		transfer_call(account_id_of(&doomed)?, ABSURD_AMOUNT),
 	];
 	let call = quantus_subxt::api::tx().utility().batch_all(calls);
-	// The extrinsic is included; the batch itself dispatches an error, so the
-	// state change from the first item must not survive.
-	let _ = submit_ok(ctx, &sender, call).await;
+	// The extrinsic must be included and fail on the second item. Anything else
+	// (an RPC error, a pool rejection) would leave the balance at zero too, so
+	// the dispatch error is checked before the balance is read as evidence.
+	let rejection = submit_expect_failure(ctx, &sender, call, INSUFFICIENT_FUNDS_ERRORS).await?;
 
 	let good_balance = ctx.free_balance(&good_ss58).await?;
 	if good_balance != 0 {
@@ -84,5 +87,7 @@ async fn batch_all_rolls_back(ctx: &mut ExerciseCtx) -> Result<String> {
 			"batch_all did not roll back: recipient has {good_balance}, expected 0"
 		)));
 	}
-	Ok("Utility::batch_all rolled back the successful item when a later item failed".to_string())
+	Ok(format!(
+		"Utility::batch_all rolled back the successful item when a later item failed ({rejection})"
+	))
 }
