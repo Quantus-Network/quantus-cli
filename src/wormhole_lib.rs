@@ -324,6 +324,7 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 			exit_account_2,
 			block_hash,
 			block_number: input.block_number,
+			input_amount: input.input_amount,
 		},
 		private: PrivateCircuitInputs {
 			secret: Secret::from(secret_digest.0),
@@ -333,7 +334,6 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 			state_root,
 			extrinsics_root,
 			digest: digest_padded,
-			input_amount: input.input_amount,
 			zk_tree_root: input.zk_tree_root,
 			zk_merkle_siblings: input.zk_merkle_siblings.clone(),
 			zk_merkle_positions: input.zk_merkle_positions.clone(),
