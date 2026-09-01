@@ -7,6 +7,7 @@ pub mod batch;
 pub mod block;
 pub mod cold_signing;
 pub mod common;
+pub mod dynamic_decode;
 pub mod events;
 pub mod exercise;
 pub mod generic_call;

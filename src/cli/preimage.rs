@@ -66,6 +66,69 @@ pub enum PreimageCommands {
 	},
 }
 
+/// The subset of `Preimage::RequestStatusFor` the CLI displays.
+///
+/// Read dynamically: the stored ticket is a runtime-local deposit type, so the
+/// generated codegen rejects this entry on any runtime that defines it differently.
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum PreimageStatusSnapshot {
+	Unrequested { len: u32 },
+	Requested { count: u32, maybe_len: Option<u32> },
+}
+
+impl PreimageStatusSnapshot {
+	/// Byte length of the stored preimage, when the chain knows it.
+	pub(crate) fn len(self) -> Option<u32> {
+		match self {
+			Self::Unrequested { len } => Some(len),
+			Self::Requested { maybe_len, .. } => maybe_len,
+		}
+	}
+}
+
+/// Fetch `Preimage::RequestStatusFor(hash)` decoded against live metadata.
+pub(crate) async fn fetch_request_status(
+	quantus_client: &crate::chain::client::QuantusClient,
+	hash: sp_core::H256,
+	block_hash: subxt::utils::H256,
+) -> crate::error::Result<Option<PreimageStatusSnapshot>> {
+	use crate::cli::dynamic_decode::{field, missing, option, u32_field, uint, variant};
+
+	let addr = subxt::dynamic::storage(
+		"Preimage",
+		"RequestStatusFor",
+		vec![subxt::dynamic::Value::from_bytes(hash.as_bytes())],
+	);
+	let storage_at = quantus_client.client().storage().at(block_hash);
+	let Some(thunk) = storage_at.fetch(&addr).await? else {
+		return Ok(None);
+	};
+	let value = thunk
+		.to_value()
+		.map_err(|e| QuantusError::Generic(format!("Failed to decode preimage status: {e:?}")))?;
+
+	let (name, fields) = variant(&value).ok_or_else(|| missing("RequestStatus"))?;
+	let snapshot = match name {
+		"Unrequested" => PreimageStatusSnapshot::Unrequested { len: u32_field(fields, "len")? },
+		"Requested" => {
+			let maybe_len = match field(fields, "maybe_len").and_then(option) {
+				Some(Some(v)) => Some(
+					u32::try_from(uint(v).ok_or_else(|| missing("maybe_len"))?)
+						.map_err(|_| missing("maybe_len"))?,
+				),
+				Some(None) => None,
+				None => return Err(missing("maybe_len")),
+			};
+			PreimageStatusSnapshot::Requested { count: u32_field(fields, "count")?, maybe_len }
+		},
+		other =>
+			return Err(QuantusError::Generic(format!(
+				"preimage decode: unknown RequestStatus variant `{other}`"
+			))),
+	};
+	Ok(Some(snapshot))
+}
+
 /// Handle preimage commands
 pub async fn handle_preimage_command(
 	command: PreimageCommands,
@@ -122,10 +185,9 @@ async fn check_preimage_status(
 	let status_addr = quantus_subxt::api::storage().preimage().status_for(preimage_hash);
 	let status_result = storage_at.fetch(&status_addr).await;
 
-	// Check RequestStatusFor (new format)
-	let request_status_addr =
-		quantus_subxt::api::storage().preimage().request_status_for(preimage_hash);
-	let request_status_result = storage_at.fetch(&request_status_addr).await;
+	// Check RequestStatusFor (new format), decoded against live metadata
+	let request_status_result =
+		fetch_request_status(quantus_client, preimage_hash, latest_block_hash).await;
 
 	log_print!("📊 Preimage Status Results:");
 	log_print!("   🔗 Hash: {}", hash_str.bright_yellow());
@@ -257,21 +319,23 @@ async fn list_preimages(
 					let len = u32::from_le_bytes([len_le[0], len_le[1], len_le[2], len_le[3]]);
 					let hash = sp_core::H256::from_slice(&key[key.len() - 36..key.len() - 4]);
 
-					let status = storage_at
-						.fetch(&quantus_subxt::api::storage().preimage().request_status_for(hash))
+					let status = fetch_request_status(quantus_client, hash, latest_block_hash)
 						.await
 						.ok()
 						.flatten();
 
 					preimage_count += 1;
 					match status {
-						Some(quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Unrequested { ticket: _, len: status_len }) => {
+						Some(PreimageStatusSnapshot::Unrequested { len: status_len }) => {
 							unrequested_count += 1;
 							log_print!("   🔗 {} (Unrequested, {} bytes)", hash, status_len);
 						},
-						Some(quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Requested { maybe_ticket: _, count, maybe_len }) => {
+						Some(PreimageStatusSnapshot::Requested { count, maybe_len }) => {
 							requested_count += 1;
-							let len_str = match maybe_len { Some(l) => format!("{} bytes", l), None => format!("{} bytes (from key)", len) };
+							let len_str = match maybe_len {
+								Some(l) => format!("{} bytes", l),
+								None => format!("{} bytes (from key)", len),
+							};
 							log_print!("   🔗 {} (Requested, count: {}, {})", hash, count, len_str);
 						},
 						None => {

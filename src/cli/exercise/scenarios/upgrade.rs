@@ -154,12 +154,11 @@ async fn cast_collective_ayes(ctx: &ExerciseCtx, index: u32) -> Result<()> {
 }
 
 async fn referendum_is_approved(ctx: &ExerciseCtx, index: u32) -> Result<bool> {
-	use quantus_subxt::api::runtime_types::pallet_referenda::types::ReferendumInfo;
-	let info_addr = quantus_subxt::api::storage().tech_referenda().referendum_info_for(index);
+	use crate::cli::tech_referenda::{fetch_referendum, ReferendumSnapshot};
 	let latest = ctx.client.get_latest_block().await?;
 	Ok(matches!(
-		ctx.client.client().storage().at(latest).fetch(&info_addr).await?,
-		Some(ReferendumInfo::Approved(..))
+		fetch_referendum(&ctx.client, index, latest).await?,
+		Some(ReferendumSnapshot::Approved(..))
 	))
 }
 
@@ -178,9 +177,8 @@ async fn refund_deposits(ctx: &mut ExerciseCtx, index: u32) -> &'static str {
 }
 
 async fn referendum_state(ctx: &ExerciseCtx, index: u32) -> Result<String> {
-	let info_addr = quantus_subxt::api::storage().tech_referenda().referendum_info_for(index);
 	let latest = ctx.client.get_latest_block().await?;
-	let info = ctx.client.client().storage().at(latest).fetch(&info_addr).await?;
+	let info = crate::cli::tech_referenda::fetch_referendum(&ctx.client, index, latest).await?;
 	Ok(format!("{info:?}"))
 }
 
