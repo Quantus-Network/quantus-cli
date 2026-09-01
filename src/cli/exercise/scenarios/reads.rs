@@ -93,17 +93,10 @@ async fn treasury_info(ctx: &ExerciseCtx) -> Result<String> {
 		.await?
 		.ok_or_else(|| QuantusError::Generic("treasury account not set".to_string()))?;
 
-	let portion_addr = quantus_subxt::api::storage().treasury_pallet().treasury_portion();
-	let portion = storage_at.fetch(&portion_addr).await?.map(|p| p.0).unwrap_or(0);
-
 	let balance_addr = quantus_subxt::api::storage().system().account(account);
 	let info = storage_at.fetch_or_default(&balance_addr).await?;
 
-	Ok(format!(
-		"portion {:.2}%, free balance {} raw units",
-		portion as f64 / 10_000.0,
-		info.data.free
-	))
+	Ok(format!("free balance {} raw units", info.data.free))
 }
 
 async fn high_security_status(ctx: &ExerciseCtx) -> Result<String> {

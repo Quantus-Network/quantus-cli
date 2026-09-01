@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// Divisor applied to every *discretionary* token amount the scenarios move (transfers, multisig
 /// funding, …) so the suite runs on a small budget. Fixed, chain-imposed amounts (existential
-/// deposit, recovery/multisig/vesting/governance deposits) are read from the chain and never
+/// deposit, multisig/vesting/governance deposits) are read from the chain and never
 /// scaled — nor is the wormhole amount, which the chain puts a floor under.
 pub(crate) const DISCRETIONARY_SCALE: u128 = 100;
 
@@ -106,7 +106,6 @@ pub enum Phase {
 	Utility,
 	Reversible,
 	Multisig,
-	Recovery,
 	Preimage,
 	Governance,
 	Vesting,
@@ -124,7 +123,6 @@ impl Phase {
 			Phase::Utility,
 			Phase::Reversible,
 			Phase::Multisig,
-			Phase::Recovery,
 			Phase::Preimage,
 			Phase::Governance,
 			Phase::Vesting,
@@ -141,7 +139,6 @@ impl Phase {
 			Phase::Utility => "utility",
 			Phase::Reversible => "reversible",
 			Phase::Multisig => "multisig",
-			Phase::Recovery => "recovery",
 			Phase::Preimage => "preimage",
 			Phase::Governance => "governance",
 			Phase::Vesting => "vesting",
@@ -299,7 +296,6 @@ async fn run_phases(
 			Phase::Utility => scenarios::utility::run(ctx, report, &label).await?,
 			Phase::Reversible => scenarios::reversible::run(ctx, report, &label).await?,
 			Phase::Multisig => scenarios::multisig::run(ctx, report, &label).await?,
-			Phase::Recovery => scenarios::recovery::run(ctx, report, &label).await?,
 			Phase::Preimage => scenarios::preimage::run(ctx, report, &label).await?,
 			Phase::Governance => {
 				let before = ctx.free_balance(&ctx.root_ss58).await?;
@@ -429,13 +425,6 @@ async fn setup(
 			existential_deposit,
 		)?);
 		culprits.push("vesting");
-	}
-	if phases.contains(&Phase::Recovery) {
-		let recovery =
-			scenarios::recovery::account_funding(&client, existential_deposit, test_unit)?
-				.saturating_mul(scenarios::recovery::LIFECYCLE_ACCOUNTS);
-		returned = returned.max(recovery);
-		culprits.push("recovery");
 	}
 	if phases.contains(&Phase::Wormhole) {
 		returned = returned.max(scenarios::wormhole::required_funding(unit));

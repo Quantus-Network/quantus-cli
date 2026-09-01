@@ -44,12 +44,15 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 	let latest = ctx.client.get_latest_block().await?;
 	let storage_at = ctx.client.client().storage().at(latest);
 
-	let portion_addr = quantus_subxt::api::storage().treasury_pallet().treasury_portion();
-	let current_portion = storage_at.fetch(&portion_addr).await?.map(|p| p.0).unwrap_or(0);
+	// Re-set the treasury account to its current value: the referendum has to enact a real
+	// root call, but the exercise must not change chain state it does not own.
+	let account_addr = quantus_subxt::api::storage().treasury_pallet().treasury_account();
+	let current_account = storage_at
+		.fetch(&account_addr)
+		.await?
+		.ok_or_else(|| QuantusError::Generic("treasury account not set".to_string()))?;
 
-	let portion =
-		quantus_subxt::api::runtime_types::sp_arithmetic::per_things::Permill(current_portion);
-	let inner = quantus_subxt::api::tx().treasury_pallet().set_treasury_portion(portion);
+	let inner = quantus_subxt::api::tx().treasury_pallet().set_treasury_account(current_account);
 	let encoded = inner
 		.encode_call_data(&ctx.client.client().metadata())
 		.map_err(|e| QuantusError::Generic(format!("failed to encode call: {e:?}")))?;

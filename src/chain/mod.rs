@@ -7,3 +7,4 @@
 /// - Managing RPC connections
 pub mod client;
 pub mod quantus_subxt;
+pub mod signing;

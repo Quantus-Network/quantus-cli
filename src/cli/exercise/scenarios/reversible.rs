@@ -200,8 +200,8 @@ async fn guardian_recover_funds(ctx: &mut ExerciseCtx) -> Result<String> {
 		.set_high_security(Delay::BlockNumber(50), guardian);
 	submit_ok(ctx, &account, enroll).await?;
 
-	// Leave a pending transfer behind so recovery also exercises the
-	// cancel-all-pending-holds path.
+	// Leave a pending transfer behind so the guardian cancel path is exercised
+	// with a hold outstanding.
 	let recipient = ctx.fresh_keypair()?.try_to_account_id_ss58check()?;
 	crate::cli::reversible::schedule_transfer(
 		&ctx.client,

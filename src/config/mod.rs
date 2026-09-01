@@ -9,6 +9,10 @@ pub struct CompatibleRuntime {
 	/// Whether the runtime's extrinsic signature enum includes ML-DSA-65
 	/// (`DilithiumSignatureScheme::Dilithium65`). Specs 134–136 only accept ML-DSA-87.
 	pub supports_ml_dsa_65: bool,
+	/// Whether the runtime verifies extrinsic signatures under the `QUANTUS_EXTRINSIC` FIPS 204
+	/// context. Specs up to 147 verify with no context, and FIPS 204 contexts are domain
+	/// separated, so signing for the wrong one is rejected as a bad signature.
+	pub binds_signing_context: bool,
 }
 
 /// Expected runtime spec name for Quantus nodes, as declared by the runtime's
@@ -17,16 +21,72 @@ pub const EXPECTED_RUNTIME_SPEC_NAME: &str = "quantus-runtime";
 
 /// Supported runtime / transaction version pairs.
 pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
-	CompatibleRuntime { spec_version: 134, transaction_version: 2, supports_ml_dsa_65: false },
-	CompatibleRuntime { spec_version: 135, transaction_version: 2, supports_ml_dsa_65: false },
-	CompatibleRuntime { spec_version: 135, transaction_version: 3, supports_ml_dsa_65: false },
-	CompatibleRuntime { spec_version: 136, transaction_version: 3, supports_ml_dsa_65: false },
-	CompatibleRuntime { spec_version: 142, transaction_version: 3, supports_ml_dsa_65: true },
-	CompatibleRuntime { spec_version: 143, transaction_version: 3, supports_ml_dsa_65: true },
-	CompatibleRuntime { spec_version: 144, transaction_version: 3, supports_ml_dsa_65: true },
-	CompatibleRuntime { spec_version: 145, transaction_version: 4, supports_ml_dsa_65: true },
-	CompatibleRuntime { spec_version: 146, transaction_version: 5, supports_ml_dsa_65: true },
-	CompatibleRuntime { spec_version: 147, transaction_version: 6, supports_ml_dsa_65: true },
+	CompatibleRuntime {
+		spec_version: 134,
+		transaction_version: 2,
+		supports_ml_dsa_65: false,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 135,
+		transaction_version: 2,
+		supports_ml_dsa_65: false,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 135,
+		transaction_version: 3,
+		supports_ml_dsa_65: false,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 136,
+		transaction_version: 3,
+		supports_ml_dsa_65: false,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 142,
+		transaction_version: 3,
+		supports_ml_dsa_65: true,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 143,
+		transaction_version: 3,
+		supports_ml_dsa_65: true,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 144,
+		transaction_version: 3,
+		supports_ml_dsa_65: true,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 145,
+		transaction_version: 4,
+		supports_ml_dsa_65: true,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 146,
+		transaction_version: 5,
+		supports_ml_dsa_65: true,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 147,
+		transaction_version: 6,
+		supports_ml_dsa_65: true,
+		binds_signing_context: false,
+	},
+	CompatibleRuntime {
+		spec_version: 148,
+		transaction_version: 6,
+		supports_ml_dsa_65: true,
+		binds_signing_context: true,
+	},
 ];
 
 /// Highest `spec_version` listed in [`COMPATIBLE_RUNTIMES`].
@@ -65,6 +125,19 @@ pub fn runtime_supports_ml_dsa_65(spec_version: u32, transaction_version: u32) -
 	}
 	is_newer_unlisted_runtime(spec_version) &&
 		COMPATIBLE_RUNTIMES.iter().any(|runtime| runtime.supports_ml_dsa_65)
+}
+
+/// Whether a runtime binds extrinsic signatures to the `QUANTUS_EXTRINSIC` context.
+///
+/// Exact table matches use [`CompatibleRuntime::binds_signing_context`]. Newer unlisted specs are
+/// assumed to keep the context (introduced at spec 148).
+pub fn runtime_binds_signing_context(spec_version: u32, transaction_version: u32) -> bool {
+	if let Some(runtime) = COMPATIBLE_RUNTIMES.iter().find(|runtime| {
+		runtime.spec_version == spec_version && runtime.transaction_version == transaction_version
+	}) {
+		return runtime.binds_signing_context;
+	}
+	is_newer_unlisted_runtime(spec_version)
 }
 
 /// Validate that a connected node's runtime identity is a Quantus runtime this CLI can talk to.
@@ -141,6 +214,8 @@ mod tests {
 			.expect("the current runtime must be accepted");
 		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 147, 6)
 			.expect("the fast-upgrade runtime must be accepted");
+		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 148, 6)
+			.expect("the runtime this build bundles metadata for must be accepted");
 	}
 
 	/// Pinned to the spec name the real Quantus runtime declares
@@ -206,6 +281,25 @@ mod tests {
 		assert!(validate_runtime_version_value(&value).is_err());
 	}
 
+	/// FIPS 204 contexts are domain separated, so this table decides which signature a runtime
+	/// accepts. Getting a row wrong means every extrinsic against that chain is rejected as a bad
+	/// signature. Spec 148 introduced the context; everything before it verifies without one.
+	#[test]
+	fn signing_context_bound_only_on_runtimes_that_declare_it() {
+		assert!(!runtime_binds_signing_context(134, 2));
+		assert!(!runtime_binds_signing_context(145, 4));
+		assert!(!runtime_binds_signing_context(147, 6));
+		assert!(runtime_binds_signing_context(148, 6));
+		assert!(
+			!runtime_binds_signing_context(148, 5),
+			"an unknown tx version must not inherit the context"
+		);
+		assert!(
+			runtime_binds_signing_context(max_compatible_spec_version() + 1, 6),
+			"newer unlisted specs are assumed to keep the context"
+		);
+	}
+
 	#[test]
 	fn ml_dsa_65_supported_only_on_runtimes_that_declare_it() {
 		assert!(!runtime_supports_ml_dsa_65(134, 2));
@@ -215,6 +309,7 @@ mod tests {
 		assert!(runtime_supports_ml_dsa_65(142, 3));
 		assert!(runtime_supports_ml_dsa_65(143, 3));
 		assert!(runtime_supports_ml_dsa_65(147, 6));
+		assert!(runtime_supports_ml_dsa_65(148, 6));
 		assert!(!runtime_supports_ml_dsa_65(142, 2), "unknown tx version must not match");
 		assert!(
 			runtime_supports_ml_dsa_65(max_compatible_spec_version() + 1, 3),

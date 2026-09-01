@@ -638,11 +638,7 @@ pub async fn propose_transfer(
 	Compact(amount).encode_to(&mut call_data);
 
 	// Build propose transaction
-	let propose_tx = quantus_subxt::api::tx().multisig().propose(
-		multisig_address,
-		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
-		expiry,
-	);
+	let propose_tx = build_propose_tx(multisig_address, call_data, expiry)?;
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
@@ -671,11 +667,7 @@ pub async fn propose_custom(
 	expiry: u32,
 ) -> crate::error::Result<subxt::utils::H256> {
 	// Build propose transaction
-	let propose_tx = quantus_subxt::api::tx().multisig().propose(
-		multisig_address,
-		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
-		expiry,
-	);
+	let propose_tx = build_propose_tx(multisig_address, call_data, expiry)?;
 
 	// Submit transaction
 	let execution_mode = ExecutionMode { finalized: false, wait_for_transaction: false };
@@ -1639,11 +1631,7 @@ async fn handle_propose(
 	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
-	let propose_tx = quantus_subxt::api::tx().multisig().propose(
-		multisig_address.clone(),
-		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
-		expiry,
-	);
+	let propose_tx = build_propose_tx(multisig_address.clone(), call_data, expiry)?;
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
@@ -1708,11 +1696,7 @@ async fn handle_propose_with_call_data(
 	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Build transaction
-	let propose_tx = quantus_subxt::api::tx().multisig().propose(
-		multisig_account_id,
-		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
-		expiry,
-	);
+	let propose_tx = build_propose_tx(multisig_account_id, call_data, expiry)?;
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
@@ -1793,19 +1777,7 @@ async fn handle_approve(
 		));
 	}
 
-	// Check if proposal exists
-	let proposal_query = quantus_subxt::api::storage()
-		.multisig()
-		.proposals(multisig_address.clone(), proposal_id);
-	let proposal_data = storage_at.fetch(&proposal_query).await?;
-	if proposal_data.is_none() {
-		log_error!("❌ Proposal {} not found", proposal_id);
-		return Err(crate::error::QuantusError::Generic(format!(
-			"Proposal {} does not exist",
-			proposal_id
-		)));
-	}
-	let proposal = proposal_data.unwrap();
+	let proposal = fetch_proposal(&storage_at, &multisig_address, proposal_id).await?;
 
 	// Check if already approved by this signer
 	if proposal.approvals.0.contains(&approver_account_id) {
@@ -1843,6 +1815,82 @@ async fn handle_approve(
 	);
 
 	Ok(())
+}
+
+/// Largest inner call a multisig proposal may carry, mirroring the runtime's
+/// `pallet_multisig::Config::MaxCallSize` (`BoundedVec<u8, MaxCallSize>`, 10 KiB).
+///
+/// Deliberately the chain's number rather than a tighter one of our own: a limit below it
+/// would refuse proposals the chain accepts, leaving a multisig no signer could act on.
+pub(crate) const MAX_CALL_BYTES: usize = 10 * 1024;
+
+/// Rejects a proposal call larger than a signer will review.
+pub(crate) fn check_call_size(len: usize) -> crate::error::Result<()> {
+	if len > MAX_CALL_BYTES {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Call is {len} bytes, over the {MAX_CALL_BYTES} byte review limit"
+		)));
+	}
+	Ok(())
+}
+
+/// Builds `multisig.propose`, refusing a call a signer could not review.
+fn build_propose_tx(
+	multisig_address: subxt::ext::subxt_core::utils::AccountId32,
+	call_data: Vec<u8>,
+	expiry: u32,
+) -> crate::error::Result<
+	subxt::ext::subxt_core::tx::payload::StaticPayload<
+		quantus_subxt::api::multisig::calls::types::Propose,
+	>,
+> {
+	check_call_size(call_data.len())?;
+	Ok(quantus_subxt::api::tx().multisig().propose(
+		multisig_address,
+		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
+		expiry,
+	))
+}
+
+/// Decodes a proposal's stored call bytes into the runtime call they encode.
+///
+/// `execute` resubmits the call itself rather than its bytes, so bytes this build cannot
+/// decode must fail here rather than produce a call the chain rejects.
+pub(crate) fn decode_proposal_call(
+	bytes: &[u8],
+) -> crate::error::Result<quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall> {
+	use codec::Decode;
+	check_call_size(bytes.len())?;
+	let mut cursor = bytes;
+	let call = quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall::decode(&mut cursor)
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!("Could not decode the proposal call: {e}"))
+		})?;
+	if !cursor.is_empty() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"{} trailing bytes after the proposal call",
+			cursor.len()
+		)));
+	}
+	Ok(call)
+}
+
+/// Fetches the stored proposal, whose call bytes `approve` and `execute` are both bound to.
+async fn fetch_proposal(
+	storage_at: &subxt::storage::Storage<
+		crate::chain::client::ChainConfig,
+		subxt::OnlineClient<crate::chain::client::ChainConfig>,
+	>,
+	multisig_account_id: &subxt::ext::subxt_core::utils::AccountId32,
+	proposal_id: u32,
+) -> crate::error::Result<quantus_subxt::api::multisig::storage::types::proposals::Proposals> {
+	let query = quantus_subxt::api::storage()
+		.multisig()
+		.proposals(multisig_account_id.clone(), proposal_id);
+	storage_at.fetch(&query).await?.ok_or_else(|| {
+		log_error!("❌ Proposal {} not found", proposal_id);
+		crate::error::QuantusError::Generic(format!("Proposal {} does not exist", proposal_id))
+	})
 }
 
 /// Execute an approved proposal (any signer)
@@ -1903,8 +1951,15 @@ async fn handle_execute(
 		));
 	}
 
-	// Build transaction
-	let execute_tx = quantus_subxt::api::tx().multisig().execute(multisig_account_id, proposal_id);
+	// The chain dispatches the submitted call only when it re-encodes to the stored
+	// proposal, so resubmit exactly those bytes — that is what makes execute clearsignable.
+	let proposal = fetch_proposal(&storage_at, &multisig_account_id, proposal_id).await?;
+	let inner_call = decode_proposal_call(&proposal.call.0)?;
+
+	let execute_tx =
+		quantus_subxt::api::tx()
+			.multisig()
+			.execute(multisig_account_id, proposal_id, inner_call);
 
 	let exec_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
 
@@ -3142,11 +3197,7 @@ async fn handle_high_security_set(
 	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 
 	// Build propose transaction
-	let propose_tx = quantus_subxt::api::tx().multisig().propose(
-		multisig_account_id,
-		quantus_subxt::api::runtime_types::bounded_collections::bounded_vec::BoundedVec(call_data),
-		expiry,
-	);
+	let propose_tx = build_propose_tx(multisig_account_id, call_data, expiry)?;
 
 	// Always wait for transaction confirmation
 	let propose_execution_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
@@ -3248,5 +3299,76 @@ mod tests {
 		);
 
 		assert_eq!(selected, Some(ss58(&wanted_address)));
+	}
+}
+
+#[cfg(test)]
+mod execute_call_tests {
+	use super::*;
+	use codec::Encode;
+	use quantus_subxt::api::runtime_types::{
+		pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
+	};
+	use subxt::ext::subxt_core::utils::MultiAddress;
+
+	fn transfer_call() -> RuntimeCall {
+		RuntimeCall::Balances(BalancesCall::transfer_allow_death {
+			dest: MultiAddress::Id(subxt::ext::subxt_core::utils::AccountId32([0x77u8; 32])),
+			value: 42_000_000_000u128,
+		})
+	}
+
+	#[test]
+	fn decode_proposal_call_round_trips_the_stored_bytes() {
+		let bytes = transfer_call().encode();
+		let decoded = decode_proposal_call(&bytes).expect("decodes");
+		// The chain only dispatches a call that re-encodes to the stored payload.
+		assert_eq!(decoded.encode(), bytes);
+	}
+
+	#[test]
+	fn decode_proposal_call_rejects_a_call_over_the_review_limit() {
+		let oversized = vec![0u8; MAX_CALL_BYTES + 1];
+		let err = decode_proposal_call(&oversized).unwrap_err().to_string();
+		assert!(err.contains("review limit"), "{err}");
+	}
+
+	#[test]
+	fn propose_refuses_a_call_over_the_review_limit() {
+		let address = subxt::ext::subxt_core::utils::AccountId32([0x99u8; 32]);
+		assert!(build_propose_tx(address.clone(), vec![0u8; MAX_CALL_BYTES + 1], 5000).is_err());
+		assert!(build_propose_tx(address, transfer_call().encode(), 5000).is_ok());
+	}
+
+	#[test]
+	fn decode_proposal_call_rejects_undecodable_bytes() {
+		assert!(decode_proposal_call(&[0xff, 0xff]).is_err());
+	}
+
+	#[test]
+	fn decode_proposal_call_rejects_trailing_bytes() {
+		let mut bytes = transfer_call().encode();
+		bytes.push(0x00);
+		let err = decode_proposal_call(&bytes).unwrap_err().to_string();
+		assert!(err.contains("trailing bytes"), "{err}");
+	}
+
+	/// `approve` carries `BoundedVec<u8>` (compact length prefix); `execute` carries
+	/// `Box<RuntimeCall>` inline. Getting this backwards produces a call the chain rejects.
+	#[test]
+	fn execute_encodes_the_inner_call_inline() {
+		let inner = transfer_call();
+		let inner_bytes = inner.encode();
+
+		let execute = quantus_subxt::api::runtime_types::pallet_multisig::pallet::Call::execute {
+			multisig_address: subxt::ext::subxt_core::utils::AccountId32([0x99u8; 32]),
+			proposal_id: 7,
+			call: ::std::boxed::Box::new(inner),
+		}
+		.encode();
+
+		// call index + 32-byte address + u32 proposal id, then the inner call verbatim.
+		assert_eq!(&execute[execute.len() - inner_bytes.len()..], inner_bytes.as_slice());
+		assert_eq!(execute.len(), 1 + 32 + 4 + inner_bytes.len());
 	}
 }

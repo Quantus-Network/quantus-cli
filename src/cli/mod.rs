@@ -15,7 +15,6 @@ pub mod metadata;
 pub mod multisend;
 pub mod multisig;
 pub mod preimage;
-pub mod recovery;
 pub mod reversible;
 pub mod runtime;
 pub mod scheduler;
@@ -108,10 +107,6 @@ pub enum Commands {
 	/// High-Security commands (reversible account settings)
 	#[command(subcommand)]
 	HighSecurity(high_security::HighSecurityCommands),
-
-	/// Recovery commands
-	#[command(subcommand)]
-	Recovery(recovery::RecoveryCommands),
 
 	/// Multisig commands (multi-signature wallets)
 	#[command(subcommand)]
@@ -406,8 +401,6 @@ pub async fn execute_command(
 			reversible::handle_reversible_command(reversible_cmd, node_url, execution_mode).await,
 		Commands::HighSecurity(hs_cmd) =>
 			high_security::handle_high_security_command(hs_cmd, node_url, execution_mode).await,
-		Commands::Recovery(recovery_cmd) =>
-			recovery::handle_recovery_command(recovery_cmd, node_url, execution_mode).await,
 		Commands::Multisig(multisig_cmd) =>
 			multisig::handle_multisig_command(multisig_cmd, node_url, execution_mode).await,
 		Commands::Scheduler(scheduler_cmd) =>

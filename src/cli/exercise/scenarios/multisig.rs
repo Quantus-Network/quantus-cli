@@ -89,8 +89,11 @@ async fn lifecycle(ctx: &mut ExerciseCtx) -> Result<String> {
 	);
 	submit_ok(ctx, &signer_b, approve_call).await?;
 
-	let execute_call =
-		quantus_subxt::api::tx().multisig().execute(multisig_id.clone(), proposal_id);
+	let execute_call = quantus_subxt::api::tx().multisig().execute(
+		multisig_id.clone(),
+		proposal_id,
+		crate::cli::multisig::decode_proposal_call(&call_data)?,
+	);
 	submit_ok(ctx, &signer_c, execute_call).await?;
 
 	let recipient_balance = ctx.free_balance(&recipient_ss58).await?;

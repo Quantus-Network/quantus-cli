@@ -375,15 +375,18 @@ impl QuantumKeyPair {
 	}
 
 	/// Convert to a scheme-aware subxt signer.
-	pub fn to_subxt_signer(&self) -> Result<crate::chain::client::QuantusSigner> {
-		match self.scheme {
-			DilithiumScheme::MlDsa87 => Ok(crate::chain::client::QuantusSigner::MlDsa87(Box::new(
-				self.to_resonance_pair()?,
-			))),
-			DilithiumScheme::MlDsa65 => Ok(crate::chain::client::QuantusSigner::MlDsa65(Box::new(
-				self.to_dilithium65_pair()?,
-			))),
-		}
+	/// `context` is the FIPS 204 context the target runtime verifies under; get it from
+	/// [`crate::chain::client::QuantusClient::signing_context`].
+	pub fn to_subxt_signer(
+		&self,
+		context: Option<&'static [u8]>,
+	) -> Result<crate::chain::client::QuantusSigner> {
+		use crate::chain::client::{QuantusSigner, SignerPair};
+		let pair = match self.scheme {
+			DilithiumScheme::MlDsa87 => SignerPair::MlDsa87(Box::new(self.to_resonance_pair()?)),
+			DilithiumScheme::MlDsa65 => SignerPair::MlDsa65(Box::new(self.to_dilithium65_pair()?)),
+		};
+		Ok(QuantusSigner::new(pair, context))
 	}
 
 	#[allow(dead_code)]
@@ -1215,9 +1218,9 @@ mod tests {
 		assert_eq!(quantum.private_key.len(), 4032);
 		let restored = quantum.to_dilithium65_pair().expect("65 pair");
 		assert_eq!(pair.public().as_ref(), restored.public().as_ref());
-		let signer = quantum.to_subxt_signer().expect("signer");
-		match signer {
-			crate::chain::client::QuantusSigner::MlDsa65(_) => {},
+		let signer = quantum.to_subxt_signer(None).expect("signer");
+		match signer.pair {
+			crate::chain::client::SignerPair::MlDsa65(_) => {},
 			_ => panic!("expected MlDsa65 signer"),
 		}
 		assert!(quantum.try_to_account_id_ss58check().is_ok());

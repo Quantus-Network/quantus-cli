@@ -21,7 +21,6 @@ pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Res
 	exercise_step!(report, phase, "transfer_keep_alive", transfer_keep_alive(ctx));
 	exercise_step!(report, phase, "transfer_all", transfer_all(ctx));
 	exercise_step!(report, phase, "burn", burn(ctx));
-	exercise_step!(report, phase, "upgrade_accounts", upgrade_accounts(ctx));
 	exercise_step!(
 		report,
 		phase,
@@ -245,13 +244,4 @@ async fn burn(ctx: &mut ExerciseCtx) -> Result<String> {
 		)));
 	}
 	Ok(format!("Balances::burn destroyed {amount} raw units (balance delta {delta} incl. fee)"))
-}
-
-/// `upgrade_accounts` is permissionless maintenance; a no-op call must still dispatch.
-async fn upgrade_accounts(ctx: &mut ExerciseCtx) -> Result<String> {
-	let sender = ctx.eph[1].clone();
-	let target = account_id_of(&ctx.bob)?;
-	let call = quantus_subxt::api::tx().balances().upgrade_accounts(vec![target]);
-	let hash = submit_ok(ctx, &sender, call).await?;
-	Ok(format!("Balances::upgrade_accounts included ({hash:?})"))
 }

@@ -165,6 +165,16 @@ impl QuantusClient {
 	}
 
 	/// Get reference to the underlying SubXT client
+	/// The FIPS 204 context the connected runtime verifies extrinsic signatures under. Read from
+	/// the runtime version subxt already cached at connect, so this costs no RPC.
+	pub fn signing_context(&self) -> Option<&'static [u8]> {
+		let version = self.client.runtime_version();
+		crate::chain::signing::context_for_runtime(
+			version.spec_version,
+			version.transaction_version,
+		)
+	}
+
 	pub fn client(&self) -> &OnlineClient<ChainConfig> {
 		&self.client
 	}
@@ -330,20 +340,34 @@ impl QuantusClient {
 ///
 /// Pairs are boxed: Dilithium secret material is multi‑KB, and an unboxed enum
 /// trips `clippy::large_enum_variant`.
-pub enum QuantusSigner {
+pub enum SignerPair {
 	MlDsa65(Box<qp_dilithium_crypto::types::Dilithium65Pair>),
 	MlDsa87(Box<qp_dilithium_crypto::types::Dilithium87Pair>),
+}
+
+/// A key plus the FIPS 204 context the connected runtime verifies under. The context is part of
+/// the signer because it is not a property of the key: the same wallet signs with no context for
+/// a pre-148 runtime and under `QUANTUS_EXTRINSIC` from spec 148 on.
+pub struct QuantusSigner {
+	pub pair: SignerPair,
+	context: Option<&'static [u8]>,
+}
+
+impl QuantusSigner {
+	pub fn new(pair: SignerPair, context: Option<&'static [u8]>) -> Self {
+		Self { pair, context }
+	}
 }
 
 impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
 		use sp_core::Pair;
-		match self {
-			Self::MlDsa65(pair) =>
+		match &self.pair {
+			SignerPair::MlDsa65(pair) =>
 				<qp_dilithium_crypto::types::Dilithium65Public as IdentifyAccount>::into_account(
 					pair.public(),
 				),
-			Self::MlDsa87(pair) =>
+			SignerPair::MlDsa87(pair) =>
 				<qp_dilithium_crypto::types::Dilithium87Public as IdentifyAccount>::into_account(
 					pair.public(),
 				),
@@ -351,61 +375,14 @@ impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 	}
 
 	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
-		use sp_core::Pair;
-		match self {
-			Self::MlDsa65(pair) => {
-				let signature_with_public =
-					<qp_dilithium_crypto::types::Dilithium65Pair as Pair>::sign(
-						pair,
-						signer_payload,
-					);
-				DilithiumSignatureScheme::Dilithium65(signature_with_public)
-			},
-			Self::MlDsa87(pair) => {
-				let signature_with_public =
-					<qp_dilithium_crypto::types::Dilithium87Pair as Pair>::sign(
-						pair,
-						signer_payload,
-					);
-				DilithiumSignatureScheme::Dilithium87(signature_with_public)
-			},
+		match &self.pair {
+			SignerPair::MlDsa65(pair) => DilithiumSignatureScheme::Dilithium65(
+				crate::chain::signing::sign_ml_dsa_65(pair, signer_payload, self.context),
+			),
+			SignerPair::MlDsa87(pair) => DilithiumSignatureScheme::Dilithium87(
+				crate::chain::signing::sign_ml_dsa_87(pair, signer_payload, self.context),
+			),
 		}
-	}
-}
-
-impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium87Pair {
-	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
-		use sp_core::Pair;
-		<qp_dilithium_crypto::types::Dilithium87Public as IdentifyAccount>::into_account(
-			self.public(),
-		)
-	}
-
-	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
-		let signature_with_public =
-			<qp_dilithium_crypto::types::Dilithium87Pair as sp_core::Pair>::sign(
-				self,
-				signer_payload,
-			);
-		DilithiumSignatureScheme::Dilithium87(signature_with_public)
-	}
-}
-
-impl subxt::tx::Signer<ChainConfig> for qp_dilithium_crypto::types::Dilithium65Pair {
-	fn account_id(&self) -> <ChainConfig as Config>::AccountId {
-		use sp_core::Pair;
-		<qp_dilithium_crypto::types::Dilithium65Public as IdentifyAccount>::into_account(
-			self.public(),
-		)
-	}
-
-	fn sign(&self, signer_payload: &[u8]) -> <ChainConfig as Config>::Signature {
-		let signature_with_public =
-			<qp_dilithium_crypto::types::Dilithium65Pair as sp_core::Pair>::sign(
-				self,
-				signer_payload,
-			);
-		DilithiumSignatureScheme::Dilithium65(signature_with_public)
 	}
 }
 

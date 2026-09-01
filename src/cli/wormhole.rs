@@ -5364,8 +5364,9 @@ mod tests {
 		);
 
 		match load_multiround_wallet("crystal_alice", None, None) {
-			Ok(_) =>
-				panic!("wallet without mnemonic must error instead of generating an ephemeral one"),
+			Ok(_) => {
+				panic!("wallet without mnemonic must error instead of generating an ephemeral one")
+			},
 			Err(err) => {
 				let msg = err.to_string();
 				assert!(

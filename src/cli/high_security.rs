@@ -197,36 +197,18 @@ pub async fn handle_high_security_command(
 			// Convert guardian to Quantus SS58 format
 			let guardian_ss58 = guardian_account.to_quantus_ss58();
 
-			// Query storage for entrusted accounts
-			let storage_addr = quantus_subxt::api::storage()
-				.reversible_transfers()
-				.guardian_index(guardian_account);
-			let latest = quantus_client.get_latest_block().await?;
-			let value = quantus_client
-				.client()
-				.storage()
-				.at(latest)
-				.fetch(&storage_addr)
-				.await
-				.map_err(|e| {
-					crate::error::QuantusError::NetworkError(format!("Fetch error: {e:?}"))
-				})?;
-
 			log_print!("🛡️  Guardian: {}", guardian_ss58.bright_cyan());
 
-			if let Some(entrusted_accounts) = value {
-				if entrusted_accounts.0.is_empty() {
-					log_print!("📋 No entrusted accounts found.");
-				} else {
-					log_success!("✅ Found {} entrusted account(s):", entrusted_accounts.0.len());
-
-					for (index, account_id) in entrusted_accounts.0.iter().enumerate() {
-						let account_ss58 = account_id.to_quantus_ss58();
-						log_print!("  {}. {}", index + 1, account_ss58.bright_green());
-					}
-				}
-			} else {
+			let entrusted_accounts =
+				crate::cli::wallet::fetch_entrusted_accounts(&quantus_client, &guardian_ss58)
+					.await?;
+			if entrusted_accounts.is_empty() {
 				log_print!("📋 No entrusted accounts found.");
+			} else {
+				log_success!("✅ Found {} entrusted account(s):", entrusted_accounts.len());
+				for (index, account_ss58) in entrusted_accounts.iter().enumerate() {
+					log_print!("  {}. {}", index + 1, account_ss58.bright_green());
+				}
 			}
 
 			Ok(())

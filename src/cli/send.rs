@@ -308,7 +308,7 @@ where
 		));
 	}
 	let from_keypair = signer.as_hot().expect("cold arm returned above");
-	let signer = from_keypair.to_subxt_signer().map_err(|e| {
+	let signer = from_keypair.to_subxt_signer(quantus_client.signing_context()).map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
 

@@ -30,7 +30,13 @@ echo "Updating metadata file at src/quantus_metadata.scale..."
 subxt metadata --url "$NODE_URL" > src/quantus_metadata.scale
 
 echo "Generating SubXT types to src/chain/quantus_subxt.rs..."
-subxt codegen --url "$NODE_URL" > src/chain/quantus_subxt.rs
+# `multisig.execute` carries a RuntimeCall, and the CLI decodes the proposal's stored
+# bytes back into one and re-encodes it, so the call surface needs codec's Decode and
+# Encode alongside DecodeAsType/EncodeAsType.
+subxt codegen --url "$NODE_URL" \
+    --derive-for-type quantus_runtime::RuntimeCall=codec::Decode,recursive \
+    --derive-for-type quantus_runtime::RuntimeCall=codec::Encode,recursive \
+    > src/chain/quantus_subxt.rs
 
 echo "Formatting generated code..."
 # Generated SubXT code may require nightly rustfmt.
