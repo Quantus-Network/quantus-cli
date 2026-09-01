@@ -215,16 +215,16 @@ pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Resu
 
 	if selected.contains(&Phase::Upgrade) && !report.should_abort() {
 		let mode = match args.upgrade_wasm.clone() {
-			Some(wasm) => scenarios::upgrade::UpgradeMode::SetCode(wasm),
+			Some(wasm) => scenarios::upgrade::UpgradeMode::Authorize(wasm),
 			None => scenarios::upgrade::UpgradeMode::SelfNoop,
 		};
-		let is_real_upgrade = matches!(mode, scenarios::upgrade::UpgradeMode::SetCode(_));
+		let is_real_upgrade = matches!(mode, scenarios::upgrade::UpgradeMode::Authorize(_));
 		let before = ctx.free_balance(&ctx.root_ss58).await?;
 		scenarios::upgrade::run(&mut ctx, &mut report, "upgrade", mode, args.upgrade_timeout_secs)
 			.await?;
 		note_exempt_spend(&mut ctx, before).await?;
 
-		// Only a real set_code upgrade changes the runtime; the self-upgrade
+		// Only a real authorized upgrade changes the runtime; the self-upgrade
 		// no-op re-installs the same blob, so a post-upgrade re-run would just
 		// burn time without covering any new code path.
 		if is_real_upgrade {

@@ -1,7 +1,9 @@
 //! `quantus tech-referenda` subcommand - manage Tech Referenda proposals
 use crate::{
-	chain::quantus_subxt, cli::common::submit_transaction, error::QuantusError, log_error,
-	log_print, log_success, log_verbose,
+	chain::quantus_subxt,
+	cli::{common::submit_transaction, runtime::UpgradeTrack},
+	error::QuantusError,
+	log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -16,12 +18,16 @@ use std::{
 /// Only Tech Collective members can submit proposals.
 #[derive(Subcommand, Debug)]
 pub enum TechReferendaCommands {
-	/// Submit a FastUpgrade proposal using an existing authorize_upgrade preimage
+	/// Submit an authorize_upgrade proposal using an existing preimage
 	#[command(arg_required_else_help = true)]
 	Submit {
 		/// Hash of the preimage already stored on-chain (hex, with or without 0x prefix)
 		#[arg(long, value_name = "HASH")]
 		preimage_hash: String,
+
+		/// Governance track carrying the authorization referendum
+		#[arg(long, value_enum, default_value_t)]
+		track: UpgradeTrack,
 
 		/// Wallet name to sign with (must be a Tech Collective member)
 		#[arg(short, long, value_name = "WALLET")]
@@ -34,12 +40,16 @@ pub enum TechReferendaCommands {
 		password_file: Option<String>,
 	},
 
-	/// Hash a WASM, note its authorize_upgrade preimage, and submit on FastUpgrade
+	/// Hash a WASM, note its authorize_upgrade preimage, and submit the referendum
 	#[command(arg_required_else_help = true)]
 	SubmitWithPreimage {
 		/// Path to the compiled runtime WASM file to propose
 		#[arg(short, long, value_name = "PATH")]
 		wasm_file: PathBuf,
+
+		/// Governance track carrying the authorization referendum
+		#[arg(long, value_enum, default_value_t)]
+		track: UpgradeTrack,
 
 		/// Wallet name to sign with (must be a Tech Collective member)
 		#[arg(short, long, value_name = "WALLET")]
@@ -147,20 +157,28 @@ pub async fn handle_tech_referenda_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		TechReferendaCommands::Submit { preimage_hash, from, password, password_file } =>
+		TechReferendaCommands::Submit { preimage_hash, track, from, password, password_file } =>
 			submit_runtime_upgrade(
 				&quantus_client,
 				&preimage_hash,
+				track,
 				&from,
 				password,
 				password_file,
 				execution_mode,
 			)
 			.await,
-		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } =>
+		TechReferendaCommands::SubmitWithPreimage {
+			wasm_file,
+			track,
+			from,
+			password,
+			password_file,
+		} =>
 			submit_runtime_upgrade_with_preimage(
 				&quantus_client,
 				&wasm_file,
+				track,
 				&from,
 				password,
 				password_file,
@@ -205,16 +223,17 @@ pub async fn handle_tech_referenda_command(
 	}
 }
 
-/// Submit a FastUpgrade authorization referendum using an existing preimage
+/// Submit an authorize_upgrade referendum using an existing preimage
 async fn submit_runtime_upgrade(
 	quantus_client: &crate::chain::client::QuantusClient,
 	preimage_hash: &str,
+	track: UpgradeTrack,
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
-	log_print!("📝 Submitting FastUpgrade Authorization Referendum");
+	log_print!("📝 Submitting Authorization Referendum on {}", track.label());
 	log_print!("   🔗 Preimage hash: {}", preimage_hash.bright_cyan());
 	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
 
@@ -271,8 +290,11 @@ async fn submit_runtime_upgrade(
 	)?;
 	log_print!("✅ Authorization preimage found for runtime hash {:?}", code_hash);
 
-	let submit_call =
-		crate::cli::runtime::build_fast_upgrade_referendum(preimage_hash_parsed, preimage_len);
+	let submit_call = crate::cli::runtime::build_authorization_referendum(
+		preimage_hash_parsed,
+		preimage_len,
+		track,
+	);
 
 	let tx_hash =
 		submit_transaction(quantus_client, &signer, submit_call, None, execution_mode).await?;
@@ -286,16 +308,17 @@ async fn submit_runtime_upgrade(
 	Ok(())
 }
 
-/// Submit a FastUpgrade authorization referendum (creates preimage first)
+/// Submit an authorize_upgrade referendum (creates preimage first)
 async fn submit_runtime_upgrade_with_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_file: &Path,
+	track: UpgradeTrack,
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
-	log_print!("📝 Submitting FastUpgrade Authorization Referendum");
+	log_print!("📝 Submitting Authorization Referendum on {}", track.label());
 	log_print!("   📂 WASM file: {}", wasm_file.display().to_string().bright_cyan());
 	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
 
@@ -306,6 +329,7 @@ async fn submit_runtime_upgrade_with_preimage(
 		quantus_client,
 		&wasm_code,
 		&signer,
+		track,
 		execution_mode,
 	)
 	.await?;
@@ -355,17 +379,18 @@ async fn get_proposal_details(
 	log_print!("📄 Tech Referendum #{} Details", index);
 	log_print!("");
 
-	let addr = quantus_subxt::api::storage().tech_referenda().referendum_info_for(index);
-
 	// Get the latest block hash to read from the latest state (not finalized)
 	let latest_block_hash = quantus_client.get_latest_block().await?;
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let info = storage_at.fetch(&addr).await?;
+	let info = storage_at.fetch(&referendum_info_address(index)).await?;
 
-	if let Some(referendum_info) = info {
+	if let Some(thunk) = info {
+		let value = thunk.to_value().map_err(|e| {
+			QuantusError::Generic(format!("Failed to decode referendum #{index}: {e:?}"))
+		})?;
 		log_print!("📋 Referendum Information (raw):");
-		log_print!("{:#?}", referendum_info);
+		log_print!("{value}");
 	} else {
 		log_print!("📭 Referendum #{} not found", index);
 	}
@@ -479,17 +504,239 @@ async fn scheduled_enactment_block(
 }
 
 /// Compute the enactment block for a given approval block, honoring the track's minimum delay
+/// When the referendum's approved call is scheduled to run.
+#[derive(Clone, Copy, Debug)]
+enum EnactmentMoment {
+	At(u32),
+	After(u32),
+}
+
+#[derive(Clone, Copy, Debug)]
+struct DecidingSnapshot {
+	since: u32,
+	confirming: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TallySnapshot {
+	ayes: u32,
+	nays: u32,
+}
+
+/// The subset of `ReferendumStatus` this command displays.
+#[derive(Clone, Copy, Debug)]
+struct OngoingSnapshot {
+	track: u16,
+	submitted: u32,
+	tally: TallySnapshot,
+	decision_deposit_placed: bool,
+	in_queue: bool,
+	deciding: Option<DecidingSnapshot>,
+	enactment: EnactmentMoment,
+}
+
+#[derive(Clone, Copy, Debug)]
+enum ReferendumSnapshot {
+	Ongoing(OngoingSnapshot),
+	Approved(u32),
+	Rejected(u32),
+	Cancelled(u32),
+	TimedOut(u32),
+	Killed(u32),
+}
+
+/// Decode `TechReferenda::ReferendumInfoFor` from a dynamically decoded value.
+///
+/// The generated static types cannot be used here: `ReferendumStatus` embeds
+/// `OriginCaller`, whose variant list changes whenever a runtime gains or loses a
+/// custom-origin pallet, so a CLI built against one runtime fails with
+/// `Metadata(IncompatibleCodegen)` against another. Decoding against the *live*
+/// metadata and reading fields by name keeps these commands working on any runtime
+/// that still calls the fields what upstream `pallet-referenda` calls them.
+mod referendum_value {
+	use super::{
+		DecidingSnapshot, EnactmentMoment, OngoingSnapshot, QuantusError, ReferendumSnapshot,
+	};
+	use subxt::ext::scale_value::{Composite, Primitive, Value, ValueDef};
+
+	type Val = Value<u32>;
+
+	fn variant(v: &Val) -> Option<(&str, &Composite<u32>)> {
+		match &v.value {
+			ValueDef::Variant(var) => Some((var.name.as_str(), &var.values)),
+			_ => None,
+		}
+	}
+
+	fn composite(v: &Val) -> Option<&Composite<u32>> {
+		match &v.value {
+			ValueDef::Composite(c) => Some(c),
+			_ => None,
+		}
+	}
+
+	fn field<'a>(c: &'a Composite<u32>, name: &str) -> Option<&'a Val> {
+		match c {
+			Composite::Named(fields) => fields.iter().find(|(n, _)| n == name).map(|(_, v)| v),
+			Composite::Unnamed(_) => None,
+		}
+	}
+
+	fn nth(c: &Composite<u32>, i: usize) -> Option<&Val> {
+		match c {
+			Composite::Named(fields) => fields.get(i).map(|(_, v)| v),
+			Composite::Unnamed(fields) => fields.get(i),
+		}
+	}
+
+	fn uint(v: &Val) -> Option<u128> {
+		match &v.value {
+			ValueDef::Primitive(Primitive::U128(n)) => Some(*n),
+			// A single-field newtype (e.g. a compact wrapper) decodes as a composite.
+			ValueDef::Composite(c) => nth(c, 0).and_then(uint),
+			_ => None,
+		}
+	}
+
+	fn boolean(v: &Val) -> Option<bool> {
+		match &v.value {
+			ValueDef::Primitive(Primitive::Bool(b)) => Some(*b),
+			_ => None,
+		}
+	}
+
+	/// `Some(inner)` / `None`, or `Err` if the value is not an Option at all.
+	fn option(v: &Val) -> Option<Option<&Val>> {
+		let (name, inner) = variant(v)?;
+		match name {
+			"None" => Some(None),
+			"Some" => Some(Some(nth(inner, 0)?)),
+			_ => None,
+		}
+	}
+
+	fn missing(what: &str) -> QuantusError {
+		QuantusError::Generic(format!(
+			"referendum decode: {what} is missing or has an unexpected shape; the runtime's \
+			 pallet-referenda layout is not recognized"
+		))
+	}
+
+	fn u32_field(c: &Composite<u32>, name: &str) -> Result<u32, QuantusError> {
+		let raw = field(c, name).and_then(uint).ok_or_else(|| missing(name))?;
+		u32::try_from(raw).map_err(|_| missing(name))
+	}
+
+	pub fn decode(value: &Val) -> Result<ReferendumSnapshot, QuantusError> {
+		let (name, body) = variant(value).ok_or_else(|| missing("ReferendumInfo"))?;
+		let since = || -> Result<u32, QuantusError> {
+			let raw = nth(body, 0).and_then(uint).ok_or_else(|| missing("since"))?;
+			u32::try_from(raw).map_err(|_| missing("since"))
+		};
+		match name {
+			"Ongoing" => {
+				let status =
+					nth(body, 0).and_then(composite).ok_or_else(|| missing("ReferendumStatus"))?;
+
+				let track = u32_field(status, "track")?;
+				let track = u16::try_from(track).map_err(|_| missing("track"))?;
+
+				let tally =
+					field(status, "tally").and_then(composite).ok_or_else(|| missing("tally"))?;
+
+				let deciding = match field(status, "deciding").and_then(option) {
+					Some(Some(d)) => {
+						let d = composite(d).ok_or_else(|| missing("deciding"))?;
+						let confirming = match field(d, "confirming").and_then(option) {
+							Some(Some(c)) => Some(
+								u32::try_from(uint(c).ok_or_else(|| missing("confirming"))?)
+									.map_err(|_| missing("confirming"))?,
+							),
+							Some(None) => None,
+							None => return Err(missing("confirming")),
+						};
+						Some(DecidingSnapshot { since: u32_field(d, "since")?, confirming })
+					},
+					Some(None) => None,
+					None => return Err(missing("deciding")),
+				};
+
+				let enactment = {
+					let (kind, args) = field(status, "enactment")
+						.and_then(variant)
+						.ok_or_else(|| missing("enactment"))?;
+					let n = nth(args, 0).and_then(uint).ok_or_else(|| missing("enactment"))?;
+					let n = u32::try_from(n).map_err(|_| missing("enactment"))?;
+					match kind {
+						"At" => EnactmentMoment::At(n),
+						"After" => EnactmentMoment::After(n),
+						_ => return Err(missing("enactment")),
+					}
+				};
+
+				Ok(ReferendumSnapshot::Ongoing(OngoingSnapshot {
+					track,
+					submitted: u32_field(status, "submitted")?,
+					tally: super::TallySnapshot {
+						ayes: u32_field(tally, "ayes")?,
+						nays: u32_field(tally, "nays")?,
+					},
+					decision_deposit_placed: matches!(
+						field(status, "decision_deposit").and_then(option),
+						Some(Some(_))
+					),
+					in_queue: field(status, "in_queue").and_then(boolean).unwrap_or(false),
+					deciding,
+					enactment,
+				}))
+			},
+			"Approved" => Ok(ReferendumSnapshot::Approved(since()?)),
+			"Rejected" => Ok(ReferendumSnapshot::Rejected(since()?)),
+			"Cancelled" => Ok(ReferendumSnapshot::Cancelled(since()?)),
+			"TimedOut" => Ok(ReferendumSnapshot::TimedOut(since()?)),
+			"Killed" => Ok(ReferendumSnapshot::Killed(since()?)),
+			other => Err(QuantusError::Generic(format!(
+				"referendum decode: unknown ReferendumInfo variant `{other}`"
+			))),
+		}
+	}
+}
+
+/// Dynamic `TechReferenda::ReferendumInfoFor(index)` address, decoded against live metadata.
+fn referendum_info_address(
+	index: u32,
+) -> subxt::storage::DynamicAddress<Vec<subxt::dynamic::Value>> {
+	subxt::dynamic::storage(
+		"TechReferenda",
+		"ReferendumInfoFor",
+		vec![subxt::dynamic::Value::u128(u128::from(index))],
+	)
+}
+
+/// Fetch and decode one referendum, tolerating runtime versions the CLI was not built against.
+async fn fetch_referendum(
+	quantus_client: &crate::chain::client::QuantusClient,
+	index: u32,
+	block_hash: subxt::utils::H256,
+) -> crate::error::Result<Option<ReferendumSnapshot>> {
+	let storage_at = quantus_client.client().storage().at(block_hash);
+	let Some(thunk) = storage_at.fetch(&referendum_info_address(index)).await? else {
+		return Ok(None);
+	};
+	let value = thunk.to_value().map_err(|e| {
+		QuantusError::Generic(format!("Failed to decode referendum #{index}: {e:?}"))
+	})?;
+	referendum_value::decode(&value).map(Some)
+}
+
 fn enactment_block(
-	enactment: &quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime<
-		u32,
-	>,
+	enactment: &EnactmentMoment,
 	approval_block: u32,
 	min_enactment_period: u32,
 ) -> u32 {
-	use quantus_subxt::api::runtime_types::frame_support::traits::schedule::DispatchTime;
 	let desired = match enactment {
-		DispatchTime::At(block) => *block,
-		DispatchTime::After(offset) => approval_block.saturating_add(*offset),
+		EnactmentMoment::At(block) => *block,
+		EnactmentMoment::After(offset) => approval_block.saturating_add(*offset),
 	};
 	desired.max(approval_block.saturating_add(min_enactment_period))
 }
@@ -539,23 +786,18 @@ async fn get_proposal_status(
 	quantus_client: &crate::chain::client::QuantusClient,
 	index: u32,
 ) -> crate::error::Result<()> {
-	use quantus_subxt::api::runtime_types::pallet_referenda::types::ReferendumInfo;
-
 	log_verbose!("📊 Fetching status for Tech Referendum #{}...", index);
-
-	let addr = quantus_subxt::api::storage().tech_referenda().referendum_info_for(index);
 
 	// Get the latest block hash to read from the latest state (not finalized)
 	let latest_block_hash = quantus_client.get_latest_block().await?;
-	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let info_res = storage_at.fetch(&addr).await;
+	let info_res = fetch_referendum(quantus_client, index, latest_block_hash).await;
 
 	match info_res {
 		Ok(Some(info)) => {
 			log_print!("📊 Status for Referendum #{}", index.to_string().bright_yellow());
 			match info {
-				ReferendumInfo::Ongoing(status) => {
+				ReferendumSnapshot::Ongoing(status) => {
 					let current_block =
 						quantus_client.client().blocks().at(latest_block_hash).await?.number();
 					let block_time_ms = target_block_time_ms(quantus_client)?;
@@ -586,7 +828,7 @@ async fn get_proposal_status(
 					);
 					log_print!(
 						"   - Decision deposit: {}",
-						if status.decision_deposit.is_some() {
+						if status.decision_deposit_placed {
 							"placed".green()
 						} else {
 							"not placed".yellow()
@@ -626,7 +868,7 @@ async fn get_proposal_status(
 							let pre_deciding = pre_deciding_state(
 								prepare_end,
 								current_block,
-								status.decision_deposit.is_some(),
+								status.decision_deposit_placed,
 								status.in_queue,
 							);
 							log_print!(
@@ -668,6 +910,29 @@ async fn get_proposal_status(
 								"   🏁 Enactment estimate: unavailable {}",
 								pre_deciding.enactment_estimate_reason()
 							);
+							// The earliest-possible dates, assuming the current tally already
+							// clears the track's thresholds when Deciding opens. Confirming
+							// starts the moment it does, so the remaining phases are fixed.
+							if status.decision_deposit_placed && !status.in_queue {
+								let confirm_end = prepare_end.saturating_add(track.confirm_period);
+								let enacts = enactment_block(
+									&status.enactment,
+									confirm_end,
+									track.min_enactment_period,
+								);
+								log_print!(
+									"      ⤷ projected, if the current tally still clears the \
+									 threshold when Deciding opens:"
+								);
+								log_print!(
+									"        - Confirm ends at {}",
+									format_block_eta(confirm_end, current_block, block_time_ms)
+								);
+								log_print!(
+									"        - Enactment at {}",
+									format_block_eta(enacts, current_block, block_time_ms)
+								);
+							}
 						},
 						Some(deciding) => match deciding.confirming {
 							None => {
@@ -759,7 +1024,7 @@ async fn get_proposal_status(
 					}
 					log_verbose!("   - Full status: {:#?}", status);
 				},
-				ReferendumInfo::Approved(since, ..) => {
+				ReferendumSnapshot::Approved(since) => {
 					let current_block =
 						quantus_client.client().blocks().at(latest_block_hash).await?.number();
 					let block_time_ms = target_block_time_ms(quantus_client)?;
@@ -780,19 +1045,19 @@ async fn get_proposal_status(
 						),
 					}
 				},
-				ReferendumInfo::Rejected(since, ..) => {
+				ReferendumSnapshot::Rejected(since) => {
 					log_print!("   - Status: {}", "Rejected".red());
 					log_print!("   - Rejected at block: {}", since);
 				},
-				ReferendumInfo::Cancelled(since, ..) => {
+				ReferendumSnapshot::Cancelled(since) => {
 					log_print!("   - Status: {}", "Cancelled".yellow());
 					log_print!("   - Cancelled at block: {}", since);
 				},
-				ReferendumInfo::TimedOut(since, ..) => {
+				ReferendumSnapshot::TimedOut(since) => {
 					log_print!("   - Status: {}", "TimedOut".dimmed());
 					log_print!("   - Timed out at block: {}", since);
 				},
-				ReferendumInfo::Killed(since) => {
+				ReferendumSnapshot::Killed(since) => {
 					log_print!("   - Status: {}", "Killed".red().bold());
 					log_print!("   - Killed at block: {}", since);
 				},
