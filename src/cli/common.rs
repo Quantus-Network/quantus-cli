@@ -529,7 +529,7 @@ where
 			.await,
 	};
 	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
-	let signer = from_keypair.to_subxt_signer().map_err(|e| {
+	let signer = from_keypair.to_subxt_signer(quantus_client.signing_context()).map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
 
@@ -712,7 +712,7 @@ where
 			.map(|(tx_hash, _included_in)| tx_hash),
 	};
 	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
-	let signer = from_keypair.to_subxt_signer().map_err(|e| {
+	let signer = from_keypair.to_subxt_signer(quantus_client.signing_context()).map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to convert keypair: {e:?}"))
 	})?;
 

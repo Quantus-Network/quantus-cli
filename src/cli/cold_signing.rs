@@ -241,6 +241,7 @@ fn validate_signature_response(
 	raw_payload: &[u8],
 	response: &[u8],
 	expected_account: &AccountId32,
+	context: Option<&[u8]>,
 ) -> std::result::Result<Dilithium87SignatureWithPublic, ResponseError> {
 	if response.len() != SIGNATURE_RESPONSE_LEN {
 		return Err(ResponseError::BadLength(response.len()));
@@ -256,7 +257,7 @@ fn validate_signature_response(
 	}
 
 	let msg = signable_payload(raw_payload);
-	if !crate::chain::signing::verify_ml_dsa_87(&sig_with_public, &msg) {
+	if !crate::chain::signing::verify_ml_dsa_87(&sig_with_public, &msg, context) {
 		return Err(ResponseError::BadSignature);
 	}
 
@@ -381,7 +382,12 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 		let response = scan_ur(&source, RESPONSE_TIMEOUT).await?;
 		log_verbose!("📥 Received {} response bytes", response.len());
 
-		match validate_signature_response(&raw_payload, &response, &account) {
+		match validate_signature_response(
+			&raw_payload,
+			&response,
+			&account,
+			client.signing_context(),
+		) {
 			Ok(swp) => break swp,
 			Err(err) => {
 				let msg = err.message(wallet_name);
@@ -513,7 +519,10 @@ pub async fn handle_cold_sign_sim(
 	}
 	let pair = keypair.to_resonance_pair()?;
 	let msg = signable_payload(&payload);
-	let sig_with_public = crate::chain::signing::sign_ml_dsa_87(&pair, &msg);
+	// Mirrors the device: Keystone firmware always signs under the extrinsic context, so a
+	// simulated signature is only good for a runtime that verifies with it.
+	let sig_with_public =
+		crate::chain::signing::sign_ml_dsa_87(&pair, &msg, Some(crate::chain::signing::EXTRINSIC));
 
 	// 3. Emit the response UR.
 	let parts = quantus_ur::encode_bytes(&sig_with_public.to_bytes())
@@ -538,6 +547,9 @@ pub async fn handle_cold_sign_sim(
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	/// The context a spec-148 runtime verifies under; what the device signs with.
+	const CTX: Option<&[u8]> = Some(crate::chain::signing::EXTRINSIC);
 	use crate::chain::quantus_subxt::api;
 	use subxt::{client::ClientState, config::substrate::H256, utils::MultiAddress, OfflineClient};
 
@@ -696,17 +708,18 @@ mod tests {
 		// Simulate the cold wallet: sign the signable form with alice's key
 		let alice = qp_dilithium_crypto::crystal_alice();
 		let msg = signable_payload(&raw);
-		let swp = crate::chain::signing::sign_ml_dsa_87(&alice, &msg);
+		let swp = crate::chain::signing::sign_ml_dsa_87(&alice, &msg, CTX);
 		let response = swp.to_bytes();
 		assert_eq!(response.len(), SIGNATURE_RESPONSE_LEN);
 
 		// Valid response verifies
-		let validated =
-			validate_signature_response(&raw, &response, &alice_account()).ok().unwrap();
+		let validated = validate_signature_response(&raw, &response, &alice_account(), CTX)
+			.ok()
+			.unwrap();
 		assert_eq!(validated.to_bytes(), response);
 
 		// Truncated response → BadLength (rescan-safe)
-		let err = validate_signature_response(&raw, &response[..1000], &alice_account())
+		let err = validate_signature_response(&raw, &response[..1000], &alice_account(), CTX)
 			.err()
 			.unwrap();
 		assert!(err.rescan_safe());
@@ -714,8 +727,8 @@ mod tests {
 
 		// Signed by a different key → WrongSigner (abort)
 		let bob = qp_dilithium_crypto::dilithium_bob();
-		let bob_swp = crate::chain::signing::sign_ml_dsa_87(&bob, &msg);
-		let err = validate_signature_response(&raw, &bob_swp.to_bytes(), &alice_account())
+		let bob_swp = crate::chain::signing::sign_ml_dsa_87(&bob, &msg, CTX);
+		let err = validate_signature_response(&raw, &bob_swp.to_bytes(), &alice_account(), CTX)
 			.err()
 			.unwrap();
 		assert!(!err.rescan_safe());
@@ -725,7 +738,7 @@ mod tests {
 		let mut other_ctx = test_ctx();
 		other_ctx.nonce = 8;
 		let other_raw = build_raw_signer_payload(&state, &call, &other_ctx).unwrap();
-		let err = validate_signature_response(&other_raw, &response, &alice_account())
+		let err = validate_signature_response(&other_raw, &response, &alice_account(), CTX)
 			.err()
 			.unwrap();
 		assert!(!err.rescan_safe());
@@ -757,14 +770,15 @@ mod tests {
 
 		// Cold wallet signs and answers over UR
 		let alice = qp_dilithium_crypto::crystal_alice();
-		let swp = crate::chain::signing::sign_ml_dsa_87(&alice, &signable_payload(&received));
+		let swp = crate::chain::signing::sign_ml_dsa_87(&alice, &signable_payload(&received), CTX);
 		let response_parts = quantus_ur::encode_bytes(&swp.to_bytes()).unwrap();
 		assert!(response_parts.len() > 1, "7219-byte response must be multi-part");
 
 		// CLI decodes, validates, assembles
 		let response = quantus_ur::decode_bytes(&response_parts).unwrap();
-		let validated =
-			validate_signature_response(&raw, &response, &alice_account()).ok().unwrap();
+		let validated = validate_signature_response(&raw, &response, &alice_account(), CTX)
+			.ok()
+			.unwrap();
 
 		let client = OfflineClient::<ChainConfig>::new(
 			state.genesis_hash,
