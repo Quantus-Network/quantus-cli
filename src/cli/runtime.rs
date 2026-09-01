@@ -8,7 +8,7 @@ use crate::{
 	log_print, log_success, log_verbose,
 	wallet::WalletSigner,
 };
-use clap::Subcommand;
+use clap::{Subcommand, ValueEnum};
 use colored::Colorize;
 use sp_runtime::traits::{BlakeTwo256, Hash};
 
@@ -19,13 +19,57 @@ use std::{
 };
 use subxt::{tx::Payload, OnlineClient};
 
+/// Governance track that carries the `System::authorize_upgrade` referendum.
+///
+/// Both tracks approve the same 34-byte authorization preimage; they differ only in
+/// the proposal origin, and therefore in thresholds and timing.
+#[derive(ValueEnum, Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum UpgradeTrack {
+	/// `Origins::FastUpgrade` (80%/80%, ~30 min). Needs a runtime that defines the
+	/// `FastUpgrade` origin — absent on runtimes older than the fast_upgrade track.
+	#[default]
+	FastUpgrade,
+	/// `system::Root` (61%/60%, ~2 days). The only option on runtimes that predate
+	/// the fast_upgrade track.
+	Root,
+}
+
+impl UpgradeTrack {
+	/// The `OriginCaller` this track dispatches under, as a dynamic value encoded
+	/// against the connected runtime's metadata.
+	fn origin_value(self) -> subxt::dynamic::Value {
+		use subxt::dynamic::Value;
+		match self {
+			Self::FastUpgrade => Value::unnamed_variant(
+				"Origins",
+				[Value::unnamed_variant("FastUpgrade", Vec::<Value>::new())],
+			),
+			Self::Root => Value::unnamed_variant(
+				"system",
+				[Value::unnamed_variant("Root", Vec::<Value>::new())],
+			),
+		}
+	}
+
+	pub(crate) fn label(self) -> &'static str {
+		match self {
+			Self::FastUpgrade => "Origins::FastUpgrade",
+			Self::Root => "system::Root",
+		}
+	}
+}
+
 #[derive(Subcommand, Debug)]
 pub enum RuntimeCommands {
-	/// Propose a version-checked runtime upgrade on the FastUpgrade track
+	/// Propose a version-checked runtime upgrade via `System::authorize_upgrade`
 	Update {
 		/// Path to the runtime WASM file
 		#[arg(short, long)]
 		wasm_file: PathBuf,
+
+		/// Governance track carrying the authorization referendum
+		#[arg(long, value_enum, default_value_t)]
+		track: UpgradeTrack,
 
 		/// Wallet name to sign with (must be allowed to submit Tech Referenda)
 		#[arg(short, long)]
@@ -44,7 +88,7 @@ pub enum RuntimeCommands {
 		force: bool,
 	},
 
-	/// Apply the exact WASM after its FastUpgrade authorization has enacted
+	/// Apply the exact WASM after its authorization referendum has enacted
 	Apply {
 		/// Path to the runtime WASM file whose hash was authorized
 		#[arg(short, long)]
@@ -137,16 +181,14 @@ pub(crate) fn validate_runtime_authorization_preimage(
 	Ok(code_hash)
 }
 
-pub(crate) fn build_fast_upgrade_referendum(
+pub(crate) fn build_authorization_referendum(
 	preimage_hash: sp_core::H256,
 	call_len: u32,
+	track: UpgradeTrack,
 ) -> subxt::tx::DynamicPayload {
 	use subxt::dynamic::Value;
 
-	let origin = Value::unnamed_variant(
-		"Origins",
-		[Value::unnamed_variant("FastUpgrade", Vec::<Value>::new())],
-	);
+	let origin = track.origin_value();
 	let proposal = Value::named_variant(
 		"Lookup",
 		[
@@ -162,6 +204,7 @@ pub(crate) async fn submit_runtime_authorization(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_code: &[u8],
 	signer: &WalletSigner,
+	track: UpgradeTrack,
 	execution_mode: ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	let authorization =
@@ -175,8 +218,8 @@ pub(crate) async fn submit_runtime_authorization(
 	log_verbose!("📝 Authorization call size: {} bytes", call_len);
 	submit_preimage(quantus_client, signer, authorization.encoded_call, execution_mode).await?;
 
-	log_print!("📡 Submitting FastUpgrade authorization referendum...");
-	let submit_call = build_fast_upgrade_referendum(authorization.preimage_hash, call_len);
+	log_print!("📡 Submitting authorization referendum on {}...", track.label());
+	let submit_call = build_authorization_referendum(authorization.preimage_hash, call_len, track);
 	let tx_hash =
 		submit_transaction(quantus_client, signer, submit_call, None, execution_mode).await?;
 	log_success!("Runtime authorization referendum submitted! Hash: 0x{}", hex::encode(tx_hash));
@@ -212,14 +255,15 @@ pub async fn update_runtime(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_code: Vec<u8>,
 	signer: &WalletSigner,
+	track: UpgradeTrack,
 	force: bool,
 	execution_mode: ExecutionMode,
 ) -> crate::error::Result<subxt::utils::H256> {
 	log_print!("📋 Upgrade path:");
-	log_print!("   • Propose System::authorize_upgrade(code_hash) as Origins::FastUpgrade");
+	log_print!("   • Propose System::authorize_upgrade(code_hash) as {}", track.label());
 	log_print!("   • Apply the exact WASM after the authorization referendum enacts");
 	confirm_runtime_action("authorization", force)?;
-	submit_runtime_authorization(quantus_client, &wasm_code, signer, execution_mode).await
+	submit_runtime_authorization(quantus_client, &wasm_code, signer, track, execution_mode).await
 }
 
 pub async fn apply_runtime(
@@ -348,7 +392,7 @@ pub async fn handle_runtime_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		RuntimeCommands::Update { wasm_file, from, password, password_file, force } => {
+		RuntimeCommands::Update { wasm_file, track, from, password, password_file, force } => {
 			log_print!("🚀 Runtime Management");
 			log_print!("🔐 Runtime Upgrade Authorization");
 			log_print!("   📂 WASM file: {}", wasm_file.display().to_string().bright_cyan());
@@ -357,9 +401,13 @@ pub async fn handle_runtime_command(
 			let wasm_code = read_wasm_file(&wasm_file)?;
 			log_print!("📊 WASM file size: {} bytes", wasm_code.len());
 			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
-			update_runtime(&quantus_client, wasm_code, &signer, force, execution_mode).await?;
+			update_runtime(&quantus_client, wasm_code, &signer, track, force, execution_mode)
+				.await?;
 
-			log_print!("💡 Place the decision deposit, collect 8 ayes, and wait for enactment.");
+			log_print!(
+				"💡 Place the decision deposit, reach the {} threshold, and wait for enactment.",
+				track.label()
+			);
 			log_print!("💡 Then apply this exact file:");
 			log_print!(
 				"   quantus runtime apply --wasm-file {} --from <funded-wallet> --node-url {}",
@@ -516,9 +564,18 @@ mod tests {
 	}
 
 	#[test]
-	fn fast_upgrade_referendum_uses_dynamic_live_metadata_payload() {
-		let payload = build_fast_upgrade_referendum(sp_core::H256::repeat_byte(7), 34);
-		assert_eq!(payload.pallet_name(), "TechReferenda");
-		assert_eq!(payload.call_name(), "submit");
+	fn authorization_referendum_uses_dynamic_live_metadata_payload() {
+		for track in [UpgradeTrack::FastUpgrade, UpgradeTrack::Root] {
+			let payload = build_authorization_referendum(sp_core::H256::repeat_byte(7), 34, track);
+			assert_eq!(payload.pallet_name(), "TechReferenda");
+			assert_eq!(payload.call_name(), "submit");
+		}
+	}
+
+	#[test]
+	fn upgrade_track_defaults_to_fast_upgrade() {
+		assert_eq!(UpgradeTrack::default(), UpgradeTrack::FastUpgrade);
+		assert_eq!(UpgradeTrack::FastUpgrade.label(), "Origins::FastUpgrade");
+		assert_eq!(UpgradeTrack::Root.label(), "system::Root");
 	}
 }

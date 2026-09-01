@@ -1,7 +1,9 @@
 //! `quantus tech-referenda` subcommand - manage Tech Referenda proposals
 use crate::{
-	chain::quantus_subxt, cli::common::submit_transaction, error::QuantusError, log_error,
-	log_print, log_success, log_verbose,
+	chain::quantus_subxt,
+	cli::{common::submit_transaction, runtime::UpgradeTrack},
+	error::QuantusError,
+	log_error, log_print, log_success, log_verbose,
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -16,12 +18,16 @@ use std::{
 /// Only Tech Collective members can submit proposals.
 #[derive(Subcommand, Debug)]
 pub enum TechReferendaCommands {
-	/// Submit a FastUpgrade proposal using an existing authorize_upgrade preimage
+	/// Submit an authorize_upgrade proposal using an existing preimage
 	#[command(arg_required_else_help = true)]
 	Submit {
 		/// Hash of the preimage already stored on-chain (hex, with or without 0x prefix)
 		#[arg(long, value_name = "HASH")]
 		preimage_hash: String,
+
+		/// Governance track carrying the authorization referendum
+		#[arg(long, value_enum, default_value_t)]
+		track: UpgradeTrack,
 
 		/// Wallet name to sign with (must be a Tech Collective member)
 		#[arg(short, long, value_name = "WALLET")]
@@ -34,12 +40,16 @@ pub enum TechReferendaCommands {
 		password_file: Option<String>,
 	},
 
-	/// Hash a WASM, note its authorize_upgrade preimage, and submit on FastUpgrade
+	/// Hash a WASM, note its authorize_upgrade preimage, and submit the referendum
 	#[command(arg_required_else_help = true)]
 	SubmitWithPreimage {
 		/// Path to the compiled runtime WASM file to propose
 		#[arg(short, long, value_name = "PATH")]
 		wasm_file: PathBuf,
+
+		/// Governance track carrying the authorization referendum
+		#[arg(long, value_enum, default_value_t)]
+		track: UpgradeTrack,
 
 		/// Wallet name to sign with (must be a Tech Collective member)
 		#[arg(short, long, value_name = "WALLET")]
@@ -147,20 +157,28 @@ pub async fn handle_tech_referenda_command(
 	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
 
 	match command {
-		TechReferendaCommands::Submit { preimage_hash, from, password, password_file } =>
+		TechReferendaCommands::Submit { preimage_hash, track, from, password, password_file } =>
 			submit_runtime_upgrade(
 				&quantus_client,
 				&preimage_hash,
+				track,
 				&from,
 				password,
 				password_file,
 				execution_mode,
 			)
 			.await,
-		TechReferendaCommands::SubmitWithPreimage { wasm_file, from, password, password_file } =>
+		TechReferendaCommands::SubmitWithPreimage {
+			wasm_file,
+			track,
+			from,
+			password,
+			password_file,
+		} =>
 			submit_runtime_upgrade_with_preimage(
 				&quantus_client,
 				&wasm_file,
+				track,
 				&from,
 				password,
 				password_file,
@@ -205,16 +223,17 @@ pub async fn handle_tech_referenda_command(
 	}
 }
 
-/// Submit a FastUpgrade authorization referendum using an existing preimage
+/// Submit an authorize_upgrade referendum using an existing preimage
 async fn submit_runtime_upgrade(
 	quantus_client: &crate::chain::client::QuantusClient,
 	preimage_hash: &str,
+	track: UpgradeTrack,
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
-	log_print!("📝 Submitting FastUpgrade Authorization Referendum");
+	log_print!("📝 Submitting Authorization Referendum on {}", track.label());
 	log_print!("   🔗 Preimage hash: {}", preimage_hash.bright_cyan());
 	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
 
@@ -271,8 +290,11 @@ async fn submit_runtime_upgrade(
 	)?;
 	log_print!("✅ Authorization preimage found for runtime hash {:?}", code_hash);
 
-	let submit_call =
-		crate::cli::runtime::build_fast_upgrade_referendum(preimage_hash_parsed, preimage_len);
+	let submit_call = crate::cli::runtime::build_authorization_referendum(
+		preimage_hash_parsed,
+		preimage_len,
+		track,
+	);
 
 	let tx_hash =
 		submit_transaction(quantus_client, &signer, submit_call, None, execution_mode).await?;
@@ -286,16 +308,17 @@ async fn submit_runtime_upgrade(
 	Ok(())
 }
 
-/// Submit a FastUpgrade authorization referendum (creates preimage first)
+/// Submit an authorize_upgrade referendum (creates preimage first)
 async fn submit_runtime_upgrade_with_preimage(
 	quantus_client: &crate::chain::client::QuantusClient,
 	wasm_file: &Path,
+	track: UpgradeTrack,
 	from: &str,
 	password: Option<String>,
 	password_file: Option<String>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> crate::error::Result<()> {
-	log_print!("📝 Submitting FastUpgrade Authorization Referendum");
+	log_print!("📝 Submitting Authorization Referendum on {}", track.label());
 	log_print!("   📂 WASM file: {}", wasm_file.display().to_string().bright_cyan());
 	log_print!("   🔑 Submitted by: {}", from.bright_yellow());
 
@@ -306,6 +329,7 @@ async fn submit_runtime_upgrade_with_preimage(
 		quantus_client,
 		&wasm_code,
 		&signer,
+		track,
 		execution_mode,
 	)
 	.await?;

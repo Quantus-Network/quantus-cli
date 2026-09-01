@@ -1,17 +1,19 @@
 //! Runtime upgrade via tech-referenda (requires fast-governance node).
 //!
+//! Both modes drive the production upgrade pipeline: a referendum approves a 34-byte
+//! `system.authorize_upgrade` hash and the full code is then supplied by anyone via
+//! `system.apply_authorized_upgrade`. `system.set_code` is not used — the code blob
+//! exceeds `TechReferenda::MaxProposalSize`, so it could never be a real proposal.
+//!
 //! Two modes:
-//! - `SetCode(wasm)`: a real upgrade via `system.set_code`; requires a candidate WASM with a higher
-//!   `spec_version` and verifies the spec bump.
+//! - `Authorize(wasm)`: a real upgrade via `system.authorize_upgrade`; requires a candidate WASM
+//!   with a higher `spec_version` and verifies the spec bump.
 //! - `SelfNoop`: fetches the current on-chain `:code` and re-installs it.
 //!   `frame_system::can_set_code` would reject the identical blob (`SpecVersionNeedsToIncrease`),
-//!   so the unchecked variants are used; the version-comparison logic itself is trivial and not
-//!   worth building a bumped WASM for. The code blob exceeds `TechReferenda::MaxProposalSize`, so
-//!   the referendum approves a 32-byte `system.authorize_upgrade_without_checks` hash and the full
-//!   code is then supplied by anyone via `system.apply_authorized_upgrade`. This proves the whole
-//!   upgrade pipeline — referendum with Root origin, enactment, authorization, code storage write —
-//!   and success is detected via the `System::CodeUpdated` event since the spec version stays the
-//!   same.
+//!   so `authorize_upgrade_without_checks` is used instead; the version-comparison logic itself is
+//!   trivial and not worth building a bumped WASM for. This proves the whole upgrade pipeline —
+//!   referendum with Root origin, enactment, authorization, code storage write — and success is
+//!   detected via the `System::CodeUpdated` event since the spec version stays the same.
 
 use crate::{
 	chain::quantus_subxt,
@@ -27,8 +29,9 @@ use std::path::PathBuf;
 use subxt::tx::Payload;
 
 pub enum UpgradeMode {
-	/// Real upgrade: `system.set_code` with the given candidate WASM.
-	SetCode(PathBuf),
+	/// Real upgrade: `system.authorize_upgrade` for the candidate WASM's hash,
+	/// then `apply_authorized_upgrade` with the blob itself.
+	Authorize(PathBuf),
 	/// No-op self-upgrade: re-install the current on-chain code via
 	/// `authorize_upgrade_without_checks` + `apply_authorized_upgrade`.
 	SelfNoop,
@@ -42,12 +45,12 @@ pub async fn run(
 	timeout_secs: u64,
 ) -> Result<()> {
 	match mode {
-		UpgradeMode::SetCode(wasm_path) => {
+		UpgradeMode::Authorize(wasm_path) => {
 			exercise_step!(
 				report,
 				phase,
-				"governance_set_code",
-				governance_set_code(ctx, &wasm_path, timeout_secs)
+				"governance_authorize_upgrade",
+				governance_authorize_upgrade(ctx, &wasm_path, timeout_secs)
 			);
 		},
 		UpgradeMode::SelfNoop => {
@@ -181,7 +184,7 @@ async fn referendum_state(ctx: &ExerciseCtx, index: u32) -> Result<String> {
 	Ok(format!("{info:?}"))
 }
 
-async fn governance_set_code(
+async fn governance_authorize_upgrade(
 	ctx: &mut ExerciseCtx,
 	wasm_path: &std::path::Path,
 	timeout_secs: u64,
@@ -191,35 +194,65 @@ async fn governance_set_code(
 	let wasm = std::fs::read(wasm_path).map_err(|e| {
 		QuantusError::Generic(format!("failed to read WASM {}: {e}", wasm_path.display()))
 	})?;
+	let code_hash: sp_core::H256 = BlakeTwo256::hash(&wasm);
 	crate::log_status!(
-		"⬆️  Upgrade phase: proposing set_code with {} ({} bytes), current spec {}",
+		"⬆️  Upgrade phase: authorizing {} ({} bytes, hash {code_hash:?}), current spec {}",
 		wasm_path.display(),
 		wasm.len(),
 		spec_before
 	);
 
-	let set_code = quantus_subxt::api::tx().system().set_code(wasm);
-	let encoded = set_code
+	let authorize = quantus_subxt::api::tx().system().authorize_upgrade(code_hash);
+	let encoded = authorize
 		.encode_call_data(&ctx.client.client().metadata())
-		.map_err(|e| QuantusError::Generic(format!("failed to encode set_code: {e:?}")))?;
+		.map_err(|e| QuantusError::Generic(format!("failed to encode authorize_upgrade: {e:?}")))?;
 	let index = submit_root_referendum(ctx, encoded).await?;
 
+	let authorized_addr = quantus_subxt::api::storage().system().authorized_upgrade();
 	let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
 	loop {
-		tokio::time::sleep(std::time::Duration::from_secs(6)).await;
-		let (spec_now, _) = ctx.client.get_runtime_version().await?;
-		if spec_now > spec_before {
-			let refunds = refund_deposits(ctx, index).await;
-			return Ok(format!(
-				"runtime upgraded via referendum #{index}: spec {spec_before} → {spec_now}; {refunds}"
-			));
+		tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+		let latest = ctx.client.get_latest_block().await?;
+		if let Some(authorized) =
+			ctx.client.client().storage().at(latest).fetch(&authorized_addr).await?
+		{
+			if authorized.code_hash != code_hash {
+				return Err(QuantusError::Generic(format!(
+					"unexpected authorized upgrade hash: {:?} (expected {code_hash:?})",
+					authorized.code_hash
+				)));
+			}
+			break;
 		}
 		if std::time::Instant::now() > deadline {
 			let info = referendum_state(ctx, index).await?;
 			return Err(QuantusError::Generic(format!(
-				"spec version still {spec_before} after {timeout_secs}s; referendum #{index} \
-				 state: {info}. Is the node built with the fast-governance feature and the \
-				 WASM spec_version higher than {spec_before}?"
+				"upgrade not authorized within {timeout_secs}s; referendum #{index} state: \
+				 {info}. Is the node built with the fast-governance feature?"
+			)));
+		}
+	}
+	crate::log_status!("⬆️  Upgrade authorized on-chain; applying the code blob…");
+
+	let apply = quantus_subxt::api::tx().system().apply_authorized_upgrade(wasm);
+	let alice = ctx.alice.clone();
+	submit_ok(ctx, &alice, apply).await?;
+
+	let deadline = std::time::Instant::now() + std::time::Duration::from_secs(timeout_secs);
+	loop {
+		tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+		let (spec_now, _) = ctx.client.get_runtime_version().await?;
+		if spec_now > spec_before {
+			let refunds = refund_deposits(ctx, index).await;
+			return Ok(format!(
+				"runtime upgraded via referendum #{index} (authorize_upgrade + \
+				 apply_authorized_upgrade): spec {spec_before} → {spec_now}; {refunds}"
+			));
+		}
+		if std::time::Instant::now() > deadline {
+			return Err(QuantusError::Generic(format!(
+				"apply_authorized_upgrade was included but the spec version is still \
+				 {spec_before} after {timeout_secs}s; is the WASM spec_version higher?"
 			)));
 		}
 	}
