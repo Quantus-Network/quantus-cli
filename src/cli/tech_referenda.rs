@@ -726,7 +726,7 @@ async fn fetch_referendum(
 	let value = thunk.to_value().map_err(|e| {
 		QuantusError::Generic(format!("Failed to decode referendum #{index}: {e:?}"))
 	})?;
-	referendum_value::decode(&value).map(Some).map_err(Into::into)
+	referendum_value::decode(&value).map(Some)
 }
 
 fn enactment_block(
