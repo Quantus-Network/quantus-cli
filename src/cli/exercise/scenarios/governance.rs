@@ -88,20 +88,14 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 		.await?;
 	}
 
-	use quantus_subxt::api::runtime_types::pallet_referenda::types::ReferendumInfo;
-	let info_addr = quantus_subxt::api::storage().tech_referenda().referendum_info_for(index);
+	use crate::cli::tech_referenda::{fetch_referendum, ReferendumSnapshot};
 	let latest = ctx.client.get_latest_block().await?;
-	let info = ctx
-		.client
-		.client()
-		.storage()
-		.at(latest)
-		.fetch(&info_addr)
+	let info = fetch_referendum(&ctx.client, index, latest)
 		.await?
 		.ok_or_else(|| QuantusError::Generic(format!("referendum #{index} not found")))?;
 
 	match info {
-		ReferendumInfo::Ongoing(status) => {
+		ReferendumSnapshot::Ongoing(status) => {
 			if status.tally.ayes < 3 {
 				return Err(QuantusError::Generic(format!(
 					"expected 3 aye votes on referendum #{index}, tally shows {}",
@@ -112,7 +106,7 @@ async fn referendum_flow(ctx: &mut ExerciseCtx) -> Result<String> {
 				"referendum #{index} submitted, deposit placed, 3 aye votes tallied (ongoing)"
 			))
 		},
-		ReferendumInfo::Approved(..) => Ok(format!(
+		ReferendumSnapshot::Approved(..) => Ok(format!(
 			"referendum #{index} submitted, voted, and already approved (fast-governance node)"
 		)),
 		other => Err(QuantusError::Generic(format!(

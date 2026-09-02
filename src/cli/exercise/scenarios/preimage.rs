@@ -42,9 +42,9 @@ async fn note_and_verify(ctx: &mut ExerciseCtx) -> Result<String> {
 	)
 	.await?;
 
-	let status_addr = quantus_subxt::api::storage().preimage().request_status_for(expected_hash);
 	let latest = ctx.client.get_latest_block().await?;
-	let status = ctx.client.client().storage().at(latest).fetch(&status_addr).await?;
+	let status =
+		crate::cli::preimage::fetch_request_status(&ctx.client, expected_hash, latest).await?;
 	match status {
 		Some(_) => Ok(format!("preimage {expected_hash:?} noted and visible in RequestStatusFor")),
 		None => Err(QuantusError::Generic(format!(
@@ -54,9 +54,10 @@ async fn note_and_verify(ctx: &mut ExerciseCtx) -> Result<String> {
 }
 
 async fn preimage_status_exists(ctx: &ExerciseCtx, hash: sp_core::H256) -> Result<bool> {
-	let status_addr = quantus_subxt::api::storage().preimage().request_status_for(hash);
 	let latest = ctx.client.get_latest_block().await?;
-	Ok(ctx.client.client().storage().at(latest).fetch(&status_addr).await?.is_some())
+	Ok(crate::cli::preimage::fetch_request_status(&ctx.client, hash, latest)
+		.await?
+		.is_some())
 }
 
 /// Note a preimage, then clear it with `unnote_preimage` and verify the

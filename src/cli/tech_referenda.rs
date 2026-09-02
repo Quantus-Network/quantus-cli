@@ -250,30 +250,18 @@ async fn submit_runtime_upgrade(
 	let latest_block_hash = quantus_client.get_latest_block().await?;
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 
-	let preimage_status = storage_at
-		.fetch(
-			&quantus_subxt::api::storage()
-				.preimage()
-				.request_status_for(preimage_hash_parsed),
-		)
-		.await
-		.map_err(|e| QuantusError::Generic(format!("Failed to fetch preimage status: {:?}", e)))?
-		.ok_or_else(|| QuantusError::Generic("Preimage not found on chain".to_string()))?;
+	let preimage_status = crate::cli::preimage::fetch_request_status(
+		quantus_client,
+		preimage_hash_parsed,
+		latest_block_hash,
+	)
+	.await
+	.map_err(|e| QuantusError::Generic(format!("Failed to fetch preimage status: {e:?}")))?
+	.ok_or_else(|| QuantusError::Generic("Preimage not found on chain".to_string()))?;
 
-	let preimage_len = match preimage_status {
-		quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Unrequested {
-			ticket: _,
-			len,
-		} => len,
-		quantus_subxt::api::runtime_types::pallet_preimage::RequestStatus::Requested {
-			maybe_ticket: _,
-			count: _,
-			maybe_len,
-		} => match maybe_len {
-			Some(len) => len,
-			None => return Err(QuantusError::Generic("Preimage length not available".to_string())),
-		},
-	};
+	let preimage_len = preimage_status
+		.len()
+		.ok_or_else(|| QuantusError::Generic("Preimage length not available".to_string()))?;
 
 	let preimage = storage_at
 		.fetch(
@@ -506,29 +494,29 @@ async fn scheduled_enactment_block(
 /// Compute the enactment block for a given approval block, honoring the track's minimum delay
 /// When the referendum's approved call is scheduled to run.
 #[derive(Clone, Copy, Debug)]
-enum EnactmentMoment {
+pub(crate) enum EnactmentMoment {
 	At(u32),
 	After(u32),
 }
 
 #[derive(Clone, Copy, Debug)]
-struct DecidingSnapshot {
+pub(crate) struct DecidingSnapshot {
 	since: u32,
 	confirming: Option<u32>,
 }
 
 #[derive(Clone, Copy, Debug)]
-struct TallySnapshot {
-	ayes: u32,
-	nays: u32,
+pub(crate) struct TallySnapshot {
+	pub(crate) ayes: u32,
+	pub(crate) nays: u32,
 }
 
 /// The subset of `ReferendumStatus` this command displays.
 #[derive(Clone, Copy, Debug)]
-struct OngoingSnapshot {
-	track: u16,
-	submitted: u32,
-	tally: TallySnapshot,
+pub(crate) struct OngoingSnapshot {
+	pub(crate) track: u16,
+	pub(crate) submitted: u32,
+	pub(crate) tally: TallySnapshot,
 	decision_deposit_placed: bool,
 	in_queue: bool,
 	deciding: Option<DecidingSnapshot>,
@@ -536,7 +524,7 @@ struct OngoingSnapshot {
 }
 
 #[derive(Clone, Copy, Debug)]
-enum ReferendumSnapshot {
+pub(crate) enum ReferendumSnapshot {
 	Ongoing(OngoingSnapshot),
 	Approved(u32),
 	Rejected(u32),
@@ -555,77 +543,14 @@ enum ReferendumSnapshot {
 /// that still calls the fields what upstream `pallet-referenda` calls them.
 mod referendum_value {
 	use super::{
-		DecidingSnapshot, EnactmentMoment, OngoingSnapshot, QuantusError, ReferendumSnapshot,
+		DecidingSnapshot, EnactmentMoment, OngoingSnapshot, ReferendumSnapshot, TallySnapshot,
 	};
-	use subxt::ext::scale_value::{Composite, Primitive, Value, ValueDef};
-
-	type Val = Value<u32>;
-
-	fn variant(v: &Val) -> Option<(&str, &Composite<u32>)> {
-		match &v.value {
-			ValueDef::Variant(var) => Some((var.name.as_str(), &var.values)),
-			_ => None,
-		}
-	}
-
-	fn composite(v: &Val) -> Option<&Composite<u32>> {
-		match &v.value {
-			ValueDef::Composite(c) => Some(c),
-			_ => None,
-		}
-	}
-
-	fn field<'a>(c: &'a Composite<u32>, name: &str) -> Option<&'a Val> {
-		match c {
-			Composite::Named(fields) => fields.iter().find(|(n, _)| n == name).map(|(_, v)| v),
-			Composite::Unnamed(_) => None,
-		}
-	}
-
-	fn nth(c: &Composite<u32>, i: usize) -> Option<&Val> {
-		match c {
-			Composite::Named(fields) => fields.get(i).map(|(_, v)| v),
-			Composite::Unnamed(fields) => fields.get(i),
-		}
-	}
-
-	fn uint(v: &Val) -> Option<u128> {
-		match &v.value {
-			ValueDef::Primitive(Primitive::U128(n)) => Some(*n),
-			// A single-field newtype (e.g. a compact wrapper) decodes as a composite.
-			ValueDef::Composite(c) => nth(c, 0).and_then(uint),
-			_ => None,
-		}
-	}
-
-	fn boolean(v: &Val) -> Option<bool> {
-		match &v.value {
-			ValueDef::Primitive(Primitive::Bool(b)) => Some(*b),
-			_ => None,
-		}
-	}
-
-	/// `Some(inner)` / `None`, or `Err` if the value is not an Option at all.
-	fn option(v: &Val) -> Option<Option<&Val>> {
-		let (name, inner) = variant(v)?;
-		match name {
-			"None" => Some(None),
-			"Some" => Some(Some(nth(inner, 0)?)),
-			_ => None,
-		}
-	}
-
-	fn missing(what: &str) -> QuantusError {
-		QuantusError::Generic(format!(
-			"referendum decode: {what} is missing or has an unexpected shape; the runtime's \
-			 pallet-referenda layout is not recognized"
-		))
-	}
-
-	fn u32_field(c: &Composite<u32>, name: &str) -> Result<u32, QuantusError> {
-		let raw = field(c, name).and_then(uint).ok_or_else(|| missing(name))?;
-		u32::try_from(raw).map_err(|_| missing(name))
-	}
+	use crate::{
+		cli::dynamic_decode::{
+			composite, field, missing, nth, option, u32_field, uint, variant, Val,
+		},
+		error::QuantusError,
+	};
 
 	pub fn decode(value: &Val) -> Result<ReferendumSnapshot, QuantusError> {
 		let (name, body) = variant(value).ok_or_else(|| missing("ReferendumInfo"))?;
@@ -677,7 +602,7 @@ mod referendum_value {
 				Ok(ReferendumSnapshot::Ongoing(OngoingSnapshot {
 					track,
 					submitted: u32_field(status, "submitted")?,
-					tally: super::TallySnapshot {
+					tally: TallySnapshot {
 						ayes: u32_field(tally, "ayes")?,
 						nays: u32_field(tally, "nays")?,
 					},
@@ -685,7 +610,9 @@ mod referendum_value {
 						field(status, "decision_deposit").and_then(option),
 						Some(Some(_))
 					),
-					in_queue: field(status, "in_queue").and_then(boolean).unwrap_or(false),
+					in_queue: field(status, "in_queue")
+						.and_then(crate::cli::dynamic_decode::boolean)
+						.unwrap_or(false),
 					deciding,
 					enactment,
 				}))
@@ -714,7 +641,7 @@ fn referendum_info_address(
 }
 
 /// Fetch and decode one referendum, tolerating runtime versions the CLI was not built against.
-async fn fetch_referendum(
+pub(crate) async fn fetch_referendum(
 	quantus_client: &crate::chain::client::QuantusClient,
 	index: u32,
 	block_hash: subxt::utils::H256,

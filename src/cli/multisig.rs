@@ -2315,227 +2315,257 @@ async fn handle_info(
 }
 
 /// Decode call data into human-readable format
+/// Render a multisig proposal's stored call for a human about to approve it.
+///
+/// Decoded entirely from the **live** metadata: the pallet is looked up by index,
+/// the call variant by index within that pallet, and each argument against the
+/// type id the metadata declares for it. Nothing about the call layout is
+/// hardcoded here.
+///
+/// The previous implementation resolved the pallet name from metadata but then
+/// matched hardcoded call indices (`idx == 0 => "transfer_allow_death"`) and
+/// hand-parsed arguments by byte offset. A runtime that reordered calls within a
+/// pallet would make it render a confident, fully-formatted description of a
+/// *different* call, with no error — on the screen a signer reads before
+/// approving. Unknown calls now say so instead of guessing.
 async fn decode_call_data(
 	quantus_client: &crate::chain::client::QuantusClient,
 	call_data: &[u8],
 ) -> crate::error::Result<String> {
-	use codec::Decode;
+	// Symbol/decimals only affect how balances are rendered; a lookup failure must
+	// not hide the call itself, so fall back to the raw integer.
+	let symbol_decimals = crate::cli::send::get_chain_properties(quantus_client).await.ok();
+	Ok(describe_call(&quantus_client.client().metadata(), call_data, symbol_decimals.as_ref()))
+}
 
+/// Pure rendering half of [`decode_call_data`], so it can be tested against a
+/// metadata blob without a live node.
+fn describe_call(
+	metadata: &subxt::Metadata,
+	call_data: &[u8],
+	symbol_decimals: Option<&(String, u8)>,
+) -> String {
 	if call_data.len() < 2 {
-		return Ok(format!("   {}  {} bytes (too short)", "Call Size:".dimmed(), call_data.len()));
+		return format!("   {}  {} bytes (too short)", "Call Size:".dimmed(), call_data.len());
 	}
 
 	let pallet_index = call_data[0];
 	let call_index = call_data[1];
-	let args = &call_data[2..];
 
-	// Get metadata to find pallet and call names
-	let metadata = quantus_client.client().metadata();
+	let Some(pallet) = metadata.pallet_by_index(pallet_index) else {
+		return format!(
+			"   {}  unknown pallet index {}\n   {}  {} bytes",
+			"Call:".dimmed(),
+			pallet_index,
+			"Args:".dimmed(),
+			call_data.len() - 2
+		);
+	};
+	let Some(variant) = pallet.call_variant_by_index(call_index) else {
+		return format!(
+			"   {}  {}::<unknown call index {}>\n   {}  {} bytes",
+			"Call:".dimmed(),
+			pallet.name().bright_cyan(),
+			call_index,
+			"Args:".dimmed(),
+			call_data.len() - 2
+		);
+	};
 
-	// Try to find pallet by index
-	let pallet_name = metadata
-		.pallets()
-		.find(|p| p.index() == pallet_index)
-		.map(|p| p.name())
-		.unwrap_or("Unknown");
+	let mut out = format!(
+		"   {}  {}::{}",
+		"Call:".dimmed(),
+		pallet.name().bright_cyan(),
+		variant.name.bright_yellow()
+	);
 
-	// Try to decode based on known patterns
-	match (pallet_index, call_index) {
-		// Balances pallet transfers
-		// transfer_allow_death (0) or transfer_keep_alive (3)
-		(_, idx) if pallet_name == "Balances" && (idx == 0 || idx == 3) => {
-			let call_name = match idx {
-				0 => "transfer_allow_death",
-				3 => "transfer_keep_alive",
-				_ => unreachable!(),
-			};
-
-			if args.len() < 33 {
-				return Ok(format!(
-					"   {}  {}::{} (index {})\n   {}  {} bytes (too short)",
-					"Call:".dimmed(),
-					pallet_name.bright_cyan(),
-					call_name.bright_yellow(),
-					idx,
-					"Args:".dimmed(),
-					args.len()
-				));
-			}
-
-			// Decode MultiAddress::Id (first byte is variant, 0x00 = Id)
-			// Then 32 bytes for AccountId32
-			let address_variant = args[0];
-			if address_variant != 0 {
-				return Ok(format!(
-					"   {}  {}::{} (index {})\n   {}  {} bytes\n   {}  Unknown address variant: {}",
-					"Call:".dimmed(),
-					pallet_name.bright_cyan(),
-					call_name.bright_yellow(),
-					idx,
-					"Args:".dimmed(),
-					args.len(),
+	let mut cursor = &call_data[2..];
+	for field in &variant.fields {
+		let name = field.name.clone().unwrap_or_else(|| "arg".to_string());
+		match subxt::ext::scale_value::scale::decode_as_type(
+			&mut cursor,
+			field.ty.id,
+			metadata.types(),
+		) {
+			Ok(value) => {
+				let rendered = render_call_arg(&value, &name, symbol_decimals, metadata);
+				out.push_str(&format!("\n   {}  {}", format!("{name}:").dimmed(), rendered));
+			},
+			Err(e) => {
+				out.push_str(&format!(
+					"\n   {}  failed to decode `{}`: {}",
 					"Error:".dimmed(),
-					address_variant
+					name,
+					e
 				));
-			}
+				return out;
+			},
+		}
+	}
 
-			let account_bytes: [u8; 32] = args[1..33].try_into().map_err(|_| {
-				crate::error::QuantusError::Generic("Failed to extract account bytes".to_string())
-			})?;
-			let account_id = SpAccountId32::from(account_bytes);
-			let to_address = account_id.to_ss58check();
+	if !cursor.is_empty() {
+		out.push_str(&format!(
+			"\n   {}  {} trailing byte(s) after the decoded arguments",
+			"Warning:".dimmed(),
+			cursor.len()
+		));
+	}
 
-			// Decode amount (Compact<u128>)
-			let mut cursor = &args[33..];
-			let amount: u128 = match codec::Compact::<u128>::decode(&mut cursor) {
-				Ok(compact) => compact.0,
-				Err(_) => {
-					return Ok(format!(
-						"   {}  {}::{} (index {})\n   {}  {}\n   {}  Failed to decode amount",
-						"Call:".dimmed(),
-						pallet_name.bright_cyan(),
-						call_name.bright_yellow(),
-						idx,
-						"To:".dimmed(),
-						to_address.bright_cyan(),
-						"Error:".dimmed()
-					));
-				},
-			};
+	out
+}
 
-			Ok(format!(
-				"   {}  {}::{}\n   {}  {}\n   {}  {}",
-				"Call:".dimmed(),
-				pallet_name.bright_cyan(),
-				call_name.bright_yellow(),
-				"To:".dimmed(),
-				to_address.bright_cyan(),
-				"Amount:".dimmed(),
-				format_balance(amount).bright_green()
-			))
+/// Human rendering of one decoded call argument.
+///
+/// SS58 is used **only** when the metadata declares the argument as `AccountId32`.
+/// Keying it on "32 bytes" instead would print an `H256` — an `authorize_upgrade`
+/// code hash, say — as an address, which is exactly the signer-visible type
+/// confusion this decoder exists to prevent. Every other byte blob renders as
+/// lossless hex so it can be compared against an artifact.
+fn render_call_arg(
+	value: &subxt::ext::scale_value::Value<u32>,
+	field_name: &str,
+	symbol_decimals: Option<&(String, u8)>,
+	metadata: &subxt::Metadata,
+) -> String {
+	if let Some(bytes) = account_bytes(value, metadata) {
+		return SpAccountId32::from(bytes).to_ss58check().bright_cyan().to_string();
+	}
+	if let Some(bytes) = byte_blob(value, metadata) {
+		return format!("0x{}", hex::encode(bytes));
+	}
+	// A sequence the metadata does not call bytes: render it element by element, so a signer
+	// set reads as addresses a signer can check rather than a wall of numbers.
+	if is_sequence(metadata, value.context) {
+		if let Some(subxt::ext::scale_value::Composite::Unnamed(items)) =
+			crate::cli::dynamic_decode::composite(value)
+		{
+			let rendered: Vec<String> = items
+				.iter()
+				.map(|item| render_call_arg(item, field_name, symbol_decimals, metadata))
+				.collect();
+			return format!("[{}]", rendered.join(", "));
+		}
+	}
+	let looks_like_balance =
+		matches!(field_name, "value" | "amount" | "new_free" | "fee" | "deposit");
+	if looks_like_balance {
+		if let (Some((symbol, decimals)), Some(n)) =
+			(symbol_decimals, crate::cli::dynamic_decode::uint(value))
+		{
+			let formatted = crate::cli::send::format_balance(n, *decimals);
+			return format!("{formatted} {symbol}").bright_green().to_string();
+		}
+	}
+	value.to_string()
+}
+
+/// True when the metadata names `id`'s type `name` (last path segment).
+fn type_is_named(metadata: &subxt::Metadata, id: u32, name: &str) -> bool {
+	metadata
+		.types()
+		.resolve(id)
+		.and_then(|t| t.path.segments.last())
+		.map(|segment| segment == name)
+		.unwrap_or(false)
+}
+
+/// Whether the metadata declares `id` a flat run of bytes: a `Vec<u8>`, a `[u8; N]`, or a
+/// single-field wrapper around one (`H256`, `BoundedVec<u8, _>`).
+///
+/// The type has to decide this, not the decoded value. Treating "a composite whose elements
+/// all read as numbers" as bytes makes `Vec<AccountId32>` look like a byte string and renders
+/// one byte per signer, silently dropping 31 of every 32 bytes of a signer set — the one thing
+/// a signer must be able to check before approving a proposal.
+fn is_byte_sequence(metadata: &subxt::Metadata, id: u32) -> bool {
+	use scale_info::TypeDef;
+
+	let Some(ty) = metadata.types().resolve(id) else {
+		return false;
+	};
+	match &ty.type_def {
+		TypeDef::Sequence(seq) => is_u8(metadata, seq.type_param.id),
+		TypeDef::Array(arr) => is_u8(metadata, arr.type_param.id),
+		TypeDef::Composite(c) => match c.fields.as_slice() {
+			[only] => is_byte_sequence(metadata, only.ty.id),
+			_ => false,
 		},
-		// ReversibleTransfers::set_high_security
-		(_, idx) if pallet_name == "ReversibleTransfers" && idx == 0 => {
-			// set_high_security has: delay (enum), interceptor (AccountId32)
-			if args.is_empty() {
-				return Ok(format!(
-					"   {}  {}::set_high_security\n   {}  {} bytes (too short)",
-					"Call:".dimmed(),
-					pallet_name.bright_cyan(),
-					"Args:".dimmed(),
-					args.len()
-				));
-			}
-
-			// Decode delay (BlockNumberOrTimestamp enum)
-			let delay_variant = args[0];
-			let delay_str: String;
-			let offset: usize;
-
-			match delay_variant {
-				0 => {
-					// BlockNumber(u32)
-					if args.len() < 5 {
-						return Ok(format!(
-							"   {}  {}::set_high_security\n   {}  Failed to decode delay (BlockNumber)",
-							"Call:".dimmed(),
-							pallet_name.bright_cyan(),
-							"Error:".dimmed()
-						));
-					}
-					let blocks = u32::from_le_bytes([args[1], args[2], args[3], args[4]]);
-					delay_str = format!("{} blocks", blocks);
-					offset = 5;
-				},
-				1 => {
-					// Timestamp(u64)
-					if args.len() < 9 {
-						return Ok(format!(
-							"   {}  {}::set_high_security\n   {}  Failed to decode delay (Timestamp)",
-							"Call:".dimmed(),
-							pallet_name.bright_cyan(),
-							"Error:".dimmed()
-						));
-					}
-					let millis = u64::from_le_bytes([
-						args[1], args[2], args[3], args[4], args[5], args[6], args[7], args[8],
-					]);
-					let seconds = millis / 1000;
-					delay_str = format!("{} seconds ({} ms)", seconds, millis);
-					offset = 9;
-				},
-				_ => {
-					return Ok(format!(
-						"   {}  {}::set_high_security\n   {}  Unknown delay variant: {}",
-						"Call:".dimmed(),
-						pallet_name.bright_cyan(),
-						"Error:".dimmed(),
-						delay_variant
-					));
-				},
-			}
-
-			// Decode interceptor (AccountId32)
-			if args.len() < offset + 32 {
-				return Ok(format!(
-					"   {}  {}::set_high_security\n   {}  {}\n   {}  Failed to decode interceptor",
-					"Call:".dimmed(),
-					pallet_name.bright_cyan(),
-					"Delay:".dimmed(),
-					delay_str.bright_yellow(),
-					"Error:".dimmed()
-				));
-			}
-
-			let interceptor_bytes: [u8; 32] =
-				args[offset..offset + 32].try_into().map_err(|_| {
-					crate::error::QuantusError::Generic(
-						"Failed to extract interceptor bytes".to_string(),
-					)
-				})?;
-			let interceptor = SpAccountId32::from(interceptor_bytes);
-			let interceptor_ss58 = interceptor
-				.to_ss58check_with_version(sp_core::crypto::Ss58AddressFormat::custom(189));
-
-			Ok(format!(
-				"   {}  {}::set_high_security\n   {}  {}\n   {}  {}",
-				"Call:".dimmed(),
-				pallet_name.bright_cyan(),
-				"Delay:".dimmed(),
-				delay_str.bright_yellow(),
-				"Guardian:".dimmed(),
-				interceptor_ss58.bright_green()
-			))
-		},
-		_ => {
-			// Try to get call name from metadata
-			let call_name = metadata
-				.pallets()
-				.find(|p| p.index() == pallet_index)
-				.and_then(|p| {
-					p.call_variants().and_then(|calls| {
-						calls.iter().find(|v| v.index == call_index).map(|v| v.name.as_str())
-					})
-				})
-				.unwrap_or("unknown");
-
-			Ok(format!(
-				"   {}  {}::{} (index {}:{})\n   {}  {} bytes\n   {}  {}",
-				"Call:".dimmed(),
-				pallet_name.bright_cyan(),
-				call_name.bright_yellow(),
-				pallet_index,
-				call_index,
-				"Args:".dimmed(),
-				args.len(),
-				"Raw:".dimmed(),
-				hex::encode(args).bright_green()
-			))
-		},
+		_ => false,
 	}
 }
 
-/// Query proposal information
+/// Whether the metadata declares `id` a sequence or array of anything.
+fn is_sequence(metadata: &subxt::Metadata, id: u32) -> bool {
+	use scale_info::TypeDef;
+
+	matches!(
+		metadata.types().resolve(id).map(|ty| &ty.type_def),
+		Some(TypeDef::Sequence(_) | TypeDef::Array(_))
+	)
+}
+
+fn is_u8(metadata: &subxt::Metadata, id: u32) -> bool {
+	use scale_info::{TypeDef, TypeDefPrimitive};
+
+	matches!(
+		metadata.types().resolve(id).map(|ty| &ty.type_def),
+		Some(TypeDef::Primitive(TypeDefPrimitive::U8))
+	)
+}
+
+/// A flat `Vec<u8>` / `[u8; N]` payload, for lossless hex rendering. `None` for anything the
+/// metadata does not declare a byte run, which then renders structured instead.
+fn byte_blob(
+	value: &subxt::ext::scale_value::Value<u32>,
+	metadata: &subxt::Metadata,
+) -> Option<Vec<u8>> {
+	is_byte_sequence(metadata, value.context).then(|| flatten_bytes(value))?
+}
+
+/// Collect the bytes of a value [`is_byte_sequence`] has already vouched for.
+fn flatten_bytes(value: &subxt::ext::scale_value::Value<u32>) -> Option<Vec<u8>> {
+	use crate::cli::dynamic_decode::{byte, composite, nth};
+	use subxt::ext::scale_value::Composite;
+
+	let fields: &Composite<u32> = composite(value)?;
+	let len = match fields {
+		Composite::Named(f) => f.len(),
+		Composite::Unnamed(f) => f.len(),
+	};
+	// A newtype wrapper (H256(pub [u8; 32])) nests one level.
+	if len == 1 {
+		if let Some(bytes) = nth(fields, 0).and_then(flatten_bytes) {
+			return Some(bytes);
+		}
+	}
+	if len == 0 {
+		return None;
+	}
+	let mut out = Vec::with_capacity(len);
+	for i in 0..len {
+		out.push(byte(nth(fields, i)?)?);
+	}
+	Some(out)
+}
+
+/// A 32-byte account id, but **only** where the metadata says `AccountId32` —
+/// directly, or inside a `MultiAddress::Id`. Any other 32-byte value is not an
+/// address and must not be shown as one.
+fn account_bytes(
+	value: &subxt::ext::scale_value::Value<u32>,
+	metadata: &subxt::Metadata,
+) -> Option<[u8; 32]> {
+	use crate::cli::dynamic_decode::{nth, variant};
+
+	if let Some(("Id", inner)) = variant(value) {
+		return nth(inner, 0).and_then(|v| account_bytes(v, metadata));
+	}
+	if !type_is_named(metadata, value.context, "AccountId32") {
+		return None;
+	}
+	let bytes = byte_blob(value, metadata)?;
+	bytes.try_into().ok()
+}
+
 async fn handle_proposal_info(
 	multisig_address: String,
 	proposal_id: u32,
@@ -3338,6 +3368,171 @@ mod execute_call_tests {
 		let address = subxt::ext::subxt_core::utils::AccountId32([0x99u8; 32]);
 		assert!(build_propose_tx(address.clone(), vec![0u8; MAX_CALL_BYTES + 1], 5000).is_err());
 		assert!(build_propose_tx(address, transfer_call().encode(), 5000).is_ok());
+	}
+
+	fn test_metadata() -> subxt::Metadata {
+		use codec::Decode;
+		let bytes: &[u8] = include_bytes!("../quantus_metadata.scale");
+		subxt::Metadata::decode(&mut &bytes[..]).expect("valid checked-in metadata")
+	}
+
+	/// Indices come from the metadata, never from a hardcoded table.
+	fn call_indices(md: &subxt::Metadata, pallet: &str, call: &str) -> (u8, u8) {
+		let p = md.pallets().find(|p| p.name() == pallet).expect("pallet present");
+		let v = p.call_variants().expect("pallet has calls");
+		let c = v.iter().find(|v| v.name == call).expect("call present");
+		(p.index(), c.index)
+	}
+
+	#[test]
+	fn describe_call_names_the_call_the_metadata_names() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "Balances", "transfer_allow_death");
+
+		let mut bytes = vec![pallet_idx, call_idx];
+		bytes.push(0x00); // MultiAddress::Id
+		bytes.extend_from_slice(&[7u8; 32]);
+		bytes.extend_from_slice(&codec::Compact(1_000_000_000_000u128).encode());
+
+		let out = describe_call(&md, &bytes, Some(&("QUAN".to_string(), 12)));
+		assert!(out.contains("transfer_allow_death"), "{out}");
+		assert!(!out.contains("trailing byte"), "{out}");
+	}
+
+	/// The regression this decoder exists for: a call index the runtime does not
+	/// define must never be rendered as some other call. The old implementation
+	/// matched hardcoded indices and would confidently mislabel it.
+	/// An `AccountId32` argument renders as an address...
+	#[test]
+	fn describe_call_renders_account_id_as_ss58() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "Balances", "transfer_allow_death");
+		let mut bytes = vec![pallet_idx, call_idx, 0x00];
+		bytes.extend_from_slice(&[7u8; 32]);
+		bytes.extend_from_slice(&codec::Compact(1u128).encode());
+
+		let out = describe_call(&md, &bytes, None);
+		let expected = SpAccountId32::from([7u8; 32]).to_ss58check();
+		assert!(out.contains(&expected), "expected SS58 {expected} in: {out}");
+	}
+
+	/// ...but a 32-byte value the metadata does NOT call an account must not be.
+	/// `authorize_upgrade.code_hash` is an `H256`; showing it as an address would
+	/// stop a signer comparing it against the authorized artifact.
+	#[test]
+	fn describe_call_does_not_render_a_hash_as_an_address() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "System", "authorize_upgrade");
+		let mut bytes = vec![pallet_idx, call_idx];
+		bytes.extend_from_slice(&[7u8; 32]);
+
+		let out = describe_call(&md, &bytes, None);
+		let ss58 = SpAccountId32::from([7u8; 32]).to_ss58check();
+		assert!(!out.contains(&ss58), "H256 must not render as SS58: {out}");
+		assert!(
+			out.contains(&format!("0x{}", hex::encode([7u8; 32]))),
+			"H256 must render as lossless hex: {out}"
+		);
+	}
+
+	/// The regression: `Multisig::create_multisig.signers` is a `Vec<AccountId32>`. Deciding
+	/// "bytes" from the decoded value made a two-signer set render as two hex bytes — one per
+	/// account — so the signer approving the proposal could not see who was in it.
+	#[test]
+	fn describe_call_renders_every_signer_of_a_signer_set() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "Multisig", "create_multisig");
+
+		let signers = [[0x11u8; 32], [0x22u8; 32]];
+		let mut bytes = vec![pallet_idx, call_idx];
+		bytes.extend_from_slice(&codec::Compact(signers.len() as u32).encode());
+		for signer in &signers {
+			bytes.extend_from_slice(signer);
+		}
+		bytes.extend_from_slice(&2u32.encode());
+		bytes.extend_from_slice(&0u64.encode());
+
+		let out = describe_call(&md, &bytes, None);
+		assert!(!out.contains("trailing byte"), "{out}");
+		for signer in &signers {
+			let expected = SpAccountId32::from(*signer).to_ss58check();
+			assert!(out.contains(&expected), "signer {expected} missing from: {out}");
+		}
+		assert!(
+			!out.contains("0x1122"),
+			"a signer set must never collapse to one byte per account: {out}"
+		);
+	}
+
+	/// The flattening that renders `H256` as hex must key on the metadata type, not on the
+	/// decoded shape, or any `Vec` of small structs silently loses all but its first field.
+	#[test]
+	fn byte_blob_only_flattens_what_the_metadata_calls_bytes() {
+		let md = test_metadata();
+		let signers_ty = md
+			.pallets()
+			.find(|p| p.name() == "Multisig")
+			.and_then(|p| p.call_variants().map(|v| v.to_vec()))
+			.expect("Multisig has calls")
+			.into_iter()
+			.find(|v| v.name == "create_multisig")
+			.expect("create_multisig present")
+			.fields
+			.first()
+			.expect("create_multisig takes signers")
+			.ty
+			.id;
+		assert!(!is_byte_sequence(&md, signers_ty), "Vec<AccountId32> is not a byte run");
+		assert!(is_sequence(&md, signers_ty), "but it is a sequence");
+
+		let hash_ty = md
+			.pallets()
+			.find(|p| p.name() == "System")
+			.and_then(|p| p.call_variants().map(|v| v.to_vec()))
+			.expect("System has calls")
+			.into_iter()
+			.find(|v| v.name == "authorize_upgrade")
+			.expect("authorize_upgrade present")
+			.fields
+			.first()
+			.expect("authorize_upgrade takes a code hash")
+			.ty
+			.id;
+		assert!(is_byte_sequence(&md, hash_ty), "H256 is a deliberate byte wrapper");
+	}
+
+	#[test]
+	fn describe_call_refuses_to_guess_an_unknown_call_index() {
+		let md = test_metadata();
+		let balances = md.pallets().find(|p| p.name() == "Balances").expect("Balances present");
+		let defined: Vec<u8> =
+			balances.call_variants().expect("has calls").iter().map(|v| v.index).collect();
+		let unknown = (0u8..=255).find(|i| !defined.contains(i)).expect("some index is free");
+
+		let out = describe_call(&md, &[balances.index(), unknown, 0, 0], None);
+		assert!(out.contains("unknown call index"), "{out}");
+		assert!(!out.contains("transfer"), "must not name any real call: {out}");
+	}
+
+	#[test]
+	fn describe_call_reports_an_unknown_pallet_index() {
+		let md = test_metadata();
+		let used: Vec<u8> = md.pallets().map(|p| p.index()).collect();
+		let unknown = (0u8..=255).find(|i| !used.contains(i)).expect("some index is free");
+		let out = describe_call(&md, &[unknown, 0], None);
+		assert!(out.contains("unknown pallet index"), "{out}");
+	}
+
+	#[test]
+	fn describe_call_flags_trailing_bytes() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "Balances", "transfer_allow_death");
+		let mut bytes = vec![pallet_idx, call_idx, 0x00];
+		bytes.extend_from_slice(&[7u8; 32]);
+		bytes.extend_from_slice(&codec::Compact(1u128).encode());
+		bytes.push(0xAA);
+		let out = describe_call(&md, &bytes, None);
+		assert!(out.contains("trailing byte"), "{out}");
 	}
 
 	#[test]

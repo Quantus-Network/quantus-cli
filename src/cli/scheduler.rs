@@ -44,8 +44,6 @@ async fn list_agenda_range(
 	quantus_client: &crate::chain::client::QuantusClient,
 	range: &str,
 ) -> Result<()> {
-	use quantus_subxt::api;
-
 	// Parse range: from..to (inclusive)
 	let parts: Vec<&str> = range.split("..").collect();
 	if parts.len() != 2 {
@@ -69,25 +67,44 @@ async fn list_agenda_range(
 
 	log_print!("🗓️  Scheduler::Agenda entries for blocks {}..={} (inclusive)", start, end);
 
+	// Decoded against live metadata rather than the generated types: a scheduled
+	// task carries `origin: OriginCaller`, whose variants change whenever a runtime
+	// gains or loses a custom-origin pallet, so the static address rejects any
+	// runtime but the one this CLI was built against.
+	let mut failures = 0u32;
 	for bn in start..=end {
-		let addr = api::storage().scheduler().agenda(
-			quantus_subxt::api::runtime_types::qp_scheduler::BlockNumberOrTimestamp::BlockNumber(
-				bn,
-			),
+		let addr = subxt::dynamic::storage(
+			"Scheduler",
+			"Agenda",
+			vec![subxt::dynamic::Value::unnamed_variant(
+				"BlockNumber",
+				[subxt::dynamic::Value::u128(u128::from(bn))],
+			)],
 		);
 		match storage_at.fetch(&addr).await {
-			Ok(Some(agenda)) => {
-				log_print!("#{}: {:?}", bn, agenda);
+			Ok(Some(thunk)) => match thunk.to_value() {
+				Ok(agenda) => log_print!("#{}: {}", bn, agenda),
+				Err(e) => {
+					failures += 1;
+					log_print!("#{}: error decoding agenda: {:?}", bn, e);
+				},
 			},
 			Ok(None) => {
 				log_print!("#{}: <empty>", bn);
 			},
 			Err(e) => {
+				failures += 1;
 				log_print!("#{}: error fetching agenda: {:?}", bn, e);
 			},
 		}
 	}
 
+	if failures > 0 {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"{failures} of {} blocks could not be read from Scheduler::Agenda",
+			end - start + 1
+		)));
+	}
 	log_success!("Finished scanning Scheduler::Agenda");
 	Ok(())
 }
