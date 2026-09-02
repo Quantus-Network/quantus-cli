@@ -18,6 +18,7 @@ use crate::{
 	},
 	cli::wormhole::{
 		compute_merkle_positions, get_zk_merkle_proof, parse_secret_hex as parse_secret_hex_str,
+		try_get_zk_merkle_proof,
 	},
 	subsquid::{
 		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
@@ -38,6 +39,34 @@ use subxt::{ext::codec::Encode, tx::TxStatus};
 
 /// Result type for collect rewards operations
 pub type Result<T> = std::result::Result<T, CollectRewardsError>;
+
+/// How many of `ascending` (sorted leaf indices) are settled into the ZK tree at
+/// `at_block`. Leaves settle in index order, so provability is monotonic: probing the
+/// highest index answers the common case in one call, and a binary search finds the
+/// boundary when some are still too new.
+async fn count_settled_leaves(
+	quantus_client: &QuantusClient,
+	ascending: &[u64],
+	at_block: subxt::utils::H256,
+) -> Result<usize> {
+	let Some(&highest) = ascending.last() else {
+		return Ok(0);
+	};
+	if try_get_zk_merkle_proof(quantus_client, highest, at_block).await?.is_some() {
+		return Ok(ascending.len());
+	}
+
+	let (mut settled, mut unsettled) = (0usize, ascending.len());
+	while settled < unsettled {
+		let probe = settled + (unsettled - settled) / 2;
+		if try_get_zk_merkle_proof(quantus_client, ascending[probe], at_block).await?.is_some() {
+			settled = probe + 1;
+		} else {
+			unsettled = probe;
+		}
+	}
+	Ok(settled)
+}
 
 const MAX_PRE_SUBMISSION_NULLIFIER_QUERIES: usize = 7;
 
@@ -362,21 +391,61 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			.await
 			.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
 	} else {
-		// Prove against the latest finalized block. Best-block proofs can be
-		// invalidated by reorgs before finality (same class as recursive flows).
-		use subxt::ext::jsonrpsee::{core::client::ClientT, rpc_params};
-		let finalized_hash: subxt::utils::H256 = quantus_client
-			.rpc_client()
-			.request("chain_getFinalizedHead", rpc_params![])
+		// Prove against the head. QPoW finality trails the head by a long way, and a
+		// leaf minted inside that window is not yet in the finalized tree — proving
+		// against the finalized block makes recent rewards permanently unsweepable.
+		// A proof reorged out is re-run; that is much cheaper than waiting for finality.
+		let latest_hash = quantus_client.get_latest_block().await?;
+		quantus_client
+			.client()
+			.blocks()
+			.at(latest_hash)
 			.await
-			.map_err(|e| {
-				CollectRewardsError::from(format!("Failed to get finalized block hash: {}", e))
-			})?;
-		quantus_client.client().blocks().at(finalized_hash).await.map_err(|e| {
-			CollectRewardsError::from(format!("Failed to get finalized block: {}", e))
-		})?
+			.map_err(|e| CollectRewardsError::from(format!("Failed to get latest block: {}", e)))?
 	};
 	let proof_block_hash = proof_block.hash();
+
+	// Leaves settle into the tree in index order, so at any block one threshold
+	// separates provable from not-yet-settled. Checking it here costs a single RPC
+	// call on the common path and turns a failure that used to surface part-way
+	// through proof generation into an immediate one.
+	let mut leaf_indices = Vec::with_capacity(selected_transfers.len());
+	for transfer in &selected_transfers {
+		leaf_indices.push(transfer.leaf_index.parse::<u64>().map_err(|_| {
+			CollectRewardsError::from(format!("Invalid leaf_index: {}", transfer.leaf_index))
+		})?);
+	}
+	let mut ascending = leaf_indices.clone();
+	ascending.sort_unstable();
+	let settled = count_settled_leaves(&quantus_client, &ascending, proof_block_hash).await?;
+
+	if settled < ascending.len() {
+		let cutoff = ascending[settled];
+		progress.on_step(
+			"warning",
+			&format!(
+				"skipping {} of {} transfer(s): leaf index >= {} is not yet settled in the ZK tree at block {:?}. Re-run to sweep them once the chain has folded them in.",
+				ascending.len() - settled,
+				ascending.len(),
+				cutoff,
+				proof_block_hash
+			),
+		);
+		selected_transfers = std::mem::take(&mut selected_transfers)
+			.into_iter()
+			.zip(&leaf_indices)
+			.filter(|(_, leaf_index)| **leaf_index < cutoff)
+			.map(|(transfer, _)| transfer)
+			.collect();
+	}
+
+	if selected_transfers.is_empty() {
+		return Err(CollectRewardsError::from(format!(
+			"None of the {} selected transfer(s) are provable at block {:?}: their leaves are not yet settled in the ZK tree. Re-run once the chain has folded them in, or pass --at-block with a block that includes them.",
+			ascending.len(),
+			proof_block_hash
+		)));
+	}
 
 	// Step 4: Generate proofs
 	progress.on_step("proofs", &format!("Generating {} proofs", selected_transfers.len()));
