@@ -2388,7 +2388,7 @@ fn describe_call(
 			metadata.types(),
 		) {
 			Ok(value) => {
-				let rendered = render_call_arg(&value, &name, symbol_decimals);
+				let rendered = render_call_arg(&value, &name, symbol_decimals, metadata);
 				out.push_str(&format!("\n   {}  {}", format!("{name}:").dimmed(), rendered));
 			},
 			Err(e) => {
@@ -2414,17 +2414,24 @@ fn describe_call(
 	out
 }
 
-/// Best-effort human rendering of one decoded call argument.
+/// Human rendering of one decoded call argument.
 ///
-/// Falls back to `scale_value`'s own formatting; the special cases only make
-/// account ids and balances readable, which is what a signer is checking.
+/// SS58 is used **only** when the metadata declares the argument as `AccountId32`.
+/// Keying it on "32 bytes" instead would print an `H256` — an `authorize_upgrade`
+/// code hash, say — as an address, which is exactly the signer-visible type
+/// confusion this decoder exists to prevent. Every other byte blob renders as
+/// lossless hex so it can be compared against an artifact.
 fn render_call_arg(
 	value: &subxt::ext::scale_value::Value<u32>,
 	field_name: &str,
 	symbol_decimals: Option<&(String, u8)>,
+	metadata: &subxt::Metadata,
 ) -> String {
-	if let Some(bytes) = account_bytes(value) {
+	if let Some(bytes) = account_bytes(value, metadata) {
 		return SpAccountId32::from(bytes).to_ss58check().bright_cyan().to_string();
+	}
+	if let Some(bytes) = byte_blob(value) {
+		return format!("0x{}", hex::encode(bytes));
 	}
 	let looks_like_balance =
 		matches!(field_name, "value" | "amount" | "new_free" | "fee" | "deposit");
@@ -2439,36 +2446,61 @@ fn render_call_arg(
 	value.to_string()
 }
 
-/// Extract a 32-byte account id from `AccountId32`, `MultiAddress::Id`, or a bare
-/// 32-byte sequence, so signers see an address rather than a byte array.
-fn account_bytes(value: &subxt::ext::scale_value::Value<u32>) -> Option<[u8; 32]> {
-	use crate::cli::dynamic_decode::{composite, nth, uint, variant};
-	use subxt::ext::scale_value::{Composite, ValueDef};
+/// True when the metadata names `id`'s type `name` (last path segment).
+fn type_is_named(metadata: &subxt::Metadata, id: u32, name: &str) -> bool {
+	metadata
+		.types()
+		.resolve(id)
+		.and_then(|t| t.path.segments.last())
+		.map(|segment| segment == name)
+		.unwrap_or(false)
+}
 
-	if let Some(("Id", inner)) = variant(value) {
-		return nth(inner, 0).and_then(account_bytes);
-	}
+/// A flat `Vec<u8>` / `[u8; N]` payload, for lossless hex rendering.
+fn byte_blob(value: &subxt::ext::scale_value::Value<u32>) -> Option<Vec<u8>> {
+	use crate::cli::dynamic_decode::{composite, nth, uint};
+	use subxt::ext::scale_value::Composite;
+
 	let fields: &Composite<u32> = composite(value)?;
-	// AccountId32 is a newtype around [u8; 32].
-	if let Some(inner) = nth(fields, 0) {
-		if matches!(inner.value, ValueDef::Composite(_)) {
-			if let Some(bytes) = account_bytes(inner) {
-				return Some(bytes);
-			}
-		}
-	}
 	let len = match fields {
 		Composite::Named(f) => f.len(),
 		Composite::Unnamed(f) => f.len(),
 	};
-	if len != 32 {
+	// A newtype wrapper (H256(pub [u8; 32])) nests one level.
+	if len == 1 {
+		if let Some(inner) = nth(fields, 0) {
+			if let Some(bytes) = byte_blob(inner) {
+				return Some(bytes);
+			}
+		}
+	}
+	if len == 0 {
 		return None;
 	}
-	let mut out = [0u8; 32];
-	for (i, slot) in out.iter_mut().enumerate() {
-		*slot = u8::try_from(uint(nth(fields, i)?)?).ok()?;
+	let mut out = Vec::with_capacity(len);
+	for i in 0..len {
+		out.push(u8::try_from(uint(nth(fields, i)?)?).ok()?);
 	}
 	Some(out)
+}
+
+/// A 32-byte account id, but **only** where the metadata says `AccountId32` —
+/// directly, or inside a `MultiAddress::Id`. Any other 32-byte value is not an
+/// address and must not be shown as one.
+fn account_bytes(
+	value: &subxt::ext::scale_value::Value<u32>,
+	metadata: &subxt::Metadata,
+) -> Option<[u8; 32]> {
+	use crate::cli::dynamic_decode::{nth, variant};
+
+	if let Some(("Id", inner)) = variant(value) {
+		return nth(inner, 0).and_then(|v| account_bytes(v, metadata));
+	}
+	if !type_is_named(metadata, value.context, "AccountId32") {
+		return None;
+	}
+	let bytes = byte_blob(value)?;
+	bytes.try_into().ok()
 }
 
 async fn handle_proposal_info(
@@ -3307,6 +3339,39 @@ mod execute_call_tests {
 	/// The regression this decoder exists for: a call index the runtime does not
 	/// define must never be rendered as some other call. The old implementation
 	/// matched hardcoded indices and would confidently mislabel it.
+	/// An `AccountId32` argument renders as an address...
+	#[test]
+	fn describe_call_renders_account_id_as_ss58() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "Balances", "transfer_allow_death");
+		let mut bytes = vec![pallet_idx, call_idx, 0x00];
+		bytes.extend_from_slice(&[7u8; 32]);
+		bytes.extend_from_slice(&codec::Compact(1u128).encode());
+
+		let out = describe_call(&md, &bytes, None);
+		let expected = SpAccountId32::from([7u8; 32]).to_ss58check();
+		assert!(out.contains(&expected), "expected SS58 {expected} in: {out}");
+	}
+
+	/// ...but a 32-byte value the metadata does NOT call an account must not be.
+	/// `authorize_upgrade.code_hash` is an `H256`; showing it as an address would
+	/// stop a signer comparing it against the authorized artifact.
+	#[test]
+	fn describe_call_does_not_render_a_hash_as_an_address() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "System", "authorize_upgrade");
+		let mut bytes = vec![pallet_idx, call_idx];
+		bytes.extend_from_slice(&[7u8; 32]);
+
+		let out = describe_call(&md, &bytes, None);
+		let ss58 = SpAccountId32::from([7u8; 32]).to_ss58check();
+		assert!(!out.contains(&ss58), "H256 must not render as SS58: {out}");
+		assert!(
+			out.contains(&format!("0x{}", hex::encode([7u8; 32]))),
+			"H256 must render as lossless hex: {out}"
+		);
+	}
+
 	#[test]
 	fn describe_call_refuses_to_guess_an_unknown_call_index() {
 		let md = test_metadata();
