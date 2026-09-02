@@ -204,6 +204,24 @@ pub async fn get_zk_merkle_proof(
 	leaf_index: u64,
 	at_block: subxt::utils::H256,
 ) -> crate::error::Result<ZkMerkleProofRpc> {
+	try_get_zk_merkle_proof(quantus_client, leaf_index, at_block)
+		.await?
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Leaf index {} not found in ZK tree at block {:?}",
+				leaf_index, at_block
+			))
+		})
+}
+
+/// As [`get_zk_merkle_proof`], but a leaf that is not yet settled into the tree at
+/// `at_block` is `Ok(None)` rather than an error. RPC and consistency failures still
+/// fail, so callers can tell "too new to prove yet" apart from "the node is unwell".
+pub async fn try_get_zk_merkle_proof(
+	quantus_client: &QuantusClient,
+	leaf_index: u64,
+	at_block: subxt::utils::H256,
+) -> crate::error::Result<Option<ZkMerkleProofRpc>> {
 	let proof_params = rpc_params![leaf_index, at_block];
 	let proof: Option<ZkMerkleProofRpc> = quantus_client
 		.rpc_client()
@@ -216,12 +234,9 @@ pub async fn get_zk_merkle_proof(
 			))
 		})?;
 
-	let proof = proof.ok_or_else(|| {
-		crate::error::QuantusError::Generic(format!(
-			"Leaf index {} not found in ZK tree at block {:?}",
-			leaf_index, at_block
-		))
-	})?;
+	let Some(proof) = proof else {
+		return Ok(None);
+	};
 
 	if proof.leaf_index != leaf_index {
 		return Err(crate::error::QuantusError::Generic(format!(
@@ -233,7 +248,7 @@ pub async fn get_zk_merkle_proof(
 	// enforces depth == siblings.len().
 	debug_assert_eq!(proof.depth as usize, proof.siblings.len());
 
-	Ok(proof)
+	Ok(Some(proof))
 }
 
 /// Compute sorted siblings and position hints from unsorted siblings.
