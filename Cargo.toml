@@ -108,10 +108,10 @@ event-listener = "5.4.2"
 
 # Blockchain deps: align with chain workspace
 codec = { package = "parity-scale-codec", version = "3.7", features = ["derive"] }
+jsonrpsee = { version = "0.24", features = ["client"] }
 # Resolving a metadata type id to its `TypeDef`, to tell a real byte run from a `Vec` of
 # structs. subxt re-exports scale-value and scale-decode but not scale-info.
 scale-info = { version = "2.11", default-features = false }
-jsonrpsee = { version = "0.24", features = ["client"] }
 sp-core = { version = "39.0.0" }
 sp-runtime = { version = "45.0.0" }
 
