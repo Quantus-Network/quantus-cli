@@ -204,12 +204,14 @@ pub async fn get_zk_merkle_proof(
 	leaf_index: u64,
 	at_block: subxt::utils::H256,
 ) -> crate::error::Result<ZkMerkleProofRpc> {
-	try_get_zk_merkle_proof(quantus_client, leaf_index, at_block).await?.ok_or_else(|| {
-		crate::error::QuantusError::Generic(format!(
-			"Leaf index {} not found in ZK tree at block {:?}",
-			leaf_index, at_block
-		))
-	})
+	try_get_zk_merkle_proof(quantus_client, leaf_index, at_block)
+		.await?
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Leaf index {} not found in ZK tree at block {:?}",
+				leaf_index, at_block
+			))
+		})
 }
 
 /// As [`get_zk_merkle_proof`], but a leaf that is not yet settled into the tree at

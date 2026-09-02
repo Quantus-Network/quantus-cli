@@ -59,13 +59,75 @@ async fn count_settled_leaves(
 	let (mut settled, mut unsettled) = (0usize, ascending.len());
 	while settled < unsettled {
 		let probe = settled + (unsettled - settled) / 2;
-		if try_get_zk_merkle_proof(quantus_client, ascending[probe], at_block).await?.is_some() {
+		if try_get_zk_merkle_proof(quantus_client, ascending[probe], at_block)
+			.await?
+			.is_some()
+		{
 			settled = probe + 1;
 		} else {
 			unsettled = probe;
 		}
 	}
 	Ok(settled)
+}
+
+/// Pick the transfers to withdraw, largest first, from the ones already settled into
+/// the ZK tree. `settled_cutoff` is the lowest leaf index not yet in the tree, or
+/// `None` when every leaf is settled; transfers at or above it are held back so they
+/// cannot crowd a provable transfer out of the selection. Returns the selection and
+/// how many transfers were held back.
+fn select_provable_transfers(
+	unspent_transfers: Vec<Transfer>,
+	settled_cutoff: Option<u64>,
+	requested: Option<u128>,
+) -> Result<(Vec<Transfer>, usize)> {
+	// Parse every unspent transfer (fail early if the indexer returned garbage), then
+	// keep only the provable ones.
+	let mut provable: Vec<(Transfer, u128)> = Vec::new();
+	let mut skipped = 0usize;
+	for t in unspent_transfers {
+		let context = format!("transfer {}", t.id);
+		let amount = parse_transfer_amount(&t.amount, &context)?;
+		let leaf_index = parse_leaf_index(&t.leaf_index, &context)?;
+		if settled_cutoff.is_some_and(|cutoff| leaf_index >= cutoff) {
+			skipped += 1;
+			continue;
+		}
+		provable.push((t, amount));
+	}
+
+	let mut total_available: u128 = 0;
+	for (_, amount) in &provable {
+		total_available =
+			checked_add_amount(total_available, *amount, "total available transfers")?;
+	}
+
+	let withdraw_amount = requested.unwrap_or(total_available);
+	if withdraw_amount > total_available {
+		let unsettled_note = if skipped > 0 {
+			format!(" and {} transfer(s) whose leaves are not yet settled in the ZK tree", skipped)
+		} else {
+			String::new()
+		};
+		return Err(CollectRewardsError::from(format!(
+			"Requested {} but only {} available (after filtering spent nullifiers{})",
+			withdraw_amount, total_available, unsettled_note
+		)));
+	}
+
+	// Sort by amount descending (largest first)
+	provable.sort_by_key(|k| std::cmp::Reverse(k.1));
+
+	let mut selected_transfers = Vec::new();
+	let mut selected_total: u128 = 0;
+	for (t, amt) in provable {
+		if selected_total >= withdraw_amount {
+			break;
+		}
+		selected_transfers.push(t);
+		selected_total = checked_add_amount(selected_total, amt, "selected transfers")?;
+	}
+	Ok((selected_transfers, skipped))
 }
 
 const MAX_PRE_SUBMISSION_NULLIFIER_QUERIES: usize = 7;
@@ -322,40 +384,77 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		});
 	}
 
-	// Calculate total available (only unspent)
-	let mut total_available: u128 = 0;
-	for t in &unspent_transfers {
-		let amount = parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
-		total_available = checked_add_amount(total_available, amount, "total available transfers")?;
+	// Get block for proofs - either specific block or latest
+	let proof_block =
+		if let Some(block_num) = config.at_block {
+			// Fetch block hash for the specified block number
+			use subxt::ext::jsonrpsee::{core::client::ClientT, rpc_params};
+			let block_hash: Option<subxt::utils::H256> = quantus_client
+				.rpc_client()
+				.request("chain_getBlockHash", rpc_params![block_num])
+				.await
+				.map_err(|e| {
+					CollectRewardsError::from(format!(
+						"Failed to get block hash for block {}: {}",
+						block_num, e
+					))
+				})?;
+			let block_hash = block_hash.ok_or_else(|| {
+				CollectRewardsError::from(format!("Block {} not found", block_num))
+			})?;
+			quantus_client
+				.client()
+				.blocks()
+				.at(block_hash)
+				.await
+				.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
+		} else {
+			// Prove against the head. QPoW finality trails the head by a long way, and a
+			// leaf minted inside that window is not yet in the finalized tree — proving
+			// against the finalized block makes recent rewards permanently unsweepable.
+			// A proof reorged out is re-run; that is much cheaper than waiting for finality.
+			let latest_hash = quantus_client.get_latest_block().await?;
+			quantus_client.client().blocks().at(latest_hash).await.map_err(|e| {
+				CollectRewardsError::from(format!("Failed to get latest block: {}", e))
+			})?
+		};
+	let proof_block_hash = proof_block.hash();
+
+	// Leaves settle into the tree in index order, so at any block one threshold
+	// separates provable from not-yet-settled. It has to be established before the
+	// amount selection, or a not-yet-settled leaf crowds out a settled one that could
+	// have covered the request. Costs a single RPC call on the common path.
+	let mut ascending = Vec::with_capacity(unspent_transfers.len());
+	for transfer in &unspent_transfers {
+		ascending
+			.push(parse_leaf_index(&transfer.leaf_index, &format!("transfer {}", transfer.id))?);
+	}
+	ascending.sort_unstable();
+	let settled = count_settled_leaves(&quantus_client, &ascending, proof_block_hash).await?;
+	let settled_cutoff = ascending.get(settled).copied();
+
+	let unspent_count = unspent_transfers.len();
+	let (selected_transfers, skipped) =
+		select_provable_transfers(unspent_transfers, settled_cutoff, config.amount)?;
+
+	if skipped > 0 {
+		progress.on_step(
+			"warning",
+			&format!(
+				"Skipping {} of {} unspent transfer(s): leaf index >= {} is not yet settled in the ZK tree at block {:?}. Re-run to sweep them once the chain has folded them in.",
+				skipped,
+				unspent_count,
+				settled_cutoff.unwrap_or_default(),
+				proof_block_hash
+			),
+		);
 	}
 
-	// Determine amount to withdraw
-	let withdraw_amount = config.amount.unwrap_or(total_available);
-	if withdraw_amount > total_available {
+	if selected_transfers.is_empty() {
 		return Err(CollectRewardsError::from(format!(
-			"Requested {} but only {} available (after filtering spent nullifiers)",
-			withdraw_amount, total_available
+			"None of the {} unspent transfer(s) are provable at block {:?}: their leaves are not yet settled in the ZK tree. Re-run once the chain has folded them in, or pass --at-block with a block that includes them.",
+			unspent_count, proof_block_hash
 		)));
-	}
-
-	// Parse amounts for sorting (fail early if any are invalid)
-	let mut transfers_with_amounts: Vec<(Transfer, u128)> = Vec::new();
-	for t in unspent_transfers {
-		let amt = parse_transfer_amount(&t.amount, &format!("transfer {}", t.id))?;
-		transfers_with_amounts.push((t, amt));
-	}
-
-	// Sort by amount descending (largest first)
-	transfers_with_amounts.sort_by_key(|k| std::cmp::Reverse(k.1));
-
-	let mut selected_transfers = Vec::new();
-	let mut selected_total: u128 = 0;
-	for (t, amt) in transfers_with_amounts {
-		if selected_total >= withdraw_amount {
-			break;
-		}
-		selected_transfers.push(t);
-		selected_total = checked_add_amount(selected_total, amt, "selected transfers")?;
 	}
 
 	if config.dry_run {
@@ -366,85 +465,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			batches: vec![],
 			transfers_processed: selected_transfers.len(),
 		});
-	}
-
-	// Get block for proofs - either specific block or latest
-	let proof_block = if let Some(block_num) = config.at_block {
-		// Fetch block hash for the specified block number
-		use subxt::ext::jsonrpsee::{core::client::ClientT, rpc_params};
-		let block_hash: Option<subxt::utils::H256> = quantus_client
-			.rpc_client()
-			.request("chain_getBlockHash", rpc_params![block_num])
-			.await
-			.map_err(|e| {
-				CollectRewardsError::from(format!(
-					"Failed to get block hash for block {}: {}",
-					block_num, e
-				))
-			})?;
-		let block_hash = block_hash
-			.ok_or_else(|| CollectRewardsError::from(format!("Block {} not found", block_num)))?;
-		quantus_client
-			.client()
-			.blocks()
-			.at(block_hash)
-			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get block: {}", e)))?
-	} else {
-		// Prove against the head. QPoW finality trails the head by a long way, and a
-		// leaf minted inside that window is not yet in the finalized tree — proving
-		// against the finalized block makes recent rewards permanently unsweepable.
-		// A proof reorged out is re-run; that is much cheaper than waiting for finality.
-		let latest_hash = quantus_client.get_latest_block().await?;
-		quantus_client
-			.client()
-			.blocks()
-			.at(latest_hash)
-			.await
-			.map_err(|e| CollectRewardsError::from(format!("Failed to get latest block: {}", e)))?
-	};
-	let proof_block_hash = proof_block.hash();
-
-	// Leaves settle into the tree in index order, so at any block one threshold
-	// separates provable from not-yet-settled. Checking it here costs a single RPC
-	// call on the common path and turns a failure that used to surface part-way
-	// through proof generation into an immediate one.
-	let mut leaf_indices = Vec::with_capacity(selected_transfers.len());
-	for transfer in &selected_transfers {
-		leaf_indices.push(transfer.leaf_index.parse::<u64>().map_err(|_| {
-			CollectRewardsError::from(format!("Invalid leaf_index: {}", transfer.leaf_index))
-		})?);
-	}
-	let mut ascending = leaf_indices.clone();
-	ascending.sort_unstable();
-	let settled = count_settled_leaves(&quantus_client, &ascending, proof_block_hash).await?;
-
-	if settled < ascending.len() {
-		let cutoff = ascending[settled];
-		progress.on_step(
-			"warning",
-			&format!(
-				"skipping {} of {} transfer(s): leaf index >= {} is not yet settled in the ZK tree at block {:?}. Re-run to sweep them once the chain has folded them in.",
-				ascending.len() - settled,
-				ascending.len(),
-				cutoff,
-				proof_block_hash
-			),
-		);
-		selected_transfers = std::mem::take(&mut selected_transfers)
-			.into_iter()
-			.zip(&leaf_indices)
-			.filter(|(_, leaf_index)| **leaf_index < cutoff)
-			.map(|(transfer, _)| transfer)
-			.collect();
-	}
-
-	if selected_transfers.is_empty() {
-		return Err(CollectRewardsError::from(format!(
-			"None of the {} selected transfer(s) are provable at block {:?}: their leaves are not yet settled in the ZK tree. Re-run once the chain has folded them in, or pass --at-block with a block that includes them.",
-			ascending.len(),
-			proof_block_hash
-		)));
 	}
 
 	// Step 4: Generate proofs
@@ -1212,6 +1232,64 @@ mod tests {
 		let result = decode_input_amount_from_leaf(&leaf_data).unwrap();
 		// 1 QTM = 10^12 planck, quantized = 10^12 / 10^10 = 100
 		assert_eq!(result, 100);
+	}
+
+	fn unspent_transfer(id: &str, leaf_index: u64, amount: u128) -> Transfer {
+		Transfer {
+			id: id.to_string(),
+			block_id: "b1".to_string(),
+			block_height: 1,
+			timestamp: "2024-01-01T00:00:00.000Z".to_string(),
+			extrinsic_hash: None,
+			from_id: "from".to_string(),
+			to_id: "to".to_string(),
+			amount: amount.to_string(),
+			fee: "0".to_string(),
+			from_hash: "aa".to_string(),
+			to_hash: "bb".to_string(),
+			leaf_index: leaf_index.to_string(),
+			transfer_count: "0".to_string(),
+		}
+	}
+
+	#[test]
+	fn select_provable_transfers_backfills_past_an_unsettled_leaf() {
+		// The largest transfer is the newest leaf and is not yet in the ZK tree. The
+		// request must be covered from the settled transfer instead of failing.
+		let unspent = vec![unspent_transfer("new", 9, 100), unspent_transfer("old", 1, 60)];
+		let (selected, skipped) = select_provable_transfers(unspent, Some(9), Some(50)).unwrap();
+
+		assert_eq!(skipped, 1);
+		assert_eq!(selected.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["old"]);
+	}
+
+	#[test]
+	fn select_provable_transfers_rejects_a_request_the_settled_leaves_cannot_cover() {
+		let unspent = vec![unspent_transfer("new", 9, 100), unspent_transfer("old", 1, 60)];
+		let err = select_provable_transfers(unspent, Some(9), Some(80))
+			.expect_err("80 is not coverable from the 60 that is settled");
+
+		assert!(err.message.contains("only 60 available"), "unexpected error: {}", err.message);
+		assert!(err.message.contains("not yet settled"), "unexpected error: {}", err.message);
+	}
+
+	#[test]
+	fn select_provable_transfers_sweeps_everything_when_all_leaves_are_settled() {
+		let unspent = vec![unspent_transfer("new", 9, 100), unspent_transfer("old", 1, 60)];
+		let (selected, skipped) = select_provable_transfers(unspent, None, None).unwrap();
+
+		assert_eq!(skipped, 0);
+		// Largest first.
+		assert_eq!(selected.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(), vec!["new", "old"]);
+	}
+
+	#[test]
+	fn select_provable_transfers_selects_nothing_when_no_leaf_is_settled() {
+		let unspent = vec![unspent_transfer("new", 9, 100), unspent_transfer("older", 1, 60)];
+		let (selected, skipped) = select_provable_transfers(unspent, Some(1), None).unwrap();
+
+		assert!(selected.is_empty());
+		assert_eq!(skipped, 2);
 	}
 
 	const TEST_SECRET_HEX: &str =
