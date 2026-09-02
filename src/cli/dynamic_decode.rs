@@ -60,6 +60,15 @@ pub(crate) fn uint(v: &Val) -> Option<u128> {
 	}
 }
 
+/// One byte, read strictly. Unlike [`uint`] this does not reach into composites: a
+/// `Vec<AccountId32>` must not pass as a byte string by yielding each account's first byte.
+pub(crate) fn byte(v: &Val) -> Option<u8> {
+	match &v.value {
+		ValueDef::Primitive(Primitive::U128(n)) => u8::try_from(*n).ok(),
+		_ => None,
+	}
+}
+
 pub(crate) fn boolean(v: &Val) -> Option<bool> {
 	match &v.value {
 		ValueDef::Primitive(Primitive::Bool(b)) => Some(*b),

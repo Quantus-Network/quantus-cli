@@ -2430,8 +2430,21 @@ fn render_call_arg(
 	if let Some(bytes) = account_bytes(value, metadata) {
 		return SpAccountId32::from(bytes).to_ss58check().bright_cyan().to_string();
 	}
-	if let Some(bytes) = byte_blob(value) {
+	if let Some(bytes) = byte_blob(value, metadata) {
 		return format!("0x{}", hex::encode(bytes));
+	}
+	// A sequence the metadata does not call bytes: render it element by element, so a signer
+	// set reads as addresses a signer can check rather than a wall of numbers.
+	if is_sequence(metadata, value.context) {
+		if let Some(subxt::ext::scale_value::Composite::Unnamed(items)) =
+			crate::cli::dynamic_decode::composite(value)
+		{
+			let rendered: Vec<String> = items
+				.iter()
+				.map(|item| render_call_arg(item, field_name, symbol_decimals, metadata))
+				.collect();
+			return format!("[{}]", rendered.join(", "));
+		}
 	}
 	let looks_like_balance =
 		matches!(field_name, "value" | "amount" | "new_free" | "fee" | "deposit");
@@ -2456,9 +2469,61 @@ fn type_is_named(metadata: &subxt::Metadata, id: u32, name: &str) -> bool {
 		.unwrap_or(false)
 }
 
-/// A flat `Vec<u8>` / `[u8; N]` payload, for lossless hex rendering.
-fn byte_blob(value: &subxt::ext::scale_value::Value<u32>) -> Option<Vec<u8>> {
-	use crate::cli::dynamic_decode::{composite, nth, uint};
+/// Whether the metadata declares `id` a flat run of bytes: a `Vec<u8>`, a `[u8; N]`, or a
+/// single-field wrapper around one (`H256`, `BoundedVec<u8, _>`).
+///
+/// The type has to decide this, not the decoded value. Treating "a composite whose elements
+/// all read as numbers" as bytes makes `Vec<AccountId32>` look like a byte string and renders
+/// one byte per signer, silently dropping 31 of every 32 bytes of a signer set — the one thing
+/// a signer must be able to check before approving a proposal.
+fn is_byte_sequence(metadata: &subxt::Metadata, id: u32) -> bool {
+	use scale_info::TypeDef;
+
+	let Some(ty) = metadata.types().resolve(id) else {
+		return false;
+	};
+	match &ty.type_def {
+		TypeDef::Sequence(seq) => is_u8(metadata, seq.type_param.id),
+		TypeDef::Array(arr) => is_u8(metadata, arr.type_param.id),
+		TypeDef::Composite(c) => match c.fields.as_slice() {
+			[only] => is_byte_sequence(metadata, only.ty.id),
+			_ => false,
+		},
+		_ => false,
+	}
+}
+
+/// Whether the metadata declares `id` a sequence or array of anything.
+fn is_sequence(metadata: &subxt::Metadata, id: u32) -> bool {
+	use scale_info::TypeDef;
+
+	matches!(
+		metadata.types().resolve(id).map(|ty| &ty.type_def),
+		Some(TypeDef::Sequence(_) | TypeDef::Array(_))
+	)
+}
+
+fn is_u8(metadata: &subxt::Metadata, id: u32) -> bool {
+	use scale_info::{TypeDef, TypeDefPrimitive};
+
+	matches!(
+		metadata.types().resolve(id).map(|ty| &ty.type_def),
+		Some(TypeDef::Primitive(TypeDefPrimitive::U8))
+	)
+}
+
+/// A flat `Vec<u8>` / `[u8; N]` payload, for lossless hex rendering. `None` for anything the
+/// metadata does not declare a byte run, which then renders structured instead.
+fn byte_blob(
+	value: &subxt::ext::scale_value::Value<u32>,
+	metadata: &subxt::Metadata,
+) -> Option<Vec<u8>> {
+	is_byte_sequence(metadata, value.context).then(|| flatten_bytes(value))?
+}
+
+/// Collect the bytes of a value [`is_byte_sequence`] has already vouched for.
+fn flatten_bytes(value: &subxt::ext::scale_value::Value<u32>) -> Option<Vec<u8>> {
+	use crate::cli::dynamic_decode::{byte, composite, nth};
 	use subxt::ext::scale_value::Composite;
 
 	let fields: &Composite<u32> = composite(value)?;
@@ -2468,10 +2533,8 @@ fn byte_blob(value: &subxt::ext::scale_value::Value<u32>) -> Option<Vec<u8>> {
 	};
 	// A newtype wrapper (H256(pub [u8; 32])) nests one level.
 	if len == 1 {
-		if let Some(inner) = nth(fields, 0) {
-			if let Some(bytes) = byte_blob(inner) {
-				return Some(bytes);
-			}
+		if let Some(bytes) = nth(fields, 0).and_then(flatten_bytes) {
+			return Some(bytes);
 		}
 	}
 	if len == 0 {
@@ -2479,7 +2542,7 @@ fn byte_blob(value: &subxt::ext::scale_value::Value<u32>) -> Option<Vec<u8>> {
 	}
 	let mut out = Vec::with_capacity(len);
 	for i in 0..len {
-		out.push(u8::try_from(uint(nth(fields, i)?)?).ok()?);
+		out.push(byte(nth(fields, i)?)?);
 	}
 	Some(out)
 }
@@ -2499,7 +2562,7 @@ fn account_bytes(
 	if !type_is_named(metadata, value.context, "AccountId32") {
 		return None;
 	}
-	let bytes = byte_blob(value)?;
+	let bytes = byte_blob(value, metadata)?;
 	bytes.try_into().ok()
 }
 
@@ -3370,6 +3433,72 @@ mod execute_call_tests {
 			out.contains(&format!("0x{}", hex::encode([7u8; 32]))),
 			"H256 must render as lossless hex: {out}"
 		);
+	}
+
+	/// The regression: `Multisig::create_multisig.signers` is a `Vec<AccountId32>`. Deciding
+	/// "bytes" from the decoded value made a two-signer set render as two hex bytes — one per
+	/// account — so the signer approving the proposal could not see who was in it.
+	#[test]
+	fn describe_call_renders_every_signer_of_a_signer_set() {
+		let md = test_metadata();
+		let (pallet_idx, call_idx) = call_indices(&md, "Multisig", "create_multisig");
+
+		let signers = [[0x11u8; 32], [0x22u8; 32]];
+		let mut bytes = vec![pallet_idx, call_idx];
+		bytes.extend_from_slice(&codec::Compact(signers.len() as u32).encode());
+		for signer in &signers {
+			bytes.extend_from_slice(signer);
+		}
+		bytes.extend_from_slice(&2u32.encode());
+		bytes.extend_from_slice(&0u64.encode());
+
+		let out = describe_call(&md, &bytes, None);
+		assert!(!out.contains("trailing byte"), "{out}");
+		for signer in &signers {
+			let expected = SpAccountId32::from(*signer).to_ss58check();
+			assert!(out.contains(&expected), "signer {expected} missing from: {out}");
+		}
+		assert!(
+			!out.contains("0x1122"),
+			"a signer set must never collapse to one byte per account: {out}"
+		);
+	}
+
+	/// The flattening that renders `H256` as hex must key on the metadata type, not on the
+	/// decoded shape, or any `Vec` of small structs silently loses all but its first field.
+	#[test]
+	fn byte_blob_only_flattens_what_the_metadata_calls_bytes() {
+		let md = test_metadata();
+		let signers_ty = md
+			.pallets()
+			.find(|p| p.name() == "Multisig")
+			.and_then(|p| p.call_variants().map(|v| v.to_vec()))
+			.expect("Multisig has calls")
+			.into_iter()
+			.find(|v| v.name == "create_multisig")
+			.expect("create_multisig present")
+			.fields
+			.first()
+			.expect("create_multisig takes signers")
+			.ty
+			.id;
+		assert!(!is_byte_sequence(&md, signers_ty), "Vec<AccountId32> is not a byte run");
+		assert!(is_sequence(&md, signers_ty), "but it is a sequence");
+
+		let hash_ty = md
+			.pallets()
+			.find(|p| p.name() == "System")
+			.and_then(|p| p.call_variants().map(|v| v.to_vec()))
+			.expect("System has calls")
+			.into_iter()
+			.find(|v| v.name == "authorize_upgrade")
+			.expect("authorize_upgrade present")
+			.fields
+			.first()
+			.expect("authorize_upgrade takes a code hash")
+			.ty
+			.id;
+		assert!(is_byte_sequence(&md, hash_ty), "H256 is a deliberate byte wrapper");
 	}
 
 	#[test]
