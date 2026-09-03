@@ -140,6 +140,14 @@ impl QuantusClient {
 		// Create SubXT client using the configured RPC client
 		let client = OnlineClient::<ChainConfig>::from_rpc_client(rpc_client).await?;
 
+		// subxt pins metadata and runtime version to the latest *finalized* block. QPoW
+		// finality trails the head by a long way (~100 blocks), so a client left on that
+		// default reports the pre-upgrade runtime for ~20 minutes after an upgrade
+		// enacts: governance config reads stale, calls added by the upgrade look absent,
+		// and `transaction_version` is wrong, which signs extrinsics the chain rejects.
+		// Re-point both at the head, matching every other read path in the CLI (#152).
+		Self::retarget_to_head(&client, &ws_client, &display_node_url).await?;
+
 		// Reject non-Quantus / older-unsupported runtimes before encode/sign. Newer-than-table
 		// Quantus specs are allowed with a warning (see validate_runtime_identity).
 		if enforce_runtime_identity {
@@ -162,6 +170,68 @@ impl QuantusClient {
 		log_verbose!("✅ Connected to Quantus node successfully!");
 
 		Ok(QuantusClient { client, rpc_client: ws_client, node_url: node_url.to_string() })
+	}
+
+	/// Re-point a freshly built client's metadata and runtime version at the chain head.
+	///
+	/// Failing here would leave the client silently on finalized-block metadata, so a
+	/// lookup failure is an error rather than a fallback.
+	async fn retarget_to_head(
+		client: &OnlineClient<ChainConfig>,
+		ws_client: &WsClient,
+		display_node_url: &str,
+	) -> Result<(), QuantusError> {
+		use codec::Decode;
+		use jsonrpsee::core::client::ClientT;
+
+		// No block argument: both RPCs answer at the head.
+		let metadata_hex: String = ws_client
+			.request::<String, [(); 0]>("state_getMetadata", [])
+			.await
+			.map_err(|e| {
+				QuantusError::NetworkError(format!(
+					"Failed to fetch runtime metadata at the head from {display_node_url}: {e:?}"
+				))
+			})?;
+		let metadata_bytes = hex::decode(metadata_hex.trim_start_matches("0x")).map_err(|e| {
+			QuantusError::NetworkError(format!("Runtime metadata is not valid hex: {e:?}"))
+		})?;
+		let metadata = subxt::Metadata::decode(&mut &metadata_bytes[..]).map_err(|e| {
+			QuantusError::NetworkError(format!("Failed to decode runtime metadata: {e:?}"))
+		})?;
+
+		let version: serde_json::Value = ws_client
+			.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
+			.await
+			.map_err(|e| {
+				QuantusError::NetworkError(format!(
+					"Failed to fetch runtime version at the head from {display_node_url}: {e:?}"
+				))
+			})?;
+		let field = |name: &str| -> Result<u32, QuantusError> {
+			version
+				.get(name)
+				.and_then(serde_json::Value::as_u64)
+				.and_then(|v| u32::try_from(v).ok())
+				.ok_or_else(|| {
+					QuantusError::NetworkError(format!(
+						"Runtime version from {display_node_url} has no usable `{name}`"
+					))
+				})
+		};
+		let runtime_version = subxt::client::RuntimeVersion {
+			spec_version: field("specVersion")?,
+			transaction_version: field("transactionVersion")?,
+		};
+
+		log_verbose!(
+			"📡 Using head runtime: spec {} / tx {}",
+			runtime_version.spec_version,
+			runtime_version.transaction_version
+		);
+		client.set_metadata(metadata);
+		client.set_runtime_version(runtime_version);
+		Ok(())
 	}
 
 	/// Get reference to the underlying SubXT client
