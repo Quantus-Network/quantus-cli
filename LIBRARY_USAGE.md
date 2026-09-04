@@ -51,6 +51,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
+`QuantusClient::new` reads the runtime version and metadata from the current best block, so a
+runtime upgrade is visible as soon as it enacts. To decode an older block, ask for a client pinned
+to that block. It shares the connection and only fetches metadata when the block ran a different
+runtime:
+
+```rust
+let at_finalized = client.at_block(finalized_hash).await?;
+let events = at_finalized.client().blocks().at(finalized_hash).await?.events().await?;
+```
+
 ### 3. Loading a Wallet for Transactions
 
 ```rust

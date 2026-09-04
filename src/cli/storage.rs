@@ -504,17 +504,17 @@ pub async fn iterate_storage_entries(
 		limit.to_string().bright_yellow()
 	);
 
-	// Validate pallet exists
-	validate_pallet_exists(quantus_client.client(), pallet_name)?;
-
-	// Determine block hash to use
 	let block_hash = if let Some(block_id) = block_identifier {
 		resolve_block_hash(quantus_client, &block_id).await?
 	} else {
 		quantus_client.get_latest_block().await?
 	};
+	let at_block = quantus_client.at_block(block_hash).await?;
+	let quantus_client = &at_block;
 
 	log_verbose!("📦 Using block: {:?}", block_hash);
+
+	validate_pallet_exists(quantus_client.client(), pallet_name)?;
 
 	// Try to get storage metadata to show what type of storage this is
 	let metadata = quantus_client.client().metadata();
@@ -714,13 +714,15 @@ async fn get_storage_by_parts(
 		log_print!("🔑 With key: {}", key_value.bright_yellow());
 	}
 
-	validate_pallet_exists(quantus_client.client(), &pallet)?;
-
 	let block_hash = if let Some(block_id) = &block {
 		resolve_block_hash(quantus_client, block_id).await?
 	} else {
 		quantus_client.get_latest_block().await?
 	};
+	let at_block = quantus_client.at_block(block_hash).await?;
+	let quantus_client = &at_block;
+
+	validate_pallet_exists(quantus_client.client(), &pallet)?;
 
 	let entry_count = count_storage_entries(quantus_client, &pallet, &name, block_hash).await?;
 	let is_storage_value = entry_count == 1;
