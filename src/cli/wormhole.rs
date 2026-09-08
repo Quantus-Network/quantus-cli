@@ -871,8 +871,7 @@ pub enum WormholeCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 
-		/// Output directory for proof files. Must not already contain
-		/// `public_batch_*.hex` or `batch_*` artifacts from a previous run.
+		/// Output directory for proof files
 		#[arg(short, long, default_value = "/tmp/wormhole_public_batches")]
 		output_dir: String,
 	},
@@ -1349,8 +1348,7 @@ fn show_wormhole_address(secret_file: String) -> crate::error::Result<()> {
 	Ok(())
 }
 
-/// Fetch the latest finalized block as a fully materialised subxt `Block`, decoded with the
-/// runtime that produced it (still the pre-upgrade one while the head has moved on).
+/// Fetch the latest finalized block as a fully materialised subxt `Block`.
 ///
 /// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
 /// of the SDK surface. Network/decoding failures are wrapped in
@@ -1367,8 +1365,7 @@ pub async fn at_finalized_block(
 				"Failed to fetch finalized block hash: {e:?}"
 			))
 		})?;
-	let at_finalized = quantus_client.at_block(finalized_block).await?;
-	let block = at_finalized.client().blocks().at(finalized_block).await.map_err(|e| {
+	let block = quantus_client.client().blocks().at(finalized_block).await.map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!(
 			"Failed to fetch finalized block {finalized_block:?}: {e:?}"
 		))
@@ -1554,69 +1551,11 @@ pub async fn aggregate_proofs(
 /// with normal `multiround` paths that use rounds starting at 1.
 const PREPARE_PUBLIC_BATCH_ROUND_BASE: usize = 1_000_000;
 
-fn is_prepare_artifact_name(name: &str) -> bool {
-	name.starts_with("batch_") || (name.starts_with("public_batch_") && name.ends_with(".hex"))
-}
-
-fn existing_prepare_artifacts(output_dir: &std::path::Path) -> std::io::Result<Vec<String>> {
-	if !output_dir.exists() {
-		return Ok(Vec::new());
-	}
-	let mut hits = Vec::new();
-	for entry in std::fs::read_dir(output_dir)? {
-		let name = entry?.file_name();
-		let Some(name) = name.to_str() else { continue };
-		if is_prepare_artifact_name(name) {
-			hits.push(name.to_string());
-		}
-	}
-	hits.sort();
-	Ok(hits)
-}
-
-/// Refuse to reuse a directory that already holds prepare artifacts. A retry that
-/// deposited again and then overwrote `public_batch_NNNN.hex` would strand the
-/// earlier notes in the wormhole with no client-side proof.
-fn ensure_fresh_prepare_output_dir(output_dir: &str) -> crate::error::Result<()> {
-	let path = std::path::Path::new(output_dir);
-	if path.exists() && !path.is_dir() {
-		return Err(crate::error::QuantusError::Generic(format!(
-			"output path {output_dir} exists and is not a directory"
-		)));
-	}
-	let artifacts = existing_prepare_artifacts(path).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to read output directory {output_dir}: {e}"
-		))
-	})?;
-	if artifacts.is_empty() {
-		return Ok(());
-	}
-	Err(crate::error::QuantusError::Generic(format!(
-		"output directory {output_dir} already contains unsubmitted proof artifacts ({}); \
-		 pass a fresh --output-dir so a retry cannot overwrite the only recovery material \
-		 for deposits already in the wormhole",
-		artifacts.join(", ")
-	)))
-}
-
-fn refuse_existing_path(path: &str) -> crate::error::Result<()> {
-	if std::path::Path::new(path).exists() {
-		Err(crate::error::QuantusError::Generic(format!(
-			"refusing to overwrite existing proof artifact {path}"
-		)))
-	} else {
-		Ok(())
-	}
-}
-
 /// Prepare `count` independent public-batch proofs **without** on-chain verify.
 ///
 /// Each batch: deposit → leaf prove → `aggregate` → `aggregate_public`. Returns
 /// paths to the written `public_batch_NNNN.hex` files. Funds remain in the
 /// wormhole until those proofs are later submitted via `verify_public_batch`.
-/// Refuses an `--output-dir` that already contains prepare artifacts so a retry
-/// cannot overwrite the only recovery material for earlier deposits.
 ///
 /// The wallet must contain a mnemonic (HD derivation). Prefer a dedicated
 /// mnemonic wallet over `crystal_*` developer wallets.
@@ -1644,11 +1583,6 @@ pub async fn prepare_public_batches(
 		)));
 	}
 
-	ensure_fresh_prepare_output_dir(output_dir)?;
-	std::fs::create_dir_all(output_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to create output directory: {e}"))
-	})?;
-
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 	let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
@@ -1660,6 +1594,10 @@ pub async fn prepare_public_batches(
 
 	let wallet = load_multiround_wallet(wallet_name, password, password_file)?;
 	let minting_account = get_minting_account(quantus_client.client()).await?;
+
+	std::fs::create_dir_all(output_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Failed to create output directory: {e}"))
+	})?;
 
 	let needed = amount_planck.saturating_mul(count as u128);
 	let free = get_balance(quantus_client, &wallet.wallet_address).await?;
@@ -1685,9 +1623,6 @@ pub async fn prepare_public_batches(
 	for batch_idx in 0..count {
 		let round = PREPARE_PUBLIC_BATCH_ROUND_BASE.saturating_add(batch_idx);
 		let batch_dir = format!("{output_dir}/batch_{batch_idx:04}");
-		let public_batch_file = format!("{output_dir}/public_batch_{batch_idx:04}.hex");
-		refuse_existing_path(&batch_dir)?;
-		refuse_existing_path(&public_batch_file)?;
 		std::fs::create_dir_all(&batch_dir).map_err(|e| {
 			crate::error::QuantusError::Generic(format!("Failed to create {batch_dir}: {e}"))
 		})?;
@@ -1723,10 +1658,9 @@ pub async fn prepare_public_batches(
 		.await?;
 
 		let aggregated_file = format!("{batch_dir}/aggregated.hex");
-		refuse_existing_path(&aggregated_file)?;
 		aggregate_proofs(proof_files, aggregated_file.clone()).await?;
 
-		refuse_existing_path(&public_batch_file)?;
+		let public_batch_file = format!("{output_dir}/public_batch_{batch_idx:04}.hex");
 		aggregate_public_batch(
 			vec![aggregated_file],
 			wallet.wallet_address.clone(),
@@ -2584,17 +2518,22 @@ async fn execute_initial_transfers(
 	// Query transfer counts BEFORE submitting the batch.
 	// The transfer_count used in the proof is the count at the time of transfer,
 	// which equals the count before the transfer (since it increments after).
-	let tip_block = wormhole_tip_block(quantus_client, execution_mode).await.map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to get tip block for transfer counts: {}",
-			e
-		))
-	})?;
+	let client = quantus_client.client();
+	let tip_block_hash = wormhole_tip_block(quantus_client, execution_mode)
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to get tip block for transfer counts: {}",
+				e
+			))
+		})?
+		.hash();
 	let mut transfer_counts_before: Vec<u64> = Vec::with_capacity(num_proofs);
 	for secret in secrets.iter() {
 		let wormhole_address = SubxtAccountId(*secret.address());
-		let count = tip_block
+		let count = client
 			.storage()
+			.at(tip_block_hash)
 			.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address))
 			.await
 			.map_err(|e| {
@@ -4032,14 +3971,19 @@ async fn run_dissolve(
 	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
 	let wormhole_address = SubxtAccountId(*initial_secret.address());
 
-	let tip_block = wormhole_tip_block(&quantus_client, execution_mode).await.map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to get tip block for dissolve transfer count: {}",
-			e
-		))
-	})?;
-	let transfer_count_before = tip_block
+	let tip_block_hash = wormhole_tip_block(&quantus_client, execution_mode)
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::Generic(format!(
+				"Failed to get tip block for dissolve transfer count: {}",
+				e
+			))
+		})?
+		.hash();
+	let transfer_count_before = quantus_client
+		.client()
 		.storage()
+		.at(tip_block_hash)
 		.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address.clone()))
 		.await
 		.map_err(|e| {
@@ -4933,45 +4877,6 @@ mod tests {
 
 		write_proof_file(path, &proof_bytes).unwrap();
 		assert_eq!(read_proof_file(path).unwrap(), proof_bytes);
-	}
-
-	#[test]
-	fn prepare_output_dir_rejects_existing_public_batch_and_batch_dir() {
-		let dir = tempfile::tempdir().expect("temp dir");
-		let path = dir.path();
-		assert!(ensure_fresh_prepare_output_dir(path.to_str().unwrap()).is_ok());
-
-		std::fs::write(path.join("notes.txt"), b"ok").unwrap();
-		assert!(
-			ensure_fresh_prepare_output_dir(path.to_str().unwrap()).is_ok(),
-			"unrelated files must not block a fresh prepare"
-		);
-
-		std::fs::write(path.join("public_batch_0000.hex"), b"proof").unwrap();
-		let err = ensure_fresh_prepare_output_dir(path.to_str().unwrap()).unwrap_err().to_string();
-		assert!(
-			err.contains("public_batch_0000.hex") && err.contains("fresh --output-dir"),
-			"expected occupied-dir error, got: {err}"
-		);
-
-		std::fs::remove_file(path.join("public_batch_0000.hex")).unwrap();
-		std::fs::create_dir(path.join("batch_0000")).unwrap();
-		let err = ensure_fresh_prepare_output_dir(path.to_str().unwrap()).unwrap_err().to_string();
-		assert!(
-			err.contains("batch_0000"),
-			"expected batch dir to count as an artifact, got: {err}"
-		);
-	}
-
-	#[test]
-	fn refuse_existing_path_blocks_overwrite() {
-		let dir = tempfile::tempdir().expect("temp dir");
-		let path = dir.path().join("public_batch_0000.hex");
-		let path_str = path.to_str().unwrap();
-		refuse_existing_path(path_str).expect("missing path is fine");
-		std::fs::write(&path, b"old").unwrap();
-		let err = refuse_existing_path(path_str).unwrap_err().to_string();
-		assert!(err.contains("refusing to overwrite"), "got: {err}");
 	}
 
 	#[test]
