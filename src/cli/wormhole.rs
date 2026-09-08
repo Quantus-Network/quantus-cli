@@ -2039,7 +2039,7 @@ async fn collect_wormhole_events_for_extrinsic(
 
 		if let subxt::events::Phase::ApplyExtrinsic(ext_idx) = event.phase() {
 			if ext_idx == our_ext_idx {
-				log_print!("    Event: {}::{}", event.pallet_name(), event.variant_name());
+				log_verbose!("    Event: {}::{}", event.pallet_name(), event.variant_name());
 
 				// Decode ExtrinsicFailed to get the specific error
 				if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
