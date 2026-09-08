@@ -113,32 +113,30 @@ async fn handle_block_analyze_command(
 
 	let quantus_client = QuantusClient::new(node_url).await?;
 
-	// Determine which block to analyze
-	let (block_number, block_hash) = if let Some(num) = number {
-		// Convert number to hash using our storage function
-		let hash = storage::resolve_block_hash(&quantus_client, &num.to_string()).await?;
-		(num, hash)
+	let block_hash = if let Some(num) = number {
+		storage::resolve_block_hash(&quantus_client, &num.to_string()).await?
 	} else if let Some(h) = hash {
-		// Parse hash and get block number from storage
-		let parsed_hash = storage::resolve_block_hash(&quantus_client, &h).await?;
-		// Get block number by querying System::Number at that block
-		let storage_at = quantus_client.client().storage().at(parsed_hash);
-		let number_addr = crate::chain::quantus_subxt::api::storage().system().number();
-		let block_num = storage_at.fetch_or_default(&number_addr).await.map_err(|e| {
-			QuantusError::NetworkError(format!("Failed to get block number: {e:?}"))
-		})?;
-		(block_num, parsed_hash)
+		storage::resolve_block_hash(&quantus_client, &h).await?
 	} else if latest {
-		// Use latest block
-		let hash = quantus_client.get_latest_block().await?;
-		let storage_at = quantus_client.client().storage().at(hash);
-		let number_addr = crate::chain::quantus_subxt::api::storage().system().number();
-		let block_num = storage_at.fetch_or_default(&number_addr).await.map_err(|e| {
-			QuantusError::NetworkError(format!("Failed to get latest block number: {e:?}"))
-		})?;
-		(block_num, hash)
+		quantus_client.get_latest_block().await?
 	} else {
 		return Err(QuantusError::Generic("Must specify --number, --hash, or --latest".to_string()));
+	};
+	let quantus_client = quantus_client.at_block(block_hash).await?;
+	let block_number = match number {
+		Some(num) => num,
+		None => {
+			let number_addr = crate::chain::quantus_subxt::api::storage().system().number();
+			quantus_client
+				.client()
+				.storage()
+				.at(block_hash)
+				.fetch_or_default(&number_addr)
+				.await
+				.map_err(|e| {
+					QuantusError::NetworkError(format!("Failed to get block number: {e:?}"))
+				})?
+		},
 	};
 
 	log_print!("📦 Block #{} - {:#x}", block_number, block_hash);

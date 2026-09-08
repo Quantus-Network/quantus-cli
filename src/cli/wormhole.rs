@@ -1282,7 +1282,8 @@ fn show_wormhole_address(secret_file: String) -> crate::error::Result<()> {
 	Ok(())
 }
 
-/// Fetch the latest finalized block as a fully materialised subxt `Block`.
+/// Fetch the latest finalized block as a fully materialised subxt `Block`, decoded with the
+/// runtime that produced it (still the pre-upgrade one while the head has moved on).
 ///
 /// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
 /// of the SDK surface. Network/decoding failures are wrapped in
@@ -1299,7 +1300,8 @@ pub async fn at_finalized_block(
 				"Failed to fetch finalized block hash: {e:?}"
 			))
 		})?;
-	let block = quantus_client.client().blocks().at(finalized_block).await.map_err(|e| {
+	let at_finalized = quantus_client.at_block(finalized_block).await?;
+	let block = at_finalized.client().blocks().at(finalized_block).await.map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!(
 			"Failed to fetch finalized block {finalized_block:?}: {e:?}"
 		))
@@ -2324,22 +2326,17 @@ async fn execute_initial_transfers(
 	// Query transfer counts BEFORE submitting the batch.
 	// The transfer_count used in the proof is the count at the time of transfer,
 	// which equals the count before the transfer (since it increments after).
-	let client = quantus_client.client();
-	let tip_block_hash = wormhole_tip_block(quantus_client, execution_mode)
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to get tip block for transfer counts: {}",
-				e
-			))
-		})?
-		.hash();
+	let tip_block = wormhole_tip_block(quantus_client, execution_mode).await.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to get tip block for transfer counts: {}",
+			e
+		))
+	})?;
 	let mut transfer_counts_before: Vec<u64> = Vec::with_capacity(num_proofs);
 	for secret in secrets.iter() {
 		let wormhole_address = SubxtAccountId(*secret.address());
-		let count = client
+		let count = tip_block
 			.storage()
-			.at(tip_block_hash)
 			.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address))
 			.await
 			.map_err(|e| {
@@ -3777,19 +3774,14 @@ async fn run_dissolve(
 	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
 	let wormhole_address = SubxtAccountId(*initial_secret.address());
 
-	let tip_block_hash = wormhole_tip_block(&quantus_client, execution_mode)
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to get tip block for dissolve transfer count: {}",
-				e
-			))
-		})?
-		.hash();
-	let transfer_count_before = quantus_client
-		.client()
+	let tip_block = wormhole_tip_block(&quantus_client, execution_mode).await.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to get tip block for dissolve transfer count: {}",
+			e
+		))
+	})?;
+	let transfer_count_before = tip_block
 		.storage()
-		.at(tip_block_hash)
 		.fetch(&quantus_node::api::storage().wormhole().transfer_count(wormhole_address.clone()))
 		.await
 		.map_err(|e| {

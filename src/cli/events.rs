@@ -119,7 +119,7 @@ pub async fn handle_events_command(
 	log_print!("🔮 Quantus CLI");
 	log_print!("🎯 Found Block #{}", block_number);
 
-	// Get events from the block
+	let quantus_client = quantus_client.at_block(block_hash).await?;
 	let events = quantus_client.client().blocks().at(block_hash).await?.events().await?;
 
 	log_print!("📋 Block Events:");

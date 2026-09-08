@@ -4,14 +4,19 @@
 //! across all CLI modules.
 
 use crate::{error::QuantusError, log_verbose};
-use jsonrpsee::ws_client::{WsClient, WsClientBuilder};
+use jsonrpsee::{
+	core::client::ClientT,
+	ws_client::{WsClient, WsClientBuilder},
+};
 use qp_dilithium_crypto::types::DilithiumSignatureScheme;
 use sp_core::crypto::AccountId32;
 use sp_runtime::{traits::IdentifyAccount, MultiAddress};
 use std::{sync::Arc, time::Duration};
 use subxt::{
-	backend::rpc::RpcClient,
+	backend::{legacy::LegacyBackend, rpc::RpcClient, Backend, BackendExt},
+	client::RuntimeVersion,
 	config::{substrate::SubstrateHeader, DefaultExtrinsicParams},
+	utils::H256,
 	Config, OnlineClient,
 };
 use subxt_metadata::Metadata as SubxtMetadata;
@@ -131,37 +136,72 @@ impl QuantusClient {
                 QuantusError::NetworkError(error_msg)
             })?;
 
-		// Wrap WS client in Arc for sharing
 		let ws_client = Arc::new(ws_client);
+		let backend = Self::backend(&ws_client);
 
-		// Create RPC client wrapper for subxt
-		let rpc_client = RpcClient::new(ws_client.clone());
-
-		// Create SubXT client using the configured RPC client
-		let client = OnlineClient::<ChainConfig>::from_rpc_client(rpc_client).await?;
+		// subxt's own constructor pins metadata to the latest finalized block. QPoW finality
+		// trails the head by ~100 blocks, so for ~20 minutes after an upgrade enacts that
+		// metadata describes the old runtime while the head already runs the new one. Read
+		// the runtime version and metadata from one best-block hash instead, so the pair
+		// cannot straddle an upgrade either.
+		let best = best_block_hash(&ws_client).await?;
+		let (version_json, runtime_version) = fetch_runtime_version(&ws_client, Some(best)).await?;
 
 		// Reject non-Quantus / older-unsupported runtimes before encode/sign. Newer-than-table
 		// Quantus specs are allowed with a warning (see validate_runtime_identity).
 		if enforce_runtime_identity {
-			use jsonrpsee::core::client::ClientT;
-			let runtime_version: serde_json::Value = ws_client
-				.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
-				.await
-				.map_err(|e| {
-					QuantusError::NetworkError(format!("Failed to fetch runtime version: {e:?}"))
-				})?;
-			crate::config::validate_runtime_version_value(&runtime_version).map_err(
-				|e| match e {
-					QuantusError::NetworkError(msg) =>
-						QuantusError::NetworkError(format!("{msg} (from {display_node_url})")),
-					other => other,
-				},
-			)?;
+			crate::config::validate_runtime_version_value(&version_json).map_err(|e| match e {
+				QuantusError::NetworkError(msg) =>
+					QuantusError::NetworkError(format!("{msg} (from {display_node_url})")),
+				other => other,
+			})?;
 		}
+
+		log_verbose!(
+			"📡 Head {:?} runs spec {} / tx {}",
+			best,
+			runtime_version.spec_version,
+			runtime_version.transaction_version
+		);
+		let genesis_hash = backend.genesis_hash().await?;
+		let metadata = fetch_metadata_at(&backend, best).await?;
+		let client =
+			OnlineClient::from_backend_with(genesis_hash, runtime_version, metadata, backend)?;
 
 		log_verbose!("✅ Connected to Quantus node successfully!");
 
 		Ok(QuantusClient { client, rpc_client: ws_client, node_url: node_url.to_string() })
+	}
+
+	fn backend(ws_client: &Arc<WsClient>) -> Arc<LegacyBackend<ChainConfig>> {
+		Arc::new(LegacyBackend::builder().build(RpcClient::new(ws_client.clone())))
+	}
+
+	/// A client whose metadata and runtime version are the ones `hash` was produced under.
+	///
+	/// Use it to decode that block's events, extrinsics and storage. Reads at the head keep
+	/// using `self`, which is returned unchanged when `hash` runs the same runtime. Never
+	/// sign with the result: the chain verifies signatures against the head runtime.
+	pub async fn at_block(&self, hash: H256) -> crate::error::Result<Self> {
+		let (_, runtime_version) = fetch_runtime_version(&self.rpc_client, Some(hash)).await?;
+		if runtime_version == self.client.runtime_version() {
+			return Ok(self.clone());
+		}
+		log_verbose!(
+			"📡 Block {:?} runs spec {} / tx {}; decoding it with that runtime's metadata",
+			hash,
+			runtime_version.spec_version,
+			runtime_version.transaction_version
+		);
+		let backend = Self::backend(&self.rpc_client);
+		let metadata = fetch_metadata_at(&backend, hash).await?;
+		let client = OnlineClient::from_backend_with(
+			self.client.genesis_hash(),
+			runtime_version,
+			metadata,
+			backend,
+		)?;
+		Ok(Self { client, rpc_client: self.rpc_client.clone(), node_url: self.node_url.clone() })
 	}
 
 	/// Get reference to the underlying SubXT client
@@ -193,19 +233,7 @@ impl QuantusClient {
 	/// This bypasses SubXT's default behavior of using finalized blocks
 	pub async fn get_latest_block(&self) -> crate::error::Result<subxt::utils::H256> {
 		log_verbose!("🔍 Fetching latest block hash via RPC...");
-
-		// Use RPC call to get the latest block hash
-		use jsonrpsee::core::client::ClientT;
-		let latest_hash: subxt::utils::H256 = self
-			.rpc_client
-			.request::<subxt::utils::H256, [(); 0]>("chain_getBlockHash", [])
-			.await
-			.map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch latest block hash: {e:?}"
-				))
-			})?;
-
+		let latest_hash = best_block_hash(&self.rpc_client).await?;
 		log_verbose!("📦 Latest block hash: {:?}", latest_hash);
 		Ok(latest_hash)
 	}
@@ -259,7 +287,6 @@ impl QuantusClient {
 	pub async fn get_genesis_hash(&self) -> crate::error::Result<subxt::utils::H256> {
 		log_verbose!("🔍 Fetching genesis hash via RPC...");
 
-		use jsonrpsee::core::client::ClientT;
 		let genesis_hash: subxt::utils::H256 = self
 			.rpc_client
 			.request::<subxt::utils::H256, [u32; 1]>("chain_getBlockHash", [0u32])
@@ -277,38 +304,18 @@ impl QuantusClient {
 	/// Get runtime version using RPC call
 	pub async fn get_runtime_version(&self) -> crate::error::Result<(u32, u32)> {
 		log_verbose!("🔍 Fetching runtime version via RPC...");
-
-		use jsonrpsee::core::client::ClientT;
-		let runtime_version: serde_json::Value = self
-			.rpc_client
-			.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
-			.await
-			.map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!(
-					"Failed to fetch runtime version: {e:?}"
-				))
-			})?;
-
-		let spec_version = runtime_version["specVersion"].as_u64().ok_or_else(|| {
-			crate::error::QuantusError::NetworkError("Failed to parse spec version".to_string())
-		})? as u32;
-
-		let transaction_version =
-			runtime_version["transactionVersion"].as_u64().ok_or_else(|| {
-				crate::error::QuantusError::NetworkError(
-					"Failed to parse transaction version".to_string(),
-				)
-			})? as u32;
-
-		log_verbose!("🔧 Runtime version: spec={}, tx={}", spec_version, transaction_version);
-		Ok((spec_version, transaction_version))
+		let (_, version) = fetch_runtime_version(&self.rpc_client, None).await?;
+		log_verbose!(
+			"🔧 Runtime version: spec={}, tx={}",
+			version.spec_version,
+			version.transaction_version
+		);
+		Ok((version.spec_version, version.transaction_version))
 	}
 
 	/// Get runtime hash using RPC call (if available)
 	pub async fn get_runtime_hash(&self) -> crate::error::Result<Option<String>> {
 		log_verbose!("🔍 Fetching runtime hash via RPC...");
-
-		use jsonrpsee::core::client::ClientT;
 
 		// Try different possible RPC calls for runtime hash
 		let possible_calls = ["state_getRuntimeHash", "state_getRuntime", "chain_getRuntimeHash"];
@@ -334,6 +341,55 @@ impl QuantusClient {
 		log_verbose!("⚠️  No runtime hash RPC call available");
 		Ok(None)
 	}
+}
+
+async fn best_block_hash(ws_client: &WsClient) -> crate::error::Result<H256> {
+	ws_client.request::<H256, [(); 0]>("chain_getBlockHash", []).await.map_err(|e| {
+		QuantusError::NetworkError(format!("Failed to fetch latest block hash: {e:?}"))
+	})
+}
+
+/// `state_getRuntimeVersion` at `at`, or at the head for `None`: the raw JSON and the parsed pair.
+async fn fetch_runtime_version(
+	ws_client: &WsClient,
+	at: Option<H256>,
+) -> crate::error::Result<(serde_json::Value, RuntimeVersion)> {
+	let value: serde_json::Value =
+		ws_client.request("state_getRuntimeVersion", [at]).await.map_err(|e| {
+			QuantusError::NetworkError(format!("Failed to fetch runtime version: {e:?}"))
+		})?;
+	let version = parse_runtime_version(&value)?;
+	Ok((value, version))
+}
+
+fn parse_runtime_version(value: &serde_json::Value) -> crate::error::Result<RuntimeVersion> {
+	let field = |name: &str| {
+		value
+			.get(name)
+			.and_then(serde_json::Value::as_u64)
+			.and_then(|v| u32::try_from(v).ok())
+			.ok_or_else(|| {
+				QuantusError::NetworkError(format!("Runtime version has no usable `{name}`"))
+			})
+	};
+	Ok(RuntimeVersion {
+		spec_version: field("specVersion")?,
+		transaction_version: field("transactionVersion")?,
+	})
+}
+
+/// The newest metadata version the runtime at `at` serves, negotiated the way subxt does.
+async fn fetch_metadata_at(
+	backend: &LegacyBackend<ChainConfig>,
+	at: H256,
+) -> crate::error::Result<subxt::Metadata> {
+	for version in subxt_metadata::SUPPORTED_METADATA_VERSIONS {
+		match backend.metadata_at_version(version, at).await {
+			Ok(metadata) => return Ok(metadata),
+			Err(e) => log_verbose!("Metadata v{} unavailable at {:?}: {}", version, at, e),
+		}
+	}
+	Ok(backend.legacy_metadata(at).await?)
 }
 
 /// Scheme-aware subxt signer (ML-DSA-65 or ML-DSA-87).
@@ -389,6 +445,118 @@ impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use codec::Encode;
+	use jsonrpsee::{
+		server::{RpcModule, Server, ServerHandle},
+		types::ErrorObjectOwned,
+	};
+	use serde_json::json;
+	use std::sync::Mutex;
+
+	const OLD_RUNTIME: RuntimeVersion =
+		RuntimeVersion { spec_version: 144, transaction_version: 3 };
+	const NEW_RUNTIME: RuntimeVersion =
+		RuntimeVersion { spec_version: 148, transaction_version: 6 };
+	const GENESIS: H256 = H256([0x01; 32]);
+	const FINALIZED: H256 = H256([0x44; 32]);
+	const HEAD: H256 = H256([0x48; 32]);
+
+	fn runtime_at(hash: H256) -> RuntimeVersion {
+		if hash == HEAD {
+			NEW_RUNTIME
+		} else {
+			OLD_RUNTIME
+		}
+	}
+
+	/// A node caught mid-upgrade the way Heisenberg is for ~20 minutes after every enactment:
+	/// the head runs the new runtime, the finalized block still runs the old one. Records the
+	/// block named by every metadata request.
+	async fn mock_node() -> (String, Arc<Mutex<Vec<H256>>>, ServerHandle) {
+		let metadata_requests = Arc::new(Mutex::new(Vec::new()));
+		let server = Server::builder().build("127.0.0.1:0").await.expect("bind mock node");
+		let url = format!("ws://{}", server.local_addr().expect("mock node address"));
+		let mut module = RpcModule::new(metadata_requests.clone());
+		module
+			.register_method("chain_getBlockHash", |params, _, _| {
+				let number: Option<u32> = params.sequence().optional_next()?;
+				Ok::<_, ErrorObjectOwned>(if number == Some(0) { GENESIS } else { HEAD })
+			})
+			.expect("register");
+		module
+			.register_method("chain_getFinalizedHead", |_, _, _| {
+				Ok::<_, ErrorObjectOwned>(FINALIZED)
+			})
+			.expect("register");
+		module
+			.register_method("state_getRuntimeVersion", |params, _, _| {
+				let at: Option<H256> = params.sequence().optional_next()?;
+				let version = runtime_at(at.unwrap_or(HEAD));
+				Ok::<_, ErrorObjectOwned>(json!({
+					"specName": crate::config::EXPECTED_RUNTIME_SPEC_NAME,
+					"specVersion": version.spec_version,
+					"transactionVersion": version.transaction_version,
+				}))
+			})
+			.expect("register");
+		module
+			.register_method("state_call", |params, requests: &Arc<Mutex<Vec<H256>>>, _| {
+				let mut params = params.sequence();
+				let function: String = params.next()?;
+				let _encoded_args: String = params.next()?;
+				let at: Option<H256> = params.optional_next()?;
+				assert_eq!(function, "Metadata_metadata_at_version");
+				requests
+					.lock()
+					.expect("lock")
+					.push(at.expect("metadata request must name a block"));
+				let metadata: &[u8] = include_bytes!("../quantus_metadata.scale");
+				Ok::<_, ErrorObjectOwned>(format!(
+					"0x{}",
+					hex::encode(Some(metadata.to_vec()).encode())
+				))
+			})
+			.expect("register");
+		(url, metadata_requests, server.start(module))
+	}
+
+	#[tokio::test]
+	async fn connect_reads_runtime_version_and_metadata_from_one_head_block() {
+		let (url, metadata_requests, _node) = mock_node().await;
+		let client = QuantusClient::new(&url).await.expect("connect");
+		assert_eq!(client.client().runtime_version(), NEW_RUNTIME);
+		assert_eq!(client.client().genesis_hash(), GENESIS);
+		assert_eq!(*metadata_requests.lock().expect("lock"), vec![HEAD]);
+	}
+
+	#[tokio::test]
+	async fn at_block_decodes_a_pre_upgrade_block_with_the_runtime_that_produced_it() {
+		let (url, metadata_requests, _node) = mock_node().await;
+		let head = QuantusClient::new(&url).await.expect("connect");
+
+		let old = head.at_block(FINALIZED).await.expect("client at the finalized block");
+		assert_eq!(old.client().runtime_version(), OLD_RUNTIME);
+		assert_eq!(head.client().runtime_version(), NEW_RUNTIME, "head client must be untouched");
+		assert_eq!(*metadata_requests.lock().expect("lock"), vec![HEAD, FINALIZED]);
+
+		let same = head.at_block(HEAD).await.expect("client at the head block");
+		assert_eq!(same.client().runtime_version(), NEW_RUNTIME);
+		assert_eq!(
+			*metadata_requests.lock().expect("lock"),
+			vec![HEAD, FINALIZED],
+			"same runtime: metadata is not fetched again"
+		);
+	}
+
+	#[test]
+	fn parse_runtime_version_rejects_missing_fields() {
+		assert!(parse_runtime_version(&json!({ "specVersion": 148 })).is_err());
+		assert_eq!(
+			parse_runtime_version(&json!({ "specVersion": 148, "transactionVersion": 6 }))
+				.expect("parse"),
+			NEW_RUNTIME
+		);
+	}
 
 	#[tokio::test]
 	async fn quantus_client_new_redacts_userinfo_in_invalid_url_error() {
