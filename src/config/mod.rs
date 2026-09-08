@@ -87,6 +87,12 @@ pub const COMPATIBLE_RUNTIMES: &[CompatibleRuntime] = &[
 		supports_ml_dsa_65: true,
 		binds_signing_context: true,
 	},
+	CompatibleRuntime {
+		spec_version: 149,
+		transaction_version: 6,
+		supports_ml_dsa_65: true,
+		binds_signing_context: true,
+	},
 ];
 
 /// Highest `spec_version` listed in [`COMPATIBLE_RUNTIMES`].
@@ -215,6 +221,8 @@ mod tests {
 		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 147, 6)
 			.expect("the fast-upgrade runtime must be accepted");
 		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 148, 6)
+			.expect("the spec-148 runtime must remain accepted");
+		validate_runtime_identity(EXPECTED_RUNTIME_SPEC_NAME, 149, 6)
 			.expect("the runtime this build bundles metadata for must be accepted");
 	}
 
@@ -290,6 +298,7 @@ mod tests {
 		assert!(!runtime_binds_signing_context(145, 4));
 		assert!(!runtime_binds_signing_context(147, 6));
 		assert!(runtime_binds_signing_context(148, 6));
+		assert!(runtime_binds_signing_context(149, 6));
 		assert!(
 			!runtime_binds_signing_context(148, 5),
 			"an unknown tx version must not inherit the context"
@@ -310,6 +319,7 @@ mod tests {
 		assert!(runtime_supports_ml_dsa_65(143, 3));
 		assert!(runtime_supports_ml_dsa_65(147, 6));
 		assert!(runtime_supports_ml_dsa_65(148, 6));
+		assert!(runtime_supports_ml_dsa_65(149, 6));
 		assert!(!runtime_supports_ml_dsa_65(142, 2), "unknown tx version must not match");
 		assert!(
 			runtime_supports_ml_dsa_65(max_compatible_spec_version() + 1, 3),

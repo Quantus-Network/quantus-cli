@@ -130,8 +130,9 @@ mod tests {
 		assert_eq!(context_for_runtime(145, 4), None, "spec 145 verifies with no context");
 		assert_eq!(context_for_runtime(134, 2), None, "the oldest listed pair predates it too");
 		assert_eq!(context_for_runtime(148, 6), Some(EXTRINSIC), "spec 148 introduced it");
+		assert_eq!(context_for_runtime(149, 6), Some(EXTRINSIC), "spec 149 keeps it");
 		assert_eq!(
-			context_for_runtime(149, 7),
+			context_for_runtime(150, 7),
 			Some(EXTRINSIC),
 			"newer unlisted runtimes are assumed to keep it"
 		);

@@ -62,16 +62,28 @@ async fn constants_and_schedules(ctx: &mut ExerciseCtx) -> Result<String> {
 	let constants = ctx.client.client().constants();
 	let payout_quantum =
 		constants.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
-	let minimum_payout =
-		constants.at(&quantus_subxt::api::constants().vesting().minimum_payout())?;
 	let min_claim_interval =
 		constants.at(&quantus_subxt::api::constants().vesting().min_claim_interval())?;
 
-	if payout_quantum == 0 || minimum_payout < payout_quantum {
-		return Err(QuantusError::Generic(format!(
-			"implausible vesting constants: quantum {payout_quantum}, minimum {minimum_payout}"
-		)));
+	if payout_quantum == 0 {
+		return Err(QuantusError::Generic(
+			"implausible vesting constants: PayoutQuantum is 0".into(),
+		));
 	}
+
+	let latest = ctx.client.get_latest_block().await?;
+	let launch = ctx
+		.client
+		.client()
+		.storage()
+		.at(latest)
+		.fetch(&quantus_subxt::api::storage().vesting().launch())
+		.await?;
+	use quantus_subxt::api::runtime_types::pallet_vesting::pallet::LaunchAnchor;
+	let launch_note = match launch {
+		Some(LaunchAnchor::Anchored(at)) => format!("launch anchored at {at}"),
+		Some(LaunchAnchor::Pending) | None => "launch pending".to_string(),
+	};
 
 	let next_id = next_schedule_id(ctx).await?;
 	let schedules = crate::cli::vesting::fetch_all_schedules(&ctx.client).await?;
@@ -90,7 +102,7 @@ async fn constants_and_schedules(ctx: &mut ExerciseCtx) -> Result<String> {
 	}
 
 	Ok(format!(
-		"quantum {payout_quantum}, minimum payout {minimum_payout}, claim interval {min_claim_interval}ms; \
+		"quantum {payout_quantum}, claim interval {min_claim_interval}ms, {launch_note}; \
 		 {} schedule(s), next id {next_id}",
 		schedules.len()
 	))
@@ -363,9 +375,8 @@ async fn ensure_treasury_multisig(
 	Ok(())
 }
 
-/// Top the treasury up from Alice so `create_schedule` can move funds into the pot.
-/// Smallest schedule the chain accepts at the suite's test scale: at least `MinimumPayout`,
-/// rounded up to a whole `PayoutQuantum` so the pallet's alignment check passes.
+/// Smallest schedule the chain accepts at the suite's test scale: a positive
+/// multiple of `PayoutQuantum`.
 pub fn schedule_total(
 	client: &crate::chain::client::QuantusClient,
 	test_unit: u128,
@@ -373,12 +384,10 @@ pub fn schedule_total(
 	let constants = client.client().constants();
 	let payout_quantum =
 		constants.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
-	let minimum_payout =
-		constants.at(&quantus_subxt::api::constants().vesting().minimum_payout())?;
 	if payout_quantum == 0 {
 		return Err(QuantusError::Generic("vesting PayoutQuantum is zero".to_string()));
 	}
-	Ok((5 * test_unit).max(minimum_payout).div_ceil(payout_quantum) * payout_quantum)
+	Ok((5 * test_unit).div_ceil(payout_quantum).max(1) * payout_quantum)
 }
 
 /// Balance the treasury multisig is topped up to. Unlike the other dedicated accounts this one

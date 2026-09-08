@@ -2050,9 +2050,9 @@ pub mod api {
 			.hash();
 		runtime_metadata_hash ==
 			[
-				104u8, 196u8, 70u8, 218u8, 94u8, 164u8, 163u8, 152u8, 189u8, 155u8, 196u8, 185u8,
-				189u8, 151u8, 104u8, 118u8, 115u8, 242u8, 115u8, 237u8, 14u8, 237u8, 29u8, 140u8,
-				142u8, 27u8, 239u8, 20u8, 232u8, 27u8, 158u8, 180u8,
+				20u8, 129u8, 235u8, 192u8, 105u8, 153u8, 56u8, 54u8, 168u8, 246u8, 201u8, 176u8,
+				111u8, 104u8, 43u8, 33u8, 205u8, 165u8, 154u8, 220u8, 208u8, 127u8, 58u8, 167u8,
+				129u8, 13u8, 213u8, 156u8, 215u8, 128u8, 65u8, 226u8,
 			]
 	}
 	pub mod system {
@@ -3180,10 +3180,9 @@ pub mod api {
 						"Events",
 						(),
 						[
-							145u8, 196u8, 168u8, 220u8, 39u8, 202u8, 204u8, 242u8, 110u8, 160u8,
-							206u8, 102u8, 64u8, 203u8, 40u8, 180u8, 196u8, 63u8, 66u8, 122u8,
-							119u8, 47u8, 219u8, 160u8, 184u8, 119u8, 71u8, 227u8, 7u8, 152u8,
-							224u8, 121u8,
+							244u8, 237u8, 38u8, 136u8, 72u8, 66u8, 248u8, 24u8, 139u8, 138u8, 19u8,
+							224u8, 33u8, 74u8, 14u8, 163u8, 159u8, 60u8, 6u8, 133u8, 161u8, 7u8,
+							73u8, 211u8, 101u8, 239u8, 218u8, 110u8, 140u8, 28u8, 92u8, 68u8,
 						],
 					)
 				}
@@ -12265,12 +12264,10 @@ pub mod api {
 				#[encode_as_type(
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
-				#[doc = "Pay the largest valid claim on `schedule_id` to its beneficiary. Payouts are"]
-				#[doc = "rounded down to [`Config::PayoutQuantum`], must meet [`Config::MinimumPayout`],"]
-				#[doc = "and reserve at least one minimum-sized final claim unless the schedule is fully"]
-				#[doc = "vested. Non-final payouts are further rounded down to"]
-				#[doc = "[`NON_FINAL_PAYOUT_QUANTA`] leaf quanta; the leftover stays on the schedule"]
-				#[doc = "until a later claim or the exact final payout."]
+				#[doc = "Pay the largest valid claim on `schedule_id` to its beneficiary. Non-final"]
+				#[doc = "payouts are rounded down to [`NON_FINAL_PAYOUT_QUANTA`] leaf quanta; the"]
+				#[doc = "leftover stays on the schedule until a later claim or the exact final"]
+				#[doc = "payout (at least one [`Config::PayoutQuantum`])."]
 				#[doc = ""]
 				#[doc = "Permissionless: any signed account may call this for any schedule; the payout"]
 				#[doc = "always goes to the stored beneficiary. This is the only claim path for"]
@@ -12298,7 +12295,7 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				#[doc = "Create a new schedule under the next free id, moving `total` from the"]
-				#[doc = "treasury account into the pot in the same call."]
+				#[doc = "treasury account into the pot in the same call (recorded as a leaf)."]
 				pub struct CreateSchedule {
 					pub beneficiary: create_schedule::Beneficiary,
 					pub start: create_schedule::Start,
@@ -12330,10 +12327,9 @@ pub mod api {
 					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
 				)]
 				#[doc = "End a schedule early: the still-unpaid vested part (rounded to the nearest"]
-				#[doc = "[`Config::PayoutQuantum`]) goes to the beneficiary if it meets"]
-				#[doc = "[`Config::MinimumPayout`]; otherwise that sliver is refunded with the"]
-				#[doc = "unvested remainder. The treasury is signature-controlled and needs no"]
-				#[doc = "wormhole leaf, so the refund is not quantized and never blocks ending."]
+				#[doc = "[`Config::PayoutQuantum`]) goes to the beneficiary if it is at least one"]
+				#[doc = "quantum; otherwise that sliver is refunded with the unvested remainder."]
+				#[doc = "Both legs are recorded as wormhole leaves."]
 				pub struct EndSchedule {
 					pub schedule_id: end_schedule::ScheduleId,
 				}
@@ -12378,12 +12374,10 @@ pub mod api {
 			}
 			pub struct TransactionApi;
 			impl TransactionApi {
-				#[doc = "Pay the largest valid claim on `schedule_id` to its beneficiary. Payouts are"]
-				#[doc = "rounded down to [`Config::PayoutQuantum`], must meet [`Config::MinimumPayout`],"]
-				#[doc = "and reserve at least one minimum-sized final claim unless the schedule is fully"]
-				#[doc = "vested. Non-final payouts are further rounded down to"]
-				#[doc = "[`NON_FINAL_PAYOUT_QUANTA`] leaf quanta; the leftover stays on the schedule"]
-				#[doc = "until a later claim or the exact final payout."]
+				#[doc = "Pay the largest valid claim on `schedule_id` to its beneficiary. Non-final"]
+				#[doc = "payouts are rounded down to [`NON_FINAL_PAYOUT_QUANTA`] leaf quanta; the"]
+				#[doc = "leftover stays on the schedule until a later claim or the exact final"]
+				#[doc = "payout (at least one [`Config::PayoutQuantum`])."]
 				#[doc = ""]
 				#[doc = "Permissionless: any signed account may call this for any schedule; the payout"]
 				#[doc = "always goes to the stored beneficiary. This is the only claim path for"]
@@ -12404,7 +12398,7 @@ pub mod api {
 					)
 				}
 				#[doc = "Create a new schedule under the next free id, moving `total` from the"]
-				#[doc = "treasury account into the pot in the same call."]
+				#[doc = "treasury account into the pot in the same call (recorded as a leaf)."]
 				pub fn create_schedule(
 					&self,
 					beneficiary: types::create_schedule::Beneficiary,
@@ -12426,10 +12420,9 @@ pub mod api {
 					)
 				}
 				#[doc = "End a schedule early: the still-unpaid vested part (rounded to the nearest"]
-				#[doc = "[`Config::PayoutQuantum`]) goes to the beneficiary if it meets"]
-				#[doc = "[`Config::MinimumPayout`]; otherwise that sliver is refunded with the"]
-				#[doc = "unvested remainder. The treasury is signature-controlled and needs no"]
-				#[doc = "wormhole leaf, so the refund is not quantized and never blocks ending."]
+				#[doc = "[`Config::PayoutQuantum`]) goes to the beneficiary if it is at least one"]
+				#[doc = "quantum; otherwise that sliver is refunded with the unvested remainder."]
+				#[doc = "Both legs are recorded as wormhole leaves."]
 				pub fn end_schedule(
 					&self,
 					schedule_id: types::end_schedule::ScheduleId,
@@ -12578,6 +12571,26 @@ pub mod api {
 				const PALLET: &'static str = "Vesting";
 				const EVENT: &'static str = "ScheduleRetargeted";
 			}
+			#[derive(
+				:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+				:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+				Debug,
+			)]
+			#[decode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode")]
+			#[encode_as_type(crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode")]
+			#[doc = "Offset genesis schedules were rebased onto this unix-ms timestamp. The"]
+			#[doc = "genesis block's `Now` is 0 and is never used."]
+			pub struct LaunchMomentSet {
+				pub at: launch_moment_set::At,
+			}
+			pub mod launch_moment_set {
+				use super::runtime_types;
+				pub type At = ::core::primitive::u64;
+			}
+			impl ::subxt::ext::subxt_core::events::StaticEvent for LaunchMomentSet {
+				const PALLET: &'static str = "Vesting";
+				const EVENT: &'static str = "LaunchMomentSet";
+			}
 		}
 		pub mod storage {
 			use super::runtime_types;
@@ -12594,6 +12607,10 @@ pub mod api {
 						::core::primitive::u128,
 					>;
 					pub type Param0 = ::core::primitive::u64;
+				}
+				pub mod launch {
+					use super::runtime_types;
+					pub type Launch = runtime_types::pallet_vesting::pallet::LaunchAnchor;
 				}
 			}
 			pub struct StorageApi;
@@ -12666,6 +12683,27 @@ pub mod api {
 						],
 					)
 				}
+				pub fn launch(
+					&self,
+				) -> ::subxt::ext::subxt_core::storage::address::StaticAddress<
+					(),
+					types::launch::Launch,
+					::subxt::ext::subxt_core::utils::Yes,
+					(),
+					(),
+				> {
+					::subxt::ext::subxt_core::storage::address::StaticAddress::new_static(
+						"Vesting",
+						"Launch",
+						(),
+						[
+							159u8, 133u8, 168u8, 43u8, 32u8, 161u8, 140u8, 94u8, 130u8, 23u8,
+							235u8, 114u8, 176u8, 102u8, 169u8, 127u8, 131u8, 12u8, 115u8, 163u8,
+							191u8, 236u8, 142u8, 222u8, 164u8, 201u8, 190u8, 194u8, 128u8, 152u8,
+							162u8, 52u8,
+						],
+					)
+				}
 			}
 		}
 		pub mod constants {
@@ -12691,7 +12729,9 @@ pub mod api {
 				#[doc = " Wormhole leaf amount quantum. ZK-tree leaves commit `amount / quantum`, so a"]
 				#[doc = " payout below one quantum would create a zero-value leaf: funds moved to a"]
 				#[doc = " keyless beneficiary would be irrecoverable. Every schedule total must be a"]
-				#[doc = " multiple of this, and every payout is rounded down to a multiple."]
+				#[doc = " positive multiple of this. Intermediate claims round down further to"]
+				#[doc = " [`NON_FINAL_PAYOUT_QUANTA`] leaf quanta; the final claim may be a single"]
+				#[doc = " quantum."]
 				pub fn payout_quantum(
 					&self,
 				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
@@ -12700,23 +12740,6 @@ pub mod api {
 					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
 						"Vesting",
 						"PayoutQuantum",
-						[
-							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
-							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
-							136u8, 71u8, 63u8, 49u8, 237u8, 234u8, 15u8, 178u8, 98u8, 148u8, 156u8,
-						],
-					)
-				}
-				#[doc = " Smallest beneficiary payout. Must be quantum-aligned, at least two quanta,"]
-				#[doc = " and larger than the existential deposit."]
-				pub fn minimum_payout(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u128,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Vesting",
-						"MinimumPayout",
 						[
 							84u8, 157u8, 140u8, 4u8, 93u8, 57u8, 29u8, 133u8, 105u8, 200u8, 214u8,
 							27u8, 144u8, 208u8, 218u8, 160u8, 130u8, 109u8, 101u8, 54u8, 210u8,
@@ -16172,12 +16195,10 @@ pub mod api {
 				#[doc = "Contains a variant per dispatchable extrinsic that this pallet has."]
 				pub enum Call {
 					#[codec(index = 0)]
-					#[doc = "Pay the largest valid claim on `schedule_id` to its beneficiary. Payouts are"]
-					#[doc = "rounded down to [`Config::PayoutQuantum`], must meet [`Config::MinimumPayout`],"]
-					#[doc = "and reserve at least one minimum-sized final claim unless the schedule is fully"]
-					#[doc = "vested. Non-final payouts are further rounded down to"]
-					#[doc = "[`NON_FINAL_PAYOUT_QUANTA`] leaf quanta; the leftover stays on the schedule"]
-					#[doc = "until a later claim or the exact final payout."]
+					#[doc = "Pay the largest valid claim on `schedule_id` to its beneficiary. Non-final"]
+					#[doc = "payouts are rounded down to [`NON_FINAL_PAYOUT_QUANTA`] leaf quanta; the"]
+					#[doc = "leftover stays on the schedule until a later claim or the exact final"]
+					#[doc = "payout (at least one [`Config::PayoutQuantum`])."]
 					#[doc = ""]
 					#[doc = "Permissionless: any signed account may call this for any schedule; the payout"]
 					#[doc = "always goes to the stored beneficiary. This is the only claim path for"]
@@ -16185,7 +16206,7 @@ pub mod api {
 					claim { schedule_id: ::core::primitive::u64 },
 					#[codec(index = 1)]
 					#[doc = "Create a new schedule under the next free id, moving `total` from the"]
-					#[doc = "treasury account into the pot in the same call."]
+					#[doc = "treasury account into the pot in the same call (recorded as a leaf)."]
 					create_schedule {
 						beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
 						start: ::core::primitive::u64,
@@ -16195,10 +16216,9 @@ pub mod api {
 					},
 					#[codec(index = 2)]
 					#[doc = "End a schedule early: the still-unpaid vested part (rounded to the nearest"]
-					#[doc = "[`Config::PayoutQuantum`]) goes to the beneficiary if it meets"]
-					#[doc = "[`Config::MinimumPayout`]; otherwise that sliver is refunded with the"]
-					#[doc = "unvested remainder. The treasury is signature-controlled and needs no"]
-					#[doc = "wormhole leaf, so the refund is not quantized and never blocks ending."]
+					#[doc = "[`Config::PayoutQuantum`]) goes to the beneficiary if it is at least one"]
+					#[doc = "quantum; otherwise that sliver is refunded with the unvested remainder."]
+					#[doc = "Both legs are recorded as wormhole leaves."]
 					end_schedule { schedule_id: ::core::primitive::u64 },
 					#[codec(index = 3)]
 					#[doc = "Change the schedule's beneficiary without paying anything out. A retarget"]
@@ -16229,35 +16249,31 @@ pub mod api {
 					#[doc = "No schedule exists under this id."]
 					NoSchedule,
 					#[codec(index = 1)]
-					#[doc = "Schedule parameters violate `start <= cliff <= end`, `start < end`,"]
-					#[doc = "`total >= MinimumPayout`, or `total` is not a multiple of the payout"]
-					#[doc = "quantum."]
+					#[doc = "Schedule parameters violate `start <= cliff <= end`, `start < end`, or"]
+					#[doc = "`total` is not a positive multiple of the payout quantum."]
 					InvalidSchedule,
 					#[codec(index = 2)]
 					#[doc = "Nothing is claimable right now (before the cliff, already fully claimed, or"]
-					#[doc = "less than the minimum payout accrued)."]
+					#[doc = "the accrual rounds down to zero — below one quantum for a final claim,"]
+					#[doc = "below the non-final alignment otherwise)."]
 					NothingToClaim,
 					#[codec(index = 3)]
 					#[doc = "This schedule has already paid out within the minimum claim interval."]
 					ClaimTooSoon,
 					#[codec(index = 4)]
-					#[doc = "Paying now would leave a remainder below the minimum payout; wait until the"]
-					#[doc = "entire remainder has vested."]
-					ClaimWouldLeaveDust,
-					#[codec(index = 5)]
 					#[doc = "The treasury account is not configured or aliases the vesting pot."]
 					TreasuryNotConfigured,
-					#[codec(index = 6)]
+					#[codec(index = 5)]
 					#[doc = "The pot does not hold its existential-deposit buffer; endow it first."]
 					PotUnderfunded,
-					#[codec(index = 7)]
+					#[codec(index = 6)]
 					#[doc = "The beneficiary must not be the pot, and retargeting must change the account."]
 					InvalidBeneficiary,
-					#[codec(index = 8)]
-					#[doc = "The proof recorder reported the payout credit as dropped: no wormhole leaf"]
-					#[doc = "was created, so the payout is rolled back rather than finalized without the"]
-					#[doc = "proof material a keyless beneficiary needs to exit."]
-					PayoutProofNotRecorded,
+					#[codec(index = 7)]
+					#[doc = "The proof recorder reported the transfer credit as dropped: no wormhole leaf"]
+					#[doc = "was created, so the transfer is rolled back rather than finalized without a"]
+					#[doc = "leaf."]
+					TransferProofNotRecorded,
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
@@ -16307,6 +16323,27 @@ pub mod api {
 						old_beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
 						new_beneficiary: ::subxt::ext::subxt_core::utils::AccountId32,
 					},
+					#[codec(index = 4)]
+					#[doc = "Offset genesis schedules were rebased onto this unix-ms timestamp. The"]
+					#[doc = "genesis block's `Now` is 0 and is never used."]
+					LaunchMomentSet { at: ::core::primitive::u64 },
+				}
+				#[derive(
+					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
+					:: subxt :: ext :: subxt_core :: ext :: scale_encode :: EncodeAsType,
+					Debug,
+				)]
+				#[decode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_decode"
+				)]
+				#[encode_as_type(
+					crate_path = ":: subxt :: ext :: subxt_core :: ext :: scale_encode"
+				)]
+				pub enum LaunchAnchor {
+					#[codec(index = 0)]
+					Pending,
+					#[codec(index = 1)]
+					Anchored(::core::primitive::u64),
 				}
 				#[derive(
 					:: subxt :: ext :: subxt_core :: ext :: scale_decode :: DecodeAsType,
