@@ -26,7 +26,7 @@ type VestingScheduleInfo =
 /// Vesting commands
 #[derive(Subcommand, Debug)]
 pub enum VestingCommands {
-	/// Show vesting pallet constants and the next schedule id
+	/// Show vesting pallet constants, launch status, and the next schedule id
 	Info,
 
 	/// List all vesting schedules (optionally filtered by beneficiary)
@@ -338,8 +338,6 @@ async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Resu
 	let constants = quantus_client.client().constants();
 	let payout_quantum =
 		constants.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
-	let minimum_payout =
-		constants.at(&quantus_subxt::api::constants().vesting().minimum_payout())?;
 	let min_claim_interval =
 		constants.at(&quantus_subxt::api::constants().vesting().min_claim_interval())?;
 
@@ -347,16 +345,15 @@ async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Resu
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
 	let next_id_addr = quantus_subxt::api::storage().vesting().next_schedule_id();
 	let next_id = storage_at.fetch_or_default(&next_id_addr).await?;
+	let launch = storage_at.fetch(&quantus_subxt::api::storage().vesting().launch()).await?;
 
 	let quantum_fmt =
 		crate::cli::send::format_balance_with_symbol(quantus_client, payout_quantum).await?;
-	let minimum_fmt =
-		crate::cli::send::format_balance_with_symbol(quantus_client, minimum_payout).await?;
 
 	log_print!("🪙 {}", "Vesting".bright_green().bold());
 	log_print!("   Payout quantum:     {}", quantum_fmt);
-	log_print!("   Minimum payout:     {}", minimum_fmt);
 	log_print!("   Min claim interval: {} ms", min_claim_interval);
+	log_print!("   Launch:             {}", format_launch(launch));
 	log_print!("   Next schedule id:   {}", next_id.to_string().bright_yellow());
 	Ok(())
 }
@@ -438,6 +435,16 @@ fn format_moment(ms: u64) -> String {
 	match chrono::Utc.timestamp_millis_opt(ms as i64) {
 		chrono::LocalResult::Single(dt) => format!("{ms} ({})", dt.format("%Y-%m-%d %H:%M:%S UTC")),
 		_ => format!("{ms}"),
+	}
+}
+
+fn format_launch(
+	launch: Option<quantus_subxt::api::runtime_types::pallet_vesting::pallet::LaunchAnchor>,
+) -> String {
+	use quantus_subxt::api::runtime_types::pallet_vesting::pallet::LaunchAnchor;
+	match launch {
+		Some(LaunchAnchor::Anchored(at)) => format_moment(at),
+		Some(LaunchAnchor::Pending) | None => "pending".to_string(),
 	}
 }
 
