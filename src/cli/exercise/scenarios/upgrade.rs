@@ -367,7 +367,8 @@ async fn find_code_updated_since(
 	}
 
 	for block_hash in chain.into_iter().rev() {
-		let events = ctx.client.client().blocks().at(block_hash).await?.events().await?;
+		let at_block = ctx.client.at_block(block_hash).await?;
+		let events = at_block.client().blocks().at(block_hash).await?.events().await?;
 		if events
 			.find_first::<quantus_subxt::api::system::events::CodeUpdated>()
 			.map_err(|e| QuantusError::Generic(format!("failed to decode events: {e:?}")))?
