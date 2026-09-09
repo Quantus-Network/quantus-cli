@@ -591,10 +591,11 @@ pub fn compute_random_output_assignments(
 	// proofs whose address holds more than its own demand; a donation splits
 	// the donor proof's output across its free second output slot.
 	// Aggregation sums exit amounts per account, so a topped-up target still
-	// receives a single mint. Best effort: a donor proof has only one spare
-	// slot, so its excess can reach only one recipient; leftover shortfalls
-	// stay with the (still above-minimum) donors rather than failing the
-	// batch.
+	// receives a single mint. A donor proof has only one spare slot, so a
+	// single rich proof cannot lift every dust sibling. When every target
+	// could have been mentioned (slot count) and the pot covers the
+	// minimum, leftover deficits are a submit-time error: committing that
+	// round would mint below the floor and kill multiround two rounds later.
 	let min_needed = min_per_target as u32;
 	let mut received: std::collections::HashMap<[u8; 32], u32> = std::collections::HashMap::new();
 	for assignment in &assignments {
@@ -658,6 +659,30 @@ pub fn compute_random_output_assignments(
 				*received.entry(donor_addr).or_default() -= take;
 				*received.entry(addr).or_default() += take;
 				deficit -= take;
+			}
+		}
+	}
+
+	// Fail closed when the assignment is supposed to fund every next-round
+	// address (enough slots and enough total value) but some address is
+	// still below the floor. Two-output capacity cannot move a rich proof's
+	// excess onto more than one sibling, so this is reachable with inputs
+	// the partition admits (e.g. four 3-unit proofs plus one large one).
+	let unique_targets = demand.len();
+	if num_targets <= 2 * num_proofs &&
+		(total_output as u128) >= min_per_target * unique_targets as u128
+	{
+		for &addr in demand.keys() {
+			let got = received.get(&addr).copied().unwrap_or(0);
+			if got < min_needed {
+				return Err(format!(
+					"Unable to fund next-round address {} with at least {} quantized \
+					 units (got {got}); no remaining proof has a free second output \
+					 slot with spare funds. Reduce the number of proofs or increase \
+					 their amounts before submitting.",
+					hex::encode(addr),
+					min_per_target,
+				));
 			}
 		}
 	}
@@ -5482,6 +5507,22 @@ mod tests {
 				})
 				.collect();
 		}
+	}
+
+	#[test]
+	fn compute_random_output_assignments_skewed_dust_proofs_fail_closed() {
+		// Four min-partition proofs plus one rich proof. After 4 bps the
+		// outputs are [2, 2, 2, 2, 99]: one donor slot can lift only one
+		// sibling, so three addresses would mint 2 and drop the next-round
+		// transfer two rounds later. Refuse that assignment.
+		let fee_bps = VOLUME_FEE_BPS;
+		let dust = 3 * SCALE_DOWN_FACTOR;
+		let rich = 100 * SCALE_DOWN_FACTOR;
+		let inputs = vec![dust, dust, dust, dust, rich];
+		let targets = mk_accounts(5);
+		let err = compute_random_output_assignments(&inputs, &targets, fee_bps)
+			.expect_err("four dust proofs plus one rich proof cannot fund every target");
+		assert!(err.contains("Unable to fund next-round address"), "unexpected error: {err}");
 	}
 
 	#[test]
