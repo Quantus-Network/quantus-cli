@@ -9,6 +9,10 @@ runs:
       run: |
         sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
         sudo rm -f /etc/apt/sources.list.d/azure-cli.list
+        # GitHub images ship a Google Chrome apt source. A stale Packages.gz
+        # there fails `apt-get update` even though we never install Chrome.
+        sudo rm -f /etc/apt/sources.list.d/google-chrome.list
+        sudo rm -f /etc/apt/sources.list.d/google-chrome.list.save
         sudo apt-get update -yqq
         sudo apt-get install -yqq --no-install-recommends \
           libclang-dev \

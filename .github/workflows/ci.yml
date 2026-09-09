@@ -37,9 +37,21 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/ubuntu
+      # Format-only: do not use ./.github/actions/ubuntu. That action
+      # apt-get updates every runner source (including Google Chrome) and
+      # installs clang/protobuf/wasm — none of which rustfmt or taplo need.
+      - name: Install rustfmt
+        run: rustup toolchain install nightly-2026-08-31 --profile minimal --component rustfmt
+      - name: Cache taplo
+        uses: actions/cache@v5
+        with:
+          path: ~/.cargo/bin/taplo
+          key: taplo-cli-${{ runner.os }}
       - name: Install taplo
-        run: cargo install taplo-cli --locked
+        run: |
+          if ! command -v taplo >/dev/null 2>&1; then
+            cargo install taplo-cli --locked
+          fi
       - name: Run format checks
         run: |
           taplo format --check --config taplo.toml
