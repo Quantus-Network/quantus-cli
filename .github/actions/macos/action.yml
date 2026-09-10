@@ -10,11 +10,14 @@ runs:
         brew update
         OK=0
         for i in 1 2 3; do
-          if brew install protobuf llvm; then OK=1; break; fi
+          # protobuf only. Homebrew LLVM has no bottle on macos-15-intel and
+          # compiles from source for an hour-plus; bindgen can use Xcode's
+          # libclang (see LIBCLANG_PATH below).
+          if brew install protobuf; then OK=1; break; fi
           echo "brew install attempt $i failed (often transient ghcr.io), retrying in 15s..."
           sleep 15
         done
-        if [ "$OK" -ne 1 ]; then echo "::error::brew install protobuf llvm failed after 3 attempts"; exit 1; fi
+        if [ "$OK" -ne 1 ]; then echo "::error::brew install protobuf failed after 3 attempts"; exit 1; fi
         curl https://sh.rustup.rs -sSf | sh -s -- -y
         brew uninstall cmake
         set +e
@@ -33,11 +36,14 @@ runs:
       shell: bash
     - name: Set LIBCLANG_PATH for clang-sys (bindgen/rocksdb etc.)
       run: |
-        # Homebrew LLVM provides libclang.dylib; clang-sys looks for libclang.dylib.
-        # ARM (Apple Silicon): /opt/homebrew/opt/llvm/lib
-        # x86 (Intel):         /usr/local/opt/llvm/lib
+        # Prefer Xcode libclang so we never brew-build LLVM. Homebrew paths
+        # remain as fallbacks if someone already installed the formula.
         DIR=
-        if command -v brew >/dev/null 2>&1; then
+        XC="$(xcode-select -p 2>/dev/null)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
+        if [ -d "$XC" ] && ls "$XC"/libclang*.dylib 1>/dev/null 2>&1; then
+          DIR="$XC"
+        fi
+        if [ -z "$DIR" ] && command -v brew >/dev/null 2>&1; then
           PREFIX="$(brew --prefix llvm 2>/dev/null)"
           [ -n "$PREFIX" ] && [ -d "$PREFIX/lib" ] && ls "$PREFIX/lib"/libclang*.dylib 1>/dev/null 2>&1 && DIR="$PREFIX/lib"
         fi
