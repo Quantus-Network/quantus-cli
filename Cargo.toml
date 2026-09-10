@@ -32,7 +32,7 @@ tokio = { version = "1.46", features = ["full"] }
 
 # Cold-wallet QR signing: UR encoding shared with the mobile/cold wallet apps
 # (1.6.0). Keystone firmware still encodes 1.4.0; the wire format is compatible.
-quantus_ur = { git = "https://github.com/Quantus-Network/quantus_ur.git", tag = "1.6.0" }
+quantus_ur = { version = "1.6.0", git = "https://github.com/Quantus-Network/quantus_ur.git", tag = "1.6.0" }
 # Terminal QR rendering (string renderers only; image/svg not needed)
 qrcode = { version = "0.14", default-features = false }
 # Camera capture (AVFoundation / MSMF / V4L2) + pure-Rust QR decoding.
