@@ -7,9 +7,13 @@ runs:
   steps:
     - name: rust compilation prerequisites (ubuntu)
       run: |
-        sudo rm -f /etc/apt/sources.list.d/microsoft-prod.list
-        sudo rm -f /etc/apt/sources.list.d/azure-cli.list
-        sudo apt-get update -yqq
+        # Only the distro sources.list. GitHub images also ship Chrome /
+        # Microsoft / Azure lists under sources.list.d; a hash-mismatch
+        # there fails the whole update even though we never install them.
+        sudo apt-get update -yqq \
+          -o Dir::Etc::sourcelist="sources.list" \
+          -o Dir::Etc::sourceparts="-" \
+          -o APT::Get::List-Cleanup="0"
         sudo apt-get install -yqq --no-install-recommends \
           libclang-dev \
           clang \

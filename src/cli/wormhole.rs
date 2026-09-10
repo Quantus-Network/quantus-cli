@@ -578,6 +578,115 @@ pub fn compute_random_output_assignments(
 		let _ = shortfall; // suppress unused warning
 	}
 
+	// Pass 3: redistribute toward the partition. Per-proof totals are fixed by
+	// the deposits (input minus fee), so passes 1-2 effectively give each
+	// target its paired proof's whole output and ignore the partition's
+	// per-target amounts. Left alone, that strands targets paired with dust
+	// proofs: the chain mints dust (or nothing) to those addresses, and a
+	// multiround flow dies within two rounds (a dust input's output quantizes
+	// to zero, and the address after that receives no mint to capture). It
+	// also stops amounts from actually being re-randomized each round.
+	//
+	// Every address is lifted toward its partition demand by donations from
+	// proofs whose address holds more than its own demand; a donation splits
+	// the donor proof's output across its free second output slot.
+	// Aggregation sums exit amounts per account, so a topped-up target still
+	// receives a single mint. A donor proof has only one spare slot, so a
+	// single rich proof cannot lift every dust sibling. When every target
+	// could have been mentioned (slot count) and the pot covers the
+	// minimum, leftover deficits are a submit-time error: committing that
+	// round would mint below the floor and kill multiround two rounds later.
+	let min_needed = min_per_target as u32;
+	let mut received: std::collections::HashMap<[u8; 32], u32> = std::collections::HashMap::new();
+	for assignment in &assignments {
+		if assignment.exit_account_1 != [0u8; 32] {
+			*received.entry(assignment.exit_account_1).or_default() += assignment.output_amount_1;
+		}
+		if assignment.exit_account_2 != [0u8; 32] {
+			*received.entry(assignment.exit_account_2).or_default() += assignment.output_amount_2;
+		}
+	}
+	// Per-address demand (duplicate target addresses sum their partition
+	// slices).
+	let mut demand: std::collections::HashMap<[u8; 32], u32> = std::collections::HashMap::new();
+	for (tidx, &addr) in target_accounts.iter().enumerate() {
+		*demand.entry(addr).or_default() += target_amounts[tidx];
+	}
+	// Only enforceable when there is enough value for every unique address
+	// (mirrors random_partition's fallback when the total is too small).
+	if (total_output as u128) >= min_per_target * received.len() as u128 {
+		let mut wanted_addrs: Vec<[u8; 32]> = demand.keys().copied().collect();
+		// Neediest first, so the limited donor slots cover actual starvation
+		// (a dust address would otherwise kill a multiround flow) before
+		// cosmetic re-randomization.
+		wanted_addrs.sort_by_key(|addr| received.get(addr).copied().unwrap_or(0));
+		for addr in wanted_addrs {
+			let wanted = demand[&addr].max(min_needed);
+			let mut deficit = wanted.saturating_sub(received.get(&addr).copied().unwrap_or(0));
+			while deficit > 0 {
+				// Donor: the proof holding the most excess over its own
+				// address's demand in output_1, with a free output_2 slot.
+				let donation = (0..num_proofs)
+					.filter_map(|donor_idx| {
+						let donor = &assignments[donor_idx];
+						if donor.exit_account_2 != [0u8; 32] ||
+							donor.exit_account_1 == addr ||
+							donor.exit_account_1 == [0u8; 32]
+						{
+							return None;
+						}
+						let donor_addr = donor.exit_account_1;
+						let donor_total = received.get(&donor_addr).copied().unwrap_or(0);
+						let donor_keeps =
+							demand.get(&donor_addr).copied().unwrap_or(0).max(min_needed);
+						let spare =
+							donor.output_amount_1.min(donor_total.saturating_sub(donor_keeps));
+						if spare == 0 {
+							return None;
+						}
+						Some((donor_idx, spare))
+					})
+					.max_by_key(|&(_, spare)| spare);
+				let Some((donor_idx, spare)) = donation else {
+					break;
+				};
+				let take = spare.min(deficit);
+				let donor = &mut assignments[donor_idx];
+				let donor_addr = donor.exit_account_1;
+				donor.output_amount_1 -= take;
+				donor.exit_account_2 = addr;
+				donor.output_amount_2 = take;
+				*received.entry(donor_addr).or_default() -= take;
+				*received.entry(addr).or_default() += take;
+				deficit -= take;
+			}
+		}
+	}
+
+	// Fail closed when the assignment is supposed to fund every next-round
+	// address (enough slots and enough total value) but some address is
+	// still below the floor. Two-output capacity cannot move a rich proof's
+	// excess onto more than one sibling, so this is reachable with inputs
+	// the partition admits (e.g. four 3-unit proofs plus one large one).
+	let unique_targets = demand.len();
+	if num_targets <= 2 * num_proofs &&
+		(total_output as u128) >= min_per_target * unique_targets as u128
+	{
+		for &addr in demand.keys() {
+			let got = received.get(&addr).copied().unwrap_or(0);
+			if got < min_needed {
+				return Err(format!(
+					"Unable to fund next-round address {} with at least {} quantized \
+					 units (got {got}); no remaining proof has a free second output \
+					 slot with spare funds. Reduce the number of proofs or increase \
+					 their amounts before submitting.",
+					hex::encode(addr),
+					min_per_target,
+				));
+			}
+		}
+	}
+
 	Ok(assignments)
 }
 
@@ -1409,12 +1518,63 @@ fn load_leaf_common_data(
 	Ok(leaf.common)
 }
 
+/// Process-wide private-batch prover, built from source once and reused for
+/// every batch. Circuit construction dominates one-shot aggregation cost, so
+/// multi-batch flows (multiround, prepare) must not pay it per batch. Prover
+/// artifacts are never deserialized from disk, so caching the in-memory build
+/// preserves the poisoned-artifact guarantees.
+fn cached_private_batch_prover(
+) -> crate::error::Result<&'static qp_wormhole_aggregator::private_batch::prover::PrivateBatchProver>
+{
+	use qp_wormhole_aggregator::private_batch::prover::PrivateBatchProver;
+	use std::sync::OnceLock;
+	static PROVER: OnceLock<PrivateBatchProver> = OnceLock::new();
+	if let Some(prover) = PROVER.get() {
+		return Ok(prover);
+	}
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	log_print!("  Building private-batch prover circuit (once per process)...");
+	let start = std::time::Instant::now();
+	let prover = PrivateBatchProver::new_from_binaries_dir(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to load private-batch prover from pre-built bins: {}",
+			e
+		))
+	})?;
+	log_print!("  Prover circuit built in {:.2}s", start.elapsed().as_secs_f64());
+	Ok(PROVER.get_or_init(|| prover))
+}
+
+/// Process-wide public-batch prover; see [`cached_private_batch_prover`].
+/// Building the 53-slot public-batch circuit takes tens of seconds, so paying
+/// it once per process instead of once per batch is the difference between
+/// ~65s and ~21s per public batch.
+fn cached_public_batch_prover(
+) -> crate::error::Result<&'static qp_wormhole_aggregator::public_batch::prover::PublicBatchProver>
+{
+	use qp_wormhole_aggregator::public_batch::prover::PublicBatchProver;
+	use std::sync::OnceLock;
+	static PROVER: OnceLock<PublicBatchProver> = OnceLock::new();
+	if let Some(prover) = PROVER.get() {
+		return Ok(prover);
+	}
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	log_print!("  Building public-batch prover circuit (once per process)...");
+	let start = std::time::Instant::now();
+	let prover = PublicBatchProver::new_from_binaries_dir(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to load public-batch prover from pre-built bins: {}",
+			e
+		))
+	})?;
+	log_print!("  Prover circuit built in {:.2}s", start.elapsed().as_secs_f64());
+	Ok(PROVER.get_or_init(|| prover))
+}
+
 pub async fn aggregate_proofs(
 	proof_files: Vec<String>,
 	output_file: String,
 ) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::private_batch::prover::PrivateBatchProver;
-
 	log_print!("Aggregating {} proofs...", proof_files.len());
 
 	let bins_dir = crate::bins::ensure_bins_dir()?;
@@ -1440,7 +1600,9 @@ pub async fn aggregate_proofs(
 	}
 
 	let num_padding_proofs = agg_config.num_leaf_proofs - proof_files.len();
-	log_print!("  Loading private-batch prover (will pad with {} dummies)...", num_padding_proofs);
+	if num_padding_proofs > 0 {
+		log_print!("  Padding with {} dummy leaf proof(s)...", num_padding_proofs);
+	}
 	log_verbose!("Aggregation config: num_leaf_proofs={}", agg_config.num_leaf_proofs);
 
 	let common_data = load_leaf_common_data(&bins_dir)?;
@@ -1463,12 +1625,7 @@ pub async fn aggregate_proofs(
 		proofs.push(proof);
 	}
 
-	let prover = PrivateBatchProver::new_from_binaries_dir(&bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!(
-			"Failed to load private-batch prover from pre-built bins: {}",
-			e
-		))
-	})?;
+	let prover = cached_private_batch_prover()?;
 
 	log_print!("  Running aggregation...");
 	let agg_start = std::time::Instant::now();
@@ -1749,7 +1906,7 @@ pub async fn aggregate_public_batch(
 	output_file: String,
 ) -> crate::error::Result<()> {
 	use plonky2::field::types::PrimeField64;
-	use qp_wormhole_aggregator::aggregator::PublicBatchAggregator;
+	use qp_wormhole_aggregator::public_batch::prover::PublicBatchInputs;
 	use qp_wormhole_inputs::PublicBatchPublicInputs;
 
 	log_print!("Aggregating {} private-batch proofs into a public batch...", proof_files.len());
@@ -1796,18 +1953,12 @@ pub async fn aggregate_public_batch(
 		)));
 	}
 
-	let mut aggregator =
-		PublicBatchAggregator::new(&bins_dir, aggregator_address).map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to load public-batch aggregator from pre-built bins: {}",
-				e
-			))
-		})?;
+	let prover = cached_public_batch_prover()?;
 
-	// Inner proofs for the public-batch aggregator are private-batch proofs.
-	let common_data = aggregator.private_batch_common().clone();
+	// Inner proofs for the public-batch prover are private-batch proofs.
+	let common_data = prover.private_batch_common().clone();
 
-	let mut batch_key = None;
+	let mut proofs = Vec::with_capacity(proof_files.len());
 	for (idx, proof_file) in proof_files.iter().enumerate() {
 		log_verbose!("Loading proof {}/{}: {}", idx + 1, proof_files.len(), proof_file);
 		let proof_bytes = read_hex_proof_file_to_bytes(proof_file)?;
@@ -1818,33 +1969,21 @@ pub async fn aggregate_public_batch(
 					proof_file, e
 				))
 			})?;
-		let key = aggregator.push_proof(proof).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Failed to add proof: {}", e))
-		})?;
-		match &batch_key {
-			None => batch_key = Some(key),
-			Some(existing) if existing != &key => {
-				return Err(crate::error::QuantusError::Generic(format!(
-					"Proof {} is incompatible with earlier proofs (block_hash/asset_id/fee mismatch)",
-					proof_file
-				)));
-			},
-			Some(_) => {},
-		}
+		proofs.push(proof);
 	}
-
-	let batch_key = batch_key.ok_or_else(|| {
-		crate::error::QuantusError::Generic("No private-batch proofs were admitted".to_string())
-	})?;
 
 	let num_dummies = num_private_batch_proofs - proof_files.len();
 	if num_dummies > 0 {
 		log_print!("  Padding with {} dummy private-batch proof(s)...", num_dummies);
 	}
 
+	// prove_batch verifies each proof and enforces cross-proof compatibility
+	// (block_hash/asset_id/fee) before the proving run.
 	log_print!("  Running public-batch aggregation...");
 	let agg_start = std::time::Instant::now();
-	let public_batch_proof = aggregator.aggregate(&batch_key).map_err(|e| {
+	let public_batch_proof = prover
+		.prove_batch(PublicBatchInputs { proofs, aggregator_address })
+		.map_err(|e| {
 		crate::error::QuantusError::Generic(format!("Public-batch aggregation failed: {}", e))
 	})?;
 	log_print!("  Aggregation: {:.2}s", agg_start.elapsed().as_secs_f64());
@@ -1884,7 +2023,7 @@ pub async fn aggregate_public_batch(
 	}
 
 	log_verbose!("Verifying public-batch proof locally...");
-	aggregator.verify(public_batch_proof.clone()).map_err(|e| {
+	prover.verifier_data().verify(public_batch_proof.clone()).map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
 			"Public-batch proof verification failed: {}",
 			e
@@ -4484,8 +4623,6 @@ async fn run_collect_rewards(
 
 /// Helper to aggregate proof files and write the result (used by dissolve command)
 fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate::error::Result<()> {
-	use qp_wormhole_aggregator::private_batch::prover::PrivateBatchProver;
-
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 	let common_data = load_leaf_common_data(&bins_dir)?;
 
@@ -4502,9 +4639,7 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 		proofs.push(proof);
 	}
 
-	let prover = PrivateBatchProver::new_from_binaries_dir(&bins_dir).map_err(|e| {
-		crate::error::QuantusError::Generic(format!("Failed to create private-batch prover: {}", e))
-	})?;
+	let prover = cached_private_batch_prover()?;
 
 	let agg_start = std::time::Instant::now();
 	let proof = prover
@@ -4693,7 +4828,7 @@ mod tests {
 	use super::*;
 	use qp_zk_circuits_common::zk_merkle::MAX_DEPTH;
 	use serde_json::json;
-	use std::collections::HashSet;
+	use std::collections::{HashMap, HashSet};
 	use tempfile::NamedTempFile;
 
 	fn hash_bytes(seed: u16) -> Vec<u8> {
@@ -5334,6 +5469,60 @@ mod tests {
 
 		let total_expected = total_output_for_inputs(&input_amounts, fee_bps);
 		assert_eq!(total_assigned, total_expected);
+	}
+
+	#[test]
+	fn compute_random_output_assignments_multiround_feedback_never_starves_a_target() {
+		// Round N's per-address mints fund round N+1's proofs (the multiround
+		// flow; the chain mints once per exit account, summing over slots).
+		// Every address must collect at least 3 quantized units every round:
+		// a dust input's output quantizes to zero, and the round after that
+		// has no mint event to capture for the next-round address.
+		// Fees burn roughly one quantized unit per proof per round, so the pot
+		// must comfortably outlast the simulated rounds (as it must in a real
+		// multiround run).
+		let fee_bps = VOLUME_FEE_BPS;
+		let n = 7usize;
+		let mut inputs: Vec<u128> =
+			random_partition(100_000, n, 3).iter().map(|&q| q * SCALE_DOWN_FACTOR).collect();
+		for round in 0..200 {
+			let targets = mk_accounts(n);
+			let assignments =
+				compute_random_output_assignments(&inputs, &targets, fee_bps).unwrap();
+			let mut minted: HashMap<[u8; 32], u128> = HashMap::new();
+			for a in &assignments {
+				if a.output_amount_1 > 0 {
+					*minted.entry(a.exit_account_1).or_default() += a.output_amount_1 as u128;
+				}
+				if a.output_amount_2 > 0 {
+					*minted.entry(a.exit_account_2).or_default() += a.output_amount_2 as u128;
+				}
+			}
+			inputs = targets
+				.iter()
+				.map(|t| {
+					let m = minted.get(t).copied().unwrap_or(0);
+					assert!(m >= 3, "round {round}: address minted only {m} units");
+					m * SCALE_DOWN_FACTOR
+				})
+				.collect();
+		}
+	}
+
+	#[test]
+	fn compute_random_output_assignments_skewed_dust_proofs_fail_closed() {
+		// Four min-partition proofs plus one rich proof. After 4 bps the
+		// outputs are [2, 2, 2, 2, 99]: one donor slot can lift only one
+		// sibling, so three addresses would mint 2 and drop the next-round
+		// transfer two rounds later. Refuse that assignment.
+		let fee_bps = VOLUME_FEE_BPS;
+		let dust = 3 * SCALE_DOWN_FACTOR;
+		let rich = 100 * SCALE_DOWN_FACTOR;
+		let inputs = vec![dust, dust, dust, dust, rich];
+		let targets = mk_accounts(5);
+		let err = compute_random_output_assignments(&inputs, &targets, fee_bps)
+			.expect_err("four dust proofs plus one rich proof cannot fund every target");
+		assert!(err.contains("Unable to fund next-round address"), "unexpected error: {err}");
 	}
 
 	#[test]
