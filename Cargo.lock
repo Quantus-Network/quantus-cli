@@ -4961,8 +4961,9 @@ dependencies = [
 
 [[package]]
 name = "quantus_ur"
-version = "0.1.0"
-source = "git+https://github.com/Quantus-Network/quantus_ur.git?tag=1.6.0#0b9bcc586a6ccb845c4d476ffa0880b0478b284a"
+version = "1.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8f5154a01e622ebb6069ea067633a2631e940ae0912b5ccfbc08b623fdc582e0"
 dependencies = [
  "hex",
  "keystone-ur",
