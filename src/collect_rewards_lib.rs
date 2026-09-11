@@ -322,12 +322,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	config: CollectRewardsConfig,
 	progress: &P,
 ) -> Result<CollectRewardsResult> {
-	let (wormhole_address, wormhole_address_bytes, wormhole_secret_bytes) =
-		resolve_credential(&config.credential)?;
-	progress.on_step("derive", &format!("Derived wormhole address: {}", wormhole_address));
-
-	// Parse destination address
-	let destination_bytes = parse_ss58_address(&config.destination_address)?;
+	let (_, wormhole_address_bytes, _) = resolve_credential(&config.credential)?;
 
 	// Step 2: Query Subsquid for pending transfers
 	progress.on_step("query", "Querying Subsquid for pending transfers");
@@ -344,6 +339,61 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	// Filter to only transfers TO our wormhole address
 	let incoming_transfers: Vec<_> =
 		transfers.into_iter().filter(|t| t.to_hash == address_hash).collect();
+
+	withdraw_transfers(config, incoming_transfers, progress).await
+}
+
+pub async fn collect_rewards_from_blocks<P: ProgressCallback>(
+	config: CollectRewardsConfig,
+	block_hashes: &[subxt::utils::H256],
+	progress: &P,
+) -> Result<CollectRewardsResult> {
+	let (_, address, _) = resolve_credential(&config.credential)?;
+	let client = QuantusClient::new(&config.node_url).await?;
+	let mut transfers = Vec::new();
+	for (index, &hash) in block_hashes.iter().enumerate() {
+		progress.on_step("blocks", &format!("Reading block {}/{}", index + 1, block_hashes.len()));
+		let block_client = client.at_block(hash).await?;
+		let block = block_client
+			.client()
+			.blocks()
+			.at(hash)
+			.await
+			.map_err(|e| CollectRewardsError::from(e.to_string()))?;
+		let events = block.events().await.map_err(|e| CollectRewardsError::from(e.to_string()))?;
+		for event in events.find::<wormhole::events::NativeTransferred>() {
+			let event = event.map_err(|e| CollectRewardsError::from(e.to_string()))?;
+			if event.to.0 != address {
+				continue;
+			}
+			transfers.push(Transfer {
+				id: format!("{hash:#x}-{}", event.leaf_index),
+				block_id: format!("{hash:#x}"),
+				block_height: block.number().into(),
+				timestamp: String::new(),
+				extrinsic_hash: None,
+				from_id: AccountId32::from(event.from.0).to_ss58check(),
+				to_id: AccountId32::from(event.to.0).to_ss58check(),
+				amount: event.amount.to_string(),
+				fee: "0".to_string(),
+				from_hash: compute_address_hash(&event.from.0),
+				to_hash: compute_address_hash(&event.to.0),
+				leaf_index: event.leaf_index.to_string(),
+				transfer_count: event.transfer_count.to_string(),
+			});
+		}
+	}
+	withdraw_transfers(config, transfers, progress).await
+}
+
+async fn withdraw_transfers<P: ProgressCallback>(
+	config: CollectRewardsConfig,
+	incoming_transfers: Vec<Transfer>,
+	progress: &P,
+) -> Result<CollectRewardsResult> {
+	let (wormhole_address, wormhole_address_bytes, wormhole_secret_bytes) =
+		resolve_credential(&config.credential)?;
+	let destination_bytes = parse_ss58_address(&config.destination_address)?;
 
 	if incoming_transfers.is_empty() {
 		return Ok(CollectRewardsResult {

@@ -329,7 +329,7 @@ pub fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32], String> {
 
 /// Read a hex-encoded secret from a file and validate that it is exactly 32 bytes.
 /// On Unix the file must be owner-only, same as --password-file and --mnemonic-file.
-fn read_secret_hex_file(path: &str) -> crate::error::Result<String> {
+pub fn read_secret_hex_file(path: &str) -> crate::error::Result<String> {
 	let secret_hex = password::read_secret_file(path, "secret")?;
 	parse_secret_hex(&secret_hex).map_err(crate::error::QuantusError::Generic)?;
 	Ok(secret_hex)
