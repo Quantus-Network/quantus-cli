@@ -187,16 +187,17 @@ pub fn get_wallet_password(
 		return read_password_file(&file_path);
 	}
 
-	if let Some(env_password) = password_from_env(wallet_name) {
-		return Ok(env_password);
-	}
-
-	// Try empty password first (for development wallets)
+	// Developer wallets (crystal_*) use an empty password. Try that before env
+	// or a prompt so a leftover QUANTUS_WALLET_PASSWORD does not force a prompt.
 	log_verbose!("🔑 Trying empty password first...");
 	let wallet_manager = WalletManager::new()?;
 	if wallet_manager.load_wallet(wallet_name, "").is_ok() {
 		log_verbose!("✅ Empty password works for wallet '{}'", wallet_name);
 		return Ok("".to_string());
+	}
+
+	if let Some(env_password) = password_from_env(wallet_name) {
+		return Ok(env_password);
 	}
 
 	get_password_from_user(&format!("Enter password for wallet '{wallet_name}'"))

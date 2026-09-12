@@ -244,6 +244,13 @@ impl WalletManager {
 		})
 	}
 
+	/// Replace a `crystal_*` developer wallet so it matches current genesis keys
+	/// and the empty password. Used by `quantus developer create-test-wallets`.
+	pub async fn recreate_developer_wallet(&self, name: &str) -> Result<WalletInfo> {
+		let _ = self.delete_wallet(name)?;
+		self.create_developer_wallet(name).await
+	}
+
 	/// Export a wallet's mnemonic phrase
 	pub fn export_mnemonic(&self, name: &str, password: Option<&str>) -> Result<String> {
 		// Cold wallets have nothing to export; check before prompting for a password.

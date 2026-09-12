@@ -360,6 +360,10 @@ fn resolve_protected_wallet_address(
 ) -> Result<String> {
 	use std::io::IsTerminal;
 
+	if let Ok(wallet_data) = wallet_manager.load_wallet(wallet_name, "") {
+		return wallet_data.keypair.try_to_account_id_ss58check();
+	}
+
 	let password = if let Some(env_password) =
 		crate::wallet::password::env_wallet_password(wallet_name)
 	{
