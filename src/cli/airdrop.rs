@@ -178,7 +178,7 @@ async fn handle_claim(
 		return Err(QuantusError::Generic("provide --wallet and/or --wormhole-secret-file".into()));
 	}
 
-	let claim_account = resolve_claim_account(to.as_deref(), wallet.as_deref(), &credentials)?;
+	let claim_account = resolve_claim_account(to.as_deref(), &credentials)?;
 	let snapshot = fetch_snapshot(&server).await?;
 	let matches = find_matches(&snapshot, &credentials);
 
@@ -193,39 +193,83 @@ async fn handle_claim(
 
 	let client = http_client()?;
 	let mut claimed = 0u64;
-	let mut skipped = 0u64;
+	let mut recorded = 0usize;
+	let mut skipped = 0usize;
+	let mut failed = 0usize;
 	for found in &matches {
 		match submit_claim(&client, &server, found, &claim_account, &credentials, dry_run).await {
 			Ok(ClaimOutcome::Recorded { amount_hundredths }) => {
+				recorded += 1;
 				claimed = claimed.saturating_add(amount_hundredths);
 			},
 			Ok(ClaimOutcome::Skipped) => skipped += 1,
 			Err(e) => {
 				log_error!("Failed {}: {e}", found.ss58);
-				skipped += 1;
+				failed += 1;
 			},
 		}
 	}
+	finish_claims(dry_run, claimed, recorded, skipped, failed)
+}
 
+/// Print the batch summary. Any submission failure makes the command fail so
+/// unattended callers see a non-zero exit; intentionally skipped schemes do
+/// not.
+fn finish_claims(
+	dry_run: bool,
+	claimed_hundredths: u64,
+	recorded: usize,
+	skipped: usize,
+	failed: usize,
+) -> Result<()> {
 	if dry_run {
 		log_print!(
-			"Dry run finished. Would submit {} claim(s); skipped {}.",
-			matches.len().saturating_sub(skipped as usize),
-			skipped
+			"Dry run finished. Would submit {recorded} claim(s); {skipped} skipped; {failed} failed."
+		);
+	} else if failed == 0 {
+		log_success!(
+			"Recorded {} QUAN across {recorded} claim(s); {skipped} skipped.",
+			format_hundredths(claimed_hundredths)
 		);
 	} else {
-		log_success!(
-			"Recorded {} QUAN across submitted claims ({} skipped).",
-			format_hundredths(claimed),
-			skipped
+		log_print!(
+			"Recorded {} QUAN across {recorded} claim(s); {skipped} skipped; {failed} failed.",
+			format_hundredths(claimed_hundredths)
 		);
+	}
+	if failed > 0 {
+		return Err(QuantusError::Generic(format!("{failed} claim submission(s) failed")));
 	}
 	Ok(())
 }
 
+/// Move-only wormhole spend secret. Zeroized on drop; Debug never prints it.
+struct SpendSecret([u8; 32]);
+
+impl SpendSecret {
+	fn bytes(&self) -> &[u8; 32] {
+		&self.0
+	}
+}
+
+impl Drop for SpendSecret {
+	fn drop(&mut self) {
+		crate::wallet::keystore::zeroize_bytes(&mut self.0);
+	}
+}
+
+impl std::fmt::Debug for SpendSecret {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str("SpendSecret(<redacted>)")
+	}
+}
+
 struct Credentials {
 	dilithium: Option<QuantumKeyPair>,
-	wormhole_secrets: Vec<([u8; 32], String)>,
+	/// AccountId of the unlocked wallet, kept so the default `--to` never
+	/// reopens the wallet (which would lose `--password-file`).
+	wallet_account: Option<[u8; 32]>,
+	wormhole_secrets: Vec<(SpendSecret, String)>,
 }
 
 fn collect_credentials(
@@ -237,9 +281,11 @@ fn collect_credentials(
 ) -> Result<Credentials> {
 	let mut wormhole_secrets = Vec::new();
 	let mut dilithium = None;
+	let mut wallet_account = None;
 
 	if let Some(name) = wallet {
 		let (keypair, mnemonic) = load_wallet_material(name, password, password_file)?;
+		wallet_account = Some(*keypair.try_to_account_id_32()?.as_ref());
 		if keypair.scheme != DilithiumScheme::MlDsa87 {
 			log_print!(
 				"Wallet '{}' is {:?}; Dilithium airdrop claims require ML-DSA-87.",
@@ -249,8 +295,10 @@ fn collect_credentials(
 		} else {
 			dilithium = Some(keypair);
 		}
-		if let Some(mnemonic) = mnemonic.as_deref() {
-			wormhole_secrets.extend(derive_hd_wormhole_secrets(mnemonic, wormhole_index)?);
+		if let Some(mut mnemonic) = mnemonic {
+			let derived = derive_hd_wormhole_secrets(&mnemonic, wormhole_index);
+			crate::wallet::keystore::zeroize_string(&mut mnemonic);
+			wormhole_secrets.extend(derived?);
 		} else {
 			log_verbose!("Wallet '{}' has no mnemonic; HD wormhole derivation skipped", name);
 		}
@@ -261,7 +309,7 @@ fn collect_credentials(
 		wormhole_secrets.push((secret, path.display().to_string()));
 	}
 
-	Ok(Credentials { dilithium, wormhole_secrets })
+	Ok(Credentials { dilithium, wallet_account, wormhole_secrets })
 }
 
 fn load_wallet_material(
@@ -282,7 +330,7 @@ fn load_wallet_material(
 fn derive_hd_wormhole_secrets(
 	mnemonic: &str,
 	wormhole_index: Option<usize>,
-) -> Result<Vec<([u8; 32], String)>> {
+) -> Result<Vec<(SpendSecret, String)>> {
 	let indexes: Vec<usize> = match wormhole_index {
 		Some(index) => vec![index],
 		None => HD_WORMHOLE_INDEXES.collect(),
@@ -292,38 +340,31 @@ fn derive_hd_wormhole_secrets(
 		let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, index);
 		let pair = derive_wormhole_from_mnemonic(mnemonic, None, &path)
 			.map_err(|e| QuantusError::Generic(format!("HD derivation failed: {e:?}")))?;
-		out.push((*pair.secret().as_bytes(), format!("hd {path}")));
+		out.push((SpendSecret(*pair.secret().as_bytes()), format!("hd {path}")));
 	}
 	Ok(out)
 }
 
-fn read_wormhole_secret(path: &std::path::Path) -> Result<[u8; 32]> {
-	let hex_str = password::read_secret_file(
+fn read_wormhole_secret(path: &std::path::Path) -> Result<SpendSecret> {
+	let mut hex_str = password::read_secret_file(
 		path.to_str()
 			.ok_or_else(|| QuantusError::Generic("secret path is not UTF-8".into()))?,
 		"secret",
 	)?;
-	parse_secret_hex(&hex_str).map_err(QuantusError::Generic)
+	let parsed = parse_secret_hex(&hex_str);
+	crate::wallet::keystore::zeroize_string(&mut hex_str);
+	parsed.map(SpendSecret).map_err(QuantusError::Generic)
 }
 
-fn resolve_claim_account(
-	to: Option<&str>,
-	wallet: Option<&str>,
-	credentials: &Credentials,
-) -> Result<[u8; 32]> {
+fn resolve_claim_account(to: Option<&str>, credentials: &Credentials) -> Result<[u8; 32]> {
 	if let Some(to) = to {
 		let (_, account) = resolve_address_with_subxt_account_id(to)?;
 		return Ok(*account.as_ref());
 	}
-	if let Some(keypair) = &credentials.dilithium {
-		let account = keypair.try_to_account_id_32()?;
-		return Ok(*account.as_ref());
+	if let Some(account) = credentials.wallet_account {
+		return Ok(account);
 	}
-	if let Some(name) = wallet {
-		let (_, account) = resolve_address_with_subxt_account_id(name)?;
-		return Ok(*account.as_ref());
-	}
-	Err(QuantusError::Generic("--to is required when claiming without a Dilithium wallet".into()))
+	Err(QuantusError::Generic("--to is required when claiming without --wallet".into()))
 }
 
 #[derive(Clone, Debug)]
@@ -361,10 +402,12 @@ struct FoundReward {
 	source: RewardSource,
 }
 
+/// Where the matching key came from. Holds an index into
+/// `Credentials::wormhole_secrets` rather than a copy of the secret.
 #[derive(Clone, Debug)]
 enum RewardSource {
 	Dilithium,
-	Wormhole { secret: [u8; 32], label: String },
+	Wormhole { secret_index: usize, label: String },
 }
 
 fn find_matches(snapshot: &SnapshotFile, credentials: &Credentials) -> Vec<FoundReward> {
@@ -385,9 +428,9 @@ fn find_matches(snapshot: &SnapshotFile, credentials: &Credentials) -> Vec<Found
 			}
 		}
 	}
-	for (secret, label) in &credentials.wormhole_secrets {
+	for (secret_index, (secret, label)) in credentials.wormhole_secrets.iter().enumerate() {
 		for scheme in WormholeHash::ALL {
-			let derived = scheme.derive(secret);
+			let derived = scheme.derive(secret.bytes());
 			if let Some(row) = snapshot.by_account.get(&derived.address) {
 				found.push(FoundReward {
 					account: derived.address,
@@ -396,7 +439,7 @@ fn find_matches(snapshot: &SnapshotFile, credentials: &Credentials) -> Vec<Found
 					testnets: row.testnets.clone(),
 					kind: row.kind.clone(),
 					scheme: scheme.id(),
-					source: RewardSource::Wormhole { secret: *secret, label: label.clone() },
+					source: RewardSource::Wormhole { secret_index, label: label.clone() },
 				});
 			}
 		}
@@ -459,7 +502,7 @@ async fn submit_claim(
 			})?;
 			ClaimBody::Dilithium(build_dilithium_claim(keypair, found.account, *claim_account)?)
 		},
-		RewardSource::Wormhole { secret, label } => {
+		RewardSource::Wormhole { secret_index, label } => {
 			if found.scheme != CLAIMABLE_WORMHOLE_SCHEME {
 				log_print!(
 					"Skipping {} ({}) from {label}: server only accepts {CLAIMABLE_WORMHOLE_SCHEME}",
@@ -468,13 +511,19 @@ async fn submit_claim(
 				);
 				return Ok(ClaimOutcome::Skipped);
 			}
+			let (secret, _) = credentials.wormhole_secrets.get(*secret_index).ok_or_else(|| {
+				QuantusError::Generic("wormhole secret index out of range".into())
+			})?;
 			log_print!("Proving wormhole ownership for {}…", found.ss58.bright_cyan());
-			ClaimBody::Wormhole(build_wormhole_claim(*secret, *claim_account).await?)
+			ClaimBody::Wormhole(build_wormhole_claim(secret, *claim_account).await?)
 		},
 	};
 
 	if dry_run {
-		log_print!("Dry run: would POST {} ({})", found.ss58, found.scheme);
+		let json = serde_json::to_string_pretty(&body)
+			.map_err(|e| QuantusError::Generic(format!("claim JSON: {e}")))?;
+		log_print!("Dry run: would POST {} ({}):", found.ss58, found.scheme);
+		log_print!("{json}");
 		return Ok(ClaimOutcome::Recorded { amount_hundredths: found.amount_hundredths });
 	}
 
@@ -523,10 +572,10 @@ fn build_dilithium_claim(
 }
 
 async fn build_wormhole_claim(
-	secret: [u8; 32],
+	secret: &SpendSecret,
 	claim_account: [u8; 32],
 ) -> Result<WormholeClaimBody> {
-	let secret = Secret::try_from(secret)
+	let secret = Secret::try_from(*secret.bytes())
 		.map_err(|e| QuantusError::Generic(format!("invalid wormhole secret: {e:?}")))?;
 	let claim = BytesDigest::try_from(claim_account.as_slice())
 		.map_err(|e| QuantusError::Generic(format!("invalid claim account: {e:?}")))?;
@@ -964,5 +1013,70 @@ mod tests {
 		assert_eq!(value["kind"], "wormhole");
 		assert_eq!(value["proof_kind"], "wormhole_rate8");
 		assert_eq!(value["proof"], "cc");
+	}
+
+	#[test]
+	fn spend_secret_debug_is_redacted() {
+		let secret = SpendSecret([0xAB; 32]);
+		let debug = format!("{secret:?}");
+		assert!(!debug.contains("ab"), "debug output must not leak secret bytes: {debug}");
+		assert!(!debug.contains("171"), "debug output must not leak secret bytes: {debug}");
+		assert!(debug.contains("redacted"));
+	}
+
+	#[test]
+	fn reward_source_debug_has_no_secret_material() {
+		let source = RewardSource::Wormhole { secret_index: 0, label: "hd m/44'".into() };
+		let debug = format!("{source:?}");
+		assert!(debug.contains("secret_index"));
+	}
+
+	#[test]
+	fn resolve_claim_account_prefers_to_over_wallet_account() {
+		let credentials = Credentials {
+			dilithium: None,
+			wallet_account: Some([5u8; 32]),
+			wormhole_secrets: Vec::new(),
+		};
+		let dest = [7u8; 32];
+		let resolved =
+			resolve_claim_account(Some(&bytes_to_quantus_ss58(&dest)), &credentials).unwrap();
+		assert_eq!(resolved, dest);
+	}
+
+	#[test]
+	fn resolve_claim_account_defaults_to_unlocked_wallet_without_reopening() {
+		// The wallet account must come from Credentials (captured at unlock,
+		// works for ML-DSA-65 + --password-file), not from re-resolving the
+		// wallet name, which cannot see --password-file.
+		let credentials = Credentials {
+			dilithium: None,
+			wallet_account: Some([5u8; 32]),
+			wormhole_secrets: Vec::new(),
+		};
+		assert_eq!(resolve_claim_account(None, &credentials).unwrap(), [5u8; 32]);
+	}
+
+	#[test]
+	fn resolve_claim_account_requires_to_without_wallet() {
+		let credentials =
+			Credentials { dilithium: None, wallet_account: None, wormhole_secrets: Vec::new() };
+		assert!(resolve_claim_account(None, &credentials).is_err());
+	}
+
+	#[test]
+	fn finish_claims_fails_when_all_submissions_failed() {
+		assert!(finish_claims(false, 0, 0, 0, 3).is_err());
+	}
+
+	#[test]
+	fn finish_claims_fails_on_partial_failure() {
+		assert!(finish_claims(false, 150, 1, 1, 1).is_err());
+	}
+
+	#[test]
+	fn finish_claims_succeeds_with_skips_but_no_failures() {
+		assert!(finish_claims(false, 150, 1, 2, 0).is_ok());
+		assert!(finish_claims(true, 0, 1, 0, 0).is_ok());
 	}
 }
