@@ -3333,6 +3333,7 @@ dependencies = [
  "once_cell",
  "serdect",
  "sha2 0.10.9",
+ "signature",
 ]
 
 [[package]]
@@ -3771,6 +3772,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d87ecb2933e8aeadb3e3a02b828fed80a7528047e68b4f424523a0981a3a084"
 dependencies = [
  "serde",
+]
+
+[[package]]
+name = "nam-tiny-hderive"
+version = "0.3.1-nam.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b2cd44792ed5cd84dc9dedc3d572242ac00e76c244e85eb4bf34da2c6239ce30"
+dependencies = [
+ "base58",
+ "hmac 0.12.1",
+ "k256",
+ "sha2 0.10.9",
+ "zeroize",
 ]
 
 [[package]]
@@ -5091,6 +5105,7 @@ dependencies = [
  "jsonrpsee",
  "libc",
  "minifb",
+ "nam-tiny-hderive",
  "nokhwa",
  "p3-field",
  "p3-goldilocks",

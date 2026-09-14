@@ -9,9 +9,10 @@ use crate::{
 };
 use clap::Subcommand;
 use colored::Colorize;
+use nam_tiny_hderive::bip32::ExtendedPrivKey;
 use qp_ownership_circuit::{CircuitInputs, Secret};
 use qp_poseidon_core_v09 as v09;
-use qp_rusty_crystals_dilithium::ml_dsa_87::SecretKey;
+use qp_rusty_crystals_dilithium::{fips202, ml_dsa_87::SecretKey, packing, params, poly, polyvec};
 use qp_rusty_crystals_hdwallet::{
 	generate_wormhole_from_seed, mnemonic_to_seed, SensitiveBytes64, QUANTUS_WORMHOLE_CHAIN_ID,
 };
@@ -29,6 +30,10 @@ const HD_WORMHOLE_INDEXES: std::ops::RangeInclusive<usize> = 0..=16;
 /// scan several rounds beyond that.
 const HD_WORMHOLE_BRANCHES: std::ops::RangeInclusive<usize> = 0..=8;
 const CLAIMABLE_WORMHOLE_SCHEME: &str = "wormhole-rate8-compact";
+/// BIP44 coin type for Dilithium keys (the wormhole coin type is 189189189').
+const DILITHIUM_CHAIN_ID: &str = "189189'";
+/// Account indexes scanned per historical Dilithium keygen family.
+const DILITHIUM_SCAN_ACCOUNTS: u32 = 9;
 
 #[derive(Subcommand, Debug)]
 pub enum AirdropCommands {
@@ -160,7 +165,7 @@ async fn handle_check(
 		return Err(QuantusError::Generic("provide --wallet and/or --wormhole-secret-file".into()));
 	}
 
-	let matches = find_matches(&snapshot, &credentials);
+	let matches = find_matches(&snapshot, &credentials)?;
 	print_snapshot_header(&snapshot);
 	print_matches(&matches);
 	Ok(())
@@ -189,7 +194,7 @@ async fn handle_claim(
 
 	let claim_account = resolve_claim_account(to.as_deref(), &credentials)?;
 	let snapshot = fetch_snapshot(&server).await?;
-	let matches = find_matches(&snapshot, &credentials);
+	let matches = find_matches(&snapshot, &credentials)?;
 
 	print_snapshot_header(&snapshot);
 	print_matches(&matches);
@@ -279,6 +284,10 @@ struct Credentials {
 	/// reopens the wallet (which would lose `--password-file`).
 	wallet_account: Option<[u8; 32]>,
 	wormhole_secrets: Vec<(SpendSecret, String)>,
+	/// Stretched BIP39 seed (self-zeroizing), kept so historical Dilithium
+	/// keypairs can be re-derived at claim time instead of holding every
+	/// candidate secret key in memory.
+	hd_seed: Option<SensitiveBytes64>,
 }
 
 fn collect_credentials(
@@ -291,6 +300,7 @@ fn collect_credentials(
 	let mut wormhole_secrets = Vec::new();
 	let mut dilithium = None;
 	let mut wallet_account = None;
+	let mut hd_seed = None;
 
 	if let Some(name) = wallet {
 		let (keypair, mnemonic) = load_wallet_material(name, password, password_file)?;
@@ -304,12 +314,16 @@ fn collect_credentials(
 		} else {
 			dilithium = Some(keypair);
 		}
-		if let Some(mut mnemonic) = mnemonic {
-			let derived = derive_hd_wormhole_secrets(&mnemonic, wormhole_index);
-			crate::wallet::keystore::zeroize_string(&mut mnemonic);
-			wormhole_secrets.extend(derived?);
+		if let Some(mnemonic) = mnemonic {
+			// Stretch the BIP39 seed once; `mnemonic_to_seed` consumes and
+			// zeroizes the mnemonic string.
+			let mut seed = SensitiveBytes64::zeroed();
+			mnemonic_to_seed(mnemonic, None, &mut seed)
+				.map_err(|e| QuantusError::Generic(format!("invalid mnemonic: {e:?}")))?;
+			wormhole_secrets.extend(derive_hd_wormhole_secrets(&seed, wormhole_index)?);
+			hd_seed = Some(seed);
 		} else {
-			log_verbose!("Wallet '{}' has no mnemonic; HD wormhole derivation skipped", name);
+			log_verbose!("Wallet '{}' has no mnemonic; HD derivation skipped", name);
 		}
 	}
 
@@ -318,7 +332,7 @@ fn collect_credentials(
 		wormhole_secrets.push((secret, path.display().to_string()));
 	}
 
-	Ok(Credentials { dilithium, wallet_account, wormhole_secrets })
+	Ok(Credentials { dilithium, wallet_account, wormhole_secrets, hd_seed })
 }
 
 fn load_wallet_material(
@@ -337,28 +351,223 @@ fn load_wallet_material(
 }
 
 fn derive_hd_wormhole_secrets(
-	mnemonic: &str,
+	seed: &SensitiveBytes64,
 	wormhole_index: Option<usize>,
 ) -> Result<Vec<(SpendSecret, String)>> {
 	let indexes: Vec<usize> = match wormhole_index {
 		Some(index) => vec![index],
 		None => HD_WORMHOLE_INDEXES.collect(),
 	};
-	// Stretch the BIP39 seed once, then walk the HD tree per path. The
-	// mnemonic copy passed in is zeroized by `mnemonic_to_seed`.
-	let mut seed = SensitiveBytes64::zeroed();
-	mnemonic_to_seed(mnemonic.to_string(), None, &mut seed)
-		.map_err(|e| QuantusError::Generic(format!("invalid mnemonic: {e:?}")))?;
 	let mut out = Vec::new();
+	// Current "Dilithium seed" tree.
 	for branch in HD_WORMHOLE_BRANCHES {
 		for &index in &indexes {
 			let path = format!("m/44'/{}/0'/{}'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, branch, index);
-			let pair = generate_wormhole_from_seed(&seed, &path)
+			let pair = generate_wormhole_from_seed(seed, &path)
 				.map_err(|e| QuantusError::Generic(format!("HD derivation failed: {e:?}")))?;
 			out.push((SpendSecret(*pair.secret().as_bytes()), format!("hd {path}")));
 		}
 	}
+	// Pre-March-2026 "Bitcoin seed" tree: same paths, different master HMAC
+	// key, so every entropy differs. The app's first wormhole address also
+	// used the master node's own key (hdwallet 1.0.0 `generate_wormhole_pair`),
+	// hence path "m".
+	let mut legacy_paths = vec!["m".to_string()];
+	for branch in HD_WORMHOLE_BRANCHES {
+		for &index in &indexes {
+			legacy_paths
+				.push(format!("m/44'/{}/0'/{}'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, branch, index));
+		}
+	}
+	for path in legacy_paths {
+		let entropy = ExtendedPrivKey::derive(seed.as_bytes(), path.as_str())
+			.map_err(|e| {
+				QuantusError::Generic(format!("BIP32 derivation failed at {path}: {e:?}"))
+			})?
+			.secret();
+		out.push((SpendSecret(entropy), format!("bitcoin-seed {path}")));
+	}
 	Ok(out)
+}
+
+// ---------------------------------------------------------------------------
+// Historical ML-DSA-87 keygens
+// ---------------------------------------------------------------------------
+//
+// The address-hash schemes below cover how a *public key* became an
+// AccountId. The public key produced from the same mnemonic changed too:
+//
+// 1. pre Nov 2025 (qp-rusty-crystals-dilithium < 2.0.0): keygen expanded SHAKE256(seed[..32]) with
+//    no domain separation. Wallets were non-HD (`Keypair::generate(seed64)`, which absorbed only
+//    the first 32 bytes) or, after the multiple-accounts feature, HD at m/44'/189189'/N'/0/0 under
+//    the BIP32 master HMAC key "Bitcoin seed" with a soft tail.
+// 2. Nov 2025 (dilithium 2.0.0): FIPS 204 keygen, SHAKE256(seed ‖ K ‖ L) absorbing the whole input.
+//    Same "Bitcoin seed" paths; the non-HD account went from an effective 32-byte input to the full
+//    64-byte seed.
+// 3. Feb 2026 (this CLI): default path hardened to m/44'/189189'/0'/0'/0'; --no-derivation wallets
+//    became the BIP32 child at m/44'/189189'/0'.
+// 4. Mar 2026 (hdwallet 2.1.0): the BIP32 master HMAC key became "Dilithium seed" (hardened-only),
+//    changing every HD key again; the non-HD legacy account became FIPS keygen over seed64[..32].
+//    This is the current scheme.
+//
+// Matching therefore derives candidate keypairs for every era and hashes
+// each candidate public key under every address scheme.
+
+/// Secret-key bytes that wipe themselves on drop.
+struct SecretKeyBytes(Vec<u8>);
+
+impl Drop for SecretKeyBytes {
+	fn drop(&mut self) {
+		crate::wallet::keystore::zeroize_bytes(&mut self.0);
+	}
+}
+
+struct HistoricalKeypair {
+	public: Vec<u8>,
+	secret: SecretKeyBytes,
+}
+
+/// Every mnemonic→ML-DSA-87-keypair scheme a snapshot key may have used.
+/// Ids are parsed by [`derive_historical_dilithium`]: `v1`/`fips` selects the
+/// seed expansion, and the source is `seed` (the 64-byte BIP39 seed),
+/// `seed32` (its first half, the chain's `from_seed`), `bip32:<path>`
+/// ("Bitcoin seed" BIP32 entropy), or `hd:<path>` (current "Dilithium seed"
+/// derivation).
+fn dilithium_keygen_ids() -> Vec<String> {
+	let mut ids = vec![
+		// Era 1 non-HD (absorbs seed64[..32]); era 2 non-HD; era 4 legacy.
+		"v1:seed".to_string(),
+		"fips:seed".to_string(),
+		"fips:seed32".to_string(),
+	];
+	for account in 0..DILITHIUM_SCAN_ACCOUNTS {
+		// Era 1 and era 2 app/CLI accounts (soft tail), era 3 CLI hardened
+		// default and --no-derivation account child, era 4 current HD.
+		ids.push(format!("v1:bip32:m/44'/{DILITHIUM_CHAIN_ID}/{account}'/0/0"));
+		ids.push(format!("fips:bip32:m/44'/{DILITHIUM_CHAIN_ID}/{account}'/0/0"));
+		ids.push(format!("fips:bip32:m/44'/{DILITHIUM_CHAIN_ID}/{account}'/0'/0'"));
+		ids.push(format!("fips:bip32:m/44'/{DILITHIUM_CHAIN_ID}/{account}'"));
+		ids.push(format!("fips:hd:m/44'/{DILITHIUM_CHAIN_ID}/{account}'/0'/0'"));
+	}
+	ids
+}
+
+/// Derive the ML-DSA-87 keypair for a historical keygen id from the BIP39
+/// seed. The secret key comes back in a self-wiping buffer; intermediate
+/// entropy buffers are wiped before returning.
+fn derive_historical_dilithium(seed: &SensitiveBytes64, id: &str) -> Result<HistoricalKeypair> {
+	let (expansion, source) = id
+		.split_once(':')
+		.ok_or_else(|| QuantusError::Generic(format!("malformed keygen id {id:?}")))?;
+	let v1 = match expansion {
+		"v1" => true,
+		"fips" => false,
+		_ => return Err(QuantusError::Generic(format!("unknown keygen era in {id:?}"))),
+	};
+	if source == "seed" {
+		return Ok(mldsa87_keypair(seed.as_bytes(), v1));
+	}
+	if source == "seed32" {
+		return Ok(mldsa87_keypair(&seed.as_bytes()[..32], v1));
+	}
+	if let Some(path) = source.strip_prefix("bip32:") {
+		let mut entropy = ExtendedPrivKey::derive(seed.as_bytes(), path)
+			.map_err(|e| {
+				QuantusError::Generic(format!("BIP32 derivation failed at {path}: {e:?}"))
+			})?
+			.secret();
+		let keypair = mldsa87_keypair(&entropy, v1);
+		crate::wallet::keystore::zeroize_bytes(&mut entropy);
+		return Ok(keypair);
+	}
+	if let Some(path) = source.strip_prefix("hd:") {
+		if v1 {
+			return Err(QuantusError::Generic(format!(
+				"keygen id {id:?} is inconsistent: no v1-era wallet used the Dilithium-seed tree"
+			)));
+		}
+		let keypair = qp_rusty_crystals_hdwallet::ml_dsa_87::derive_key_from_seed(seed, path)
+			.map_err(|e| QuantusError::Generic(format!("HD derivation failed at {path}: {e:?}")))?;
+		// `to_bytes` returns a `Zeroizing` buffer, wiped when it drops here.
+		let secret = SecretKeyBytes(keypair.secret().to_bytes().to_vec());
+		return Ok(HistoricalKeypair { public: keypair.public().to_bytes().to_vec(), secret });
+	}
+	Err(QuantusError::Generic(format!("unknown keygen source in {id:?}")))
+}
+
+/// ML-DSA-87 key generation with a selectable seed expansion, built from the
+/// current crate's public primitives (its `keypair_var` is not public, and
+/// the historical crates' own keygens copy the seed into heap buffers they
+/// free unscrubbed). `v1` selects the pre-FIPS expansion — SHAKE256 over the
+/// first 32 seed bytes with no `K ‖ L` domain suffix; otherwise the FIPS 204
+/// expansion absorbs the whole seed plus the suffix. Byte-equality of both
+/// keypairs with the shipped dilithium 1.0.3 / 2.0.0 keygens is pinned by
+/// golden vectors in the tests.
+fn mldsa87_keypair(seed: &[u8], v1: bool) -> HistoricalKeypair {
+	use crate::wallet::keystore::zeroize_bytes;
+	use params::{
+		ml_dsa_87::{ETA, K, L, PUBLICKEYBYTES, SECRETKEYBYTES},
+		CRHBYTES, SEEDBYTES, TR_BYTES,
+	};
+	use polyvec::Polyvec;
+
+	debug_assert!(seed.len() == 32 || seed.len() == 64);
+	let mut seedbuf = [0u8; 2 * SEEDBYTES + CRHBYTES];
+	if v1 {
+		// The v1 expansion reads exactly SEEDBYTES from its input.
+		fips202::shake256(&mut seedbuf, &seed[..SEEDBYTES]);
+	} else {
+		let mut preimage = [0u8; 64 + 2];
+		preimage[..seed.len()].copy_from_slice(seed);
+		preimage[seed.len()] = K as u8;
+		preimage[seed.len() + 1] = L as u8;
+		fips202::shake256(&mut seedbuf, &preimage[..seed.len() + 2]);
+		zeroize_bytes(&mut preimage);
+	}
+
+	let mut rho = [0u8; SEEDBYTES];
+	rho.copy_from_slice(&seedbuf[..SEEDBYTES]);
+	let mut rhoprime = [0u8; CRHBYTES];
+	rhoprime.copy_from_slice(&seedbuf[SEEDBYTES..SEEDBYTES + CRHBYTES]);
+	let mut key = [0u8; SEEDBYTES];
+	key.copy_from_slice(&seedbuf[SEEDBYTES + CRHBYTES..]);
+	zeroize_bytes(&mut seedbuf);
+
+	let mut s1 = Polyvec::<L>::default();
+	for (i, p) in s1.vec.iter_mut().enumerate() {
+		poly::uniform_eta::<ETA>(p, &rhoprime, i as u16);
+	}
+	let mut s2 = Polyvec::<K>::default();
+	for (i, p) in s2.vec.iter_mut().enumerate() {
+		poly::uniform_eta::<ETA>(p, &rhoprime, (L + i) as u16);
+	}
+	zeroize_bytes(&mut rhoprime);
+
+	let mut s1hat = s1.clone();
+	polyvec::ntt(&mut s1hat);
+	let mut t1 = Polyvec::<K>::default();
+	polyvec::matrix_pointwise_montgomery_streamed(&mut t1, &rho, &s1hat);
+	polyvec::reduce(&mut t1);
+	polyvec::invntt_tomont(&mut t1);
+	polyvec::add(&mut t1, &s2);
+	polyvec::caddq(&mut t1);
+	let mut t0 = Polyvec::<K>::default();
+	polyvec::power2round(&mut t1, &mut t0);
+
+	let mut pk = [0u8; PUBLICKEYBYTES];
+	packing::pack_pk::<K, PUBLICKEYBYTES>(&mut pk, &rho, &t1);
+	let mut tr = [0u8; TR_BYTES];
+	fips202::shake256(&mut tr, &pk);
+	let mut sk = [0u8; SECRETKEYBYTES];
+	packing::pack_sk::<K, L, ETA, SECRETKEYBYTES>(&mut sk, &rho, &tr, &key, &t0, &s1, &s2);
+	zeroize_bytes(&mut key);
+
+	// s1, s2, t0, and s1hat wipe themselves on drop (Polyvec is
+	// ZeroizeOnDrop); the packed sk moves into a self-wiping buffer and its
+	// stack copy is scrubbed here.
+	let secret = SecretKeyBytes(sk.to_vec());
+	zeroize_bytes(&mut sk);
+	HistoricalKeypair { public: pk.to_vec(), secret }
 }
 
 fn read_wormhole_secret(path: &std::path::Path) -> Result<SpendSecret> {
@@ -419,14 +628,16 @@ struct FoundReward {
 }
 
 /// Where the matching key came from. Holds an index into
-/// `Credentials::wormhole_secrets` rather than a copy of the secret.
+/// `Credentials::wormhole_secrets` (or a keygen id re-derivable from
+/// `Credentials::hd_seed`) rather than a copy of the secret.
 #[derive(Clone, Debug)]
 enum RewardSource {
 	Dilithium,
+	DilithiumHistorical { keygen: String },
 	Wormhole { secret_index: usize, label: String },
 }
 
-fn find_matches(snapshot: &SnapshotFile, credentials: &Credentials) -> Vec<FoundReward> {
+fn find_matches(snapshot: &SnapshotFile, credentials: &Credentials) -> Result<Vec<FoundReward>> {
 	let mut found = Vec::new();
 	if let Some(keypair) = &credentials.dilithium {
 		for scheme in DilithiumHash::ALL {
@@ -441,6 +652,28 @@ fn find_matches(snapshot: &SnapshotFile, credentials: &Credentials) -> Vec<Found
 					scheme: scheme.id(),
 					source: RewardSource::Dilithium,
 				});
+			}
+		}
+	}
+	// Dilithium keys under every historical keygen era. Current-era
+	// candidates can duplicate a wallet-keypair match above; the
+	// (account, scheme) dedupe below keeps the wallet-based one.
+	if let Some(seed) = &credentials.hd_seed {
+		for id in dilithium_keygen_ids() {
+			let keypair = derive_historical_dilithium(seed, &id)?;
+			for scheme in DilithiumHash::ALL {
+				let address = scheme.derive(&keypair.public);
+				if let Some(row) = snapshot.by_account.get(&address) {
+					found.push(FoundReward {
+						account: address,
+						ss58: row.address.clone(),
+						amount_hundredths: row.amount_hundredths,
+						testnets: row.testnets.clone(),
+						kind: row.kind.clone(),
+						scheme: scheme.id(),
+						source: RewardSource::DilithiumHistorical { keygen: id.clone() },
+					});
+				}
 			}
 		}
 	}
@@ -460,9 +693,11 @@ fn find_matches(snapshot: &SnapshotFile, credentials: &Credentials) -> Vec<Found
 			}
 		}
 	}
+	// Stable sort: within one (address, scheme) the push order above is kept,
+	// so dedup retains the wallet-keypair match over a historical keygen one.
 	found.sort_by(|a, b| a.ss58.cmp(&b.ss58).then(a.scheme.cmp(b.scheme)));
 	found.dedup_by(|a, b| a.account == b.account && a.scheme == b.scheme);
-	found
+	Ok(found)
 }
 
 fn print_snapshot_header(snapshot: &SnapshotFile) {
@@ -482,7 +717,7 @@ fn print_matches(matches: &[FoundReward]) {
 	log_print!("{} snapshot match(es):", matches.len());
 	for found in matches {
 		let claimable = match &found.source {
-			RewardSource::Dilithium => true,
+			RewardSource::Dilithium | RewardSource::DilithiumHistorical { .. } => true,
 			RewardSource::Wormhole { .. } => found.scheme == CLAIMABLE_WORMHOLE_SCHEME,
 		};
 		let note = if claimable { "claimable" } else { "not claimable yet" };
@@ -516,7 +751,25 @@ async fn submit_claim(
 			let keypair = credentials.dilithium.as_ref().ok_or_else(|| {
 				QuantusError::Generic("Dilithium match without a loaded wallet".into())
 			})?;
-			ClaimBody::Dilithium(build_dilithium_claim(keypair, found.account, *claim_account)?)
+			ClaimBody::Dilithium(build_dilithium_claim(
+				&keypair.public_key,
+				&keypair.private_key,
+				found.account,
+				*claim_account,
+			)?)
+		},
+		RewardSource::DilithiumHistorical { keygen } => {
+			let seed = credentials.hd_seed.as_ref().ok_or_else(|| {
+				QuantusError::Generic("historical Dilithium match without a wallet mnemonic".into())
+			})?;
+			// Re-derive the era's keypair; the secret key wipes on drop.
+			let keypair = derive_historical_dilithium(seed, keygen)?;
+			ClaimBody::Dilithium(build_dilithium_claim(
+				&keypair.public,
+				&keypair.secret.0,
+				found.account,
+				*claim_account,
+			)?)
 		},
 		RewardSource::Wormhole { secret_index, label } => {
 			if found.scheme != CLAIMABLE_WORMHOLE_SCHEME {
@@ -562,26 +815,27 @@ async fn submit_claim(
 }
 
 fn build_dilithium_claim(
-	keypair: &QuantumKeyPair,
+	public_key: &[u8],
+	secret_key: &[u8],
 	address: [u8; 32],
 	claim_account: [u8; 32],
 ) -> Result<DilithiumClaimBody> {
 	let expiry_unix = now_unix()?.saturating_add(CLAIM_TTL_SECS);
 	let msg = claim_message(&address, &claim_account, expiry_unix);
-	let secret = SecretKey::from_bytes(&keypair.private_key)
+	let secret = SecretKey::from_bytes(secret_key)
 		.map_err(|_| QuantusError::Generic("invalid ML-DSA-87 secret key".into()))?;
 	let signature = secret
 		.sign(&msg, Some(CLAIM_CONTEXT), None)
 		.map_err(|e| QuantusError::Generic(format!("ML-DSA sign failed: {e}")))?;
 	let scheme = DilithiumHash::ALL
 		.iter()
-		.find(|s| s.derive(&keypair.public_key) == address)
+		.find(|s| s.derive(public_key) == address)
 		.ok_or_else(|| QuantusError::Generic("could not identify Dilithium hash scheme".into()))?;
 	Ok(DilithiumClaimBody {
 		scheme: scheme.id().to_string(),
 		address: bytes_to_quantus_ss58(&address),
 		claim_account: bytes_to_quantus_ss58(&claim_account),
-		public_key: hex::encode(&keypair.public_key),
+		public_key: hex::encode(public_key),
 		signature: hex::encode(signature),
 		expiry_unix,
 	})
@@ -1120,18 +1374,26 @@ mod tests {
 		hex::decode(s).unwrap().try_into().unwrap()
 	}
 
+	const TEST_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon \
+	                             abandon abandon abandon about";
+
+	fn test_seed() -> SensitiveBytes64 {
+		let mut seed = SensitiveBytes64::zeroed();
+		mnemonic_to_seed(TEST_MNEMONIC.into(), None, &mut seed).unwrap();
+		seed
+	}
+
 	#[test]
 	fn hd_scan_covers_change_branch_and_multiround_rounds() {
-		let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon \
-		                abandon abandon about";
-		let secrets = derive_hd_wormhole_secrets(mnemonic, None).unwrap();
-		assert_eq!(secrets.len(), 9 * 17);
+		let secrets = derive_hd_wormhole_secrets(&test_seed(), None).unwrap();
+		// Current tree + "Bitcoin seed" tree + the legacy master node.
+		assert_eq!(secrets.len(), 2 * (9 * 17) + 1);
 
 		// A `wormhole multiround` round-2 address must be in the scan and match
 		// direct derivation.
 		let path = format!("m/44'/{}/0'/2'/1'", QUANTUS_WORMHOLE_CHAIN_ID);
 		let direct =
-			qp_rusty_crystals_hdwallet::derive_wormhole_from_mnemonic(mnemonic, None, &path)
+			qp_rusty_crystals_hdwallet::derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path)
 				.unwrap();
 		let (secret, _) = secrets
 			.iter()
@@ -1139,10 +1401,141 @@ mod tests {
 			.expect("round-2 path in scan");
 		assert_eq!(secret.bytes(), direct.secret().as_bytes());
 
-		// Explicit index still scans every branch/round.
-		let pinned = derive_hd_wormhole_secrets(mnemonic, Some(1)).unwrap();
-		assert_eq!(pinned.len(), 9);
+		// Explicit index still scans every branch/round in both trees.
+		let pinned = derive_hd_wormhole_secrets(&test_seed(), Some(1)).unwrap();
+		assert_eq!(pinned.len(), 2 * 9 + 1);
 		assert!(pinned.iter().any(|(_, label)| label == &format!("hd {path}")));
+	}
+
+	/// The pre-March-2026 wormhole entropies ("Bitcoin seed" BIP32) pinned by
+	/// the hdwallet 1.0.0 probe: the master-node secret
+	/// (`generate_wormhole_pair`) and a path-derived one
+	/// (`generate_wormhole_pair_from_path`).
+	#[test]
+	fn hd_scan_covers_bitcoin_seed_wormhole_entropies() {
+		let secrets = derive_hd_wormhole_secrets(&test_seed(), None).unwrap();
+		let get = |label: &str| {
+			secrets
+				.iter()
+				.find(|(_, l)| l == label)
+				.unwrap_or_else(|| panic!("{label} missing"))
+				.0
+				.bytes()
+				.to_owned()
+		};
+		assert_eq!(
+			get("bitcoin-seed m"),
+			hex32("1837c1be8e2995ec11cda2b066151be2cfb48adf9e47b151d46adab3a21cdf67")
+		);
+		let path = format!("m/44'/{}/0'/0'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
+		assert_eq!(
+			get(&format!("bitcoin-seed {path}")),
+			hex32("87b3000325d7058a64b01b93f199b3d54ba5d9b2e036cee672199e7da326538c")
+		);
+	}
+
+	/// sha256(pk) vectors computed with the exact shipped crates
+	/// (`.probe-keygen`): qp-rusty-crystals-dilithium 1.0.3 (pre-FIPS
+	/// expansion), 2.0.0 (FIPS expansion), qp-rusty-crystals-hdwallet 1.0.0
+	/// ("Bitcoin seed" BIP32), and the current 4.1.1. These pin the local
+	/// keygen reimplementation and the BIP32 tree to the historical bytes.
+	#[test]
+	fn historical_dilithium_keygens_match_shipped_crate_vectors() {
+		use sha2::Digest;
+		let seed = test_seed();
+		let ids = dilithium_keygen_ids();
+		let vectors = [
+			("v1:seed", "77993f1dafc02c9162925807f825f611bab071d121d6a42250bc4957c9149562"),
+			(
+				"v1:bip32:m/44'/189189'/0'/0/0",
+				"57eafbd7c902c02686aff7f39c692beb9f3c057383dc6c954defc381e2c59f7d",
+			),
+			("fips:seed", "1819feeaba63629813f1266de3d135de22ec505f1e014e669011cd9399bacb6f"),
+			(
+				"fips:bip32:m/44'/189189'/0'/0/0",
+				"08fffe331b888d215c335e82712aa41ef680edd57e4634a89cca81b87e021e24",
+			),
+			(
+				"fips:bip32:m/44'/189189'/0'/0'/0'",
+				"7aeb9126559a7f750bf90941f632cf1f2835a57500cb1be74d9d3d15007d7e8d",
+			),
+			(
+				"fips:bip32:m/44'/189189'/0'",
+				"a49dac7c3537f61476626d491016abb2ca0e355be017c8cbbabc5a705d1cb5d7",
+			),
+			("fips:seed32", "2af97815f11fb93d64d0e93fecff2b0e7af88882ed9fda813b5cd6f421799ab2"),
+			(
+				"fips:hd:m/44'/189189'/0'/0'/0'",
+				"aa46cca1014fa42d40388298b33a7537d6a313b401f5be259cc59797cf4307e7",
+			),
+		];
+		for (id, expected_pk_sha) in vectors {
+			assert!(ids.iter().any(|i| i == id), "{id} missing from scan list");
+			let keypair = derive_historical_dilithium(&seed, id).unwrap();
+			assert_eq!(hex::encode(sha2::Sha256::digest(&keypair.public)), expected_pk_sha, "{id}");
+		}
+		// Secret keys too, for the two locally reimplemented expansions: the
+		// packed sk must be byte-identical to the historical crates' output.
+		let v1 = derive_historical_dilithium(&seed, "v1:seed").unwrap();
+		assert_eq!(
+			hex::encode(sha2::Sha256::digest(&v1.secret.0)),
+			"fbcb8f8db649111054baddc24f3eaab314c120950d76fdb8df5c1cd6a4102aa9"
+		);
+		let fips = derive_historical_dilithium(&seed, "fips:seed").unwrap();
+		assert_eq!(
+			hex::encode(sha2::Sha256::digest(&fips.secret.0)),
+			"fbe63db6ccf71badbb5a4aea59bead046637065fca38270b1a6361644ecf20d3"
+		);
+	}
+
+	/// An address minted by an era-1 wallet (pre-FIPS keygen, soft HD path,
+	/// v0.8 address hash) is found from the seed alone, and the claim built
+	/// for it signs with the era's key, verifying under the current crate —
+	/// which is what the claim server runs.
+	#[test]
+	fn matches_and_claims_historical_dilithium_address() {
+		let keygen = "v1:bip32:m/44'/189189'/1'/0/0";
+		let seed = test_seed();
+		let keypair = derive_historical_dilithium(&seed, keygen).unwrap();
+		let address = DilithiumHash::V08Padded.derive(&keypair.public);
+		let row = SnapshotRow {
+			address: bytes_to_quantus_ss58(&address),
+			account: hex::encode(address),
+			amount_hundredths: 150,
+			testnets: vec!["Resonance".into()],
+			kind: "dilithium".into(),
+		};
+		let snapshot = SnapshotFile {
+			version: 1,
+			sha256: "0".repeat(64),
+			rows: vec![row.clone()],
+			by_account: HashMap::from([(address, row)]),
+		};
+		let credentials = Credentials {
+			dilithium: None,
+			wallet_account: None,
+			wormhole_secrets: Vec::new(),
+			hd_seed: Some(seed),
+		};
+
+		let matches = find_matches(&snapshot, &credentials).unwrap();
+		assert_eq!(matches.len(), 1);
+		assert_eq!(matches[0].scheme, "dilithium-v08-padded");
+		let RewardSource::DilithiumHistorical { keygen: found_keygen } = &matches[0].source else {
+			panic!("expected a historical Dilithium source");
+		};
+		assert_eq!(found_keygen, keygen);
+
+		let claim_account = [9u8; 32];
+		let body =
+			build_dilithium_claim(&keypair.public, &keypair.secret.0, address, claim_account)
+				.unwrap();
+		assert_eq!(body.scheme, "dilithium-v08-padded");
+		let msg = claim_message(&address, &claim_account, body.expiry_unix);
+		let public =
+			qp_rusty_crystals_dilithium::ml_dsa_87::PublicKey::from_bytes(&keypair.public).unwrap();
+		let sig = hex::decode(&body.signature).unwrap();
+		assert!(public.verify(&msg, &sig, Some(CLAIM_CONTEXT)));
 	}
 
 	#[test]
@@ -1288,6 +1681,7 @@ mod tests {
 			dilithium: None,
 			wallet_account: Some([5u8; 32]),
 			wormhole_secrets: Vec::new(),
+			hd_seed: None,
 		};
 		let dest = [7u8; 32];
 		let resolved =
@@ -1304,14 +1698,19 @@ mod tests {
 			dilithium: None,
 			wallet_account: Some([5u8; 32]),
 			wormhole_secrets: Vec::new(),
+			hd_seed: None,
 		};
 		assert_eq!(resolve_claim_account(None, &credentials).unwrap(), [5u8; 32]);
 	}
 
 	#[test]
 	fn resolve_claim_account_requires_to_without_wallet() {
-		let credentials =
-			Credentials { dilithium: None, wallet_account: None, wormhole_secrets: Vec::new() };
+		let credentials = Credentials {
+			dilithium: None,
+			wallet_account: None,
+			wormhole_secrets: Vec::new(),
+			hd_seed: None,
+		};
 		assert!(resolve_claim_account(None, &credentials).is_err());
 	}
 
