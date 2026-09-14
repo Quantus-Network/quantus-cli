@@ -591,7 +591,11 @@ async fn build_wormhole_claim(
 	secret: &SpendSecret,
 	claim_account: [u8; 32],
 ) -> Result<WormholeClaimBody> {
-	let secret = Secret::try_from(*secret.bytes())
+	// `Secret::new` zeroizes its source, so this stack copy is scrubbed even
+	// though it outlives the call (unlike `Secret::try_from`, which leaves
+	// the source bytes intact).
+	let mut secret_bytes = *secret.bytes();
+	let secret = Secret::new(&mut secret_bytes)
 		.map_err(|e| QuantusError::Generic(format!("invalid wormhole secret: {e:?}")))?;
 	let claim = BytesDigest::try_from(claim_account.as_slice())
 		.map_err(|e| QuantusError::Generic(format!("invalid claim account: {e:?}")))?;
@@ -785,25 +789,34 @@ impl WormholeHash {
 
 	fn derive(self, secret: &[u8; 32]) -> DerivedWormhole {
 		if matches!(self, Self::V09Injective) {
-			let core = v09::Poseidon2Core::new();
-			let mut preimage = v09::injective_bytes_to_felts(b"wormhole");
-			preimage.extend(v09::injective_bytes_to_felts(secret));
-			let first_hash = core.hash_no_pad(preimage);
-			let address = core.hash_no_pad(v09::digest_bytes_to_felts(&first_hash));
-			return DerivedWormhole { first_hash, address };
+			return derive_v09(secret);
 		}
-		let mut preimage = injective4(b"wormhole");
-		preimage.extend(self.encode_secret(secret));
-		let first_hash = self.sponge().hash_felts(&preimage);
+		let salt = injective4(b"wormhole");
+		// Full capacity up front: growing the buffer after secret felts are
+		// written would free the old block unscrubbed. injective4 of a
+		// 32-byte secret is exactly 9 felts; compact8 is 4.
+		let mut preimage = SensitiveFelts::with_capacity(salt.len() + 9);
+		for felt in salt {
+			preimage.push(felt);
+		}
+		match self {
+			Self::V09Injective => unreachable!("handled above"),
+			Self::Rate4Injective | Self::Rate8Injective => {
+				for word in injective4_secret_words(secret) {
+					preimage.push(qp_poseidon_core::Goldilocks::from_u64(word));
+				}
+			},
+			Self::Rate4Compact | Self::Rate8Compact => {
+				let mut digest = compact8_decode(secret);
+				for felt in digest {
+					preimage.push(felt);
+				}
+				wipe_felts(&mut digest);
+			},
+		}
+		let first_hash = self.sponge().hash_felts(preimage.as_slice());
 		let address = self.sponge().rehash(&first_hash);
 		DerivedWormhole { first_hash, address }
-	}
-
-	fn encode_secret(self, secret: &[u8; 32]) -> Vec<qp_poseidon_core::Goldilocks> {
-		match self {
-			Self::V09Injective | Self::Rate4Injective | Self::Rate8Injective => injective4(secret),
-			Self::Rate4Compact | Self::Rate8Compact => compact8_decode(secret).to_vec(),
-		}
 	}
 
 	fn sponge(self) -> Sponge {
@@ -838,6 +851,68 @@ impl Sponge {
 	fn rehash(self, digest: &[u8; 32]) -> [u8; 32] {
 		self.hash_felts(&compact8_decode(digest))
 	}
+}
+
+fn derive_v09(secret: &[u8; 32]) -> DerivedWormhole {
+	use p3_field::integers::QuotientMap;
+	let core = v09::Poseidon2Core::new();
+	let salt = v09::injective_bytes_to_felts(b"wormhole");
+	// One pre-sized buffer so growth never frees a partial copy of the
+	// secret. `hash_no_pad` takes it by value and frees it unscrubbed inside
+	// the pinned historical crate — the heap-zeroization test exempts exactly
+	// this block, mirroring qp-zk-circuits' upstream carve-outs.
+	let mut preimage: Vec<p3_goldilocks::Goldilocks> = Vec::with_capacity(salt.len() + 9);
+	preimage.extend_from_slice(&salt);
+	preimage.extend(injective4_secret_words(secret).map(p3_goldilocks::Goldilocks::from_int));
+	let first_hash = core.hash_no_pad(preimage);
+	let address = core.hash_no_pad(v09::digest_bytes_to_felts(&first_hash));
+	DerivedWormhole { first_hash, address }
+}
+
+/// The injective 4-bytes-per-felt encoding of a 32-byte secret, as canonical
+/// limb values: eight little-endian u32 words plus the `1` terminator
+/// (32 % 4 == 0, so the terminator is always appended). Matches both
+/// `injective4` and v0.9.5's `injective_bytes_to_felts` without materializing
+/// an intermediate felt buffer.
+fn injective4_secret_words(secret: &[u8; 32]) -> impl Iterator<Item = u64> + '_ {
+	secret
+		.chunks(4)
+		.map(|chunk| u32::from_le_bytes(chunk.try_into().expect("4-byte chunk")) as u64)
+		.chain([1u64])
+}
+
+/// Heap buffer for secret-bearing field elements. The full capacity must be
+/// reserved before secret material is written (a growing `Vec` frees its old
+/// block unscrubbed); limbs are wiped on drop.
+struct SensitiveFelts(Vec<qp_poseidon_core::Goldilocks>);
+
+impl SensitiveFelts {
+	fn with_capacity(capacity: usize) -> Self {
+		Self(Vec::with_capacity(capacity))
+	}
+
+	fn push(&mut self, felt: qp_poseidon_core::Goldilocks) {
+		debug_assert!(self.0.len() < self.0.capacity(), "SensitiveFelts must be pre-sized");
+		self.0.push(felt);
+	}
+
+	fn as_slice(&self) -> &[qp_poseidon_core::Goldilocks] {
+		&self.0
+	}
+}
+
+impl Drop for SensitiveFelts {
+	fn drop(&mut self) {
+		wipe_felts(&mut self.0);
+	}
+}
+
+/// Zero field elements, resistant to dead-store elimination: `black_box`
+/// makes the compiler assume the zeros are observed, so the fill cannot be
+/// elided (same construction as qp-poseidon-core's internal state wipe).
+fn wipe_felts(felts: &mut [qp_poseidon_core::Goldilocks]) {
+	felts.fill(qp_poseidon_core::Goldilocks::ZERO);
+	core::hint::black_box(felts);
 }
 
 fn compact8_decode(
@@ -907,6 +982,10 @@ fn hash_felts_rate4_pad10(x: &[qp_poseidon_core::Goldilocks]) -> [u8; 32] {
 
 	let digest: [Goldilocks; POSEIDON2_OUTPUT] =
 		state[..POSEIDON2_OUTPUT].try_into().expect("width > output");
+	// The absorb buffer holds raw preimage felts and the state is the
+	// permuted secret; wipe both before returning.
+	wipe_felts(&mut state);
+	wipe_felts(&mut buf);
 	qp_poseidon_core::serialization::digest_to_bytes(&digest)
 }
 
@@ -1170,5 +1249,116 @@ mod tests {
 	fn finish_claims_succeeds_with_skips_but_no_failures() {
 		assert!(finish_claims(false, 150, 1, 2, 0).is_ok());
 		assert!(finish_claims(true, 0, 1, 0, 0).is_ok());
+	}
+}
+
+/// Regression test (security review): wormhole address matching must never
+/// free heap memory that still contains the spend secret.
+///
+/// Mirroring `heap_zeroization.rs` in qp-zk-circuits, a global allocator
+/// scans every freed block for the secret at `dealloc` time (the block is
+/// still valid inside the hook). Two byte images are searched, because the
+/// secret appears in two encodings: the raw 32 bytes (also the in-memory
+/// image of the compact8 felt encoding — every 8-byte limb of the ASCII
+/// pattern is canonical), and the injective4 felt image (4 secret bytes then
+/// 4 zero bytes per limb).
+///
+/// # Known upstream exemption
+///
+/// qp-poseidon-core 0.9.5's `hash_no_pad` takes its preimage `Vec` by value
+/// and frees it unscrubbed; only the pinned historical crate could fix that.
+/// The scanner exempts a block that byte-for-byte equals that one handoff
+/// buffer and nothing else, so a leak of any buffer this crate owns still
+/// fails.
+///
+/// The scanner only reacts to blocks containing the distinctive pattern, so
+/// unrelated tests running in the same binary cannot trip it.
+#[cfg(test)]
+mod heap_zeroization_tests {
+	use core::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+	use std::{
+		alloc::{GlobalAlloc, Layout, System},
+		sync::OnceLock,
+	};
+
+	use p3_field::PrimeField64;
+
+	use super::{injective4_secret_words, WormholeHash};
+
+	/// Distinctive all-ASCII 32-byte pattern; see module docs for why ASCII
+	/// makes the compact8 felt image identical to the raw bytes.
+	const SECRET_PATTERN: [u8; 32] = *b"quantus-cli-airdrop-zeroize-pat!";
+
+	static SCANNING: AtomicBool = AtomicBool::new(false);
+	static LEAKED_BLOCK_SIZE: AtomicUsize = AtomicUsize::new(0);
+	/// Injective4 felt image of the pattern (precomputed: the dealloc hook
+	/// should not allocate).
+	static INJECTIVE4_IMAGE: OnceLock<Vec<u8>> = OnceLock::new();
+	/// Byte image of the one buffer v0.9.5's `hash_no_pad` frees for us.
+	static V09_HANDOFF_BLOCK: OnceLock<Vec<u8>> = OnceLock::new();
+
+	fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+		haystack.windows(needle.len()).any(|w| w == needle)
+	}
+
+	struct SecretScanningAllocator;
+
+	unsafe impl GlobalAlloc for SecretScanningAllocator {
+		unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+			unsafe { System.alloc(layout) }
+		}
+
+		unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+			if SCANNING.load(Ordering::SeqCst) && layout.size() >= SECRET_PATTERN.len() {
+				let block = unsafe { core::slice::from_raw_parts(ptr, layout.size()) };
+				let hit = contains(block, &SECRET_PATTERN) ||
+					INJECTIVE4_IMAGE.get().is_some_and(|img| contains(block, img));
+				let exempt = V09_HANDOFF_BLOCK.get().is_some_and(|b| b.as_slice() == block);
+				if hit && !exempt {
+					LEAKED_BLOCK_SIZE.store(layout.size(), Ordering::SeqCst);
+				}
+			}
+			unsafe { System.dealloc(ptr, layout) }
+		}
+	}
+
+	#[global_allocator]
+	static ALLOCATOR: SecretScanningAllocator = SecretScanningAllocator;
+
+	fn injective4_image() -> Vec<u8> {
+		injective4_secret_words(&SECRET_PATTERN)
+			.take(8) // the terminator limb is not secret material
+			.flat_map(u64::to_le_bytes)
+			.collect()
+	}
+
+	fn expected_v09_handoff_block() -> Vec<u8> {
+		let salt = super::v09::injective_bytes_to_felts(b"wormhole");
+		salt.iter()
+			.map(|f| f.as_canonical_u64())
+			.chain(injective4_secret_words(&SECRET_PATTERN))
+			.flat_map(u64::to_le_bytes)
+			.collect()
+	}
+
+	#[test]
+	fn matching_never_frees_heap_memory_containing_the_secret() {
+		INJECTIVE4_IMAGE.set(injective4_image()).expect("set once");
+		V09_HANDOFF_BLOCK.set(expected_v09_handoff_block()).expect("set once");
+
+		LEAKED_BLOCK_SIZE.store(0, Ordering::SeqCst);
+		SCANNING.store(true, Ordering::SeqCst);
+		for scheme in WormholeHash::ALL {
+			let derived = scheme.derive(&SECRET_PATTERN);
+			core::hint::black_box(derived.address);
+		}
+		SCANNING.store(false, Ordering::SeqCst);
+
+		let leaked = LEAKED_BLOCK_SIZE.load(Ordering::SeqCst);
+		assert_eq!(
+			leaked, 0,
+			"a heap block of {leaked} bytes still containing the spend secret was freed \
+			 unscrubbed; check SensitiveFelts pre-sizing and drop in cli/airdrop.rs"
+		);
 	}
 }

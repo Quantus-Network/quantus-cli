@@ -5082,6 +5082,8 @@ dependencies = [
  "libc",
  "minifb",
  "nokhwa",
+ "p3-field",
+ "p3-goldilocks",
  "parity-scale-codec",
  "qp-dilithium-crypto",
  "qp-human-checkphrase",

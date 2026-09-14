@@ -122,6 +122,10 @@ subxt-metadata = "0.44"
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
 
+# Field type of qp-poseidon-core 0.9.5, needed to build v09 hash preimages
+# in pre-sized buffers (see SensitiveFelts in cli/airdrop.rs).
+p3-field = { version = "0.3.0", default-features = false }
+p3-goldilocks = { version = "0.3.0", default-features = false }
 qp-ownership-circuit = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["std"] }
 qp-ownership-prover = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["std"] }
 qp-plonky2 = { version = "1.5.5", default-features = false, features = ["rand", "std"] }

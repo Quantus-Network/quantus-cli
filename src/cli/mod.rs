@@ -618,6 +618,7 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 			];
 
 			let mut created_count = 0;
+			let mut failed_count = 0;
 
 			for (name, description) in test_wallets {
 				log_verbose!("Creating wallet: {}", name.bright_green());
@@ -632,8 +633,16 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 					},
 					Err(e) => {
 						log_error!("❌ Failed to create {}: {}", name.bright_red(), e);
+						failed_count += 1;
 					},
 				}
+			}
+
+			if failed_count > 0 {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"failed to create {failed_count} of {} test wallets",
+					created_count + failed_count
+				)));
 			}
 
 			log_print!("");
