@@ -72,6 +72,11 @@ qp-dilithium-crypto = { version = "0.6.1", features = ["serde"] }
 qp-human-checkphrase = "2.2.1"
 qp-rusty-crystals-dilithium = { version = "4.1.1", features = ["ml-dsa-65", "ml-dsa-87"] }
 qp-rusty-crystals-hdwallet = { version = "4.1.1", features = ["ml-dsa-65"] }
+# The pre-March-2026 BIP32 tree ("Bitcoin seed" master HMAC key, soft child
+# support): historical Dilithium accounts and wormhole entropies in
+# cli/airdrop.rs derive through it. Same crate qp-rusty-crystals-hdwallet
+# < 2.1.0 used internally.
+nam-tiny-hderive = { version = "=0.3.1-nam.1", default-features = false }
 
 # HTTP client for Subsquid queries
 blake3 = "1.8"
@@ -122,15 +127,27 @@ subxt-metadata = "0.44"
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
 
+# Building blocks of qp-poseidon-core 0.9.5's hasher. The local v09 sponge in
+# cli/airdrop.rs hashes the secret preimage from a borrowed slice because the
+# 0.9.5 crate's hash_no_pad consumes its Vec and frees it unscrubbed.
+p3-field = { version = "0.3.0", default-features = false }
+p3-goldilocks = { version = "0.3.0", default-features = false }
+p3-symmetric = { version = "0.3.0", default-features = false }
+qp-ownership-circuit = { version = "=4.4.0", default-features = false, features = ["std"] }
+qp-ownership-prover = { version = "=4.4.0", default-features = false, features = ["std"] }
 qp-plonky2 = { version = "1.5.5", default-features = false, features = ["rand", "std"] }
 qp-plonky2-verifier = { version = "1.5.5", default-features = false }
-qp-wormhole-aggregator = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-circuit = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0" }
-qp-wormhole-inputs = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0", default-features = false, features = ["std"] }
+qp-poseidon-core = "3.1.0"
+rand_chacha = { version = "0.9", default-features = false }
+# Resonance-era (v0.9.x) permutation constants differ from the current ones.
+qp-poseidon-core-v09 = { package = "qp-poseidon-core", version = "=0.9.5" }
+qp-wormhole-aggregator = { version = "=4.4.0", default-features = false, features = ["rayon", "std"] }
+qp-wormhole-circuit = { version = "=4.4.0", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = "=4.4.0"
+qp-wormhole-inputs = { version = "=4.4.0", default-features = false, features = ["std"] }
+qp-wormhole-prover = { version = "=4.4.0", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { version = "=4.4.0", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { version = "=4.4.0", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -138,7 +155,7 @@ libc = "0.2"
 [build-dependencies]
 hex = "0.4"
 qp-poseidon-core = "3.1.0"
-qp-wormhole-circuit-builder = { version = "4.4.0", git = "https://github.com/Quantus-Network/qp-zk-circuits", tag = "v4.4.0" }
+qp-wormhole-circuit-builder = "=4.4.0"
 sha2 = "0.10"
 
 [dev-dependencies]
