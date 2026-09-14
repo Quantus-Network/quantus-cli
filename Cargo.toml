@@ -122,15 +122,18 @@ subxt-metadata = "0.44"
 # ZK proof generation (aligned with chain)
 anyhow = "1.0"
 
-# Field type of qp-poseidon-core 0.9.5, needed to build v09 hash preimages
-# in pre-sized buffers (see SensitiveFelts in cli/airdrop.rs).
+# Building blocks of qp-poseidon-core 0.9.5's hasher. The local v09 sponge in
+# cli/airdrop.rs hashes the secret preimage from a borrowed slice because the
+# 0.9.5 crate's hash_no_pad consumes its Vec and frees it unscrubbed.
 p3-field = { version = "0.3.0", default-features = false }
 p3-goldilocks = { version = "0.3.0", default-features = false }
+p3-symmetric = { version = "0.3.0", default-features = false }
 qp-ownership-circuit = { version = "=4.4.0", default-features = false, features = ["std"] }
 qp-ownership-prover = { version = "=4.4.0", default-features = false, features = ["std"] }
 qp-plonky2 = { version = "1.5.5", default-features = false, features = ["rand", "std"] }
 qp-plonky2-verifier = { version = "1.5.5", default-features = false }
 qp-poseidon-core = "3.1.0"
+rand_chacha = { version = "0.9", default-features = false }
 # Resonance-era (v0.9.x) permutation constants differ from the current ones.
 qp-poseidon-core-v09 = { package = "qp-poseidon-core", version = "=0.9.5" }
 qp-wormhole-aggregator = { version = "=4.4.0", default-features = false, features = ["rayon", "std"] }
