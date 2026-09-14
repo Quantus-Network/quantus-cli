@@ -12,7 +12,9 @@ use colored::Colorize;
 use qp_ownership_circuit::{CircuitInputs, Secret};
 use qp_poseidon_core_v09 as v09;
 use qp_rusty_crystals_dilithium::ml_dsa_87::SecretKey;
-use qp_rusty_crystals_hdwallet::{derive_wormhole_from_mnemonic, QUANTUS_WORMHOLE_CHAIN_ID};
+use qp_rusty_crystals_hdwallet::{
+	generate_wormhole_from_seed, mnemonic_to_seed, SensitiveBytes64, QUANTUS_WORMHOLE_CHAIN_ID,
+};
 use qp_zk_circuits_common::utils::BytesDigest;
 use serde::{Deserialize, Serialize};
 use sp_core::crypto::{AccountId32, Ss58Codec};
@@ -22,6 +24,10 @@ const CLAIM_CONTEXT: &[u8] = b"qp-airdrop-claim-v1";
 const CLAIM_TTL_SECS: i64 = 10 * 60;
 const DEFAULT_SERVER: &str = "http://127.0.0.1:8080";
 const HD_WORMHOLE_INDEXES: std::ops::RangeInclusive<usize> = 0..=16;
+/// Middle HD path component. The mobile app uses 0 (external) and 1 (change);
+/// `wormhole multiround` uses it as a round counter (default 2 rounds), so
+/// scan several rounds beyond that.
+const HD_WORMHOLE_BRANCHES: std::ops::RangeInclusive<usize> = 0..=8;
 const CLAIMABLE_WORMHOLE_SCHEME: &str = "wormhole-rate8-compact";
 
 #[derive(Subcommand, Debug)]
@@ -48,7 +54,8 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		wormhole_secret_file: Option<PathBuf>,
 
-		/// HD wormhole index at round 0 (default: scan 0..=16)
+		/// HD wormhole address index, scanned across branches/rounds 0..=8
+		/// (default: scan indexes 0..=16)
 		#[arg(long)]
 		wormhole_index: Option<usize>,
 	},
@@ -79,7 +86,8 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		wormhole_secret_file: Option<PathBuf>,
 
-		/// HD wormhole index at round 0 (default: scan 0..=16)
+		/// HD wormhole address index, scanned across branches/rounds 0..=8
+		/// (default: scan indexes 0..=16)
 		#[arg(long)]
 		wormhole_index: Option<usize>,
 
@@ -336,12 +344,19 @@ fn derive_hd_wormhole_secrets(
 		Some(index) => vec![index],
 		None => HD_WORMHOLE_INDEXES.collect(),
 	};
+	// Stretch the BIP39 seed once, then walk the HD tree per path. The
+	// mnemonic copy passed in is zeroized by `mnemonic_to_seed`.
+	let mut seed = SensitiveBytes64::zeroed();
+	mnemonic_to_seed(mnemonic.to_string(), None, &mut seed)
+		.map_err(|e| QuantusError::Generic(format!("invalid mnemonic: {e:?}")))?;
 	let mut out = Vec::new();
-	for index in indexes {
-		let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, index);
-		let pair = derive_wormhole_from_mnemonic(mnemonic, None, &path)
-			.map_err(|e| QuantusError::Generic(format!("HD derivation failed: {e:?}")))?;
-		out.push((SpendSecret(*pair.secret().as_bytes()), format!("hd {path}")));
+	for branch in HD_WORMHOLE_BRANCHES {
+		for &index in &indexes {
+			let path = format!("m/44'/{}/0'/{}'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, branch, index);
+			let pair = generate_wormhole_from_seed(&seed, &path)
+				.map_err(|e| QuantusError::Generic(format!("HD derivation failed: {e:?}")))?;
+			out.push((SpendSecret(*pair.secret().as_bytes()), format!("hd {path}")));
+		}
 	}
 	Ok(out)
 }
@@ -944,6 +959,31 @@ mod tests {
 
 	fn hex32(s: &str) -> [u8; 32] {
 		hex::decode(s).unwrap().try_into().unwrap()
+	}
+
+	#[test]
+	fn hd_scan_covers_change_branch_and_multiround_rounds() {
+		let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon \
+		                abandon abandon about";
+		let secrets = derive_hd_wormhole_secrets(mnemonic, None).unwrap();
+		assert_eq!(secrets.len(), 9 * 17);
+
+		// A `wormhole multiround` round-2 address must be in the scan and match
+		// direct derivation.
+		let path = format!("m/44'/{}/0'/2'/1'", QUANTUS_WORMHOLE_CHAIN_ID);
+		let direct =
+			qp_rusty_crystals_hdwallet::derive_wormhole_from_mnemonic(mnemonic, None, &path)
+				.unwrap();
+		let (secret, _) = secrets
+			.iter()
+			.find(|(_, label)| label == &format!("hd {path}"))
+			.expect("round-2 path in scan");
+		assert_eq!(secret.bytes(), direct.secret().as_bytes());
+
+		// Explicit index still scans every branch/round.
+		let pinned = derive_hd_wormhole_secrets(mnemonic, Some(1)).unwrap();
+		assert_eq!(pinned.len(), 9);
+		assert!(pinned.iter().any(|(_, label)| label == &format!("hd {path}")));
 	}
 
 	#[test]
