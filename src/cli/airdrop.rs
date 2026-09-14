@@ -703,16 +703,26 @@ fn claim_message(address: &[u8; 32], claim_account: &[u8; 32], expiry_unix: i64)
 
 #[derive(Clone, Copy, Debug)]
 enum DilithiumHash {
+	V08Padded,
+	V091Padded,
 	V09Padded,
 	V10Padded,
 	Rate8HashBytes,
 }
 
 impl DilithiumHash {
-	const ALL: &'static [Self] = &[Self::V09Padded, Self::V10Padded, Self::Rate8HashBytes];
+	const ALL: &'static [Self] = &[
+		Self::V08Padded,
+		Self::V091Padded,
+		Self::V09Padded,
+		Self::V10Padded,
+		Self::Rate8HashBytes,
+	];
 
 	fn id(self) -> &'static str {
 		match self {
+			Self::V08Padded => "dilithium-v08-padded",
+			Self::V091Padded => "dilithium-v091-padded",
 			Self::V09Padded => "dilithium-v09-padded",
 			Self::V10Padded => "dilithium-v10-padded",
 			Self::Rate8HashBytes => "dilithium-rate8-hash-bytes",
@@ -721,6 +731,8 @@ impl DilithiumHash {
 
 	fn derive(self, public_key: &[u8]) -> [u8; 32] {
 		match self {
+			Self::V08Padded => hash_padded_legacy(public_key, 8, 73),
+			Self::V091Padded => hash_padded_legacy(public_key, 4, 188),
 			Self::V09Padded => hash_padded_v09(public_key),
 			Self::V10Padded => hash_padded_v10(public_key),
 			Self::Rate8HashBytes => qp_poseidon_core::hash_bytes(public_key),
@@ -889,6 +901,33 @@ fn hash_padded_v09(bytes: &[u8]) -> [u8; 32] {
 	v09::Poseidon2Core::new().hash_padded(bytes)
 }
 
+// Pre-0.9.5 Resonance AccountId hash: legacy plonky2 Poseidon (unchanged in
+// the current qp-plonky2) over little-endian limbs, zero-padded to a fixed
+// preimage length. poseidon-resonance 0.8.0 used 8-byte limbs and 73 felts;
+// qp-poseidon 0.9.1 used 4-byte limbs and 188 felts.
+fn hash_padded_legacy(bytes: &[u8], bytes_per_felt: usize, pad_to: usize) -> [u8; 32] {
+	use plonky2::{
+		field::{goldilocks_field::GoldilocksField, types::Field},
+		plonk::config::{GenericHashOut, Hasher},
+	};
+
+	let mut felts: Vec<GoldilocksField> = bytes
+		.chunks(bytes_per_felt)
+		.map(|chunk| {
+			let mut word = [0u8; 8];
+			word[..chunk.len()].copy_from_slice(chunk);
+			GoldilocksField::from_noncanonical_u64(u64::from_le_bytes(word))
+		})
+		.collect();
+	if felts.len() < pad_to {
+		felts.resize(pad_to, GoldilocksField::ZERO);
+	}
+	plonky2::hash::poseidon::PoseidonHash::hash_no_pad(&felts)
+		.to_bytes()
+		.try_into()
+		.expect("poseidon output is 32 bytes")
+}
+
 fn hash_padded_v10(bytes: &[u8]) -> [u8; 32] {
 	use qp_poseidon_core::Goldilocks;
 	const PAD: usize = 189;
@@ -932,6 +971,30 @@ mod tests {
 		);
 	}
 
+	/// Vectors computed with the exact crates the shipped Resonance chains
+	/// pinned: poseidon-resonance 0.8.0 (rev fcb49a7, plonky2 fork rev 80a1000,
+	/// per chain tag v0.0.12-resonance-alpha) and crates.io qp-poseidon 0.9.1
+	/// (per chain rev e9fc9b9). The 2592-byte input is ML-DSA-87 pubkey sized.
+	#[test]
+	fn pre_v095_dilithium_matches_original_crate_vectors() {
+		assert_eq!(
+			DilithiumHash::V08Padded.derive(&[0u8]),
+			hex32("fdf0715f178bfb2381d3804961bda8c679990d6318ff53f7a6475e1bef1982ca")
+		);
+		assert_eq!(
+			DilithiumHash::V08Padded.derive(&[5u8; 2592]),
+			hex32("9c69917b10f0228a0beed1d78ce34026b4778dc04a49a401dd5e692a51f44207")
+		);
+		assert_eq!(
+			DilithiumHash::V091Padded.derive(&[0u8]),
+			hex32("c4f1020767625056e669e3653f190b7763c6c398a45f1dc20db0d7ed32b14ff7")
+		);
+		assert_eq!(
+			DilithiumHash::V091Padded.derive(&[5u8; 2592]),
+			hex32("8ba4f919664c796aa811f552eaff5975570d56ed6812728944f60fe7d28d3c74")
+		);
+	}
+
 	/// Vectors computed with qp-poseidon-core 0.9.5 (git tag v0.9.5); the `[0]`
 	/// digest was also independently reproduced from the original tagged source.
 	#[test]
@@ -956,6 +1019,18 @@ mod tests {
 	#[test]
 	fn dilithium_hash_schemes_diverge() {
 		let pk = [7u8; 64];
+		let addrs: Vec<_> = DilithiumHash::ALL.iter().map(|s| s.derive(&pk)).collect();
+		for i in 0..addrs.len() {
+			for j in (i + 1)..addrs.len() {
+				assert_ne!(
+					addrs[i],
+					addrs[j],
+					"{} and {} collide",
+					DilithiumHash::ALL[i].id(),
+					DilithiumHash::ALL[j].id()
+				);
+			}
+		}
 		let a = DilithiumHash::V09Padded.derive(&pk);
 		let b = DilithiumHash::V10Padded.derive(&pk);
 		let c = DilithiumHash::Rate8HashBytes.derive(&pk);
