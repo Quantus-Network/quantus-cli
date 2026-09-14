@@ -54,7 +54,10 @@ impl SubsquidClient {
 	///
 	/// * `url` - The GraphQL endpoint URL (e.g., "https://indexer.quantus.com/graphql")
 	pub fn new(url: String) -> Result<Self> {
+		// Bound every request so a hung indexer cannot stall reward-collection
+		// flows indefinitely (the WS chain client uses a 30s timeout as well).
 		let http_client = Client::builder()
+			.timeout(std::time::Duration::from_secs(30))
 			.build()
 			.map_err(|e| QuantusError::Generic(format!("Failed to create HTTP client: {}", e)))?;
 
