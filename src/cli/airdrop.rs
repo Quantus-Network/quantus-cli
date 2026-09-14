@@ -10,6 +10,7 @@ use crate::{
 use clap::Subcommand;
 use colored::Colorize;
 use qp_ownership_circuit::{CircuitInputs, Secret};
+use qp_poseidon_core_v09 as v09;
 use qp_rusty_crystals_dilithium::ml_dsa_87::SecretKey;
 use qp_rusty_crystals_hdwallet::{derive_wormhole_from_mnemonic, QUANTUS_WORMHOLE_CHAIN_ID};
 use qp_zk_circuits_common::utils::BytesDigest;
@@ -756,6 +757,14 @@ impl WormholeHash {
 	}
 
 	fn derive(self, secret: &[u8; 32]) -> DerivedWormhole {
+		if matches!(self, Self::V09Injective) {
+			let core = v09::Poseidon2Core::new();
+			let mut preimage = v09::injective_bytes_to_felts(b"wormhole");
+			preimage.extend(v09::injective_bytes_to_felts(secret));
+			let first_hash = core.hash_no_pad(preimage);
+			let address = core.hash_no_pad(v09::digest_bytes_to_felts(&first_hash));
+			return DerivedWormhole { first_hash, address };
+		}
 		let mut preimage = injective4(b"wormhole");
 		preimage.extend(self.encode_secret(secret));
 		let first_hash = self.sponge().hash_felts(&preimage);
@@ -772,7 +781,7 @@ impl WormholeHash {
 
 	fn sponge(self) -> Sponge {
 		match self {
-			Self::V09Injective => Sponge::Rate4Pad10PlusDomain,
+			Self::V09Injective => unreachable!("v09 uses its own field type; see derive()"),
 			Self::Rate4Compact | Self::Rate4Injective => Sponge::Rate4Pad10,
 			Self::Rate8Compact | Self::Rate8Injective => Sponge::Rate8Pad10,
 		}
@@ -787,7 +796,6 @@ struct DerivedWormhole {
 
 #[derive(Clone, Copy)]
 enum Sponge {
-	Rate4Pad10PlusDomain,
 	Rate4Pad10,
 	Rate8Pad10,
 }
@@ -795,7 +803,6 @@ enum Sponge {
 impl Sponge {
 	fn hash_felts(self, input: &[qp_poseidon_core::Goldilocks]) -> [u8; 32] {
 		match self {
-			Self::Rate4Pad10PlusDomain => hash_no_pad_v09(input),
 			Self::Rate4Pad10 => hash_felts_rate4_pad10(input),
 			Self::Rate8Pad10 => qp_poseidon_core::hash_to_bytes(input),
 		}
@@ -839,44 +846,6 @@ fn injective4(bytes: &[u8]) -> Vec<qp_poseidon_core::Goldilocks> {
 	out
 }
 
-fn hash_no_pad_v09(x: &[qp_poseidon_core::Goldilocks]) -> [u8; 32] {
-	use qp_poseidon_core::{Goldilocks, Poseidon2, POSEIDON2_OUTPUT, SPONGE_WIDTH};
-	const RATE_4: usize = 4;
-	let poseidon = Poseidon2::new();
-	let mut state = [Goldilocks::ZERO; SPONGE_WIDTH];
-
-	if !x.is_empty() {
-		let num_chunks = x.chunks(RATE_4).len();
-		let mut unpadded = false;
-		for (j, chunk) in x.chunks(RATE_4).enumerate() {
-			let mut block = [Goldilocks::ZERO; RATE_4];
-			if j == num_chunks - 1 {
-				if chunk.len() < RATE_4 {
-					block[chunk.len()] = Goldilocks::ONE;
-				} else {
-					unpadded = true;
-				}
-			}
-			block[..chunk.len()].copy_from_slice(chunk);
-			for i in 0..RATE_4 {
-				state[i] += block[i];
-			}
-			poseidon.permute_mut(&mut state);
-		}
-		if unpadded {
-			state[0] += Goldilocks::ONE;
-			poseidon.permute_mut(&mut state);
-		}
-	}
-
-	state[3] += Goldilocks::ONE;
-	poseidon.permute_mut(&mut state);
-
-	let digest: [Goldilocks; POSEIDON2_OUTPUT] =
-		state[..POSEIDON2_OUTPUT].try_into().expect("width > output");
-	qp_poseidon_core::serialization::digest_to_bytes(&digest)
-}
-
 fn hash_felts_rate4_pad10(x: &[qp_poseidon_core::Goldilocks]) -> [u8; 32] {
 	use qp_poseidon_core::{Goldilocks, Poseidon2, POSEIDON2_OUTPUT, SPONGE_WIDTH};
 	const RATE_4: usize = 4;
@@ -914,16 +883,10 @@ fn hash_felts_rate4_pad10(x: &[qp_poseidon_core::Goldilocks]) -> [u8; 32] {
 	qp_poseidon_core::serialization::digest_to_bytes(&digest)
 }
 
+// The v0.9.x permutation used different round constants than the current one,
+// so v09 derivations go through the real historical crate.
 fn hash_padded_v09(bytes: &[u8]) -> [u8; 32] {
-	use qp_poseidon_core::Goldilocks;
-	const MIN_FELTS: usize = 190;
-	let mut felts = injective4(bytes);
-	let len = felts.len();
-	felts.insert(0, Goldilocks::from_u64(len as u64));
-	if len < MIN_FELTS {
-		felts.resize(MIN_FELTS, Goldilocks::ZERO);
-	}
-	hash_no_pad_v09(&felts)
+	v09::Poseidon2Core::new().hash_padded(bytes)
 }
 
 fn hash_padded_v10(bytes: &[u8]) -> [u8; 32] {
@@ -966,6 +929,20 @@ mod tests {
 		assert_eq!(
 			derived.address,
 			hex32("6a2f0d3abe4390e0b05f6dea4ba10670676cda7c00d49526ddde59f16c85269f")
+		);
+	}
+
+	/// Vectors computed with qp-poseidon-core 0.9.5 (git tag v0.9.5); the `[0]`
+	/// digest was also independently reproduced from the original tagged source.
+	#[test]
+	fn v09_schemes_match_original_crate_vectors() {
+		assert_eq!(
+			DilithiumHash::V09Padded.derive(&[0u8]),
+			hex32("b17b423096da9ebd57af5038b490257d9c492e64059c0ccff23f44e6293213d4")
+		);
+		assert_eq!(
+			WormholeHash::V09Injective.derive(&[42u8; 32]).address,
+			hex32("f4e231ede747e9ca2da9528add147ee488651a0df72b00313b0a8e6b76388fea")
 		);
 	}
 
