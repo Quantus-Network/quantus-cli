@@ -109,7 +109,7 @@ impl SubsquidClient {
 		// Hasura table query with an aggregate count so callers can detect when a
 		// block range needs further narrowing or offset-based pagination.
 		let query = r#"
-            query TransfersByHashPrefix($where: transfer_bool_exp!, $limit: Int!, $offset: Int!) {
+            query TransfersByHashPrefix($where: transfer_bool_exp!, $limit: Int!,$offset: Int!) {
                 transfers: transfer(
                     where: $where
                     limit: $limit
