@@ -6,6 +6,7 @@ A modern command line interface for interacting with the Quantus Network, featur
 
 - **Quantum-Safe Wallets**: Built with Dilithium post-quantum cryptography
 - **Cold Wallet Signing**: Air-gapped signing over QR codes with Keystone or the Quantus cold wallet app
+- **Airdrop Claims**: Find and claim testnet rewards across every historical key-derivation scheme
 - **SubXT Integration**: Modern Substrate client with type-safe API
 - **Generic Pallet Calls**: Call ANY blockchain function using metadata-driven parsing
 - **Real Chain Operations**: Send tokens, query balances, explore metadata
@@ -321,6 +322,111 @@ quantus wormhole check-nullifier --secret-file ./secret.hex --transfer-counts 0-
 - `--transfer-counts`: Single number or range (e.g., `0-10`) of transfer counts to check.
 - `--wormhole-index`: Wormhole address index for HD derivation (default: `0`).
 - `--subsquid-url`: Subsquid indexer URL (default: `https://sub2.quantus.com/v1/graphql`).
+
+---
+
+### Airdrop (Testnet Reward Claims)
+
+The `airdrop` commands find testnet addresses you own in the published reward
+snapshot and claim their rewards. You prove ownership either by signing with an
+ML-DSA-87 (Dilithium) key or with a ZK wormhole ownership proof; the payout is
+credited to any account you choose.
+
+Ownership is re-derived from your wallet, so old addresses are found even if
+the key-derivation scheme has changed since they were created. From a single
+wallet mnemonic the scan covers:
+
+- **Your wallet's current Dilithium key**, hashed under every address format
+  each testnet generation used (Resonance through Planck).
+- **Every historical key-generation scheme**: non-HD keys expanded from the
+  BIP39 seed (both the pre-FIPS and FIPS 204 seed expansions), BIP32 keys under
+  the legacy `"Bitcoin seed"` master (soft `m/44'/189189'/N'/0/0` and hardened
+  `m/44'/189189'/N'/0'/0'` paths, plus account-only `m/44'/189189'/N'`), and the
+  current `"Dilithium seed"` HD tree — accounts `0..=8` by default, plus the
+  wallet's own stored derivation path if it was imported with a custom
+  `--derivation-path`.
+- **HD wormhole secrets** in both the current `"Dilithium seed"` tree and the
+  legacy `"Bitcoin seed"` tree (including the pre-2026 master-node secret), at
+  paths `m/44'/189189189'/0'/round'/index'` for rounds `0..=8` and indexes
+  `0..=16` by default.
+
+Wallets without a mnemonic (raw-seed imports) are matched on their current key
+only; cold wallets cannot be used. ML-DSA-65 wallets cannot sign Dilithium
+claims, but their mnemonic is still scanned for historical ML-DSA-87 and
+wormhole addresses.
+
+#### `quantus airdrop check`
+
+List snapshot rows owned by your wallet and/or an explicit wormhole secret.
+Read-only: nothing is signed or submitted.
+
+```bash
+quantus airdrop check --wallet my_wallet
+
+# Also (or only) check an explicit wormhole secret
+quantus airdrop check --wallet my_wallet --wormhole-secret-file ./secret.hex
+quantus airdrop check --wormhole-secret-file ./secret.hex
+```
+
+Output:
+```
+Snapshot v1 (3f9c2a81be04) — 1234 rewarded addresses
+2 snapshot match(es):
+  qDx...  150.00 QUAN  Resonance  dilithium-v08-padded (dilithium)  [claimable]
+  qDy...  75.50 QUAN   Planck     wormhole-rate8-compact (wormhole)  [claimable]
+```
+
+- `--wallet`: Hot wallet used to derive Dilithium and HD wormhole addresses.
+- `--wormhole-secret-file`: File with a 32-byte hex wormhole secret. On Unix
+  the file must be a regular file owned by you with no group/other access
+  (`chmod 600`), like `--password-file`.
+- `--wormhole-index`: Pin the HD wormhole address index instead of scanning
+  `0..=16`; every branch/round is still scanned.
+- `--scan-accounts`: Highest Dilithium account index scanned per historical
+  keygen family (default: `8`). Raise it if the wallet was created with a
+  higher account index.
+- `--scan-rounds`: Highest wormhole branch/round component scanned (default:
+  `8`). Raise it if you ran `wormhole multiround` with more rounds.
+- `--server`: Claim server base URL.
+
+#### `quantus airdrop claim`
+
+Prove ownership of every match and submit the claims. Amounts come from the
+snapshot; the server verifies each proof and records the payout.
+
+```bash
+# Claim everything the wallet owns, paid out to the wallet's own account
+quantus airdrop claim --wallet my_wallet
+
+# Pay out to a different account (wallet name or SS58 address)
+quantus airdrop claim --wallet my_wallet --to qDz...
+
+# Claim from an explicit wormhole secret (requires --to)
+quantus airdrop claim --wormhole-secret-file ./secret.hex --to qDz...
+
+# Inspect the exact payloads without submitting anything
+quantus airdrop claim --wallet my_wallet --dry-run
+```
+
+For each match the CLI builds the appropriate proof:
+
+- **Dilithium rewards** are claimed with an ML-DSA-87 signature over
+  `address ‖ payout account ‖ expiry`, using your wallet's key or, for
+  historical matches, a key re-derived on the spot from the mnemonic with that
+  era's exact scheme (all secret material is wiped from memory after signing).
+- **Wormhole rewards** under the current scheme (`wormhole-rate8-compact`) are
+  claimed with a ZK ownership proof, so the secret itself is never sent.
+  Matches under older wormhole schemes are listed as `not claimable yet` and
+  skipped — the server does not accept them yet.
+
+- `--to`: Payout destination (wallet name or SS58). Defaults to `--wallet`'s
+  own account; required when claiming with only a secret file.
+- `--dry-run`: Print the signed/proved claim payloads without POSTing.
+- All `check` flags (`--wormhole-secret-file`, `--wormhole-index`,
+  `--scan-accounts`, `--scan-rounds`, `--server`) work the same here.
+
+The command exits non-zero if any claim fails, and prints a summary of
+recorded, skipped, and failed claims.
 
 ---
 
