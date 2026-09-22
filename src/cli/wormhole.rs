@@ -313,18 +313,28 @@ pub fn compute_merkle_positions(
 	(sorted_siblings, positions)
 }
 
-/// Parse a hex-encoded secret string into a 32-byte array
+/// Parse a hex-encoded secret string into a 32-byte array.
+///
+/// Decodes straight into a fixed stack buffer: `hex::decode` would put the
+/// spend secret into a heap `Vec` whose backing block is freed unscrubbed
+/// when the bytes are moved out (security review).
 pub fn parse_secret_hex(secret_hex: &str) -> Result<[u8; 32], String> {
-	let secret_bytes = hex::decode(secret_hex.trim_start_matches("0x"))
-		.map_err(|e| format!("Invalid secret hex: {}", e))?;
-
-	if secret_bytes.len() != 32 {
-		return Err(format!("Secret must be exactly 32 bytes, got {} bytes", secret_bytes.len()));
+	let hex_str = secret_hex.trim_start_matches("0x");
+	if !hex_str.len().is_multiple_of(2) {
+		return Err("Invalid secret hex: odd number of digits".to_string());
 	}
-
-	secret_bytes
-		.try_into()
-		.map_err(|_| "Failed to convert secret to 32-byte array".to_string())
+	if hex_str.len() != 64 {
+		return Err(format!("Secret must be exactly 32 bytes, got {} bytes", hex_str.len() / 2));
+	}
+	let mut secret = [0u8; 32];
+	match hex::decode_to_slice(hex_str, &mut secret) {
+		Ok(()) => Ok(secret),
+		Err(e) => {
+			// A partial prefix may have decoded before the bad digit.
+			crate::wallet::keystore::zeroize_bytes(&mut secret);
+			Err(format!("Invalid secret hex: {}", e))
+		},
+	}
 }
 
 /// Read a hex-encoded secret from a file and validate that it is exactly 32 bytes.

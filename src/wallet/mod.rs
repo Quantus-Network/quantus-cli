@@ -201,13 +201,43 @@ impl WalletManager {
 		if keystore.load_wallet(name)?.is_some() {
 			return Err(WalletError::AlreadyExists.into());
 		}
+		let (info, encrypted_wallet) = self.build_developer_wallet(&keystore, name)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
+		Ok(info)
+	}
 
-		// Generate the appropriate test keypair
+	/// Replace a `crystal_*` developer wallet so it matches current genesis keys
+	/// and the empty password. Used by `quantus developer create-test-wallets`.
+	///
+	/// The replacement is built in full before the existing file is touched —
+	/// an unknown name or failed key generation leaves any existing wallet
+	/// intact — and then swapped in atomically (temp write + rename via
+	/// `Keystore::save_wallet`), so no failure mode deletes a wallet without
+	/// installing its replacement.
+	pub async fn recreate_developer_wallet(&self, name: &str) -> Result<WalletInfo> {
+		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
+		let (info, encrypted_wallet) = self.build_developer_wallet(&keystore, name)?;
+		keystore.save_wallet(&encrypted_wallet)?;
+		Ok(info)
+	}
+
+	/// Build the wallet material for a well-known `crystal_*` genesis name.
+	/// Rejects any other name without touching the keystore.
+	fn build_developer_wallet(
+		&self,
+		keystore: &Keystore,
+		name: &str,
+	) -> Result<(WalletInfo, keystore::EncryptedWallet)> {
 		let resonance_pair = match name {
 			"crystal_alice" => qp_dilithium_crypto::crystal_alice(),
 			"crystal_bob" => qp_dilithium_crypto::dilithium_bob(),
 			"crystal_charlie" => qp_dilithium_crypto::crystal_charlie(),
-			_ => return Err(WalletError::KeyGeneration.into()),
+			_ =>
+				return Err(crate::error::QuantusError::Generic(format!(
+					"'{name}' is not a developer wallet (expected crystal_alice, crystal_bob, \
+					 or crystal_charlie)"
+				))),
 		};
 
 		// Genesis helpers are ML-DSA-87 only.
@@ -231,17 +261,17 @@ impl WalletManager {
 
 		// Empty password is intentional for crystal_* developer wallets: these are
 		// well-known genesis test keys for local development, not custody material.
-		// File permissions remain owner-only (0600) via Keystore::save_new_wallet.
+		// File permissions remain owner-only (0600) via the keystore save paths.
 		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, "")?;
-		keystore.save_new_wallet(&encrypted_wallet)?;
 
-		Ok(WalletInfo {
+		let info = WalletInfo {
 			name: name.to_string(),
 			address,
 			created_at: encrypted_wallet.created_at,
 			key_type: scheme.key_type_label().to_string(),
 			derivation_path: "m/".to_string(),
-		})
+		};
+		Ok((info, encrypted_wallet))
 	}
 
 	/// Export a wallet's mnemonic phrase
@@ -992,6 +1022,56 @@ mod tests {
 			result,
 			Err(crate::error::QuantusError::Wallet(WalletError::AlreadyExists))
 		));
+	}
+
+	/// Regression (review): `recreate_developer_wallet` used to delete first
+	/// and validate later, so an unknown name destroyed a real wallet and
+	/// returned an error. Validation must come before any file is touched.
+	#[tokio::test]
+	async fn recreate_developer_wallet_rejects_unknown_name_and_preserves_wallet() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		wallet_manager
+			.create_wallet("my_wallet", Some("password123"))
+			.await
+			.expect("create user wallet");
+
+		let result = wallet_manager.recreate_developer_wallet("my_wallet").await;
+		assert!(result.is_err(), "non-developer name must be rejected");
+
+		wallet_manager
+			.load_wallet("my_wallet", "password123")
+			.expect("original wallet must survive a rejected recreate");
+	}
+
+	#[tokio::test]
+	async fn recreate_developer_wallet_replaces_existing_in_place() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let first = wallet_manager
+			.create_developer_wallet("crystal_alice")
+			.await
+			.expect("create developer wallet");
+
+		let second = wallet_manager
+			.recreate_developer_wallet("crystal_alice")
+			.await
+			.expect("recreate developer wallet");
+		// Genesis keys are deterministic, so the replacement matches.
+		assert_eq!(second.address, first.address);
+		wallet_manager
+			.load_wallet("crystal_alice", "")
+			.expect("replaced wallet must be usable");
+	}
+
+	#[tokio::test]
+	async fn recreate_developer_wallet_creates_when_missing() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		wallet_manager
+			.recreate_developer_wallet("crystal_bob")
+			.await
+			.expect("recreate must work with no existing wallet");
+		wallet_manager
+			.load_wallet("crystal_bob", "")
+			.expect("created wallet must be usable");
 	}
 
 	#[tokio::test]

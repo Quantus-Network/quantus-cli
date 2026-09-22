@@ -3,6 +3,7 @@ use clap::Subcommand;
 use colored::Colorize;
 
 pub mod address_format;
+pub mod airdrop;
 pub mod batch;
 pub mod block;
 pub mod cold_signing;
@@ -293,6 +294,10 @@ pub enum Commands {
 	#[command(subcommand)]
 	Wormhole(wormhole::WormholeCommands),
 
+	/// Claim testnet airdrop rewards
+	#[command(subcommand)]
+	Airdrop(airdrop::AirdropCommands),
+
 	/// Send random amounts to multiple addresses (total is distributed randomly)
 	Multisend {
 		/// Wallet name to send from
@@ -510,6 +515,7 @@ pub async fn execute_command(
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
 		Commands::Wormhole(wormhole_cmd) =>
 			wormhole::handle_wormhole_command(wormhole_cmd, node_url, execution_mode).await,
+		Commands::Airdrop(airdrop_cmd) => airdrop::handle_airdrop_command(airdrop_cmd).await,
 		Commands::Multisend {
 			from,
 			addresses_file,
@@ -612,12 +618,13 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 			];
 
 			let mut created_count = 0;
+			let mut failed_count = 0;
 
 			for (name, description) in test_wallets {
 				log_verbose!("Creating wallet: {}", name.bright_green());
 
 				// Create wallet with a default password for testing
-				match wallet_manager.create_developer_wallet(name).await {
+				match wallet_manager.recreate_developer_wallet(name).await {
 					Ok(wallet_info) => {
 						log_success!("✅ Created {}", name.bright_green());
 						log_success!("   Address: {}", wallet_info.address.bright_cyan());
@@ -626,8 +633,16 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 					},
 					Err(e) => {
 						log_error!("❌ Failed to create {}: {}", name.bright_red(), e);
+						failed_count += 1;
 					},
 				}
+			}
+
+			if failed_count > 0 {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"failed to create {failed_count} of {} test wallets",
+					created_count + failed_count
+				)));
 			}
 
 			log_print!("");
@@ -635,6 +650,10 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 			log_success!("   Created: {} wallets", created_count.to_string().bright_green());
 			log_print!("");
 			log_print!("💡 {} You can now use these wallets:", "TIP".bright_blue().bold());
+			log_print!("   Empty password (just press Enter if a prompt appears).");
+			log_print!(
+				"   Existing crystal_alice / crystal_bob / crystal_charlie files were replaced."
+			);
 			log_print!("   quantus send --from crystal_alice --to <address> --amount 1000");
 			log_print!("   quantus send --from crystal_bob --to <address> --amount 1000");
 			log_print!("   quantus send --from crystal_charlie --to <address> --amount 1000");
