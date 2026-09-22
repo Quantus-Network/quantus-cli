@@ -472,13 +472,17 @@ Example review output:
 
 ```
 3 recorded claim(s) awaiting payout:
-  qRewarded1  →  qPayout1  150.00 QTC  dilithium-v08-padded  (verified 2026-09-20 11:02 UTC)
-  qRewarded2  →  qPayout2  75.50 QTC   wormhole-rate8-compact  (verified 2026-09-21 08:44 UTC)
-  qRewarded3  →  qPayout3  10.00 QTC   dilithium-v10-padded  (verified 2026-09-21 09:15 UTC)
+  qRewarded1  →  qPayout1 [Apple-River-Stone-Cloud-Fox]  150.00 QTC  dilithium-v08-padded  (verified 2026-09-20 11:02 UTC)
+  qRewarded2  →  qPayout2 [Maple-Tiger-Coral-Dawn-Iris]  75.50 QTC   wormhole-rate8-compact  (verified 2026-09-21 08:44 UTC)
+  qRewarded3  →  qPayout3 [Cedar-Whale-Amber-Frost-Owl]  10.00 QTC   dilithium-v10-padded  (verified 2026-09-21 09:15 UTC)
 Total: 235.50 QTC to 3 account(s); 1201 snapshot row(s) remain unclaimed.
 Plan: 1 batch extrinsic(s) of up to 256 transfer(s) each.
 Pay 235.50 QTC to 3 account(s) in 1 batch(es) from 'treasury_wallet'? [y/N]
 ```
+
+Every destination address is shown with its human checkphrase (the same
+five-word phrase the wallet apps display), so payout accounts can be verified
+against the recipient out of band before confirming.
 
 - `--from`: Wallet that funds the payouts — hot or cold. Cold wallets follow
   the standard QR signing flow, one roundtrip per batch extrinsic.

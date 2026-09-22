@@ -347,7 +347,10 @@ async fn handle_claim(
 
 	print_snapshot_header(&snapshot);
 	print_matches(&matches);
-	log_print!("Payout destination: {}", bytes_to_quantus_ss58(&claim_account).bright_cyan());
+	log_print!(
+		"Payout destination: {}",
+		address_with_checkphrase(&bytes_to_quantus_ss58(&claim_account))
+	);
 
 	if matches.is_empty() {
 		log_print!("No snapshot addresses to claim.");
@@ -457,6 +460,16 @@ fn recorded_payouts(rows: Vec<UnpaidRow>) -> Result<Vec<Payout>> {
 		});
 	}
 	Ok(payouts)
+}
+
+/// Destination address with its human checkphrase so the operator can
+/// verify it against the recipient out of band.
+fn address_with_checkphrase(address: &str) -> String {
+	format!(
+		"{} [{}]",
+		address.bright_green(),
+		crate::wallet::checkphrase::checkphrase(address).bright_blue()
+	)
 }
 
 /// Which recorded claims this run pays: an optional address allowlist
@@ -650,7 +663,7 @@ async fn handle_pay(
 		log_print!(
 			"  {}  →  {}  {} QTC  {}  (verified {})",
 			payout.address.bright_cyan(),
-			payout.claim_account.bright_green(),
+			address_with_checkphrase(&payout.claim_account),
 			format_hundredths(payout.amount_hundredths),
 			payout.scheme,
 			format_verified_at(payout.verified_at),
@@ -693,7 +706,7 @@ async fn handle_pay(
 			for payout in chunk {
 				log_print!(
 					"  {} ← {} QTC",
-					payout.claim_account,
+					address_with_checkphrase(&payout.claim_account),
 					format_hundredths(payout.amount_hundredths)
 				);
 			}
@@ -1459,7 +1472,7 @@ async fn submit_claim(
 	log_success!(
 		"Recorded {} → {} ({} QTC)",
 		recorded.address.bright_cyan(),
-		recorded.claim_account.bright_green(),
+		address_with_checkphrase(&recorded.claim_account),
 		format_hundredths(recorded.amount_hundredths)
 	);
 	Ok(ClaimOutcome::Recorded { amount_hundredths: recorded.amount_hundredths })
