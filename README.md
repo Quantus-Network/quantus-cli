@@ -375,8 +375,8 @@ Output:
 ```
 Snapshot v1 (3f9c2a81be04) — 1234 rewarded addresses
 2 snapshot match(es):
-  qDx...  150.00 QUAN  Resonance  dilithium-v08-padded (dilithium)  [claimable]
-  qDy...  75.50 QUAN   Planck     wormhole-rate8-compact (wormhole)  [claimable]
+  qDx...  150.00 QTC  Resonance  dilithium-v08-padded (dilithium)  [claimable]
+  qDy...  75.50 QTC   Planck     wormhole-rate8-compact (wormhole)  [claimable]
 ```
 
 - `--wallet`: Hot wallet used to derive Dilithium and HD wormhole addresses.
@@ -466,12 +466,12 @@ Example review output:
 
 ```
 3 recorded claim(s) awaiting payout:
-  qRewarded1  →  qPayout1  150.00 QUAN  dilithium-v08-padded  (verified 2026-09-20 11:02 UTC)
-  qRewarded2  →  qPayout2  75.50 QUAN   wormhole-rate8-compact  (verified 2026-09-21 08:44 UTC)
-  qRewarded3  →  qPayout3  10.00 QUAN   dilithium-v10-padded  (verified 2026-09-21 09:15 UTC)
-Total: 235.50 QUAN to 3 account(s); 1201 snapshot row(s) remain unclaimed.
+  qRewarded1  →  qPayout1  150.00 QTC  dilithium-v08-padded  (verified 2026-09-20 11:02 UTC)
+  qRewarded2  →  qPayout2  75.50 QTC   wormhole-rate8-compact  (verified 2026-09-21 08:44 UTC)
+  qRewarded3  →  qPayout3  10.00 QTC   dilithium-v10-padded  (verified 2026-09-21 09:15 UTC)
+Total: 235.50 QTC to 3 account(s); 1201 snapshot row(s) remain unclaimed.
 Plan: 1 batch extrinsic(s) of up to 256 transfer(s) each.
-Pay 235.50 QUAN to 3 account(s) in 1 batch(es) from 'treasury_wallet'? [y/N]
+Pay 235.50 QTC to 3 account(s) in 1 batch(es) from 'treasury_wallet'? [y/N]
 ```
 
 - `--from`: Wallet that funds the payouts — hot or cold. Cold wallets follow

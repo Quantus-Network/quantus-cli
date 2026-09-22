@@ -378,12 +378,12 @@ fn finish_claims(
 		);
 	} else if failed == 0 {
 		log_success!(
-			"Recorded {} QUAN across {recorded} claim(s); {skipped} skipped.",
+			"Recorded {} QTC across {recorded} claim(s); {skipped} skipped.",
 			format_hundredths(claimed_hundredths)
 		);
 	} else {
 		log_print!(
-			"Recorded {} QUAN across {recorded} claim(s); {skipped} skipped; {failed} failed.",
+			"Recorded {} QTC across {recorded} claim(s); {skipped} skipped; {failed} failed.",
 			format_hundredths(claimed_hundredths)
 		);
 	}
@@ -446,11 +446,11 @@ fn recorded_payouts(rows: Vec<UnpaidRow>) -> Result<Vec<Payout>> {
 	Ok(payouts)
 }
 
-/// Snapshot amounts are hundredths of a QUAN; the chain wants raw units.
+/// Snapshot amounts are hundredths of a QTC; the chain wants raw units.
 fn hundredths_to_raw(amount_hundredths: u64, decimals: u8) -> Result<u128> {
 	let scale = decimals.checked_sub(2).ok_or_else(|| {
 		QuantusError::Generic(format!(
-			"chain has {decimals} decimal(s); cannot represent hundredths of a QUAN"
+			"chain has {decimals} decimal(s); cannot represent hundredths of a QTC"
 		))
 	})?;
 	let unit = 10u128
@@ -504,9 +504,7 @@ fn format_verified_at(verified_at: Option<i64>) -> String {
 
 fn confirm_payout(total: &str, accounts: usize, batches: usize, from: &str) -> Result<()> {
 	use std::io::Write;
-	print!(
-		"Pay {total} QUAN to {accounts} account(s) in {batches} batch(es) from '{from}'? [y/N] "
-	);
+	print!("Pay {total} QTC to {accounts} account(s) in {batches} batch(es) from '{from}'? [y/N] ");
 	std::io::stdout()
 		.flush()
 		.map_err(|e| QuantusError::Generic(format!("Failed to flush confirmation prompt: {e}")))?;
@@ -601,7 +599,7 @@ async fn handle_pay(
 			.checked_add(payout.amount_hundredths)
 			.ok_or_else(|| QuantusError::Generic("payout total overflow".into()))?;
 		log_print!(
-			"  {}  →  {}  {} QUAN  {}  (verified {})",
+			"  {}  →  {}  {} QTC  {}  (verified {})",
 			payout.address.bright_cyan(),
 			payout.claim_account.bright_green(),
 			format_hundredths(payout.amount_hundredths),
@@ -611,7 +609,7 @@ async fn handle_pay(
 	}
 	let total = format_hundredths(total_hundredths);
 	log_print!(
-		"Total: {} QUAN to {} account(s); {} snapshot row(s) remain unclaimed.",
+		"Total: {} QTC to {} account(s); {} snapshot row(s) remain unclaimed.",
 		total.bright_yellow(),
 		payouts.len(),
 		unclaimed
@@ -641,10 +639,14 @@ async fn handle_pay(
 	log_print!("Plan: {batches} batch extrinsic(s) of up to {per_batch} transfer(s) each.");
 
 	if dry_run {
-		for (index, chunk) in transfers.chunks(per_batch).enumerate() {
+		for (index, chunk) in payouts.chunks(per_batch).enumerate() {
 			log_print!("Batch {}/{batches}:", index + 1);
-			for (to, amount) in chunk {
-				log_print!("  {} ← {} raw units", to, amount);
+			for payout in chunk {
+				log_print!(
+					"  {} ← {} QTC",
+					payout.claim_account,
+					format_hundredths(payout.amount_hundredths)
+				);
 			}
 		}
 		log_print!("Dry run finished. Nothing was submitted or marked paid.");
@@ -743,7 +745,7 @@ async fn handle_pay(
 	}
 
 	log_success!(
-		"Paid {} QUAN across {paid_rows} claim(s) in {batches} batch(es).",
+		"Paid {} QTC across {paid_rows} claim(s) in {batches} batch(es).",
 		format_hundredths(paid_hundredths)
 	);
 	if !unmarked.is_empty() {
@@ -1322,7 +1324,7 @@ fn print_matches(matches: &[FoundReward]) {
 		};
 		let note = if claimable { "claimable" } else { "not claimable yet" };
 		log_print!(
-			"  {}  {} QUAN  {}  {} ({})  [{}]",
+			"  {}  {} QTC  {}  {} ({})  [{}]",
 			found.ss58.bright_cyan(),
 			format_hundredths(found.amount_hundredths),
 			found.testnets.join(","),
@@ -1406,7 +1408,7 @@ async fn submit_claim(
 	let recorded: ClaimResponse = serde_json::from_str(&text)
 		.map_err(|e| QuantusError::Generic(format!("claim JSON: {e}")))?;
 	log_success!(
-		"Recorded {} → {} ({} QUAN)",
+		"Recorded {} → {} ({} QTC)",
 		recorded.address.bright_cyan(),
 		recorded.claim_account.bright_green(),
 		format_hundredths(recorded.amount_hundredths)
@@ -2500,7 +2502,7 @@ mod tests {
 
 	#[test]
 	fn hundredths_convert_to_raw_chain_units() {
-		// 1.50 QUAN at 12 decimals.
+		// 1.50 QTC at 12 decimals.
 		assert_eq!(hundredths_to_raw(150, 12).unwrap(), 1_500_000_000_000);
 		// 2 decimals: hundredths are already the raw unit.
 		assert_eq!(hundredths_to_raw(150, 2).unwrap(), 150);
