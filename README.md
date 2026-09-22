@@ -375,8 +375,8 @@ Output:
 ```
 Snapshot v1 (3f9c2a81be04) — 1234 rewarded addresses
 2 snapshot match(es):
-  qDx...  150.00 QUAN  Resonance  dilithium-v08-padded (dilithium)  [claimable]
-  qDy...  75.50 QUAN   Planck     wormhole-rate8-compact (wormhole)  [claimable]
+  qDx...  150.00 QTC  Resonance  dilithium-v08-padded (dilithium)  [claimable]
+  qDy...  75.50 QTC   Planck     wormhole-rate8-compact (wormhole)  [claimable]
 ```
 
 - `--wallet`: Hot wallet used to derive Dilithium and HD wormhole addresses.
@@ -438,6 +438,80 @@ For each match the CLI builds the appropriate proof:
 
 The command exits non-zero if any claim fails, and prints a summary of
 recorded, skipped, and failed claims.
+
+#### `quantus airdrop pay`
+
+Operator command: pay out recorded (claimed but unpaid) rewards and mark them
+paid on the claim server. It fetches the server's unpaid list, presents every
+pending payout for review, batches the transfers into as few extrinsics as the
+chain's batch limit allows, and marks each claim paid once its batch is in a
+block.
+
+```bash
+# Review and pay everything pending, confirming interactively
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token
+
+# Air-gapped payout: any cold wallet works, one QR roundtrip per batch
+quantus airdrop pay --from my_cold --admin-token-file ./admin.token
+
+# See the full payout plan without touching the chain or the server
+quantus airdrop pay --from treasury_wallet --dry-run
+
+# Test the flow end-to-end by paying a single claim first
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token --limit 1
+
+# Or pay one specific rewarded address
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token --only qRewarded1
+
+# Unattended (skips the review prompt)
+quantus airdrop pay --from treasury_wallet --yes \
+  --password-file ./pass --admin-token-file ./admin.token
+```
+
+Example review output:
+
+```
+3 recorded claim(s) awaiting payout:
+  qRewarded1  →  qPayout1 [Apple-River-Stone-Cloud-Fox]  150.00 QTC  dilithium-v08-padded  (verified 2026-09-20 11:02 UTC)
+  qRewarded2  →  qPayout2 [Maple-Tiger-Coral-Dawn-Iris]  75.50 QTC   wormhole-rate8-compact  (verified 2026-09-21 08:44 UTC)
+  qRewarded3  →  qPayout3 [Cedar-Whale-Amber-Frost-Owl]  10.00 QTC   dilithium-v10-padded  (verified 2026-09-21 09:15 UTC)
+Total: 235.50 QTC to 3 account(s); 1201 snapshot row(s) remain unclaimed.
+Plan: 1 batch extrinsic(s) of up to 256 transfer(s) each.
+Pay 235.50 QTC to 3 account(s) in 1 batch(es) from 'treasury_wallet'? [y/N]
+```
+
+Every destination address is shown with its human checkphrase (the same
+five-word phrase the wallet apps display), so payout accounts can be verified
+against the recipient out of band before confirming.
+
+- `--from`: Wallet that funds the payouts — hot or cold. Cold wallets follow
+  the standard QR signing flow, one roundtrip per batch extrinsic.
+- `--admin-token-file`: File with the claim server's admin token (`chmod
+  600`), used for `mark-paid`. Falls back to the `QUANTUS_AIRDROP_ADMIN_TOKEN`
+  environment variable. Required up front, before anything is paid, so every
+  completed payout can be marked.
+- `--limit`: Pay at most this many claims this run — `--limit 1` to test the
+  whole flow on a single claim before paying the rest (a re-run pays the
+  remainder, since paid claims drop off `/unpaid`).
+- `--only`: Pay only the given rewarded address(es) (repeatable). Errors if
+  an address has no recorded unpaid claim.
+- `--batch-size`: Max transfers per batch extrinsic (default: the chain's
+  safe `utility.batch` limit).
+- `--tip`: Optional tip per batch extrinsic.
+- `--yes`: Skip the interactive review confirmation.
+- `--dry-run`: Print the payout plan (rows, batches, raw amounts) without
+  submitting transfers or marking anything paid.
+- `--server`: Claim server base URL.
+
+Safety properties: each batch is waited on until it is in a block before its
+claims are marked paid, and a claim is only marked after its transfer
+succeeded. If a `mark-paid` call fails after payment, the command prints the
+affected addresses loudly and exits non-zero — mark them manually before
+re-running, or those rows would be paid twice. If a batch fails, everything
+already paid is already marked, so re-running continues where it left off.
+After all batches land, the command re-fetches `/unpaid` and verifies none of
+the paid addresses are still listed, failing loudly if any are. Like
+passwords, the bearer token is never accepted as a command-line value.
 
 ---
 
