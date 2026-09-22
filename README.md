@@ -366,6 +366,9 @@ quantus airdrop check --wallet my_wallet
 # Also (or only) check an explicit wormhole secret
 quantus airdrop check --wallet my_wallet --wormhole-secret-file ./secret.hex
 quantus airdrop check --wormhole-secret-file ./secret.hex
+
+# No mnemonic, seed, or secret file? Paste the secret at a hidden prompt
+quantus airdrop check --wormhole-secret-prompt
 ```
 
 Output:
@@ -380,6 +383,10 @@ Snapshot v1 (3f9c2a81be04) — 1234 rewarded addresses
 - `--wormhole-secret-file`: File with a 32-byte hex wormhole secret. On Unix
   the file must be a regular file owned by you with no group/other access
   (`chmod 600`), like `--password-file`.
+- `--wormhole-secret-prompt`: Paste a 32-byte hex wormhole secret at a hidden
+  prompt instead — for users who only have the raw secret. Secrets are never
+  accepted as command-line values (they would leak into shell history and
+  process listings).
 - `--wormhole-index`: Pin the HD wormhole address index instead of scanning
   `0..=16`; every branch/round is still scanned.
 - `--scan-accounts`: Highest Dilithium account index scanned per historical
@@ -404,6 +411,9 @@ quantus airdrop claim --wallet my_wallet --to qDz...
 # Claim from an explicit wormhole secret (requires --to)
 quantus airdrop claim --wormhole-secret-file ./secret.hex --to qDz...
 
+# Or paste the secret at a hidden prompt (requires --to)
+quantus airdrop claim --wormhole-secret-prompt --to qDz...
+
 # Inspect the exact payloads without submitting anything
 quantus airdrop claim --wallet my_wallet --dry-run
 ```
@@ -422,8 +432,9 @@ For each match the CLI builds the appropriate proof:
 - `--to`: Payout destination (wallet name or SS58). Defaults to `--wallet`'s
   own account; required when claiming with only a secret file.
 - `--dry-run`: Print the signed/proved claim payloads without POSTing.
-- All `check` flags (`--wormhole-secret-file`, `--wormhole-index`,
-  `--scan-accounts`, `--scan-rounds`, `--server`) work the same here.
+- All `check` flags (`--wormhole-secret-file`, `--wormhole-secret-prompt`,
+  `--wormhole-index`, `--scan-accounts`, `--scan-rounds`, `--server`) work the
+  same here.
 
 The command exits non-zero if any claim fails, and prints a summary of
 recorded, skipped, and failed claims.
