@@ -150,6 +150,11 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 
+		/// Admin token (unsupported on argv; use --admin-token-file or
+		/// QUANTUS_AIRDROP_ADMIN_TOKEN)
+		#[arg(long, hide = true)]
+		admin_token: Option<String>,
+
 		/// File with the claim server admin token (chmod 600). Falls back to
 		/// the QUANTUS_AIRDROP_ADMIN_TOKEN environment variable.
 		#[arg(long)]
@@ -231,6 +236,7 @@ pub async fn handle_airdrop_command(
 			from,
 			password,
 			password_file,
+			admin_token,
 			admin_token_file,
 			batch_size,
 			tip,
@@ -242,7 +248,7 @@ pub async fn handle_airdrop_command(
 				from,
 				password,
 				password_file,
-				admin_token_file,
+				AdminTokenSource { argv: admin_token, file: admin_token_file },
 				batch_size,
 				tip,
 				yes,
@@ -455,11 +461,25 @@ fn hundredths_to_raw(amount_hundredths: u64, decimals: u8) -> Result<u128> {
 		.ok_or_else(|| QuantusError::Generic("payout amount overflow".into()))
 }
 
+/// Where the mark-paid bearer token may come from. Raw argv values are
+/// rejected like passwords are.
+struct AdminTokenSource {
+	argv: Option<String>,
+	file: Option<String>,
+}
+
 /// The mark-paid admin token, from a chmod-600 file or the
 /// QUANTUS_AIRDROP_ADMIN_TOKEN environment variable. Required before any
 /// payment goes out so a paid claim can always be marked.
-fn load_admin_token(admin_token_file: Option<&str>) -> Result<String> {
-	if let Some(path) = admin_token_file {
+fn load_admin_token(source: &AdminTokenSource) -> Result<String> {
+	if source.argv.is_some() {
+		return Err(QuantusError::Generic(
+			"Passing the admin token with --admin-token is not supported (argv is visible in \
+			 process listings); use --admin-token-file or QUANTUS_AIRDROP_ADMIN_TOKEN"
+				.to_string(),
+		));
+	}
+	if let Some(path) = &source.file {
 		return Ok(password::read_secret_file(path, "admin token")?.trim().to_string());
 	}
 	if let Ok(token) = std::env::var("QUANTUS_AIRDROP_ADMIN_TOKEN") {
@@ -501,6 +521,26 @@ fn confirm_payout(total: &str, accounts: usize, batches: usize, from: &str) -> R
 	Ok(())
 }
 
+async fn fetch_unpaid(client: &reqwest::Client, server: &str) -> Result<UnpaidResponse> {
+	let url = format!("{}/unpaid", server.trim_end_matches('/'));
+	let response = client.get(&url).send().await.map_err(http_err)?;
+	let status = response.status();
+	let text = response.text().await.map_err(http_err)?;
+	if !status.is_success() {
+		return Err(QuantusError::Generic(format_server_error(status, &text)));
+	}
+	serde_json::from_str(&text).map_err(|e| QuantusError::Generic(format!("unpaid JSON: {e}")))
+}
+
+/// Addresses we paid that the server still lists on `/unpaid` (any status).
+fn addresses_still_listed(rows: &[UnpaidRow], paid: &[String]) -> Vec<String> {
+	rows.iter()
+		.map(|row| &row.address)
+		.filter(|a| paid.contains(a))
+		.cloned()
+		.collect()
+}
+
 async fn mark_paid(
 	client: &reqwest::Client,
 	server: &str,
@@ -534,7 +574,7 @@ async fn handle_pay(
 	from: String,
 	password: Option<String>,
 	password_file: Option<String>,
-	admin_token_file: Option<String>,
+	admin_token_source: AdminTokenSource,
 	batch_size: Option<u32>,
 	tip: Option<String>,
 	yes: bool,
@@ -543,15 +583,7 @@ async fn handle_pay(
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	let client = http_client()?;
-	let url = format!("{}/unpaid", server.trim_end_matches('/'));
-	let response = client.get(&url).send().await.map_err(http_err)?;
-	let status = response.status();
-	let text = response.text().await.map_err(http_err)?;
-	if !status.is_success() {
-		return Err(QuantusError::Generic(format_server_error(status, &text)));
-	}
-	let unpaid: UnpaidResponse = serde_json::from_str(&text)
-		.map_err(|e| QuantusError::Generic(format!("unpaid JSON: {e}")))?;
+	let unpaid = fetch_unpaid(&client, &server).await?;
 	let unclaimed = unpaid.rows.iter().filter(|r| r.status == "unclaimed").count();
 	let payouts = recorded_payouts(unpaid.rows)?;
 	if payouts.is_empty() {
@@ -622,7 +654,7 @@ async fn handle_pay(
 	// The token is loaded before anything is paid so a completed payout can
 	// always be marked on the server (re-running an unmarked payout would
 	// double-pay).
-	let admin_token = load_admin_token(admin_token_file.as_deref())?;
+	let admin_token = load_admin_token(&admin_token_source)?;
 
 	if !yes {
 		confirm_payout(&total, payouts.len(), batches, &from)?;
@@ -728,7 +760,31 @@ async fn handle_pay(
 			unmarked.len()
 		)));
 	}
-	Ok(())
+
+	// Re-fetch /unpaid and verify every paid address is gone from the list;
+	// anything still listed would be paid again on the next run.
+	let paid_addresses: Vec<String> = payouts.iter().map(|p| p.address.clone()).collect();
+	let still_listed =
+		addresses_still_listed(&fetch_unpaid(&client, &server).await?.rows, &paid_addresses);
+	if still_listed.is_empty() {
+		log_success!(
+			"Server verification: none of the {} paid address(es) remain on /unpaid.",
+			paid_addresses.len()
+		);
+		return Ok(());
+	}
+	log_error!(
+		"{} paid address(es) still appear on /unpaid — resolve on the server before running \
+		 pay again or they will be paid twice:",
+		still_listed.len()
+	);
+	for address in &still_listed {
+		log_error!("  {address}");
+	}
+	Err(QuantusError::Generic(format!(
+		"{} paid address(es) are still listed unpaid by the server",
+		still_listed.len()
+	)))
 }
 
 /// Move-only wormhole spend secret. Zeroized on drop; Debug never prints it.
@@ -2415,6 +2471,31 @@ mod tests {
 
 		// A recorded row without a claim account is a server bug, not a skip.
 		assert!(recorded_payouts(vec![unpaid_row("recorded", None, 150)]).is_err());
+	}
+
+	/// Like passwords, the admin bearer token must not be accepted on argv.
+	#[test]
+	fn admin_token_rejected_on_argv() {
+		let err = load_admin_token(&AdminTokenSource {
+			argv: Some("token".into()),
+			file: Some("/tmp/whatever".into()),
+		})
+		.unwrap_err()
+		.to_string();
+		assert!(err.contains("--admin-token-file"), "unexpected error: {err}");
+	}
+
+	#[test]
+	fn verification_flags_paid_addresses_still_listed() {
+		let rows =
+			vec![unpaid_row("recorded", Some("qDest"), 150), unpaid_row("unclaimed", None, 10)];
+		// unpaid_row uses address "qAddr" for every row.
+		assert_eq!(
+			addresses_still_listed(&rows, &["qAddr".to_string(), "qOther".to_string()]),
+			vec!["qAddr".to_string(), "qAddr".to_string()],
+		);
+		assert!(addresses_still_listed(&rows, &["qGone".to_string()]).is_empty());
+		assert!(addresses_still_listed(&[], &["qAddr".to_string()]).is_empty());
 	}
 
 	#[test]

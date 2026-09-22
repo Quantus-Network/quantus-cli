@@ -494,6 +494,9 @@ succeeded. If a `mark-paid` call fails after payment, the command prints the
 affected addresses loudly and exits non-zero — mark them manually before
 re-running, or those rows would be paid twice. If a batch fails, everything
 already paid is already marked, so re-running continues where it left off.
+After all batches land, the command re-fetches `/unpaid` and verifies none of
+the paid addresses are still listed, failing loudly if any are. Like
+passwords, the bearer token is never accepted as a command-line value.
 
 ---
 
