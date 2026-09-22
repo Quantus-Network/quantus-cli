@@ -887,15 +887,7 @@ async fn list_blocks_in_range(
 
 	for block_num in (start..=end).step_by(step as usize) {
 		// Get block hash for this block number
-		let block_hash: subxt::utils::H256 = quantus_client
-			.rpc_client()
-			.request::<subxt::utils::H256, [u32; 1]>("chain_getBlockHash", [block_num])
-			.await
-			.map_err(|e| {
-				QuantusError::NetworkError(format!(
-					"Failed to get block hash for block {block_num}: {e:?}"
-				))
-			})?;
+		let block_hash = quantus_client.get_block_hash(block_num as u64).await?;
 
 		// Get block data
 		let block_data: serde_json::Value = quantus_client

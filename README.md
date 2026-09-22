@@ -439,6 +439,44 @@ For each match the CLI builds the appropriate proof:
 The command exits non-zero if any claim fails, and prints a summary of
 recorded, skipped, and failed claims.
 
+#### Paying out claims (operators)
+
+Four commands turn recorded claims into one on-chain payment each. Every step
+is separate so it can be checked by hand, and a manifest file carries the state
+between them (`pulled` → `approved` → `paying` → `paid` → `marked`).
+
+```bash
+# 1. Pull unpaid recorded claims into a manifest (one transfer per payout account)
+quantus airdrop pull --out payout.json
+
+# 2. Show it, re-check it against the server and the chain, approve it
+quantus airdrop review --manifest payout.json --approve
+
+# 3. Pay it as ONE utility.batch_all — every transfer lands or none does.
+#    A cold wallet signs over QR; the command waits for finalization.
+quantus airdrop pay --manifest payout.json --from treasury_cold
+
+# 4. Mark every reward in the manifest paid on the claim server
+quantus airdrop mark-paid --manifest payout.json --admin-token-file ./admin-token
+```
+
+- `pull` skips unclaimed rows, aggregates rewards by `claim_account`, and refuses
+  to run while another manifest in the same directory is not yet `marked`, so
+  no reward can be pulled into two payments. `--limit N` keeps only the first
+  N destinations when a batch must be split (a cold-wallet QR payload holds
+  about 180 transfers).
+- `review` fails if any reward was paid, re-claimed or changed on the server
+  since the pull, reports the encoded batch size, and `--approve` pins the
+  transfers with a hash that `pay` verifies.
+- `pay` re-checks the server right before signing, records the signer, nonce
+  and anchor block in the manifest, then submits. If it is interrupted, run it
+  again with `--recover`: it scans the finalized blocks the batch could have
+  landed in and either records the payment or, once the transaction can no
+  longer be included, returns the manifest to `approved`.
+- `mark-paid` is idempotent and re-runnable; a `409 already marked paid` counts
+  as done. The admin token comes from `--admin-token-file` (owner-only file) or
+  `AIRDROP_ADMIN_TOKEN`, never from argv.
+
 ---
 
 ### Developer Tools

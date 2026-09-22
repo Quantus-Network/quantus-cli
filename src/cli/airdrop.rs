@@ -21,9 +21,11 @@ use serde::{Deserialize, Serialize};
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::{collections::HashMap, path::PathBuf, time::Duration};
 
+mod payout;
+
 const CLAIM_CONTEXT: &[u8] = b"qp-airdrop-claim-v1";
 const CLAIM_TTL_SECS: i64 = 10 * 60;
-const DEFAULT_SERVER: &str = "http://127.0.0.1:8080";
+pub(super) const DEFAULT_SERVER: &str = "https://airdrop-claim.quantus.com";
 const HD_WORMHOLE_INDEXES: std::ops::RangeInclusive<usize> = 0..=16;
 const CLAIMABLE_WORMHOLE_SCHEME: &str = "wormhole-rate8-compact";
 /// BIP44 coin type for Dilithium keys (the wormhole coin type is 189189189').
@@ -130,9 +132,68 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		dry_run: bool,
 	},
+	/// Operator: pull unpaid recorded claims into a payout manifest
+	Pull {
+		/// Claim server base URL
+		#[arg(long, default_value = DEFAULT_SERVER)]
+		server: String,
+
+		/// Manifest file to write (default: airdrop-payout-<unix time>.json)
+		#[arg(long)]
+		out: Option<PathBuf>,
+
+		/// Only include the first N payout destinations (one batch per manifest)
+		#[arg(long)]
+		limit: Option<usize>,
+	},
+
+	/// Operator: show a manifest, check it against the server and chain, optionally approve it
+	Review {
+		/// Payout manifest written by `airdrop pull`
+		#[arg(long)]
+		manifest: PathBuf,
+
+		/// Approve the manifest for payment
+		#[arg(long)]
+		approve: bool,
+	},
+
+	/// Operator: pay an approved manifest as one atomic batch (all transfers or none)
+	Pay {
+		/// Approved payout manifest
+		#[arg(long)]
+		manifest: PathBuf,
+
+		/// Wallet that pays (a cold wallet signs over QR)
+		#[arg(long, short)]
+		from: String,
+
+		/// Password for the wallet (unsupported on argv; use --password-file or prompt)
+		#[arg(short, long, hide = true)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// After an interrupted payment: find out whether the batch landed and update the manifest
+		#[arg(long)]
+		recover: bool,
+	},
+
+	/// Operator: mark every reward in a paid manifest as paid on the claim server
+	MarkPaid {
+		/// Paid payout manifest
+		#[arg(long)]
+		manifest: PathBuf,
+
+		/// File holding the server admin token (chmod 600); otherwise AIRDROP_ADMIN_TOKEN
+		#[arg(long)]
+		admin_token_file: Option<String>,
+	},
 }
 
-pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
+pub async fn handle_airdrop_command(command: AirdropCommands, node_url: &str) -> Result<()> {
 	match command {
 		AirdropCommands::Check {
 			server,
@@ -180,6 +241,14 @@ pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
 				dry_run,
 			)
 			.await,
+		AirdropCommands::Pull { server, out, limit } =>
+			payout::handle_pull(server, out, limit).await,
+		AirdropCommands::Review { manifest, approve } =>
+			payout::handle_review(node_url, manifest, approve).await,
+		AirdropCommands::Pay { manifest, from, password, password_file, recover } =>
+			payout::handle_pay(node_url, manifest, from, password, password_file, recover).await,
+		AirdropCommands::MarkPaid { manifest, admin_token_file } =>
+			payout::handle_mark_paid(manifest, admin_token_file).await,
 	}
 }
 
@@ -1032,16 +1101,7 @@ struct ErrorBody {
 }
 
 async fn fetch_snapshot(server: &str) -> Result<SnapshotFile> {
-	let url = format!("{}/snapshot", server.trim_end_matches('/'));
-	log_verbose!("GET {url}");
-	let response = http_client()?.get(&url).send().await.map_err(http_err)?;
-	let status = response.status();
-	let text = response.text().await.map_err(http_err)?;
-	if !status.is_success() {
-		return Err(QuantusError::Generic(format_server_error(status, &text)));
-	}
-	let wire: SnapshotWire = serde_json::from_str(&text)
-		.map_err(|e| QuantusError::Generic(format!("snapshot JSON: {e}")))?;
+	let wire: SnapshotWire = get_json(server, "snapshot").await?;
 	let mut by_account = HashMap::new();
 	for row in &wire.rows {
 		let account = parse_account_id(&row.account).or_else(|_| parse_account_id(&row.address))?;
@@ -1050,7 +1110,22 @@ async fn fetch_snapshot(server: &str) -> Result<SnapshotFile> {
 	Ok(SnapshotFile { version: wire.version, sha256: wire.sha256, rows: wire.rows, by_account })
 }
 
-fn parse_account_id(s: &str) -> Result<[u8; 32]> {
+pub(super) async fn get_json<T: serde::de::DeserializeOwned>(
+	server: &str,
+	path: &str,
+) -> Result<T> {
+	let url = format!("{}/{path}", server.trim_end_matches('/'));
+	log_verbose!("GET {url}");
+	let response = http_client()?.get(&url).send().await.map_err(http_err)?;
+	let status = response.status();
+	let text = response.text().await.map_err(http_err)?;
+	if !status.is_success() {
+		return Err(QuantusError::Generic(format_server_error(status, &text)));
+	}
+	serde_json::from_str(&text).map_err(|e| QuantusError::Generic(format!("{path} JSON: {e}")))
+}
+
+pub(super) fn parse_account_id(s: &str) -> Result<[u8; 32]> {
 	let s = s.trim();
 	if s.starts_with("qz") {
 		let (account, _) = AccountId32::from_ss58check_with_version(s)
@@ -1065,18 +1140,18 @@ fn parse_account_id(s: &str) -> Result<[u8; 32]> {
 	})
 }
 
-fn http_client() -> Result<reqwest::Client> {
+pub(super) fn http_client() -> Result<reqwest::Client> {
 	reqwest::Client::builder()
 		.timeout(Duration::from_secs(120))
 		.build()
 		.map_err(|e| QuantusError::Generic(format!("HTTP client: {e}")))
 }
 
-fn http_err(e: reqwest::Error) -> QuantusError {
+pub(super) fn http_err(e: reqwest::Error) -> QuantusError {
 	QuantusError::NetworkError(e.to_string())
 }
 
-fn format_server_error(status: reqwest::StatusCode, body: &str) -> String {
+pub(super) fn format_server_error(status: reqwest::StatusCode, body: &str) -> String {
 	if let Ok(err) = serde_json::from_str::<ErrorBody>(body) {
 		format!("server {status}: {}", err.error)
 	} else {
@@ -1084,11 +1159,11 @@ fn format_server_error(status: reqwest::StatusCode, body: &str) -> String {
 	}
 }
 
-fn format_hundredths(amount: u64) -> String {
+pub(super) fn format_hundredths(amount: u64) -> String {
 	format!("{}.{:02}", amount / 100, amount % 100)
 }
 
-fn now_unix() -> Result<i64> {
+pub(super) fn now_unix() -> Result<i64> {
 	std::time::SystemTime::now()
 		.duration_since(std::time::UNIX_EPOCH)
 		.map(|d| d.as_secs() as i64)
