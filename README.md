@@ -457,6 +457,12 @@ quantus airdrop pay --from my_cold --admin-token-file ./admin.token
 # See the full payout plan without touching the chain or the server
 quantus airdrop pay --from treasury_wallet --dry-run
 
+# Test the flow end-to-end by paying a single claim first
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token --limit 1
+
+# Or pay one specific rewarded address
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token --only qRewarded1
+
 # Unattended (skips the review prompt)
 quantus airdrop pay --from treasury_wallet --yes \
   --password-file ./pass --admin-token-file ./admin.token
@@ -480,6 +486,11 @@ Pay 235.50 QTC to 3 account(s) in 1 batch(es) from 'treasury_wallet'? [y/N]
   600`), used for `mark-paid`. Falls back to the `QUANTUS_AIRDROP_ADMIN_TOKEN`
   environment variable. Required up front, before anything is paid, so every
   completed payout can be marked.
+- `--limit`: Pay at most this many claims this run — `--limit 1` to test the
+  whole flow on a single claim before paying the rest (a re-run pays the
+  remainder, since paid claims drop off `/unpaid`).
+- `--only`: Pay only the given rewarded address(es) (repeatable). Errors if
+  an address has no recorded unpaid claim.
 - `--batch-size`: Max transfers per batch extrinsic (default: the chain's
   safe `utility.batch` limit).
 - `--tip`: Optional tip per batch extrinsic.

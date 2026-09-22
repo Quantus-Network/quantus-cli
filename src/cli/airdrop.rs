@@ -160,6 +160,16 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		admin_token_file: Option<String>,
 
+		/// Pay only this rewarded address (repeatable). Errors if the
+		/// address has no recorded unpaid claim.
+		#[arg(long)]
+		only: Vec<String>,
+
+		/// Pay at most this many claims this run (e.g. 1 to test the flow
+		/// end-to-end before paying the rest)
+		#[arg(long)]
+		limit: Option<usize>,
+
 		/// Max transfers per batch extrinsic (default: the chain's safe
 		/// batch limit)
 		#[arg(long)]
@@ -238,6 +248,8 @@ pub async fn handle_airdrop_command(
 			password_file,
 			admin_token,
 			admin_token_file,
+			only,
+			limit,
 			batch_size,
 			tip,
 			yes,
@@ -249,6 +261,7 @@ pub async fn handle_airdrop_command(
 				password,
 				password_file,
 				AdminTokenSource { argv: admin_token, file: admin_token_file },
+				PayoutSelection { only, limit },
 				batch_size,
 				tip,
 				yes,
@@ -446,6 +459,33 @@ fn recorded_payouts(rows: Vec<UnpaidRow>) -> Result<Vec<Payout>> {
 	Ok(payouts)
 }
 
+/// Which recorded claims this run pays: an optional address allowlist
+/// (`--only`, repeatable) and an optional cap (`--limit`).
+struct PayoutSelection {
+	only: Vec<String>,
+	limit: Option<usize>,
+}
+
+fn select_payouts(mut payouts: Vec<Payout>, selection: &PayoutSelection) -> Result<Vec<Payout>> {
+	if !selection.only.is_empty() {
+		for wanted in &selection.only {
+			if !payouts.iter().any(|p| &p.address == wanted) {
+				return Err(QuantusError::Generic(format!(
+					"--only {wanted} has no recorded unpaid claim"
+				)));
+			}
+		}
+		payouts.retain(|p| selection.only.contains(&p.address));
+	}
+	if let Some(limit) = selection.limit {
+		if limit == 0 {
+			return Err(QuantusError::Generic("--limit must be at least 1".into()));
+		}
+		payouts.truncate(limit);
+	}
+	Ok(payouts)
+}
+
 /// Snapshot amounts are hundredths of a QTC; the chain wants raw units.
 fn hundredths_to_raw(amount_hundredths: u64, decimals: u8) -> Result<u128> {
 	let scale = decimals.checked_sub(2).ok_or_else(|| {
@@ -573,6 +613,7 @@ async fn handle_pay(
 	password: Option<String>,
 	password_file: Option<String>,
 	admin_token_source: AdminTokenSource,
+	selection: PayoutSelection,
 	batch_size: Option<u32>,
 	tip: Option<String>,
 	yes: bool,
@@ -583,12 +624,20 @@ async fn handle_pay(
 	let client = http_client()?;
 	let unpaid = fetch_unpaid(&client, &server).await?;
 	let unclaimed = unpaid.rows.iter().filter(|r| r.status == "unclaimed").count();
-	let payouts = recorded_payouts(unpaid.rows)?;
-	if payouts.is_empty() {
+	let recorded = recorded_payouts(unpaid.rows)?;
+	if recorded.is_empty() {
 		log_print!(
 			"No recorded claims awaiting payout ({unclaimed} snapshot row(s) remain unclaimed)."
 		);
 		return Ok(());
+	}
+	let pending = recorded.len();
+	let payouts = select_payouts(recorded, &selection)?;
+	if payouts.len() < pending {
+		log_print!(
+			"Paying {} of {pending} pending claim(s) this run (--only/--limit).",
+			payouts.len()
+		);
 	}
 
 	// Review.
@@ -2498,6 +2547,37 @@ mod tests {
 		);
 		assert!(addresses_still_listed(&rows, &["qGone".to_string()]).is_empty());
 		assert!(addresses_still_listed(&[], &["qAddr".to_string()]).is_empty());
+	}
+
+	#[test]
+	fn payout_selection_filters_and_limits() {
+		let payout = |address: &str| Payout {
+			address: address.into(),
+			claim_account: "qDest".into(),
+			amount_hundredths: 100,
+			scheme: "dilithium-v10-padded".into(),
+			verified_at: None,
+		};
+		let all = vec![payout("qA"), payout("qB"), payout("qC")];
+
+		let none = PayoutSelection { only: vec![], limit: None };
+		assert_eq!(select_payouts(all.clone(), &none).unwrap().len(), 3);
+
+		let one = PayoutSelection { only: vec![], limit: Some(1) };
+		let selected = select_payouts(all.clone(), &one).unwrap();
+		assert_eq!(selected.len(), 1);
+		assert_eq!(selected[0].address, "qA");
+
+		let only_b = PayoutSelection { only: vec!["qB".into()], limit: None };
+		let selected = select_payouts(all.clone(), &only_b).unwrap();
+		assert_eq!(selected.len(), 1);
+		assert_eq!(selected[0].address, "qB");
+
+		let missing = PayoutSelection { only: vec!["qZ".into()], limit: None };
+		assert!(select_payouts(all.clone(), &missing).is_err());
+
+		let zero = PayoutSelection { only: vec![], limit: Some(0) };
+		assert!(select_payouts(all, &zero).is_err());
 	}
 
 	#[test]
