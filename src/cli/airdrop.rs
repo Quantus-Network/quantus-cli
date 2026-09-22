@@ -53,6 +53,11 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		wormhole_secret_file: Option<PathBuf>,
 
+		/// Paste a 32-byte hex wormhole secret at a hidden prompt (secrets
+		/// are never accepted on argv)
+		#[arg(long)]
+		wormhole_secret_prompt: bool,
+
 		/// HD wormhole address index, scanned across every branch/round
 		/// (default: scan indexes 0..=16)
 		#[arg(long)]
@@ -98,6 +103,11 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		wormhole_secret_file: Option<PathBuf>,
 
+		/// Paste a 32-byte hex wormhole secret at a hidden prompt (secrets
+		/// are never accepted on argv)
+		#[arg(long)]
+		wormhole_secret_prompt: bool,
+
 		/// HD wormhole address index, scanned across every branch/round
 		/// (default: scan indexes 0..=16)
 		#[arg(long)]
@@ -130,6 +140,7 @@ pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
 			password,
 			password_file,
 			wormhole_secret_file,
+			wormhole_secret_prompt,
 			wormhole_index,
 			scan_accounts,
 			scan_rounds,
@@ -140,6 +151,7 @@ pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
 				password,
 				password_file,
 				wormhole_secret_file,
+				wormhole_secret_prompt,
 				ScanWindow { wormhole_index, accounts: scan_accounts, rounds: scan_rounds },
 			)
 			.await,
@@ -150,6 +162,7 @@ pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
 			password,
 			password_file,
 			wormhole_secret_file,
+			wormhole_secret_prompt,
 			wormhole_index,
 			scan_accounts,
 			scan_rounds,
@@ -162,6 +175,7 @@ pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
 				password,
 				password_file,
 				wormhole_secret_file,
+				wormhole_secret_prompt,
 				ScanWindow { wormhole_index, accounts: scan_accounts, rounds: scan_rounds },
 				dry_run,
 			)
@@ -188,6 +202,7 @@ async fn handle_check(
 	password: Option<String>,
 	password_file: Option<String>,
 	wormhole_secret_file: Option<PathBuf>,
+	wormhole_secret_prompt: bool,
 	scan: ScanWindow,
 ) -> Result<()> {
 	let snapshot = fetch_snapshot(&server).await?;
@@ -196,10 +211,13 @@ async fn handle_check(
 		password,
 		password_file,
 		wormhole_secret_file.as_deref(),
+		wormhole_secret_prompt,
 		scan,
 	)?;
 	if credentials.dilithium.is_none() && credentials.wormhole_secrets.is_empty() {
-		return Err(QuantusError::Generic("provide --wallet and/or --wormhole-secret-file".into()));
+		return Err(QuantusError::Generic(
+			"provide --wallet, --wormhole-secret-file, and/or --wormhole-secret-prompt".into(),
+		));
 	}
 
 	let matches = find_matches(&snapshot, &credentials);
@@ -215,6 +233,7 @@ async fn handle_claim(
 	password: Option<String>,
 	password_file: Option<String>,
 	wormhole_secret_file: Option<PathBuf>,
+	wormhole_secret_prompt: bool,
 	scan: ScanWindow,
 	dry_run: bool,
 ) -> Result<()> {
@@ -223,10 +242,13 @@ async fn handle_claim(
 		password,
 		password_file,
 		wormhole_secret_file.as_deref(),
+		wormhole_secret_prompt,
 		scan,
 	)?;
 	if credentials.dilithium.is_none() && credentials.wormhole_secrets.is_empty() {
-		return Err(QuantusError::Generic("provide --wallet and/or --wormhole-secret-file".into()));
+		return Err(QuantusError::Generic(
+			"provide --wallet, --wormhole-secret-file, and/or --wormhole-secret-prompt".into(),
+		));
 	}
 
 	let claim_account = resolve_claim_account(to.as_deref(), &credentials)?;
@@ -338,6 +360,7 @@ fn collect_credentials(
 	password: Option<String>,
 	password_file: Option<String>,
 	wormhole_secret_file: Option<&std::path::Path>,
+	wormhole_secret_prompt: bool,
 	scan: ScanWindow,
 ) -> Result<Credentials> {
 	let mut wormhole_secrets = Vec::new();
@@ -380,6 +403,10 @@ fn collect_credentials(
 	if let Some(path) = wormhole_secret_file {
 		let secret = read_wormhole_secret(path)?;
 		wormhole_secrets.push((secret, path.display().to_string()));
+	}
+
+	if wormhole_secret_prompt {
+		wormhole_secrets.push((prompt_wormhole_secret()?, "pasted secret".to_string()));
 	}
 
 	Ok(Credentials {
@@ -645,6 +672,19 @@ fn mldsa87_keypair(seed: &[u8], v1: bool) -> HistoricalKeypair {
 	let secret = SecretKeyBytes(sk.to_vec());
 	zeroize_bytes(&mut sk);
 	HistoricalKeypair { public: pk.to_vec(), secret }
+}
+
+/// Read a pasted wormhole secret from a hidden terminal prompt, for users who
+/// hold only the raw secret (no mnemonic or seed) and no secret file. Argv is
+/// visible in process listings and shell history, so the secret is never
+/// accepted as a command-line value.
+fn prompt_wormhole_secret() -> Result<SpendSecret> {
+	log_print!("{}", "Paste wormhole secret (64 hex chars; input is hidden)".bright_yellow());
+	let mut hex_str = rpassword::read_password()
+		.map_err(|e| QuantusError::Generic(format!("Failed to read secret: {e}")))?;
+	let parsed = parse_secret_hex(&hex_str);
+	crate::wallet::keystore::zeroize_string(&mut hex_str);
+	parsed.map(SpendSecret).map_err(QuantusError::Generic)
 }
 
 fn read_wormhole_secret(path: &std::path::Path) -> Result<SpendSecret> {
@@ -1714,6 +1754,42 @@ mod tests {
 			dilithium_keygen_ids(8, Some("m/44'/189189'/0'/0'/0'")).len(),
 			dilithium_keygen_ids(8, None).len() + 1
 		);
+	}
+
+	/// #160103: wormhole secrets must not be accepted on argv. The paste
+	/// prompt (`--wormhole-secret-prompt`) is a bare flag; any variant that
+	/// takes the secret as a command-line value must fail to parse.
+	#[test]
+	fn airdrop_rejects_secret_cli_argument() {
+		use clap::Parser;
+
+		#[derive(Parser, Debug)]
+		#[command(name = "quantus")]
+		struct TestCli {
+			#[command(subcommand)]
+			command: crate::cli::Commands,
+		}
+
+		let secret = "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20";
+		for args in [
+			vec!["quantus", "airdrop", "check", "--wormhole-secret", secret],
+			vec!["quantus", "airdrop", "claim", "--wormhole-secret", secret],
+			vec!["quantus", "airdrop", "check", "--wormhole-secret-prompt", secret],
+			vec!["quantus", "airdrop", "claim", "--wormhole-secret-prompt", secret],
+		] {
+			let result = TestCli::try_parse_from(args.clone());
+			assert!(result.is_err(), "airdrop must not accept a secret on argv; args={args:?}");
+		}
+
+		for args in [
+			vec!["quantus", "airdrop", "check", "--wormhole-secret-prompt"],
+			vec!["quantus", "airdrop", "claim", "--wormhole-secret-prompt"],
+		] {
+			assert!(
+				TestCli::try_parse_from(args.clone()).is_ok(),
+				"bare --wormhole-secret-prompt must parse; args={args:?}"
+			);
+		}
 	}
 
 	#[test]
