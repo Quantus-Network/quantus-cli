@@ -130,9 +130,55 @@ pub enum AirdropCommands {
 		#[arg(long)]
 		dry_run: bool,
 	},
+
+	/// Pay recorded (claimed but unpaid) rewards with batch transfers and
+	/// mark them paid on the claim server. Requires the server admin token.
+	Pay {
+		/// Claim server base URL
+		#[arg(long, default_value = DEFAULT_SERVER)]
+		server: String,
+
+		/// Wallet that funds the payouts (hot or cold)
+		#[arg(long, short)]
+		from: String,
+
+		/// Password for the wallet (unsupported on argv; use --password-file or prompt)
+		#[arg(short, long, hide = true)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+
+		/// File with the claim server admin token (chmod 600). Falls back to
+		/// the QUANTUS_AIRDROP_ADMIN_TOKEN environment variable.
+		#[arg(long)]
+		admin_token_file: Option<String>,
+
+		/// Max transfers per batch extrinsic (default: the chain's safe
+		/// batch limit)
+		#[arg(long)]
+		batch_size: Option<u32>,
+
+		/// Optional tip amount per batch to prioritize inclusion (e.g. "0.5")
+		#[arg(long)]
+		tip: Option<String>,
+
+		/// Skip the interactive review confirmation
+		#[arg(long)]
+		yes: bool,
+
+		/// Show the payout plan without submitting or marking anything paid
+		#[arg(long)]
+		dry_run: bool,
+	},
 }
 
-pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
+pub async fn handle_airdrop_command(
+	command: AirdropCommands,
+	node_url: &str,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<()> {
 	match command {
 		AirdropCommands::Check {
 			server,
@@ -178,6 +224,31 @@ pub async fn handle_airdrop_command(command: AirdropCommands) -> Result<()> {
 				wormhole_secret_prompt,
 				ScanWindow { wormhole_index, accounts: scan_accounts, rounds: scan_rounds },
 				dry_run,
+			)
+			.await,
+		AirdropCommands::Pay {
+			server,
+			from,
+			password,
+			password_file,
+			admin_token_file,
+			batch_size,
+			tip,
+			yes,
+			dry_run,
+		} =>
+			handle_pay(
+				server,
+				from,
+				password,
+				password_file,
+				admin_token_file,
+				batch_size,
+				tip,
+				yes,
+				dry_run,
+				node_url,
+				execution_mode,
 			)
 			.await,
 	}
@@ -312,6 +383,350 @@ fn finish_claims(
 	}
 	if failed > 0 {
 		return Err(QuantusError::Generic(format!("{failed} claim submission(s) failed")));
+	}
+	Ok(())
+}
+
+/// One `/unpaid` row from the claim server. `status` is `recorded` (claimed,
+/// awaiting payout) or `unclaimed` (snapshot row nobody has claimed).
+#[derive(Clone, Debug, Deserialize)]
+struct UnpaidRow {
+	address: String,
+	claim_account: Option<String>,
+	amount_hundredths: u64,
+	kind: String,
+	scheme: Option<String>,
+	verified_at: Option<i64>,
+	status: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct UnpaidResponse {
+	rows: Vec<UnpaidRow>,
+}
+
+/// A recorded claim awaiting payout: pay `claim_account` on chain, then mark
+/// the rewarded `address` paid on the server.
+#[derive(Clone, Debug)]
+struct Payout {
+	address: String,
+	claim_account: String,
+	amount_hundredths: u64,
+	scheme: String,
+	verified_at: Option<i64>,
+}
+
+fn recorded_payouts(rows: Vec<UnpaidRow>) -> Result<Vec<Payout>> {
+	let mut payouts = Vec::new();
+	for row in rows {
+		if row.status != "recorded" {
+			continue;
+		}
+		let scheme = row.scheme.unwrap_or(row.kind);
+		let claim_account = row.claim_account.ok_or_else(|| {
+			QuantusError::Generic(format!("recorded claim {} has no claim account", row.address))
+		})?;
+		if row.amount_hundredths == 0 {
+			continue;
+		}
+		payouts.push(Payout {
+			address: row.address,
+			claim_account,
+			amount_hundredths: row.amount_hundredths,
+			scheme,
+			verified_at: row.verified_at,
+		});
+	}
+	Ok(payouts)
+}
+
+/// Snapshot amounts are hundredths of a QUAN; the chain wants raw units.
+fn hundredths_to_raw(amount_hundredths: u64, decimals: u8) -> Result<u128> {
+	let scale = decimals.checked_sub(2).ok_or_else(|| {
+		QuantusError::Generic(format!(
+			"chain has {decimals} decimal(s); cannot represent hundredths of a QUAN"
+		))
+	})?;
+	let unit = 10u128
+		.checked_pow(u32::from(scale))
+		.ok_or_else(|| QuantusError::Generic("decimal scale overflow".into()))?;
+	u128::from(amount_hundredths)
+		.checked_mul(unit)
+		.ok_or_else(|| QuantusError::Generic("payout amount overflow".into()))
+}
+
+/// The mark-paid admin token, from a chmod-600 file or the
+/// QUANTUS_AIRDROP_ADMIN_TOKEN environment variable. Required before any
+/// payment goes out so a paid claim can always be marked.
+fn load_admin_token(admin_token_file: Option<&str>) -> Result<String> {
+	if let Some(path) = admin_token_file {
+		return Ok(password::read_secret_file(path, "admin token")?.trim().to_string());
+	}
+	if let Ok(token) = std::env::var("QUANTUS_AIRDROP_ADMIN_TOKEN") {
+		let token = token.trim().to_string();
+		if !token.is_empty() {
+			return Ok(token);
+		}
+	}
+	Err(QuantusError::Generic(
+		"provide --admin-token-file or set QUANTUS_AIRDROP_ADMIN_TOKEN; the token is required \
+		 up front so every paid claim can be marked paid"
+			.into(),
+	))
+}
+
+fn format_verified_at(verified_at: Option<i64>) -> String {
+	match verified_at.and_then(|t| chrono::DateTime::from_timestamp(t, 0)) {
+		Some(when) => when.format("%Y-%m-%d %H:%M UTC").to_string(),
+		None => "-".to_string(),
+	}
+}
+
+fn confirm_payout(total: &str, accounts: usize, batches: usize, from: &str) -> Result<()> {
+	use std::io::Write;
+	print!(
+		"Pay {total} QUAN to {accounts} account(s) in {batches} batch(es) from '{from}'? [y/N] "
+	);
+	std::io::stdout()
+		.flush()
+		.map_err(|e| QuantusError::Generic(format!("Failed to flush confirmation prompt: {e}")))?;
+	let mut response = String::new();
+	std::io::stdin()
+		.read_line(&mut response)
+		.map_err(|e| QuantusError::Generic(format!("Failed to read confirmation: {e}")))?;
+	let response = response.trim().to_lowercase();
+	if response != "y" && response != "yes" {
+		return Err(QuantusError::Generic("Payout aborted".into()));
+	}
+	Ok(())
+}
+
+async fn mark_paid(
+	client: &reqwest::Client,
+	server: &str,
+	admin_token: &str,
+	address: &str,
+) -> Result<()> {
+	let url = format!("{}/mark-paid", server.trim_end_matches('/'));
+	let response = client
+		.post(&url)
+		.bearer_auth(admin_token)
+		.json(&serde_json::json!({ "address": address }))
+		.send()
+		.await
+		.map_err(http_err)?;
+	let status = response.status();
+	if status.is_success() {
+		return Ok(());
+	}
+	let text = response.text().await.map_err(http_err)?;
+	if status == reqwest::StatusCode::CONFLICT {
+		// Already marked (e.g. a concurrent operator); the payout stands.
+		log_verbose!("{address} was already marked paid");
+		return Ok(());
+	}
+	Err(QuantusError::Generic(format_server_error(status, &text)))
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn handle_pay(
+	server: String,
+	from: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	admin_token_file: Option<String>,
+	batch_size: Option<u32>,
+	tip: Option<String>,
+	yes: bool,
+	dry_run: bool,
+	node_url: &str,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<()> {
+	let client = http_client()?;
+	let url = format!("{}/unpaid", server.trim_end_matches('/'));
+	let response = client.get(&url).send().await.map_err(http_err)?;
+	let status = response.status();
+	let text = response.text().await.map_err(http_err)?;
+	if !status.is_success() {
+		return Err(QuantusError::Generic(format_server_error(status, &text)));
+	}
+	let unpaid: UnpaidResponse = serde_json::from_str(&text)
+		.map_err(|e| QuantusError::Generic(format!("unpaid JSON: {e}")))?;
+	let unclaimed = unpaid.rows.iter().filter(|r| r.status == "unclaimed").count();
+	let payouts = recorded_payouts(unpaid.rows)?;
+	if payouts.is_empty() {
+		log_print!(
+			"No recorded claims awaiting payout ({unclaimed} snapshot row(s) remain unclaimed)."
+		);
+		return Ok(());
+	}
+
+	// Review.
+	let mut total_hundredths: u64 = 0;
+	log_print!("{} recorded claim(s) awaiting payout:", payouts.len());
+	for payout in &payouts {
+		total_hundredths = total_hundredths
+			.checked_add(payout.amount_hundredths)
+			.ok_or_else(|| QuantusError::Generic("payout total overflow".into()))?;
+		log_print!(
+			"  {}  →  {}  {} QUAN  {}  (verified {})",
+			payout.address.bright_cyan(),
+			payout.claim_account.bright_green(),
+			format_hundredths(payout.amount_hundredths),
+			payout.scheme,
+			format_verified_at(payout.verified_at),
+		);
+	}
+	let total = format_hundredths(total_hundredths);
+	log_print!(
+		"Total: {} QUAN to {} account(s); {} snapshot row(s) remain unclaimed.",
+		total.bright_yellow(),
+		payouts.len(),
+		unclaimed
+	);
+
+	// Plan batches against the chain's limits.
+	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+	let (_, decimals) = crate::cli::send::get_chain_properties(&quantus_client).await?;
+	let (safe_limit, _) = crate::cli::send::get_batch_limits(&quantus_client).await?;
+	let per_batch = match batch_size {
+		Some(0) => return Err(QuantusError::Generic("--batch-size must be at least 1".into())),
+		Some(size) if size > safe_limit => {
+			log_print!("--batch-size {size} exceeds the chain's safe limit; using {safe_limit}.");
+			safe_limit as usize
+		},
+		Some(size) => size as usize,
+		None => safe_limit as usize,
+	};
+	let mut transfers = Vec::with_capacity(payouts.len());
+	for payout in &payouts {
+		transfers.push((
+			payout.claim_account.clone(),
+			hundredths_to_raw(payout.amount_hundredths, decimals)?,
+		));
+	}
+	let batches = transfers.len().div_ceil(per_batch);
+	log_print!("Plan: {batches} batch extrinsic(s) of up to {per_batch} transfer(s) each.");
+
+	if dry_run {
+		for (index, chunk) in transfers.chunks(per_batch).enumerate() {
+			log_print!("Batch {}/{batches}:", index + 1);
+			for (to, amount) in chunk {
+				log_print!("  {} ← {} raw units", to, amount);
+			}
+		}
+		log_print!("Dry run finished. Nothing was submitted or marked paid.");
+		return Ok(());
+	}
+
+	// The token is loaded before anything is paid so a completed payout can
+	// always be marked on the server (re-running an unmarked payout would
+	// double-pay).
+	let admin_token = load_admin_token(admin_token_file.as_deref())?;
+
+	if !yes {
+		confirm_payout(&total, payouts.len(), batches, &from)?;
+	}
+
+	let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
+	crate::cli::send::validate_batch_transfer_request(&quantus_client, &signer, &transfers).await?;
+
+	let tip_amount = match tip {
+		Some(tip_str) => {
+			let (value, _) =
+				crate::cli::send::validate_and_format_amount(&quantus_client, &tip_str).await?;
+			Some(value)
+		},
+		None => None,
+	};
+	let per_batch_tip = crate::cli::send::effective_tip_amount(tip_amount);
+	let submit_tip = crate::cli::send::positive_tip_amount(tip_amount);
+
+	let from_account = signer.try_account_id_ss58check()?;
+	let balance = crate::cli::send::get_balance(&quantus_client, &from_account).await?;
+	let total_amount = transfers.iter().try_fold(0u128, |acc, (_, amount)| {
+		crate::cli::send::checked_add(acc, *amount, "payout total")
+	})?;
+	let total_tips = per_batch_tip
+		.checked_mul(batches as u128)
+		.ok_or_else(|| QuantusError::Generic("tip total overflow".into()))?;
+	let exact_required =
+		crate::cli::send::checked_add(total_amount, total_tips, "required payout balance")?;
+	// Fee estimation covers the first batch; later batches add fees on top,
+	// so this is a floor, not a guarantee.
+	let first_chunk = &transfers[..per_batch.min(transfers.len())];
+	let first_call = crate::cli::send::build_batch_transfer_call(first_chunk)?;
+	crate::cli::send::ensure_balance_covers_call(
+		&quantus_client,
+		&signer,
+		&first_call,
+		balance,
+		exact_required,
+		submit_tip,
+		"payout",
+	)
+	.await?;
+
+	// Never mark a claim paid before its transfer is in a block.
+	let wait_mode =
+		crate::cli::common::ExecutionMode { wait_for_transaction: true, ..execution_mode };
+
+	let mut paid_rows = 0usize;
+	let mut paid_hundredths = 0u64;
+	let mut unmarked = Vec::new();
+	for (index, (payout_chunk, transfer_chunk)) in
+		payouts.chunks(per_batch).zip(transfers.chunks(per_batch)).enumerate()
+	{
+		log_print!(
+			"Submitting batch {}/{batches} ({} transfer(s))…",
+			index + 1,
+			transfer_chunk.len()
+		);
+		let call = crate::cli::send::build_batch_transfer_call(transfer_chunk)?;
+		let tx_hash = crate::cli::send::submit_prebuilt_batch_transfer_call(
+			&quantus_client,
+			&signer,
+			transfer_chunk,
+			call,
+			tip_amount,
+			wait_mode,
+		)
+		.await
+		.map_err(|e| {
+			QuantusError::Generic(format!(
+				"batch {}/{batches} failed ({e}); {paid_rows} row(s) from earlier batches were \
+				 paid and marked, nothing from this batch was paid — re-run to continue",
+				index + 1
+			))
+		})?;
+		log_success!("Batch {}/{batches} in block: {:?}", index + 1, tx_hash);
+		for payout in payout_chunk {
+			if let Err(e) = mark_paid(&client, &server, &admin_token, &payout.address).await {
+				log_error!("mark-paid failed for {}: {e}", payout.address);
+				unmarked.push(payout.address.clone());
+			}
+			paid_rows += 1;
+			paid_hundredths = paid_hundredths.saturating_add(payout.amount_hundredths);
+		}
+	}
+
+	log_success!(
+		"Paid {} QUAN across {paid_rows} claim(s) in {batches} batch(es).",
+		format_hundredths(paid_hundredths)
+	);
+	if !unmarked.is_empty() {
+		log_error!(
+			"{} payout(s) were PAID but not marked on the server — mark them before running \
+			 pay again or they will be paid twice:",
+			unmarked.len()
+		);
+		for address in &unmarked {
+			log_error!("  {address}");
+		}
+		return Err(QuantusError::Generic(format!(
+			"{} mark-paid call(s) failed after payment",
+			unmarked.len()
+		)));
 	}
 	Ok(())
 }
@@ -1972,6 +2387,63 @@ mod tests {
 			scan_accounts: 8,
 		};
 		assert!(resolve_claim_account(None, &credentials).is_err());
+	}
+
+	fn unpaid_row(status: &str, claim_account: Option<&str>, amount: u64) -> UnpaidRow {
+		UnpaidRow {
+			address: "qAddr".into(),
+			claim_account: claim_account.map(str::to_string),
+			amount_hundredths: amount,
+			kind: "dilithium".into(),
+			scheme: Some("dilithium-v08-padded".into()),
+			verified_at: Some(1_760_000_000),
+			status: status.into(),
+		}
+	}
+
+	#[test]
+	fn recorded_payouts_keeps_only_recorded_rows_with_accounts() {
+		let payouts = recorded_payouts(vec![
+			unpaid_row("recorded", Some("qDest"), 150),
+			unpaid_row("unclaimed", None, 999),
+			unpaid_row("recorded", Some("qDest2"), 0),
+		])
+		.unwrap();
+		assert_eq!(payouts.len(), 1);
+		assert_eq!(payouts[0].claim_account, "qDest");
+		assert_eq!(payouts[0].amount_hundredths, 150);
+
+		// A recorded row without a claim account is a server bug, not a skip.
+		assert!(recorded_payouts(vec![unpaid_row("recorded", None, 150)]).is_err());
+	}
+
+	#[test]
+	fn hundredths_convert_to_raw_chain_units() {
+		// 1.50 QUAN at 12 decimals.
+		assert_eq!(hundredths_to_raw(150, 12).unwrap(), 1_500_000_000_000);
+		// 2 decimals: hundredths are already the raw unit.
+		assert_eq!(hundredths_to_raw(150, 2).unwrap(), 150);
+		// Fewer than 2 decimals cannot represent hundredths.
+		assert!(hundredths_to_raw(150, 1).is_err());
+		// Overflow is an error, not a wrap.
+		assert!(hundredths_to_raw(u64::MAX, 38).is_err());
+	}
+
+	#[test]
+	fn unpaid_response_parses_server_wire_format() {
+		let unpaid: UnpaidResponse = serde_json::from_str(
+			r#"{"rows":[{"address":"qA","claim_account":"qB","amount_hundredths":150,
+			"kind":"dilithium","scheme":"dilithium-v10-padded","verified_at":1760000000,
+			"status":"recorded"},{"address":"qC","claim_account":null,"amount_hundredths":10,
+			"kind":"wormhole","scheme":null,"verified_at":null,"status":"unclaimed"}],
+			"total_amount_hundredths":160}"#,
+		)
+		.unwrap();
+		assert_eq!(unpaid.rows.len(), 2);
+		let payouts = recorded_payouts(unpaid.rows).unwrap();
+		assert_eq!(payouts.len(), 1);
+		assert_eq!(payouts[0].address, "qA");
+		assert_eq!(payouts[0].scheme, "dilithium-v10-padded");
 	}
 
 	#[test]
