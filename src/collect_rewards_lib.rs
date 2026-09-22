@@ -387,21 +387,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 	// Get block for proofs - either specific block or latest
 	let proof_block =
 		if let Some(block_num) = config.at_block {
-			// Fetch block hash for the specified block number
-			use subxt::ext::jsonrpsee::{core::client::ClientT, rpc_params};
-			let block_hash: Option<subxt::utils::H256> = quantus_client
-				.rpc_client()
-				.request("chain_getBlockHash", rpc_params![block_num])
-				.await
-				.map_err(|e| {
-					CollectRewardsError::from(format!(
-						"Failed to get block hash for block {}: {}",
-						block_num, e
-					))
-				})?;
-			let block_hash = block_hash.ok_or_else(|| {
-				CollectRewardsError::from(format!("Block {} not found", block_num))
-			})?;
+			let block_hash = quantus_client.get_block_hash(block_num as u64).await?;
 			quantus_client
 				.client()
 				.blocks()

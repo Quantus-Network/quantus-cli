@@ -238,6 +238,17 @@ impl QuantusClient {
 		Ok(latest_hash)
 	}
 
+	/// Hash of the block at `number`; an error if the chain has no such block.
+	pub async fn get_block_hash(&self, number: u64) -> crate::error::Result<H256> {
+		let hash: Option<H256> =
+			self.rpc_client.request("chain_getBlockHash", [number]).await.map_err(|e| {
+				QuantusError::NetworkError(format!(
+					"Failed to get block hash for block {number}: {e:?}"
+				))
+			})?;
+		hash.ok_or_else(|| QuantusError::NetworkError(format!("Block {number} not found")))
+	}
+
 	/// Interpret a System::Account nonce lookup without collapsing absence into a silent zero.
 	///
 	/// Returns `(nonce, account_exists)`. Missing accounts use nonce `0` (correct for the first
