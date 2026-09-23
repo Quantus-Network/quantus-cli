@@ -439,7 +439,7 @@ async fn estimate_fee_with_dummy_signature<Call: subxt::tx::Payload>(
 		client.client().tx().create_v4_partial_offline(call, build_params(ctx)).ok()?;
 	let tx = partial
 		.sign_with_account_and_signature(account, &DilithiumSignatureScheme::Dilithium87(dummy));
-	tx.partial_fee_estimate().await.ok()
+	client.partial_fee(tx.encoded()).await.ok()
 }
 
 /// Fee estimate for a cold wallet when no [`TxContext`] exists yet (balance

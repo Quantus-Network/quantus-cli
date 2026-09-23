@@ -43,11 +43,12 @@ struct Cli {
 	#[arg(long, global = true, default_value = "ws://127.0.0.1:9944")]
 	node_url: String,
 
-	/// Wait for transaction finalization before returning
-	/// Implies `--wait-for-transaction`
-	/// NOTE: waiting for finalized transaction may take a while in PoW chain
-	#[arg(long, global = true, default_value = "false")]
-	finalized_tx: bool,
+	/// Use the finalized block for every read, and wait for finalization before returning
+	///
+	/// Off by default: QPoW finality trails the head by ~100 blocks, so finalized reads
+	/// serve state ~20 minutes stale. Implies `--wait-for-transaction`.
+	#[arg(long, global = true, alias = "finalized-tx", default_value = "false")]
+	finalized: bool,
 
 	/// Wait for transaction inclusion in a best block before returning
 	/// Default: false
@@ -82,15 +83,19 @@ async fn main() -> Result<(), QuantusError> {
 	log_verbose!("");
 
 	// Display warning about finalization
-	if cli.finalized_tx {
-		log_print!("⚠️ Warning: Waiting for finalized block may take a while in PoW chain.");
+	if cli.finalized {
+		log_print!("⚠️ Warning: reads and waits use the finalized block; on this PoW chain it");
+		log_print!("   trails the head by ~100 blocks, so this may take a while.");
 	}
 
 	// Create execution mode from CLI args
 	let execution_mode = cli::common::ExecutionMode {
-		finalized: cli.finalized_tx,
+		finalized: cli.finalized,
 		wait_for_transaction: cli.wait_for_transaction,
 	};
+	// Published process-wide so reads honour the same flag without being threaded
+	// through every call site.
+	execution_mode.install();
 
 	// Cold-wallet QR I/O config for the submit stage (used only when the
 	// signing wallet is watch-only).

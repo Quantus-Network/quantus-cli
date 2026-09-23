@@ -256,6 +256,18 @@ fn build_transfer_call_for_account_id(
 	)
 }
 
+/// Move the whole free balance, with the chain deducting the exact fee.
+///
+/// `keep_alive` leaves the existential deposit behind instead of reaping the account.
+fn build_transfer_all_call_for_account_id(
+	to_account_id: SubxtAccountId32,
+	keep_alive: bool,
+) -> impl subxt::tx::Payload {
+	quantus_subxt::api::tx()
+		.balances()
+		.transfer_all(subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id), keep_alive)
+}
+
 pub(crate) fn build_batch_transfer_call(
 	transfers: &[(String, u128)],
 ) -> Result<impl subxt::tx::Payload> {
@@ -329,11 +341,7 @@ where
 				))
 			})?;
 
-	signed_tx.partial_fee_estimate().await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!(
-			"Failed to estimate transaction fee: {e:?}"
-		))
-	})
+	quantus_client.partial_fee(signed_tx.encoded()).await
 }
 
 pub(crate) async fn ensure_balance_covers_call<Call>(
@@ -584,10 +592,12 @@ pub async fn batch_transfer(
 
 /// Handle the send command
 #[allow(clippy::too_many_arguments)]
+/// `sweep_keep_alive` is `Some(keep_alive)` for `--all`, `None` for a fixed amount.
 pub async fn handle_send_command(
 	from_wallet: String,
 	to_address: String,
-	amount_str: &str,
+	amount_str: Option<&str>,
+	sweep_keep_alive: Option<bool>,
 	node_url: &str,
 	password: Option<String>,
 	password_file: Option<String>,
@@ -598,9 +608,15 @@ pub async fn handle_send_command(
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
 
-	// Parse and validate the amount
-	let (amount, formatted_amount) =
-		validate_and_format_amount(&quantus_client, amount_str).await?;
+	// Parse and validate the amount. With `--all` the chain computes it, so there is
+	// nothing to validate and nothing to reserve against.
+	let (amount, formatted_amount) = match amount_str {
+		Some(raw) => {
+			let (value, formatted) = validate_and_format_amount(&quantus_client, raw).await?;
+			(Some(value), formatted)
+		},
+		None => (None, "the entire free balance".to_string()),
+	};
 
 	// Resolve the destination address (could be wallet name or SS58 address)
 	let (resolved_address, to_account_id) = resolve_address_with_subxt_account_id(&to_address)?;
@@ -635,18 +651,34 @@ pub async fn handle_send_command(
 	};
 	let effective_tip = effective_tip_amount(tip_amount);
 	let submit_tip = positive_tip_amount(tip_amount);
-	let exact_required = checked_add(amount, effective_tip, "required send balance")?;
-	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount);
-	ensure_balance_covers_call(
-		&quantus_client,
-		&signer,
-		&transfer_call,
-		balance,
-		exact_required,
-		submit_tip,
-		"send",
-	)
-	.await?;
+
+	let transfer_call = match (amount, sweep_keep_alive) {
+		// `transfer_all` asks the chain to move everything minus the exact fee, so the
+		// balance precheck an estimate would drive has nothing to check.
+		(None, Some(keep_alive)) =>
+			Box::new(build_transfer_all_call_for_account_id(to_account_id, keep_alive))
+				as Box<dyn subxt::tx::Payload>,
+		(Some(value), _) => {
+			let exact_required = checked_add(value, effective_tip, "required send balance")?;
+			let call = Box::new(build_transfer_call_for_account_id(to_account_id, value))
+				as Box<dyn subxt::tx::Payload>;
+			ensure_balance_covers_call(
+				&quantus_client,
+				&signer,
+				&call,
+				balance,
+				exact_required,
+				submit_tip,
+				"send",
+			)
+			.await?;
+			call
+		},
+		(None, None) =>
+			return Err(crate::error::QuantusError::Generic(
+				"send needs either --amount or --all".to_string(),
+			)),
+	};
 
 	// Create and submit transaction
 	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
@@ -662,8 +694,15 @@ pub async fn handle_send_command(
 	)
 	.await?;
 
-	print_send_result(&quantus_client, &from_account_id, balance, amount, tx_hash, execution_mode)
-		.await
+	print_send_result(
+		&quantus_client,
+		&from_account_id,
+		balance,
+		amount.unwrap_or(balance),
+		tx_hash,
+		execution_mode,
+	)
+	.await
 }
 
 /// Print the post-submission summary (status, new balance, fee).
@@ -685,7 +724,7 @@ async fn print_send_result(
 
 	if !execution_mode.should_watch_transaction() {
 		log_print!(
-			"ℹ️  The transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized-tx to wait before returning.",
+			"ℹ️  The transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized to wait before returning.",
 			transaction_stage.success_detail()
 		);
 		return Ok(());
@@ -768,6 +807,30 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 
 #[cfg(test)]
 mod tests {
+	/// `--all` must build `transfer_all`, not a transfer of a guessed amount: the
+	/// chain deducts the exact fee, which is the whole point of the flag.
+	#[test]
+	fn transfer_all_builds_the_transfer_all_call() {
+		use super::{build_transfer_all_call_for_account_id, SubxtAccountId32};
+		use subxt::tx::Payload;
+		let dest = SubxtAccountId32::from([9u8; 32]);
+		let call = build_transfer_all_call_for_account_id(dest, false);
+		let details = call.validation_details().expect("static payload");
+		assert_eq!(details.pallet_name, "Balances");
+		assert_eq!(details.call_name, "transfer_all");
+	}
+
+	#[test]
+	fn fixed_amount_still_builds_transfer_allow_death() {
+		use super::{build_transfer_call_for_account_id, SubxtAccountId32};
+		use subxt::tx::Payload;
+		let dest = SubxtAccountId32::from([9u8; 32]);
+		let call = build_transfer_call_for_account_id(dest, 1_000);
+		let details = call.validation_details().expect("static payload");
+		assert_eq!(details.pallet_name, "Balances");
+		assert_eq!(details.call_name, "transfer_allow_death");
+	}
+
 	use super::{
 		build_batch_transfer_call, effective_tip_amount, format_balance,
 		limits_from_batched_calls_limit, parse_amount_with_decimals,
