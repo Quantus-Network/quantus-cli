@@ -34,7 +34,28 @@ pub enum TransactionStage {
 	Finalized,
 }
 
+static GLOBAL_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 impl ExecutionMode {
+	/// Install the finality choice process-wide, once, from `main`.
+	///
+	/// Waiting for a transaction is driven by the [`ExecutionMode`] threaded through each
+	/// command, but reads are taken in ~80 places that have no reason to carry one. Rather
+	/// than thread it everywhere, the same flag is published here and read by
+	/// `QuantusClient::get_latest_block`, so one switch governs both.
+	pub fn install(self) {
+		GLOBAL_MODE.store(self.finalized, std::sync::atomic::Ordering::Relaxed);
+	}
+
+	/// Whether reads should be taken at the finalized block rather than the head.
+	///
+	/// False by default: QPoW finality trails the head by ~100 blocks, so finalized
+	/// reads serve state ~20 minutes stale — after a runtime upgrade, the *previous*
+	/// runtime's state.
+	pub fn reads_at_finalized() -> bool {
+		GLOBAL_MODE.load(std::sync::atomic::Ordering::Relaxed)
+	}
+
 	pub fn transaction_stage(self) -> TransactionStage {
 		if self.finalized {
 			TransactionStage::Finalized
@@ -1165,6 +1186,18 @@ mod tests {
 			"unexpected error: {err}"
 		);
 		assert_eq!(delay_seconds_to_millis(1).unwrap(), 1_000);
+	}
+
+	#[test]
+	fn reads_follow_the_installed_finality_flag() {
+		// Default: reads take the head, so state is never ~100 blocks stale.
+		assert!(!ExecutionMode::reads_at_finalized());
+
+		ExecutionMode { finalized: true, wait_for_transaction: false }.install();
+		assert!(ExecutionMode::reads_at_finalized());
+
+		ExecutionMode { finalized: false, wait_for_transaction: true }.install();
+		assert!(!ExecutionMode::reads_at_finalized());
 	}
 
 	#[test]

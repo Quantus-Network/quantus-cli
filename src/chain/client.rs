@@ -204,6 +204,38 @@ impl QuantusClient {
 		Ok(Self { client, rpc_client: self.rpc_client.clone(), node_url: self.node_url.clone() })
 	}
 
+	/// Partial fee for an already-signed extrinsic, computed at the **head**.
+	///
+	/// subxt's own `partial_fee_estimate` calls `TransactionPaymentApi_query_info` at
+	/// `latest_finalized_block_ref`. QPoW finality trails the head by ~100 blocks, so
+	/// for ~20 minutes after a runtime upgrade that changes fees the estimate is the
+	/// *old* runtime's. That made `send` refuse transfers it could afford, quoting a
+	/// fee 10x the real one right after mainnet 152 -> 153 cut `FEE_SCALE`.
+	///
+	/// Uses [`Self::get_latest_block`], so `--finalized` moves it with every other read.
+	pub async fn partial_fee(&self, encoded_tx: &[u8]) -> Result<u128, QuantusError> {
+		use codec::Encode;
+
+		let mut params = encoded_tx.to_vec();
+		(encoded_tx.len() as u32).encode_to(&mut params);
+		let head = self.get_latest_block().await?;
+
+		// RuntimeDispatchInfo: { weight_ref_time, weight_proof_size, class, partial_fee }
+		let (_, _, _, partial_fee) = self
+			.client
+			.backend()
+			.call_decoding::<(codec::Compact<u64>, codec::Compact<u64>, u8, u128)>(
+				"TransactionPaymentApi_query_info",
+				Some(&params),
+				head,
+			)
+			.await
+			.map_err(|e| {
+				QuantusError::NetworkError(format!("Failed to estimate transaction fee: {e:?}"))
+			})?;
+		Ok(partial_fee)
+	}
+
 	/// Get reference to the underlying SubXT client
 	/// The FIPS 204 context the connected runtime verifies extrinsic signatures under. Read from
 	/// the runtime version subxt already cached at connect, so this costs no RPC.
@@ -229,9 +261,18 @@ impl QuantusClient {
 		&self.rpc_client
 	}
 
-	/// Get the latest block (best block) using RPC call
-	/// This bypasses SubXT's default behavior of using finalized blocks
+	/// The block every read in the CLI is taken at.
+	///
+	/// The head by default; the finalized block under `--finalized`. subxt's own default
+	/// is the finalized block, which on this chain is ~100 blocks (~20 minutes) behind —
+	/// stale state, and after a runtime upgrade the previous runtime's state entirely.
 	pub async fn get_latest_block(&self) -> crate::error::Result<subxt::utils::H256> {
+		if crate::cli::common::ExecutionMode::reads_at_finalized() {
+			log_verbose!("🔍 Fetching finalized block hash via RPC (--finalized)...");
+			let hash = finalized_block_hash(&self.rpc_client).await?;
+			log_verbose!("📦 Finalized block hash: {:?}", hash);
+			return Ok(hash);
+		}
 		log_verbose!("🔍 Fetching latest block hash via RPC...");
 		let latest_hash = best_block_hash(&self.rpc_client).await?;
 		log_verbose!("📦 Latest block hash: {:?}", latest_hash);
@@ -341,6 +382,17 @@ impl QuantusClient {
 		log_verbose!("⚠️  No runtime hash RPC call available");
 		Ok(None)
 	}
+}
+
+/// Finalized block hash via RPC.
+async fn finalized_block_hash(ws_client: &WsClient) -> crate::error::Result<H256> {
+	use jsonrpsee::core::client::ClientT;
+	ws_client
+		.request::<H256, [(); 0]>("chain_getFinalizedHead", [])
+		.await
+		.map_err(|e| {
+			QuantusError::NetworkError(format!("Failed to fetch finalized block hash: {e:?}"))
+		})
 }
 
 async fn best_block_hash(ws_client: &WsClient) -> crate::error::Result<H256> {

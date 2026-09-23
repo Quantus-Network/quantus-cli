@@ -46,9 +46,20 @@ pub enum Commands {
 		#[arg(short, long)]
 		to: String,
 
-		/// Amount to send (e.g., "10", "10.5", "0.0001")
-		#[arg(short, long)]
-		amount: String,
+		/// Amount to send (e.g., "10", "10.5", "0.0001"). Omit with `--all`.
+		#[arg(short, long, required_unless_present = "all", conflicts_with = "all")]
+		amount: Option<String>,
+
+		/// Send the whole free balance, letting the chain deduct the fee exactly.
+		///
+		/// Uses `Balances::transfer_all`, so no fee estimate has to be guessed and
+		/// nothing is stranded. The account is reaped unless `--keep-alive`.
+		#[arg(long)]
+		all: bool,
+
+		/// With `--all`, leave the existential deposit behind so the account survives.
+		#[arg(long, requires = "all")]
+		keep_alive: bool,
 
 		/// Wallet name to send from
 		#[arg(short, long)]
@@ -385,11 +396,22 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
+		Commands::Send {
+			from,
+			to,
+			amount,
+			all,
+			keep_alive,
+			password,
+			password_file,
+			tip,
+			nonce,
+		} =>
 			send::handle_send_command(
 				from,
 				to,
-				&amount,
+				amount.as_deref(),
+				all.then_some(keep_alive),
 				node_url,
 				password,
 				password_file,
