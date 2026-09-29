@@ -57,20 +57,26 @@ context_sign!(
 	ml_dsa_65
 );
 
-/// Whether `sig_with_public` signs `message` under `context`. Cold wallets sign ML-DSA-87 only,
-/// so that is the only response the CLI checks.
-pub fn verify_ml_dsa_87(
-	sig_with_public: &Dilithium87SignatureWithPublic,
-	message: &[u8],
-	context: Option<&[u8]>,
-) -> bool {
-	let Ok(public) = qp_rusty_crystals_dilithium::ml_dsa_87::PublicKey::from_bytes(
-		sig_with_public.public().as_slice(),
-	) else {
-		return false;
+macro_rules! context_verify {
+	($verify:ident, $sig_with_public:ty, $module:ident) => {
+		/// Whether `sig_with_public` signs `message` under `context`.
+		pub fn $verify(
+			sig_with_public: &$sig_with_public,
+			message: &[u8],
+			context: Option<&[u8]>,
+		) -> bool {
+			let Ok(public) = qp_rusty_crystals_dilithium::$module::PublicKey::from_bytes(
+				sig_with_public.public().as_slice(),
+			) else {
+				return false;
+			};
+			public.verify(message, sig_with_public.signature().as_slice(), context)
+		}
 	};
-	public.verify(message, sig_with_public.signature().as_slice(), context)
 }
+
+context_verify!(verify_ml_dsa_87, Dilithium87SignatureWithPublic, ml_dsa_87);
+context_verify!(verify_ml_dsa_65, Dilithium65SignatureWithPublic, ml_dsa_65);
 
 #[cfg(test)]
 mod tests {
@@ -90,13 +96,9 @@ mod tests {
 	fn ml_dsa_65_signature_verifies_under_the_context_it_was_made_with() {
 		let pair = Dilithium65Pair::from_seed(&[7u8; 32]).expect("seed is well-formed");
 		let signature = sign_ml_dsa_65(&pair, b"payload", CTX);
-		let public = qp_rusty_crystals_dilithium::ml_dsa_65::PublicKey::from_bytes(
-			signature.public().as_slice(),
-		)
-		.expect("public key must parse");
-		let sig = signature.signature();
-		assert!(public.verify(b"payload", sig.as_slice(), CTX));
-		assert!(!public.verify(b"payload", sig.as_slice(), None));
+		assert!(verify_ml_dsa_65(&signature, b"payload", CTX));
+		assert!(!verify_ml_dsa_65(&signature, b"payload", None));
+		assert!(!verify_ml_dsa_65(&signature, b"a different payload", CTX));
 	}
 
 	/// FIPS 204 contexts are domain separated, so this cuts both ways: a spec-148 node rejects a

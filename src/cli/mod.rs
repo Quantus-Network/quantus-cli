@@ -16,6 +16,7 @@ pub mod high_security;
 pub mod metadata;
 pub mod multisend;
 pub mod multisig;
+pub mod near;
 pub mod preimage;
 pub mod reversible;
 pub mod runtime;
@@ -113,6 +114,10 @@ pub enum Commands {
 	/// Multisig commands (multi-signature wallets)
 	#[command(subcommand)]
 	Multisig(multisig::MultisigCommands),
+
+	/// NEAR accounts controlled by ML-DSA-65 wallets
+	#[command(subcommand)]
+	Near(near::NearCommands),
 
 	/// Scheduler commands
 	#[command(subcommand)]
@@ -409,6 +414,7 @@ pub async fn execute_command(
 			high_security::handle_high_security_command(hs_cmd, node_url, execution_mode).await,
 		Commands::Multisig(multisig_cmd) =>
 			multisig::handle_multisig_command(multisig_cmd, node_url, execution_mode).await,
+		Commands::Near(near_cmd) => near::handle_near_command(near_cmd).await,
 		Commands::Scheduler(scheduler_cmd) =>
 			scheduler::handle_scheduler_command(scheduler_cmd, node_url, execution_mode).await,
 		Commands::Storage(storage_cmd) =>

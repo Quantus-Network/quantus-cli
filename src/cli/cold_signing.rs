@@ -7,8 +7,10 @@
 //!    `ur:quantus-sign-request` QR (animated when multi-part): `call ‖ era ‖ nonce ‖ tip ‖ mode ‖
 //!    specVersion ‖ txVersion ‖ genesis ‖ blockHash ‖ Option<metadataHash>`. Raw (not hashed) so
 //!    the device can parse and show the user what they are signing.
-//! 2. The cold wallet signs `payload.len() > 256 ? blake2b_256(payload) : payload` with ML-DSA-87
-//!    and answers with an animated UR containing `signature[4627] ‖ public_key[2592]`.
+//! 2. The cold wallet signs `payload.len() > 256 ? blake2b_256(payload) : payload` with its
+//!    Dilithium key and answers with an animated UR containing `signature ‖ public_key` —
+//!    `signature[4627] ‖ public_key[2592]` for ML-DSA-87 or `signature[3309] ‖ public_key[1952]`
+//!    for ML-DSA-65. The CLI detects the scheme from the response length.
 //! 3. The CLI validates the response against the wallet's stored address, assembles the V4
 //!    extrinsic with the *identical* parameters, and submits.
 //!
@@ -23,7 +25,9 @@ use crate::{
 	qr::{display_ur_until_enter, render_ur_frames, scan_ur, SignRequest, UrSource},
 };
 use colored::Colorize;
-use qp_dilithium_crypto::types::{Dilithium87SignatureWithPublic, DilithiumSignatureScheme};
+use qp_dilithium_crypto::types::{
+	Dilithium65SignatureWithPublic, Dilithium87SignatureWithPublic, DilithiumSignatureScheme,
+};
 use sp_core::crypto::AccountId32;
 use sp_runtime::traits::IdentifyAccount;
 use std::{io::IsTerminal, path::PathBuf, time::Duration};
@@ -39,8 +43,12 @@ pub const MORTALITY_BLOCKS: u64 = 256;
 /// Cold-wallet parsers reject payloads above this size.
 pub const MAX_COLD_PAYLOAD: usize = 8 * 1024;
 
-/// `ML-DSA-87 signature (4627) ‖ public key (2592)` — the only valid response size.
-pub const SIGNATURE_RESPONSE_LEN: usize = Dilithium87SignatureWithPublic::TOTAL_LEN;
+/// `ML-DSA-87 signature (4627) ‖ public key (2592)` response size.
+pub const SIGNATURE_RESPONSE_LEN_ML_DSA_87: usize = Dilithium87SignatureWithPublic::TOTAL_LEN;
+
+/// `ML-DSA-65 signature (3309) ‖ public key (1952)` response size. Distinct from
+/// the ML-DSA-87 size, so the scheme is detected from the response length.
+pub const SIGNATURE_RESPONSE_LEN_ML_DSA_65: usize = Dilithium65SignatureWithPublic::TOTAL_LEN;
 
 /// How long to wait for the signed response before giving up.
 const RESPONSE_TIMEOUT: Duration = Duration::from_secs(300);
@@ -145,10 +153,10 @@ impl ResponseError {
 	fn message(&self, wallet_name: &str) -> String {
 		match self {
 			ResponseError::BadLength(got) => format!(
-				"Response has {got} bytes, expected {SIGNATURE_RESPONSE_LEN} (signature ‖ public key). The scan was likely incomplete or picked up the wrong QR — rescan the response on the cold wallet."
+				"Response has {got} bytes, expected {SIGNATURE_RESPONSE_LEN_ML_DSA_87} (ML-DSA-87) or {SIGNATURE_RESPONSE_LEN_ML_DSA_65} (ML-DSA-65) for signature ‖ public key. The scan was likely incomplete or picked up the wrong QR — rescan the response on the cold wallet."
 			),
 			ResponseError::Malformed(e) => format!(
-				"Response bytes do not parse as an ML-DSA-87 signature + public key ({e}) — rescan the response."
+				"Response bytes do not parse as a Dilithium signature + public key ({e}) — rescan the response."
 			),
 			ResponseError::WrongSigner { got } => format!(
 				"Response was signed by a DIFFERENT key ({got}) than cold wallet '{wallet_name}'. Aborting — check that the right device/account signed."
@@ -234,34 +242,45 @@ pub fn signable_payload(raw: &[u8]) -> Vec<u8> {
 	}
 }
 
-/// Split and verify a signature response. Checks length, structure, that the
-/// embedded public key matches the cold wallet's address (poseidon binding),
-/// and that the signature verifies over this exact payload.
+/// Split and verify a signature response. The scheme is detected from the
+/// response length. Checks length, structure, that the embedded public key
+/// matches the cold wallet's address (poseidon binding), and that the
+/// signature verifies over this exact payload.
 fn validate_signature_response(
 	raw_payload: &[u8],
 	response: &[u8],
 	expected_account: &AccountId32,
 	context: Option<&[u8]>,
-) -> std::result::Result<Dilithium87SignatureWithPublic, ResponseError> {
-	if response.len() != SIGNATURE_RESPONSE_LEN {
-		return Err(ResponseError::BadLength(response.len()));
-	}
+) -> std::result::Result<DilithiumSignatureScheme, ResponseError> {
+	let msg = signable_payload(raw_payload);
 
-	let sig_with_public = Dilithium87SignatureWithPublic::from_bytes(response)
-		.map_err(|e| ResponseError::Malformed(format!("{e:?}")))?;
+	let (signature, derived_account, verified) = match response.len() {
+		SIGNATURE_RESPONSE_LEN_ML_DSA_87 => {
+			let swp = Dilithium87SignatureWithPublic::from_bytes(response)
+				.map_err(|e| ResponseError::Malformed(format!("{e:?}")))?;
+			let account = swp.public().into_account();
+			let verified = crate::chain::signing::verify_ml_dsa_87(&swp, &msg, context);
+			(DilithiumSignatureScheme::Dilithium87(swp), account, verified)
+		},
+		SIGNATURE_RESPONSE_LEN_ML_DSA_65 => {
+			let swp = Dilithium65SignatureWithPublic::from_bytes(response)
+				.map_err(|e| ResponseError::Malformed(format!("{e:?}")))?;
+			let account = swp.public().into_account();
+			let verified = crate::chain::signing::verify_ml_dsa_65(&swp, &msg, context);
+			(DilithiumSignatureScheme::Dilithium65(swp), account, verified)
+		},
+		got => return Err(ResponseError::BadLength(got)),
+	};
 
-	let derived_account = sig_with_public.public().into_account();
 	if derived_account != *expected_account {
 		use crate::cli::address_format::QuantusSS58;
 		return Err(ResponseError::WrongSigner { got: derived_account.to_quantus_ss58() });
 	}
-
-	let msg = signable_payload(raw_payload);
-	if !crate::chain::signing::verify_ml_dsa_87(&sig_with_public, &msg, context) {
+	if !verified {
 		return Err(ResponseError::BadSignature);
 	}
 
-	Ok(sig_with_public)
+	Ok(signature)
 }
 
 fn confirm_or_abort(prompt: &str) -> Result<()> {
@@ -378,7 +397,7 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 		Some(source) => source.clone(),
 		None => default_response_source(io)?,
 	};
-	let sig_with_public = loop {
+	let signature = loop {
 		let response = scan_ur(&source, RESPONSE_TIMEOUT).await?;
 		log_verbose!("📥 Received {} response bytes", response.len());
 
@@ -419,7 +438,6 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 		));
 	}
 
-	let signature = DilithiumSignatureScheme::Dilithium87(sig_with_public);
 	let submittable = partial.sign_with_account_and_signature(&account, &signature);
 
 	crate::cli::common::submit_prepared_transaction(client, submittable, execution_mode).await
@@ -428,13 +446,19 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 /// Estimate the fee by assembling a throwaway extrinsic with an all-zero
 /// (correct-length) signature. Returns `None` on any failure — the preview is
 /// informational and must never block signing.
+///
+/// The signing scheme is unknown until the device responds, so the dummy is
+/// ML-DSA-87 sized — the larger of the two, making the estimate conservative
+/// for ML-DSA-65 signers.
 async fn estimate_fee_with_dummy_signature<Call: subxt::tx::Payload>(
 	client: &QuantusClient,
 	call: &Call,
 	ctx: &TxContext,
 	account: &AccountId32,
 ) -> Option<u128> {
-	let dummy = Dilithium87SignatureWithPublic::from_bytes(&[0u8; SIGNATURE_RESPONSE_LEN]).ok()?;
+	let dummy =
+		Dilithium87SignatureWithPublic::from_bytes(&[0u8; SIGNATURE_RESPONSE_LEN_ML_DSA_87])
+			.ok()?;
 	let mut partial =
 		client.client().tx().create_v4_partial_offline(call, build_params(ctx)).ok()?;
 	let tx = partial
@@ -511,21 +535,34 @@ pub async fn handle_cold_sign_sim(
 			request.signer
 		)));
 	}
-	if keypair.scheme != crate::wallet::DilithiumScheme::MlDsa87 {
-		return Err(QuantusError::Generic(
-			"cold-sign-sim and real devices sign ML-DSA-87 only; use an ML-DSA-87 wallet"
-				.to_string(),
-		));
-	}
-	let pair = keypair.to_resonance_pair()?;
 	let msg = signable_payload(&payload);
-	// Mirrors the device: Keystone firmware always signs under the extrinsic context, so a
+	// Mirrors the device: firmware always signs under the extrinsic context, so a
 	// simulated signature is only good for a runtime that verifies with it.
-	let sig_with_public =
-		crate::chain::signing::sign_ml_dsa_87(&pair, &msg, Some(crate::chain::signing::EXTRINSIC));
+	let response_bytes: Vec<u8> = match keypair.scheme {
+		crate::wallet::DilithiumScheme::MlDsa87 => {
+			let pair = keypair.to_resonance_pair()?;
+			crate::chain::signing::sign_ml_dsa_87(
+				&pair,
+				&msg,
+				Some(crate::chain::signing::EXTRINSIC),
+			)
+			.to_bytes()
+			.to_vec()
+		},
+		crate::wallet::DilithiumScheme::MlDsa65 => {
+			let pair = keypair.to_dilithium65_pair()?;
+			crate::chain::signing::sign_ml_dsa_65(
+				&pair,
+				&msg,
+				Some(crate::chain::signing::EXTRINSIC),
+			)
+			.to_bytes()
+			.to_vec()
+		},
+	};
 
 	// 3. Emit the response UR.
-	let parts = quantus_ur::encode_bytes(&sig_with_public.to_bytes())
+	let parts = quantus_ur::encode_bytes(&response_bytes)
 		.map_err(|e| QuantusError::Generic(format!("Failed to UR-encode response: {e:?}")))?;
 
 	match &response_file {
@@ -710,13 +747,16 @@ mod tests {
 		let msg = signable_payload(&raw);
 		let swp = crate::chain::signing::sign_ml_dsa_87(&alice, &msg, CTX);
 		let response = swp.to_bytes();
-		assert_eq!(response.len(), SIGNATURE_RESPONSE_LEN);
+		assert_eq!(response.len(), SIGNATURE_RESPONSE_LEN_ML_DSA_87);
 
 		// Valid response verifies
 		let validated = validate_signature_response(&raw, &response, &alice_account(), CTX)
 			.ok()
 			.unwrap();
-		assert_eq!(validated.to_bytes(), response);
+		let DilithiumSignatureScheme::Dilithium87(validated_swp) = validated else {
+			panic!("87-sized response must validate as Dilithium87");
+		};
+		assert_eq!(validated_swp.to_bytes(), response);
 
 		// Truncated response → BadLength (rescan-safe)
 		let err = validate_signature_response(&raw, &response[..1000], &alice_account(), CTX)
@@ -743,6 +783,80 @@ mod tests {
 			.unwrap();
 		assert!(!err.rescan_safe());
 		assert!(matches!(err, ResponseError::BadSignature));
+	}
+
+	/// The 65 mirror of the roundtrip above: the scheme is picked from the
+	/// response length, every rejection path holds, and the validated
+	/// signature assembles into a submittable extrinsic.
+	#[test]
+	fn test_validate_signature_response_ml_dsa_65() {
+		use qp_dilithium_crypto::types::Dilithium65Pair;
+		use sp_core::Pair as _;
+
+		let state = test_client_state();
+		let ctx = test_ctx();
+		let call = transfer_call();
+		let raw = build_raw_signer_payload(&state, &call, &ctx).unwrap();
+		let msg = signable_payload(&raw);
+
+		let pair = Dilithium65Pair::from_seed(&[7u8; 32]).expect("valid seed");
+		let account: AccountId32 = pair.public().into_account();
+		let swp = crate::chain::signing::sign_ml_dsa_65(&pair, &msg, CTX);
+		let response = swp.to_bytes();
+		assert_eq!(response.len(), SIGNATURE_RESPONSE_LEN_ML_DSA_65);
+
+		// Valid 65 response validates as Dilithium65
+		let validated = validate_signature_response(&raw, &response, &account, CTX).ok().unwrap();
+		assert!(matches!(validated, DilithiumSignatureScheme::Dilithium65(_)));
+
+		// A 65 response against an 87 wallet's account → WrongSigner (abort)
+		let err = validate_signature_response(&raw, &response, &alice_account(), CTX)
+			.err()
+			.unwrap();
+		assert!(!err.rescan_safe());
+		assert!(matches!(err, ResponseError::WrongSigner { .. }));
+
+		// Signed by a different 65 key → WrongSigner (abort)
+		let other = Dilithium65Pair::from_seed(&[9u8; 32]).expect("valid seed");
+		let other_swp = crate::chain::signing::sign_ml_dsa_65(&other, &msg, CTX);
+		let err = validate_signature_response(&raw, &other_swp.to_bytes(), &account, CTX)
+			.err()
+			.unwrap();
+		assert!(matches!(err, ResponseError::WrongSigner { .. }));
+
+		// Right key, stale payload → BadSignature (abort)
+		let mut other_ctx = test_ctx();
+		other_ctx.nonce = 8;
+		let other_raw = build_raw_signer_payload(&state, &call, &other_ctx).unwrap();
+		let err = validate_signature_response(&other_raw, &response, &account, CTX).err().unwrap();
+		assert!(!err.rescan_safe());
+		assert!(matches!(err, ResponseError::BadSignature));
+
+		// Truncated response → BadLength (rescan-safe)
+		let err = validate_signature_response(
+			&raw,
+			&response[..SIGNATURE_RESPONSE_LEN_ML_DSA_65 - 1],
+			&account,
+			CTX,
+		)
+		.err()
+		.unwrap();
+		assert!(err.rescan_safe());
+		assert!(matches!(err, ResponseError::BadLength(_)));
+
+		// The validated 65 signature assembles into a signed V4 extrinsic
+		let client = OfflineClient::<ChainConfig>::new(
+			state.genesis_hash,
+			state.runtime_version,
+			state.metadata.clone(),
+		);
+		let mut partial = client.tx().create_v4_partial_offline(&call, build_params(&ctx)).unwrap();
+		let submittable = partial.sign_with_account_and_signature(&account, &validated);
+		let encoded = submittable.encoded().to_vec();
+		use codec::Decode;
+		let mut cursor = &encoded[..];
+		let _len = codec::Compact::<u32>::decode(&mut cursor).unwrap();
+		assert_eq!(cursor[0], 0b1000_0000 | 4, "signed V4 extrinsic marker");
 	}
 
 	/// The full simulator loop: request UR → sign → response UR → validate →
@@ -788,8 +902,7 @@ mod tests {
 		let mut partial = client.tx().create_v4_partial_offline(&call, build_params(&ctx)).unwrap();
 		assert_eq!(partial.signer_payload(), signable_payload(&raw));
 
-		let signature = DilithiumSignatureScheme::Dilithium87(validated);
-		let submittable = partial.sign_with_account_and_signature(&alice_account(), &signature);
+		let submittable = partial.sign_with_account_and_signature(&alice_account(), &validated);
 
 		// V4 signed extrinsic: version byte 0x84 after the compact length prefix
 		let encoded = submittable.encoded().to_vec();
