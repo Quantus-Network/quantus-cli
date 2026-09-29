@@ -197,8 +197,8 @@ impl NearRpcClient {
 		}
 	}
 
-	/// Submit and wait for finality. Returns the execution outcome; a
-	/// `status.Failure` in it is turned into an error.
+	/// Submit and wait for finality. Returns the execution outcome only if it
+	/// explicitly reports a finalized success; anything else is an error.
 	pub async fn send_tx(&self, signed: &SignedTransaction) -> Result<Value> {
 		let bytes = borsh::to_vec(signed)
 			.map_err(|e| QuantusError::Generic(format!("borsh-encoding transaction: {e}")))?;
@@ -209,10 +209,36 @@ impl NearRpcClient {
 			.call("send_tx", json!({ "signed_tx_base64": signed_tx_base64, "wait_until": "FINAL" }))
 			.await?;
 
-		if let Some(failure) = result.pointer("/status/Failure") {
-			return Err(QuantusError::Generic(format!("transaction failed on-chain: {failure}")));
-		}
+		check_send_tx_outcome(&result)?;
 		Ok(result)
+	}
+}
+
+/// Accept only a finalized, successful `send_tx` outcome. A missing result,
+/// missing/unfinished status, or non-FINAL execution status is an error even
+/// when the RPC call itself returned 200.
+fn check_send_tx_outcome(result: &Value) -> Result<()> {
+	if !result.is_object() {
+		return Err(QuantusError::Generic(
+			"send_tx returned no execution outcome; transaction state unknown".into(),
+		));
+	}
+	if let Some(failure) = result.pointer("/status/Failure") {
+		return Err(QuantusError::Generic(format!("transaction failed on-chain: {failure}")));
+	}
+	if result.pointer("/status/SuccessValue").is_none() {
+		let status = result.get("status").cloned().unwrap_or(Value::Null);
+		return Err(QuantusError::Generic(format!(
+			"transaction did not report a successful outcome (status: {status}); \
+			 check the explorer before retrying"
+		)));
+	}
+	match result.get("final_execution_status").and_then(|v| v.as_str()) {
+		Some("FINAL") => Ok(()),
+		other => Err(QuantusError::Generic(format!(
+			"transaction succeeded but is not finalized (final_execution_status: {other:?}); \
+			 check the explorer before retrying"
+		))),
 	}
 }
 
@@ -227,4 +253,66 @@ fn decode_block_hash(result: &Value) -> Result<[u8; 32]> {
 	bytes.as_slice().try_into().map_err(|_| {
 		QuantusError::Generic(format!("block_hash must be 32 bytes, got {}", bytes.len()))
 	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn send_tx_outcome_accepts_finalized_success() {
+		let result = json!({
+			"status": { "SuccessValue": "" },
+			"final_execution_status": "FINAL",
+			"transaction": { "hash": "abc" },
+		});
+		assert!(check_send_tx_outcome(&result).is_ok());
+	}
+
+	#[test]
+	fn send_tx_outcome_rejects_missing_result() {
+		let err = check_send_tx_outcome(&Value::Null).unwrap_err();
+		assert!(err.to_string().contains("no execution outcome"), "{err}");
+	}
+
+	#[test]
+	fn send_tx_outcome_rejects_failure() {
+		let result = json!({
+			"status": { "Failure": { "ActionError": { "index": 0 } } },
+			"final_execution_status": "FINAL",
+		});
+		let err = check_send_tx_outcome(&result).unwrap_err();
+		assert!(err.to_string().contains("failed on-chain"), "{err}");
+	}
+
+	#[test]
+	fn send_tx_outcome_rejects_missing_status() {
+		let result = json!({ "final_execution_status": "FINAL" });
+		let err = check_send_tx_outcome(&result).unwrap_err();
+		assert!(err.to_string().contains("did not report a successful outcome"), "{err}");
+	}
+
+	#[test]
+	fn send_tx_outcome_rejects_unstarted_status() {
+		let result = json!({ "status": "Started", "final_execution_status": "FINAL" });
+		let err = check_send_tx_outcome(&result).unwrap_err();
+		assert!(err.to_string().contains("did not report a successful outcome"), "{err}");
+	}
+
+	#[test]
+	fn send_tx_outcome_rejects_unfinalized_success() {
+		let result = json!({
+			"status": { "SuccessValue": "" },
+			"final_execution_status": "EXECUTED_OPTIMISTIC",
+		});
+		let err = check_send_tx_outcome(&result).unwrap_err();
+		assert!(err.to_string().contains("not finalized"), "{err}");
+	}
+
+	#[test]
+	fn send_tx_outcome_rejects_missing_final_execution_status() {
+		let result = json!({ "status": { "SuccessValue": "" } });
+		let err = check_send_tx_outcome(&result).unwrap_err();
+		assert!(err.to_string().contains("not finalized"), "{err}");
+	}
 }
