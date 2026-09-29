@@ -626,6 +626,18 @@ fn transfer_proposal_args(
 	})
 }
 
+/// The stored kind of a proposal, required by `act_proposal`: the current
+/// Sputnik contract re-checks it against the stored proposal
+/// (`ERR_WRONG_KIND`) so a vote can't be replayed onto a swapped proposal.
+fn proposal_kind(proposal: &serde_json::Value) -> Result<serde_json::Value> {
+	match proposal.get("kind") {
+		Some(kind) if !kind.is_null() => Ok(kind.clone()),
+		_ => Err(QuantusError::Generic(
+			"proposal has no kind field — cannot build a vote the DAO will accept".into(),
+		)),
+	}
+}
+
 /// The bond `add_proposal` must attach; the DAO rejects any other amount.
 fn policy_proposal_bond(policy: &serde_json::Value) -> Result<u128> {
 	policy
@@ -771,6 +783,14 @@ async fn handle_dao_vote(
 	let client = NearRpcClient::for_network(network, rpc_url)?;
 	client.ensure_ml_dsa_support().await?;
 
+	// act_proposal requires the stored kind and rejects mismatches, so read
+	// the proposal first — this also shows the voter what they are signing.
+	let proposal = client
+		.call_view_function(dao, "get_proposal", &serde_json::json!({ "id": id }))
+		.await?;
+	print_proposal(id, &proposal);
+	let kind = proposal_kind(&proposal)?;
+
 	log_print!(
 		"🗳️  Voting {} on proposal {id} of {} (member {}, ML-DSA-65 wallet '{wallet}')",
 		action.bright_yellow(),
@@ -778,7 +798,7 @@ async fn handle_dao_vote(
 		account.bright_cyan(),
 	);
 
-	let args = serde_json::json!({ "id": id, "action": action });
+	let args = serde_json::json!({ "id": id, "action": action, "proposal": kind });
 	submit_dao_call(
 		&client,
 		&keypair,
@@ -867,6 +887,20 @@ mod tests {
 				}
 			})
 		);
+	}
+
+	#[test]
+	fn vote_args_carry_the_stored_proposal_kind() {
+		let stored = serde_json::json!({
+			"status": "InProgress",
+			"kind": { "Transfer": { "token_id": "", "receiver_id": "bob.near", "amount": "1" } },
+		});
+		let kind = proposal_kind(&stored).unwrap();
+		let args = serde_json::json!({ "id": 7, "action": "VoteApprove", "proposal": kind });
+		assert_eq!(args["proposal"]["Transfer"]["receiver_id"], "bob.near");
+
+		assert!(proposal_kind(&serde_json::json!({ "status": "InProgress" })).is_err());
+		assert!(proposal_kind(&serde_json::json!({ "kind": null })).is_err());
 	}
 
 	#[test]
