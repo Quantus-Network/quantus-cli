@@ -9,6 +9,9 @@
 //!    its only key. The parent holds no key on it.
 //! 3. `near keys` — verify the account's key list from the chain.
 //! 4. `near send` — spend from the account, signed by the wallet.
+//! 5. `near dao ...` — act as a co-signer in a Sputnik DAO multisig (the contract behind Trezu):
+//!    propose transfers and vote, signed by the wallet. Sputnik authorizes by account id, so an
+//!    ML-DSA-65-controlled account is a full member with no DAO-side changes.
 //!
 //! ML-DSA-87 wallets are rejected: NEAR defined ML-DSA-65 only.
 
@@ -17,10 +20,10 @@ use crate::{
 	log_print, log_success, log_verbose,
 	near::{
 		protocol::{
-			validate_account_id, AccessKey, Action, AddKeyAction, PublicKey, Transaction,
-			TransferAction, NEAR_DECIMALS,
+			validate_account_id, AccessKey, Action, AddKeyAction, FunctionCallAction, PublicKey,
+			Transaction, TransferAction, NEAR_DECIMALS,
 		},
-		rpc::NearRpcClient,
+		rpc::{decode_success_value, NearRpcClient},
 		sign::{load_credentials, sign_transaction_ed25519, sign_transaction_ml_dsa_65},
 	},
 	wallet::QuantumKeyPair,
@@ -147,6 +150,123 @@ pub enum NearCommands {
 		#[arg(long)]
 		password_file: Option<String>,
 	},
+
+	/// Act in a Sputnik DAO multisig (the contract behind Trezu) as a member
+	/// account controlled by the wallet
+	Dao {
+		#[command(subcommand)]
+		command: DaoCommands,
+	},
+}
+
+/// Sputnik DAO subcommands
+#[derive(Subcommand, Debug)]
+pub enum DaoCommands {
+	/// Propose a NEAR transfer from the DAO treasury (calls `add_proposal`)
+	ProposeTransfer {
+		/// Sputnik DAO contract account id
+		#[arg(long)]
+		dao: String,
+
+		/// Member account the wallet controls
+		#[arg(long)]
+		account: String,
+
+		/// Quantus wallet holding the member account's ML-DSA-65 key
+		#[arg(long, short)]
+		wallet: String,
+
+		/// Transfer recipient
+		#[arg(long)]
+		receiver: String,
+
+		/// Amount in NEAR
+		#[arg(long)]
+		amount: String,
+
+		/// Proposal description shown to voters
+		#[arg(long, default_value = "Proposed via quantus-cli")]
+		description: String,
+
+		/// Proposal bond in NEAR (default: the exact bond from the DAO policy)
+		#[arg(long)]
+		bond: Option<String>,
+
+		/// NEAR network: testnet or mainnet
+		#[arg(long, default_value = "testnet")]
+		network: String,
+
+		/// Custom NEAR RPC URL (overrides --network)
+		#[arg(long)]
+		rpc_url: Option<String>,
+
+		/// Password for the wallet (unsupported on argv; use --password-file or prompt)
+		#[arg(short, long, hide = true)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Vote on a proposal (calls `act_proposal`; an approving vote that meets
+	/// the threshold also executes the proposal)
+	Vote {
+		/// Sputnik DAO contract account id
+		#[arg(long)]
+		dao: String,
+
+		/// Member account the wallet controls
+		#[arg(long)]
+		account: String,
+
+		/// Quantus wallet holding the member account's ML-DSA-65 key
+		#[arg(long, short)]
+		wallet: String,
+
+		/// Proposal id
+		#[arg(long)]
+		id: u64,
+
+		/// approve, reject, or remove
+		#[arg(long)]
+		vote: String,
+
+		/// NEAR network: testnet or mainnet
+		#[arg(long, default_value = "testnet")]
+		network: String,
+
+		/// Custom NEAR RPC URL (overrides --network)
+		#[arg(long)]
+		rpc_url: Option<String>,
+
+		/// Password for the wallet (unsupported on argv; use --password-file or prompt)
+		#[arg(short, long, hide = true)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
+	/// Show a proposal's state (view call, no wallet needed)
+	Proposal {
+		/// Sputnik DAO contract account id
+		#[arg(long)]
+		dao: String,
+
+		/// Proposal id
+		#[arg(long)]
+		id: u64,
+
+		/// NEAR network: testnet or mainnet
+		#[arg(long, default_value = "testnet")]
+		network: String,
+
+		/// Custom NEAR RPC URL (overrides --network)
+		#[arg(long)]
+		rpc_url: Option<String>,
+	},
 }
 
 pub async fn handle_near_command(command: NearCommands) -> Result<()> {
@@ -188,6 +308,64 @@ pub async fn handle_near_command(command: NearCommands) -> Result<()> {
 		} =>
 			handle_send(&wallet, &account, &to, &amount, &network, rpc_url, password, password_file)
 				.await,
+		NearCommands::Dao { command } => handle_dao_command(command).await,
+	}
+}
+
+async fn handle_dao_command(command: DaoCommands) -> Result<()> {
+	match command {
+		DaoCommands::ProposeTransfer {
+			dao,
+			account,
+			wallet,
+			receiver,
+			amount,
+			description,
+			bond,
+			network,
+			rpc_url,
+			password,
+			password_file,
+		} =>
+			handle_dao_propose_transfer(
+				&dao,
+				&account,
+				&wallet,
+				&receiver,
+				&amount,
+				&description,
+				bond,
+				&network,
+				rpc_url,
+				password,
+				password_file,
+			)
+			.await,
+		DaoCommands::Vote {
+			dao,
+			account,
+			wallet,
+			id,
+			vote,
+			network,
+			rpc_url,
+			password,
+			password_file,
+		} =>
+			handle_dao_vote(
+				&dao,
+				&account,
+				&wallet,
+				id,
+				&vote,
+				&network,
+				rpc_url,
+				password,
+				password_file,
+			)
+			.await,
+		DaoCommands::Proposal { dao, id, network, rpc_url } =>
+			handle_dao_proposal(&dao, id, &network, rpc_url).await,
 	}
 }
 
@@ -410,4 +588,293 @@ async fn handle_send(
 	report_outcome(network, &outcome);
 	log_success!("✅ Transfer finalized");
 	Ok(())
+}
+
+const TGAS: u64 = 1_000_000_000_000;
+const ADD_PROPOSAL_GAS: u64 = 100 * TGAS;
+/// A threshold-meeting approval executes the proposal in the same call.
+const ACT_PROPOSAL_GAS: u64 = 300 * TGAS;
+
+fn vote_action(vote: &str) -> Result<&'static str> {
+	match vote {
+		"approve" => Ok("VoteApprove"),
+		"reject" => Ok("VoteReject"),
+		"remove" => Ok("VoteRemove"),
+		other => Err(QuantusError::Generic(format!(
+			"unknown vote '{other}' — use approve, reject, or remove"
+		))),
+	}
+}
+
+/// `add_proposal` args for a base-NEAR transfer (`token_id: ""`).
+fn transfer_proposal_args(
+	description: &str,
+	receiver: &str,
+	amount_yocto: u128,
+) -> serde_json::Value {
+	serde_json::json!({
+		"proposal": {
+			"description": description,
+			"kind": {
+				"Transfer": {
+					"token_id": "",
+					"receiver_id": receiver,
+					"amount": amount_yocto.to_string(),
+				}
+			}
+		}
+	})
+}
+
+/// The bond `add_proposal` must attach; the DAO rejects any other amount.
+fn policy_proposal_bond(policy: &serde_json::Value) -> Result<u128> {
+	policy
+		.get("proposal_bond")
+		.and_then(|v| v.as_str())
+		.and_then(|s| s.parse().ok())
+		.ok_or_else(|| {
+			QuantusError::Generic(
+				"DAO policy has no parseable proposal_bond — pass --bond explicitly".into(),
+			)
+		})
+}
+
+/// Sign a single function call on the DAO with the member account's
+/// ML-DSA-65 key and submit it.
+#[allow(clippy::too_many_arguments)]
+async fn submit_dao_call(
+	client: &NearRpcClient,
+	keypair: &QuantumKeyPair,
+	public: PublicKey,
+	account: &str,
+	dao: &str,
+	method_name: &str,
+	args: serde_json::Value,
+	gas: u64,
+	deposit: u128,
+	network: &str,
+) -> Result<serde_json::Value> {
+	let full_key = public.to_near_string();
+	let access_key = client.view_access_key(account, &full_key).await?;
+	log_verbose!("access key nonce: {}", access_key.nonce);
+
+	let tx = Transaction {
+		signer_id: account.to_string(),
+		public_key: public,
+		nonce: access_key.nonce + 1,
+		receiver_id: dao.to_string(),
+		block_hash: access_key.block_hash,
+		actions: vec![Action::FunctionCall(FunctionCallAction {
+			method_name: method_name.to_string(),
+			args: args.to_string().into_bytes(),
+			gas,
+			deposit,
+		})],
+	};
+
+	let pair = keypair.to_dilithium65_pair()?;
+	let signed = sign_transaction_ml_dsa_65(tx, &pair)?;
+	let outcome = client.send_tx(&signed).await?;
+	report_outcome(network, &outcome);
+	Ok(outcome)
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn handle_dao_propose_transfer(
+	dao: &str,
+	account: &str,
+	wallet: &str,
+	receiver: &str,
+	amount: &str,
+	description: &str,
+	bond: Option<String>,
+	network: &str,
+	rpc_url: Option<String>,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> Result<()> {
+	validate_account_id(dao)?;
+	validate_account_id(account)?;
+	validate_account_id(receiver)?;
+	let (keypair, public) = load_ml_dsa_65_wallet(wallet, password, password_file)?;
+	let amount_yocto = crate::cli::send::parse_amount_with_decimals(amount, NEAR_DECIMALS)?;
+
+	let client = NearRpcClient::for_network(network, rpc_url)?;
+	client.ensure_ml_dsa_support().await?;
+
+	let bond_yocto = match bond {
+		Some(bond) => crate::cli::send::parse_amount_with_decimals(&bond, NEAR_DECIMALS)?,
+		None => {
+			let policy =
+				client.call_view_function(dao, "get_policy", &serde_json::json!({})).await?;
+			policy_proposal_bond(&policy)?
+		},
+	};
+
+	log_print!(
+		"🏛️  Proposing on {}: transfer {} NEAR → {} (bond {} NEAR, member {}, ML-DSA-65 wallet \
+		 '{wallet}')",
+		dao.bright_cyan(),
+		crate::cli::send::format_balance(amount_yocto, NEAR_DECIMALS).bright_yellow(),
+		receiver.bright_cyan(),
+		crate::cli::send::format_balance(bond_yocto, NEAR_DECIMALS),
+		account.bright_cyan(),
+	);
+
+	let args = transfer_proposal_args(description, receiver, amount_yocto);
+	let outcome = submit_dao_call(
+		&client,
+		&keypair,
+		public,
+		account,
+		dao,
+		"add_proposal",
+		args,
+		ADD_PROPOSAL_GAS,
+		bond_yocto,
+		network,
+	)
+	.await?;
+
+	match decode_success_value(&outcome).and_then(|v| v.as_u64()) {
+		Some(id) => {
+			log_success!("✅ Proposal {id} created on {dao}");
+			log_print!(
+				"💡 Members vote with: quantus near dao vote --dao {dao} --id {id} --vote approve \
+				 --account <member> --wallet <wallet>"
+			);
+		},
+		None => log_success!(
+			"✅ Proposal created on {dao} (id not returned; check with quantus near dao proposal)"
+		),
+	}
+	Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn handle_dao_vote(
+	dao: &str,
+	account: &str,
+	wallet: &str,
+	id: u64,
+	vote: &str,
+	network: &str,
+	rpc_url: Option<String>,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> Result<()> {
+	validate_account_id(dao)?;
+	validate_account_id(account)?;
+	let action = vote_action(vote)?;
+	let (keypair, public) = load_ml_dsa_65_wallet(wallet, password, password_file)?;
+
+	let client = NearRpcClient::for_network(network, rpc_url)?;
+	client.ensure_ml_dsa_support().await?;
+
+	log_print!(
+		"🗳️  Voting {} on proposal {id} of {} (member {}, ML-DSA-65 wallet '{wallet}')",
+		action.bright_yellow(),
+		dao.bright_cyan(),
+		account.bright_cyan(),
+	);
+
+	let args = serde_json::json!({ "id": id, "action": action });
+	submit_dao_call(
+		&client,
+		&keypair,
+		public,
+		account,
+		dao,
+		"act_proposal",
+		args,
+		ACT_PROPOSAL_GAS,
+		0,
+		network,
+	)
+	.await?;
+	log_success!("✅ Vote recorded");
+
+	// Removed proposals disappear, so a failed follow-up view is not an error.
+	match client
+		.call_view_function(dao, "get_proposal", &serde_json::json!({ "id": id }))
+		.await
+	{
+		Ok(proposal) => print_proposal(id, &proposal),
+		Err(e) => log_verbose!("proposal state after vote: {e}"),
+	}
+	Ok(())
+}
+
+async fn handle_dao_proposal(
+	dao: &str,
+	id: u64,
+	network: &str,
+	rpc_url: Option<String>,
+) -> Result<()> {
+	validate_account_id(dao)?;
+	let client = NearRpcClient::for_network(network, rpc_url)?;
+	let proposal = client
+		.call_view_function(dao, "get_proposal", &serde_json::json!({ "id": id }))
+		.await?;
+	print_proposal(id, &proposal);
+	Ok(())
+}
+
+fn print_proposal(id: u64, proposal: &serde_json::Value) {
+	let field = |key: &str| proposal.get(key).and_then(|v| v.as_str()).unwrap_or("?").to_string();
+	log_print!("📋 Proposal {id}");
+	log_print!("   Status:      {}", field("status").bright_yellow());
+	log_print!("   Proposer:    {}", field("proposer"));
+	log_print!("   Description: {}", field("description"));
+	if let Some(kind) = proposal.get("kind") {
+		log_print!("   Kind:        {kind}");
+	}
+	if let Some(votes) = proposal.get("votes").and_then(|v| v.as_object()) {
+		log_print!("   Votes:");
+		for (member, vote) in votes {
+			log_print!("     {member}: {vote}");
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn vote_actions_map_to_sputnik_names() {
+		assert_eq!(vote_action("approve").unwrap(), "VoteApprove");
+		assert_eq!(vote_action("reject").unwrap(), "VoteReject");
+		assert_eq!(vote_action("remove").unwrap(), "VoteRemove");
+		assert!(vote_action("yes").is_err());
+	}
+
+	#[test]
+	fn transfer_proposal_args_match_sputnik_schema() {
+		let args = transfer_proposal_args("payroll", "bob.near", 1_500_000_000_000_000_000_000_000);
+		assert_eq!(
+			args,
+			serde_json::json!({
+				"proposal": {
+					"description": "payroll",
+					"kind": {
+						"Transfer": {
+							"token_id": "",
+							"receiver_id": "bob.near",
+							"amount": "1500000000000000000000000",
+						}
+					}
+				}
+			})
+		);
+	}
+
+	#[test]
+	fn proposal_bond_comes_from_policy_as_yocto_string() {
+		let policy = serde_json::json!({ "proposal_bond": "100000000000000000000000" });
+		assert_eq!(policy_proposal_bond(&policy).unwrap(), 100_000_000_000_000_000_000_000);
+
+		assert!(policy_proposal_bond(&serde_json::json!({})).is_err());
+		assert!(policy_proposal_bond(&serde_json::json!({ "proposal_bond": 5 })).is_err());
+	}
 }
