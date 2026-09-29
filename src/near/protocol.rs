@@ -150,7 +150,6 @@ pub enum Action {
 	CreateAccount,
 	#[allow(dead_code)]
 	DeployContract(DeployContractAction),
-	#[allow(dead_code)]
 	FunctionCall(FunctionCallAction),
 	Transfer(TransferAction),
 	#[allow(dead_code)]
@@ -290,6 +289,28 @@ mod tests {
 			hex::encode(crate::near::sign::transaction_hash(&tx).unwrap()),
 			"c2a1f5de00a9538f35cfc24316fc8748315b837299153eafc47abde7c187b92e"
 		);
+	}
+
+	#[test]
+	fn function_call_action_borsh_layout() {
+		let args = br#"{"id":0,"action":"VoteApprove"}"#.to_vec();
+		let action = Action::FunctionCall(FunctionCallAction {
+			method_name: "act_proposal".to_string(),
+			args: args.clone(),
+			gas: 300_000_000_000_000,
+			deposit: 1,
+		});
+
+		let mut expected: Vec<u8> = Vec::new();
+		expected.push(2); // Action tag: FunctionCall
+		expected.extend(12u32.to_le_bytes()); // method_name length
+		expected.extend(b"act_proposal");
+		expected.extend((args.len() as u32).to_le_bytes());
+		expected.extend(&args);
+		expected.extend(300_000_000_000_000u64.to_le_bytes()); // gas
+		expected.extend(1u128.to_le_bytes()); // deposit
+
+		assert_eq!(borsh::to_vec(&action).unwrap(), expected);
 	}
 
 	#[test]
