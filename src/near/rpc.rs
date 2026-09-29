@@ -197,6 +197,36 @@ impl NearRpcClient {
 		}
 	}
 
+	/// Call a contract view method with JSON args and decode its JSON return
+	/// value.
+	pub async fn call_view_function(
+		&self,
+		account_id: &str,
+		method_name: &str,
+		args: &Value,
+	) -> Result<Value> {
+		use base64::Engine as _;
+		let args_base64 = base64::engine::general_purpose::STANDARD.encode(args.to_string());
+		let result = self
+			.call(
+				"query",
+				json!({
+					"request_type": "call_function",
+					"finality": "final",
+					"account_id": account_id,
+					"method_name": method_name,
+					"args_base64": args_base64,
+				}),
+			)
+			.await?;
+		if let Some(error) = result.get("error").and_then(|e| e.as_str()) {
+			return Err(QuantusError::Generic(format!(
+				"view call {account_id}.{method_name}: {error}"
+			)));
+		}
+		parse_call_function_result(&result, account_id, method_name)
+	}
+
 	/// Submit and wait for finality. Returns the execution outcome only if it
 	/// explicitly reports a finalized success; anything else is an error.
 	pub async fn send_tx(&self, signed: &SignedTransaction) -> Result<Value> {
@@ -240,6 +270,48 @@ fn check_send_tx_outcome(result: &Value) -> Result<()> {
 			 check the explorer before retrying"
 		))),
 	}
+}
+
+/// A `call_function` query returns the method's JSON return value as an
+/// array of byte numbers.
+fn parse_call_function_result(
+	result: &Value,
+	account_id: &str,
+	method_name: &str,
+) -> Result<Value> {
+	let bytes = result
+		.get("result")
+		.and_then(|r| r.as_array())
+		.ok_or_else(|| {
+			QuantusError::Generic(format!(
+				"view call {account_id}.{method_name} returned no result bytes"
+			))
+		})?
+		.iter()
+		.map(|v| v.as_u64().and_then(|n| u8::try_from(n).ok()))
+		.collect::<Option<Vec<u8>>>()
+		.ok_or_else(|| {
+			QuantusError::Generic(format!(
+				"view call {account_id}.{method_name} result bytes are malformed"
+			))
+		})?;
+	serde_json::from_slice(&bytes).map_err(|e| {
+		QuantusError::Generic(format!(
+			"view call {account_id}.{method_name} returned non-JSON: {e}"
+		))
+	})
+}
+
+/// Decode a finalized outcome's base64 `SuccessValue` as JSON (e.g. the
+/// proposal id `add_proposal` returns). `None` when empty or not JSON.
+pub fn decode_success_value(outcome: &Value) -> Option<Value> {
+	use base64::Engine as _;
+	let b64 = outcome.pointer("/status/SuccessValue")?.as_str()?;
+	let bytes = base64::engine::general_purpose::STANDARD.decode(b64).ok()?;
+	if bytes.is_empty() {
+		return None;
+	}
+	serde_json::from_slice(&bytes).ok()
 }
 
 fn decode_block_hash(result: &Value) -> Result<[u8; 32]> {
@@ -314,5 +386,36 @@ mod tests {
 		let result = json!({ "status": { "SuccessValue": "" } });
 		let err = check_send_tx_outcome(&result).unwrap_err();
 		assert!(err.to_string().contains("not finalized"), "{err}");
+	}
+
+	#[test]
+	fn call_function_result_decodes_json_bytes() {
+		let payload = br#"{"proposal_bond":"100000000000000000000000"}"#;
+		let bytes: Vec<Value> = payload.iter().map(|b| json!(b)).collect();
+		let result = json!({ "result": bytes, "block_height": 1 });
+		let value = parse_call_function_result(&result, "dao.near", "get_policy").unwrap();
+		assert_eq!(value["proposal_bond"], "100000000000000000000000");
+	}
+
+	#[test]
+	fn call_function_result_rejects_missing_or_malformed_bytes() {
+		let err = parse_call_function_result(&json!({}), "dao.near", "get_policy").unwrap_err();
+		assert!(err.to_string().contains("no result bytes"), "{err}");
+
+		let result = json!({ "result": [300, -1] });
+		let err = parse_call_function_result(&result, "dao.near", "get_policy").unwrap_err();
+		assert!(err.to_string().contains("malformed"), "{err}");
+	}
+
+	#[test]
+	fn success_value_decodes_returned_json() {
+		// base64("0") — add_proposal returning proposal id 0.
+		let outcome = json!({ "status": { "SuccessValue": "MA==" } });
+		assert_eq!(decode_success_value(&outcome), Some(json!(0)));
+
+		let empty = json!({ "status": { "SuccessValue": "" } });
+		assert_eq!(decode_success_value(&empty), None);
+
+		assert_eq!(decode_success_value(&json!({ "status": "Started" })), None);
 	}
 }
