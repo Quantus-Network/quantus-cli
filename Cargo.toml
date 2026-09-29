@@ -82,6 +82,14 @@ nam-tiny-hderive = { version = "=0.3.1-nam.1", default-features = false }
 blake3 = "1.8"
 reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
+# NEAR integration: borsh transaction encoding, base58 key text forms,
+# SHA3-256 access-key handles, ed25519 parent-account signing, base64 tx submit.
+base64 = "0.22"
+borsh = { version = "1.5", features = ["derive"] }
+bs58 = "0.5"
+ed25519-dalek = "2"
+sha3 = "0.10"
+
 # Self-update: download and replace the running binary from GitHub releases.
 # 1.0.0-rc.x is required for quick-xml >= 0.41 (RUSTSEC-2026-0194 / 0195); stable
 # 0.44 still pins quick-xml ^0.38. Pulls reqwest 0.13 alongside our 0.12.
