@@ -508,8 +508,8 @@ claims are marked paid, and a claim is only marked after its transfer
 succeeded. If a `mark-paid` call fails after payment, the command prints the
 affected addresses loudly and exits non-zero — mark them manually before
 re-running, or those rows would be paid twice. If a batch fails, everything
-already paid is already marked, but the failed batch may still land — check on
-chain before re-running, or it will be paid twice.
+already paid is already marked, but the failed batch's transaction may still go
+through, so check the chain before re-running or those rows will be paid twice.
 After all batches land, the command re-fetches `/unpaid` and verifies none of
 the paid addresses are still listed, failing loudly if any are. Like
 passwords, the bearer token is never accepted as a command-line value.
