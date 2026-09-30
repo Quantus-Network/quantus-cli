@@ -791,7 +791,8 @@ async fn handle_pay(
 		.map_err(|e| {
 			QuantusError::Generic(format!(
 				"batch {}/{batches} failed ({e}); {paid_rows} row(s) from earlier batches were \
-				 paid and marked, nothing from this batch was paid — re-run to continue",
+				 paid and marked; this batch may still land — check on chain before re-running \
+				 or it will be paid twice",
 				index + 1
 			))
 		})?;
