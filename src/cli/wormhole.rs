@@ -1465,7 +1465,20 @@ fn show_wormhole_address(secret_file: String) -> crate::error::Result<()> {
 	Ok(())
 }
 
-/// Fetch the latest (best) block as a fully materialised subxt `Block`.
+/// Fetch the latest finalized block as a fully materialised subxt `Block`.
+///
+/// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
+/// of the SDK surface. Network/decoding failures are wrapped in
+/// [`crate::error::QuantusError::NetworkError`].
+#[allow(dead_code)] // SDK re-export; CLI proofs use `wormhole_tip_block`.
+pub async fn at_finalized_block(
+	quantus_client: &QuantusClient,
+) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
+	head_or_finalized_block(quantus_client, true).await
+}
+
+/// Fetch the latest (best) block as a fully materialised subxt `Block`, whatever
+/// `--finalized` installed.
 ///
 /// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
 /// of the SDK surface. Network/decoding failures are wrapped in
@@ -1474,13 +1487,17 @@ fn show_wormhole_address(secret_file: String) -> crate::error::Result<()> {
 pub async fn at_best_block(
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
-	let best_block = quantus_client.get_latest_block().await?;
-	let block = quantus_client.client().blocks().at(best_block).await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!(
-			"Failed to fetch best block {best_block:?}: {e:?}"
-		))
-	})?;
-	Ok(block)
+	head_or_finalized_block(quantus_client, false).await
+}
+
+async fn head_or_finalized_block(
+	quantus_client: &QuantusClient,
+	finalized: bool,
+) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
+	let hash = quantus_client.head_or_finalized(finalized).await?;
+	quantus_client.client().blocks().at(hash).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to fetch block {hash:?}: {e:?}"))
+	})
 }
 
 /// Load leaf-circuit common data for deserializing leaf proofs from `bins_dir`.
@@ -4898,6 +4915,17 @@ mod tests {
 		let finalized = ExecutionMode { finalized: true, wait_for_transaction: false };
 		assert_eq!(wormhole_tip_block(&client, finalized).await.expect("tip"), FINALIZED);
 		assert_eq!(wormhole_tip_block(&client, ExecutionMode::default()).await.expect("tip"), HEAD);
+	}
+
+	/// SDK callers pick the block by name, so neither helper follows the installed switch.
+	#[tokio::test]
+	async fn sdk_block_helpers_fetch_the_block_they_name() {
+		use crate::chain::client::tests::{mock_node, FINALIZED, HEAD};
+
+		let (url, _, _node) = mock_node().await;
+		let client = QuantusClient::new(&url).await.expect("connect");
+		assert_eq!(at_finalized_block(&client).await.expect("finalized").hash(), FINALIZED);
+		assert_eq!(at_best_block(&client).await.expect("best").hash(), HEAD);
 	}
 
 	#[test]

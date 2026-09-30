@@ -419,7 +419,7 @@ where
 {
 	if let Some(manual_nonce) = nonce {
 		log_verbose!("🔢 Using manual nonce: {}", manual_nonce);
-		crate::cli::common::submit_transaction_with_nonce(
+		crate::cli::common::submit_transaction_with_nonce_and_inclusion_block(
 			quantus_client,
 			signer,
 			transfer_call,

@@ -713,6 +713,31 @@ pub async fn submit_transaction_with_nonce<Call>(
 	tip: Option<u128>,
 	nonce: u32,
 	execution_mode: ExecutionMode,
+) -> crate::error::Result<subxt::utils::H256>
+where
+	Call: subxt::tx::Payload,
+{
+	let (tx_hash, _included_in) = submit_transaction_with_nonce_and_inclusion_block(
+		quantus_client,
+		signer,
+		call,
+		tip,
+		nonce,
+		execution_mode,
+	)
+	.await?;
+	Ok(tx_hash)
+}
+
+/// Like [`submit_transaction_with_nonce`], but also returns the inclusion block, as
+/// [`submit_transaction_with_inclusion_block`] does.
+pub async fn submit_transaction_with_nonce_and_inclusion_block<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	signer: &crate::wallet::WalletSigner,
+	call: Call,
+	tip: Option<u128>,
+	nonce: u32,
+	execution_mode: ExecutionMode,
 ) -> crate::error::Result<(subxt::utils::H256, Option<subxt::utils::H256>)>
 where
 	Call: subxt::tx::Payload,

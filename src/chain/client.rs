@@ -560,6 +560,17 @@ pub(crate) mod tests {
 			})
 			.expect("register");
 		module
+			.register_method("chain_getHeader", |_, _, _| {
+				Ok::<_, ErrorObjectOwned>(json!({
+					"parentHash": GENESIS,
+					"number": "0x1",
+					"stateRoot": GENESIS,
+					"extrinsicsRoot": GENESIS,
+					"digest": { "logs": [] },
+				}))
+			})
+			.expect("register");
+		module
 			.register_method("state_getRuntimeVersion", |params, _, _| {
 				let at: Option<H256> = params.sequence().optional_next()?;
 				let version = runtime_at(at.unwrap_or(HEAD));
