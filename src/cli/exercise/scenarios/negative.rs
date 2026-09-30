@@ -99,7 +99,7 @@ async fn stale_nonce(ctx: &mut ExerciseCtx) -> Result<String> {
 	)
 	.await
 	{
-		Ok(hash) => Err(QuantusError::Generic(format!(
+		Ok((hash, _)) => Err(QuantusError::Generic(format!(
 			"stale-nonce transaction unexpectedly accepted ({hash:?})"
 		))),
 		Err(e) => {

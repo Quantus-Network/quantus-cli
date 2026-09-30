@@ -181,16 +181,21 @@ pub async fn get_detailed_chain_params(
 	let genesis_hash = quantus_client.get_genesis_hash().await?;
 	log_print!("   🧬 Genesis hash: {}", genesis_hash.to_string().bright_cyan());
 
-	// Get runtime version
-	let (spec_version, transaction_version) = quantus_client.get_runtime_version().await?;
-	log_print!("   📋 Spec version: {}", spec_version.to_string().bright_green());
-	log_print!("   🔄 Transaction version: {}", transaction_version.to_string().bright_yellow());
+	// Runtime and header both come from the block reads are taken at, so `--finalized` moves
+	// them together.
+	let at = quantus_client.get_latest_block().await?;
+	let (runtime_info, version) = quantus_client.get_runtime_version_at(at).await?;
+	log_print!("   📋 Spec version: {}", version.spec_version.to_string().bright_green());
+	log_print!(
+		"   🔄 Transaction version: {}",
+		version.transaction_version.to_string().bright_yellow()
+	);
 
 	// Get current block info
 	use jsonrpsee::core::client::ClientT;
 	let current_block: serde_json::Value = quantus_client
 		.rpc_client()
-		.request::<serde_json::Value, [(); 0]>("chain_getHeader", [])
+		.request::<serde_json::Value, [subxt::utils::H256; 1]>("chain_getHeader", [at])
 		.await
 		.map_err(|e| {
 			crate::error::QuantusError::NetworkError(format!(
@@ -213,15 +218,6 @@ pub async fn get_detailed_chain_params(
 			);
 		}
 	}
-
-	// Get full runtime info
-	let runtime_info: serde_json::Value = quantus_client
-		.rpc_client()
-		.request::<serde_json::Value, [(); 0]>("state_getRuntimeVersion", [])
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Failed to fetch runtime info: {e:?}"))
-		})?;
 
 	if show_raw_data {
 		log_verbose!("📋 Full runtime info: {:?}", runtime_info);

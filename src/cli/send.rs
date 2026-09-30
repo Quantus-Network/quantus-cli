@@ -413,7 +413,7 @@ async fn submit_transfer_call<Call>(
 	submit_tip: Option<u128>,
 	nonce: Option<u32>,
 	execution_mode: crate::cli::common::ExecutionMode,
-) -> Result<subxt::utils::H256>
+) -> Result<(subxt::utils::H256, Option<subxt::utils::H256>)>
 where
 	Call: subxt::tx::Payload,
 {
@@ -429,7 +429,7 @@ where
 		)
 		.await
 	} else {
-		crate::cli::common::submit_transaction(
+		crate::cli::common::submit_transaction_with_inclusion_block(
 			quantus_client,
 			signer,
 			transfer_call,
@@ -482,7 +482,7 @@ pub async fn transfer_with_nonce(
 	let submit_tip = positive_tip_amount(tip);
 
 	// Submit the transaction with optional manual nonce
-	let tx_hash = submit_transfer_call(
+	let (tx_hash, _) = submit_transfer_call(
 		quantus_client,
 		signer,
 		transfer_call,
@@ -684,7 +684,7 @@ pub async fn handle_send_command(
 	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
 
 	// Submit transaction
-	let tx_hash = submit_transfer_call(
+	let (tx_hash, included_in) = submit_transfer_call(
 		&quantus_client,
 		&signer,
 		transfer_call,
@@ -694,24 +694,15 @@ pub async fn handle_send_command(
 	)
 	.await?;
 
-	print_send_result(
-		&quantus_client,
-		&from_account_id,
-		balance,
-		amount.unwrap_or(balance),
-		tx_hash,
-		execution_mode,
-	)
-	.await
+	print_send_result(&quantus_client, &from_account_id, tx_hash, included_in, execution_mode).await
 }
 
 /// Print the post-submission summary (status, new balance, fee).
 async fn print_send_result(
 	quantus_client: &QuantusClient,
 	from_account_id: &str,
-	balance_before: u128,
-	amount: u128,
 	tx_hash: subxt::utils::H256,
+	included_in: Option<subxt::utils::H256>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	let transaction_stage = execution_mode.transaction_stage();
@@ -722,13 +713,13 @@ async fn print_send_result(
 		tx_hash
 	);
 
-	if !execution_mode.should_watch_transaction() {
+	let Some(block_hash) = included_in else {
 		log_print!(
 			"ℹ️  The transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized to wait before returning.",
 			transaction_stage.success_detail()
 		);
 		return Ok(());
-	}
+	};
 
 	log_success!(
 		"🎉 {} Transaction {}.",
@@ -740,10 +731,23 @@ async fn print_send_result(
 	let new_balance = get_balance(quantus_client, from_account_id).await?;
 	let formatted_new_balance = format_balance_with_symbol(quantus_client, new_balance).await?;
 
-	// Calculate and display transaction fee in verbose mode
-	let fee_paid = balance_before.saturating_sub(new_balance).saturating_sub(amount);
-	if fee_paid > 0 {
-		let formatted_fee = format_balance_with_symbol(quantus_client, fee_paid).await?;
+	// What the chain took, tip included, read from the included transaction: a balance delta
+	// cannot separate it from what `--all` moved. Not `TransactionFeePaid`, which omits the
+	// refund an account reaped by `--all` forfeits.
+	if crate::log::is_verbose() {
+		use quantus_subxt::api::mining_rewards::events::FeesCollected;
+		let collected = crate::cli::common::find_extrinsic_event::<FeesCollected>(
+			quantus_client.client(),
+			&block_hash,
+			&tx_hash,
+		)
+		.await?
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Transaction {tx_hash:?} emitted no MiningRewards::FeesCollected event"
+			))
+		})?;
+		let formatted_fee = format_balance_with_symbol(quantus_client, collected.amount).await?;
 		log_verbose!("💸 Transaction fee: {}", formatted_fee.bright_cyan());
 	}
 

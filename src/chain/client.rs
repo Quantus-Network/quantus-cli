@@ -261,14 +261,24 @@ impl QuantusClient {
 		&self.rpc_client
 	}
 
-	/// The block every read in the CLI is taken at.
-	///
-	/// The head by default; the finalized block under `--finalized`. subxt's own default
-	/// is the finalized block, which on this chain is ~100 blocks (~20 minutes) behind —
-	/// stale state, and after a runtime upgrade the previous runtime's state entirely.
+	/// The block every read in the CLI is taken at: [`Self::head_or_finalized`] under the
+	/// `--finalized` switch `main` installs.
 	pub async fn get_latest_block(&self) -> crate::error::Result<subxt::utils::H256> {
-		if crate::cli::common::ExecutionMode::reads_at_finalized() {
-			log_verbose!("🔍 Fetching finalized block hash via RPC (--finalized)...");
+		self.head_or_finalized(crate::cli::common::ExecutionMode::reads_at_finalized())
+			.await
+	}
+
+	/// The finalized block when `finalized`, the head otherwise.
+	///
+	/// subxt's own default is the finalized block, which on this chain is ~100 blocks (~20
+	/// minutes) behind — stale state, and after a runtime upgrade the previous runtime's state
+	/// entirely. Callers whose reads must match the [`ExecutionMode`] they were handed pass its
+	/// `finalized` here: library callers never install the switch.
+	///
+	/// [`ExecutionMode`]: crate::cli::common::ExecutionMode
+	pub async fn head_or_finalized(&self, finalized: bool) -> crate::error::Result<H256> {
+		if finalized {
+			log_verbose!("🔍 Fetching finalized block hash via RPC...");
 			let hash = finalized_block_hash(&self.rpc_client).await?;
 			log_verbose!("📦 Finalized block hash: {:?}", hash);
 			return Ok(hash);
@@ -298,8 +308,9 @@ impl QuantusClient {
 	) -> crate::error::Result<u64> {
 		log_verbose!("🔍 Fetching account nonce from best block via RPC...");
 
-		// Get latest block hash first
-		let latest_block_hash = self.get_latest_block().await?;
+		// The head even under `--finalized`: signing with the finalized block's nonce makes the
+		// extrinsic outdated whenever the account has anything unfinalized.
+		let latest_block_hash = self.head_or_finalized(false).await?;
 		log_verbose!("📦 Latest block hash for nonce query: {:?}", latest_block_hash);
 
 		// Convert sp_core::AccountId32 to subxt::utils::AccountId32
@@ -352,6 +363,14 @@ impl QuantusClient {
 			version.transaction_version
 		);
 		Ok((version.spec_version, version.transaction_version))
+	}
+
+	/// `state_getRuntimeVersion` at `at`: the raw JSON and the parsed pair.
+	pub async fn get_runtime_version_at(
+		&self,
+		at: H256,
+	) -> crate::error::Result<(serde_json::Value, RuntimeVersion)> {
+		fetch_runtime_version(&self.rpc_client, Some(at)).await
 	}
 
 	/// Get runtime hash using RPC call (if available)
@@ -495,7 +514,7 @@ impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 	use codec::Encode;
 	use jsonrpsee::{
@@ -510,8 +529,8 @@ mod tests {
 	const NEW_RUNTIME: RuntimeVersion =
 		RuntimeVersion { spec_version: 148, transaction_version: 6 };
 	const GENESIS: H256 = H256([0x01; 32]);
-	const FINALIZED: H256 = H256([0x44; 32]);
-	const HEAD: H256 = H256([0x48; 32]);
+	pub(crate) const FINALIZED: H256 = H256([0x44; 32]);
+	pub(crate) const HEAD: H256 = H256([0x48; 32]);
 
 	fn runtime_at(hash: H256) -> RuntimeVersion {
 		if hash == HEAD {
@@ -524,7 +543,7 @@ mod tests {
 	/// A node caught mid-upgrade the way Heisenberg is for ~20 minutes after every enactment:
 	/// the head runs the new runtime, the finalized block still runs the old one. Records the
 	/// block named by every metadata request.
-	async fn mock_node() -> (String, Arc<Mutex<Vec<H256>>>, ServerHandle) {
+	pub(crate) async fn mock_node() -> (String, Arc<Mutex<Vec<H256>>>, ServerHandle) {
 		let metadata_requests = Arc::new(Mutex::new(Vec::new()));
 		let server = Server::builder().build("127.0.0.1:0").await.expect("bind mock node");
 		let url = format!("ws://{}", server.local_addr().expect("mock node address"));
