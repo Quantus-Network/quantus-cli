@@ -55,6 +55,7 @@ impl SubsquidClient {
 	/// * `url` - The GraphQL endpoint URL (e.g., "https://indexer.quantus.com/graphql")
 	pub fn new(url: String) -> Result<Self> {
 		let http_client = Client::builder()
+			.timeout(std::time::Duration::from_secs(30))
 			.build()
 			.map_err(|e| QuantusError::Generic(format!("Failed to create HTTP client: {}", e)))?;
 
@@ -106,7 +107,7 @@ impl SubsquidClient {
 		// Hasura table query with an aggregate count so callers can detect when a
 		// block range needs further narrowing or offset-based pagination.
 		let query = r#"
-            query TransfersByHashPrefix($where: transfer_bool_exp!, $limit: Int!, $offset: Int!) {
+            query TransfersByHashPrefix($where: transfer_bool_exp!, $limit: Int!,$offset: Int!) {
                 transfers: transfer(
                     where: $where
                     limit: $limit
