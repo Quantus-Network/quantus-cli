@@ -12,13 +12,17 @@
 //! 5. `near dao ...` — act as a co-signer in a Sputnik DAO multisig (the contract behind Trezu):
 //!    propose transfers and vote, signed by the wallet. Sputnik authorizes by account id, so an
 //!    ML-DSA-65-controlled account is a full member with no DAO-side changes.
+//! 6. `near sign-cold` — sign a transaction prepared by near-cli-rs with a cold (air-gapped) wallet
+//!    over QR codes, for any contract call the hot commands do not cover.
 //!
 //! ML-DSA-87 wallets are rejected: NEAR defined ML-DSA-65 only.
 
 use crate::{
+	cli::cold_signing::ColdIo,
 	error::{QuantusError, Result},
 	log_print, log_success, log_verbose,
 	near::{
+		cold::{load_unsigned_transaction, sign_transaction_cold},
 		protocol::{
 			validate_account_id, AccessKey, Action, AddKeyAction, FunctionCallAction, PublicKey,
 			Transaction, TransferAction, NEAR_DECIMALS,
@@ -149,6 +153,40 @@ pub enum NearCommands {
 		/// Read password from file (for scripting)
 		#[arg(long)]
 		password_file: Option<String>,
+	},
+
+	/// Sign a prepared NEAR transaction with a cold (air-gapped) Quantus
+	/// wallet over QR codes. Build the transaction with near-cli-rs
+	/// (`... sign-later --signer-public-key ml-dsa-65:<key> ... save-to-file`)
+	/// and pass its output here; the result is a base64 signed transaction
+	/// for `near transaction send-signed-transaction`, or send it directly
+	/// with --send.
+	SignCold {
+		/// Unsigned transaction: base64 borsh, or @path to a file holding
+		/// base64 or the JSON `sign-later ... save-to-file` writes
+		#[arg(long)]
+		unsigned_tx: String,
+
+		/// Cold wallet (created with `quantus wallet create-cold`) whose
+		/// ML-DSA-65 key the transaction declares
+		#[arg(long, short)]
+		wallet: String,
+
+		/// NEAR network the transaction is for, shown on the device: testnet or mainnet
+		#[arg(long, default_value = "testnet")]
+		network: String,
+
+		/// Write the signed transaction (base64) to this file
+		#[arg(long)]
+		out: Option<PathBuf>,
+
+		/// Submit the signed transaction to the network and wait for finality
+		#[arg(long)]
+		send: bool,
+
+		/// Custom NEAR RPC URL for --send (overrides --network)
+		#[arg(long)]
+		rpc_url: Option<String>,
 	},
 
 	/// Act in a Sputnik DAO multisig (the contract behind Trezu) as a member
@@ -308,8 +346,55 @@ pub async fn handle_near_command(command: NearCommands) -> Result<()> {
 		} =>
 			handle_send(&wallet, &account, &to, &amount, &network, rpc_url, password, password_file)
 				.await,
+		NearCommands::SignCold { unsigned_tx, wallet, network, out, send, rpc_url } =>
+			handle_sign_cold(&unsigned_tx, &wallet, &network, out, send, rpc_url).await,
 		NearCommands::Dao { command } => handle_dao_command(command).await,
 	}
+}
+
+async fn handle_sign_cold(
+	unsigned_tx: &str,
+	wallet: &str,
+	network: &str,
+	out: Option<PathBuf>,
+	send: bool,
+	rpc_url: Option<String>,
+) -> Result<()> {
+	let cold_address = match crate::wallet::load_signer_from_wallet(wallet, None, None)? {
+		crate::wallet::WalletSigner::Cold { address, .. } => address,
+		crate::wallet::WalletSigner::Hot(_) =>
+			return Err(QuantusError::Generic(format!(
+				"wallet '{wallet}' is a hot wallet; sign-cold is for cold wallets. Use `quantus \
+				 near send` or the other hot commands with it instead."
+			))),
+	};
+	let tx = load_unsigned_transaction(unsigned_tx)?;
+
+	let signed =
+		sign_transaction_cold(tx, network, wallet, &cold_address, ColdIo::global()).await?;
+	let signed_b64 = signed.to_base64()?;
+
+	if let Some(path) = &out {
+		std::fs::write(path, format!("{signed_b64}\n"))?;
+		log_print!("📝 Signed transaction written to {}", path.display());
+	} else if !send {
+		log_print!("Signed transaction (base64):");
+		println!("{signed_b64}");
+	}
+
+	if send {
+		let client = NearRpcClient::for_network(network, rpc_url)?;
+		client.ensure_ml_dsa_support().await?;
+		let outcome = client.send_tx(&signed).await?;
+		report_outcome(network, &outcome);
+		log_success!("✅ Transaction finalized");
+	} else {
+		log_print!(
+			"💡 Submit with: near transaction send-signed-transaction base64-signed-transaction \
+			 '<base64>' network-config {network} send"
+		);
+	}
+	Ok(())
 }
 
 async fn handle_dao_command(command: DaoCommands) -> Result<()> {
