@@ -17,12 +17,18 @@
 //! Invariant: nonce and block context are captured **once** into [`TxContext`];
 //! the QR payload and the final extrinsic are both built from it. Refetching
 //! anything in between would silently invalidate the signature.
+//!
+//! The same QR transport also carries NEAR transactions (envelope v2, see
+//! `crate::near::cold`); the simulator below answers both kinds.
 
 use crate::{
 	chain::client::{ChainConfig, QuantusClient},
 	error::{QuantusError, Result},
 	log_print, log_verbose,
-	qr::{display_ur_until_enter, render_ur_frames, scan_ur, SignRequest, UrSource},
+	qr::{
+		display_ur_until_enter, render_ur_frames, scan_ur, AnySignRequest, NearSignRequest,
+		SignRequest, UrSource,
+	},
 };
 use colored::Colorize;
 use qp_dilithium_crypto::types::{
@@ -283,7 +289,7 @@ fn validate_signature_response(
 	Ok(signature)
 }
 
-fn confirm_or_abort(prompt: &str) -> Result<()> {
+pub(crate) fn confirm_or_abort(prompt: &str) -> Result<()> {
 	use std::io::Write;
 	print!("{prompt}");
 	std::io::stdout().flush()?;
@@ -293,6 +299,72 @@ fn confirm_or_abort(prompt: &str) -> Result<()> {
 		return Err(QuantusError::Generic("Aborted by user".to_string()));
 	}
 	Ok(())
+}
+
+/// Hand an encoded sign request to the cold wallet: UR-encode it, write the
+/// request file if configured, and in an interactive session display the
+/// animated QR and prompt until the user is ready to scan the response.
+///
+/// Returns whether the session is interactive, which decides if a rescan-safe
+/// validation failure may prompt for a rescan.
+pub(crate) async fn present_sign_request(request: &[u8], io: &ColdIo) -> Result<bool> {
+	let parts = quantus_ur::encode_bytes(request)
+		.map_err(|e| QuantusError::Generic(format!("Failed to UR-encode payload: {e:?}")))?;
+
+	// A response file existing before this request is handed out is necessarily
+	// from an earlier session (the response depends on this request); together
+	// with consume-on-read in the scanner this keeps every roundtrip fresh.
+	if let Some(UrSource::File(path)) = &io.response_in {
+		match std::fs::remove_file(path) {
+			Ok(()) => log_print!("🧹 Removed stale response file {}", path.display()),
+			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
+			Err(e) => return Err(e.into()),
+		}
+	}
+
+	if let Some(path) = &io.request_out {
+		let content = parts.join("\n") + "\n";
+		std::fs::write(path, content)?;
+		log_print!("📤 Sign request written to {}", path.display());
+	}
+
+	// Skip the QR display and prompts when scripted (stdin is not a terminal);
+	// the request file above is the handoff instead.
+	let interactive = std::io::stdin().is_terminal();
+	require_interactive_or_request_out(interactive, io)?;
+	if interactive {
+		let frames = render_ur_frames(&parts)?;
+		log_print!("");
+		display_ur_until_enter(
+			&frames,
+			"📱 Scan this QR with your cold wallet, then press Enter here…",
+		)
+		.await?;
+		confirm_or_abort(
+			"✍️  Sign the transaction on the cold wallet. Ready to scan its response? [Enter to scan / q to abort]: ",
+		)?;
+	} else {
+		log_print!(
+			"🤖 Non-interactive session: skipping QR display, waiting for the signature response…"
+		);
+	}
+	Ok(interactive)
+}
+
+/// Where the signature response comes from: the configured override, else the
+/// camera.
+pub(crate) fn response_source(io: &ColdIo) -> Result<UrSource> {
+	match &io.response_in {
+		Some(source) => Ok(source.clone()),
+		None => default_response_source(io),
+	}
+}
+
+/// Read one signature response from `source`.
+pub(crate) async fn read_signature_response(source: &UrSource) -> Result<Vec<u8>> {
+	let response = scan_ur(source, RESPONSE_TIMEOUT).await?;
+	log_verbose!("📥 Received {} response bytes", response.len());
+	Ok(response)
 }
 
 /// Run the full cold signing flow for `call` and submit the result.
@@ -350,56 +422,12 @@ pub async fn sign_and_submit_cold<Call: subxt::tx::Payload>(
 	// accounts cannot tell which key this wants, and one holding none of them
 	// cannot tell that it holds the wrong key.
 	let request = SignRequest::new(cold_address_ss58, raw_payload.clone());
-	let parts = quantus_ur::encode_bytes(&request.encode())
-		.map_err(|e| QuantusError::Generic(format!("Failed to UR-encode payload: {e:?}")))?;
+	let interactive = present_sign_request(&request.encode(), io).await?;
 
-	// A response file existing before this request is handed out is necessarily
-	// from an earlier session (the response depends on this request); together
-	// with consume-on-read in the scanner this keeps every roundtrip fresh.
-	if let Some(UrSource::File(path)) = &io.response_in {
-		match std::fs::remove_file(path) {
-			Ok(()) => log_print!("🧹 Removed stale response file {}", path.display()),
-			Err(e) if e.kind() == std::io::ErrorKind::NotFound => {},
-			Err(e) => return Err(e.into()),
-		}
-	}
-
-	if let Some(path) = &io.request_out {
-		let content = parts.join("\n") + "\n";
-		std::fs::write(path, content)?;
-		log_print!("📤 Sign request written to {}", path.display());
-	}
-
-	// Skip the QR display and prompts when scripted (stdin is not a terminal);
-	// the request file above is the handoff instead.
-	let interactive = std::io::stdin().is_terminal();
-	require_interactive_or_request_out(interactive, io)?;
-	if interactive {
-		let frames = render_ur_frames(&parts)?;
-		log_print!("");
-		display_ur_until_enter(
-			&frames,
-			"📱 Scan this QR with your cold wallet, then press Enter here…",
-		)
-		.await?;
-		confirm_or_abort(
-			"✍️  Sign the transaction on the cold wallet. Ready to scan its response? [Enter to scan / q to abort]: ",
-		)?;
-	} else {
-		log_print!(
-			"🤖 Non-interactive session: skipping QR display, waiting for the signature response…"
-		);
-	}
-
-	// 3. Collect and validate the signature response. Fall back to the camera
-	// only when no explicit source was given.
-	let source = match &io.response_in {
-		Some(source) => source.clone(),
-		None => default_response_source(io)?,
-	};
+	// 3. Collect and validate the signature response.
+	let source = response_source(io)?;
 	let signature = loop {
-		let response = scan_ur(&source, RESPONSE_TIMEOUT).await?;
-		log_verbose!("📥 Received {} response bytes", response.len());
+		let response = read_signature_response(&source).await?;
 
 		match validate_signature_response(
 			&raw_payload,
@@ -511,7 +539,15 @@ pub async fn handle_cold_sign_sim(
 		Some(path) => UrSource::File(PathBuf::from(path)),
 		None => UrSource::StdinLines,
 	};
-	let request = SignRequest::decode(&scan_ur(&request_source, Duration::from_secs(60)).await?)?;
+	let request =
+		match AnySignRequest::decode(&scan_ur(&request_source, Duration::from_secs(60)).await?)? {
+			AnySignRequest::Quantus(request) => request,
+			AnySignRequest::Near(request) => {
+				let response_bytes =
+					sign_near_request_as_device(&request, &wallet, password, password_file)?;
+				return write_sim_response(&response_bytes, response_file.as_deref());
+			},
+		};
 	let payload = request.payload.clone();
 
 	if payload.len() < 2 {
@@ -562,10 +598,61 @@ pub async fn handle_cold_sign_sim(
 	};
 
 	// 3. Emit the response UR.
-	let parts = quantus_ur::encode_bytes(&response_bytes)
+	write_sim_response(&response_bytes, response_file.as_deref())
+}
+
+/// The NEAR half of the simulator, mirroring what the cold wallet app will do
+/// with a v2 request: decode the borsh transaction, refuse it unless the
+/// transaction's declared key is this wallet's ML-DSA-65 key, and sign the
+/// SHA-256 of the transaction bytes as a pure (empty-context) ML-DSA-65
+/// signature. The response is `signature ‖ public_key`, the same shape as a
+/// Quantus response, so the CLI can tie the signature to the wallet's SS58
+/// address as well as to the transaction's key.
+fn sign_near_request_as_device(
+	request: &NearSignRequest,
+	wallet: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> Result<Vec<u8>> {
+	use crate::near::protocol::{PublicKey, Transaction};
+
+	let tx = Transaction::from_bytes(&request.transaction)?;
+	log_print!("🧾 NEAR sign request ({} bytes, {})", request.transaction.len(), request.network);
+	log_print!("   Signer:   {}", tx.signer_id.bright_cyan());
+	log_print!("   Key:      {}", tx.public_key.to_near_string());
+	log_print!("   Receiver: {}", tx.receiver_id.bright_cyan());
+	log_print!("   Nonce:    {}", tx.nonce);
+	for action in tx.describe_actions() {
+		log_print!("   Action:   {action}");
+	}
+
+	let keypair = crate::wallet::load_keypair_from_wallet(wallet, password, password_file)?;
+	if keypair.scheme != crate::wallet::DilithiumScheme::MlDsa65 {
+		return Err(QuantusError::Generic(format!(
+			"wallet '{wallet}' is {:?}; NEAR transactions are signed with ML-DSA-65 only. Nothing \
+			 was signed.",
+			keypair.scheme
+		)));
+	}
+	let our_key = PublicKey::from_ml_dsa_65_bytes(&keypair.public_key)?;
+	if tx.public_key != our_key {
+		return Err(QuantusError::Generic(format!(
+			"This transaction is signed by {}, but wallet '{wallet}' is {}. Nothing was signed.",
+			tx.public_key.to_near_string(),
+			our_key.to_near_string()
+		)));
+	}
+
+	let hash = crate::near::sign::transaction_hash(&tx)?;
+	let pair = keypair.to_dilithium65_pair()?;
+	Ok(crate::chain::signing::sign_ml_dsa_65(&pair, &hash, None).to_bytes().to_vec())
+}
+
+fn write_sim_response(response_bytes: &[u8], response_file: Option<&str>) -> Result<()> {
+	let parts = quantus_ur::encode_bytes(response_bytes)
 		.map_err(|e| QuantusError::Generic(format!("Failed to UR-encode response: {e:?}")))?;
 
-	match &response_file {
+	match response_file {
 		Some(path) => {
 			// Atomic write: pollers must never observe a half-written response.
 			let tmp = format!("{path}.tmp");

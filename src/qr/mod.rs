@@ -11,4 +11,4 @@ pub mod sign_request;
 
 pub use display::{display_ur_until_enter, render_ur_frames};
 pub use scanner::{scan_quantus_address, scan_ur, UrSource};
-pub use sign_request::SignRequest;
+pub use sign_request::{AnySignRequest, NearSignRequest, SignRequest};

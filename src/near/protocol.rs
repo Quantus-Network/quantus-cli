@@ -12,7 +12,7 @@
 //! form; [`PublicKey::handle_string`] computes it for reconciliation.
 
 use crate::error::{QuantusError, Result};
-use borsh::BorshSerialize;
+use borsh::{BorshDeserialize, BorshSerialize};
 
 pub const ED25519_PUBLIC_KEY_LEN: usize = 32;
 pub const SECP256K1_PUBLIC_KEY_LEN: usize = 64;
@@ -25,7 +25,7 @@ pub const ML_DSA_65_SIGNATURE_LEN: usize = 3309;
 pub const ML_DSA_65_HANDLE_DOMAIN_TAG: &[u8] = b"near:ml-dsa-65-pubkey-hash:v1";
 
 /// A public key as carried in transactions and actions.
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum PublicKey {
 	Ed25519([u8; ED25519_PUBLIC_KEY_LEN]),
 	Secp256k1(Box<[u8; SECP256K1_PUBLIC_KEY_LEN]>),
@@ -105,7 +105,7 @@ impl PublicKey {
 }
 
 /// A transaction signature. Same tag space as [`PublicKey`].
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum Signature {
 	Ed25519([u8; ED25519_SIGNATURE_LEN]),
 	/// Tag position only; this CLI never signs secp256k1.
@@ -114,7 +114,7 @@ pub enum Signature {
 	MlDsa65(Box<[u8; ML_DSA_65_SIGNATURE_LEN]>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct AccessKey {
 	/// Starting nonce for the key. 0 for a key on a brand-new account.
 	pub nonce: u64,
@@ -127,7 +127,7 @@ impl AccessKey {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum AccessKeyPermission {
 	/// Tag position only; this CLI adds full-access keys.
 	#[allow(dead_code)]
@@ -135,7 +135,7 @@ pub enum AccessKeyPermission {
 	FullAccess,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct FunctionCallPermission {
 	/// Allowance in yoctoNEAR the key may spend on gas; `None` = unlimited.
 	pub allowance: Option<u128>,
@@ -145,7 +145,7 @@ pub struct FunctionCallPermission {
 
 /// A transaction action. Variant order fixes the borsh tags; only the ones
 /// this CLI builds carry real payload types, but every position must exist.
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub enum Action {
 	CreateAccount,
 	#[allow(dead_code)]
@@ -161,12 +161,12 @@ pub enum Action {
 	DeleteAccount(DeleteAccountAction),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct DeployContractAction {
 	pub code: Vec<u8>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct FunctionCallAction {
 	pub method_name: String,
 	pub args: Vec<u8>,
@@ -174,36 +174,36 @@ pub struct FunctionCallAction {
 	pub deposit: u128,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct TransferAction {
 	/// Amount in yoctoNEAR (24 decimals).
 	pub deposit: u128,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct StakeAction {
 	pub stake: u128,
 	pub public_key: PublicKey,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct AddKeyAction {
 	pub public_key: PublicKey,
 	pub access_key: AccessKey,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct DeleteKeyAction {
 	pub public_key: PublicKey,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct DeleteAccountAction {
 	pub beneficiary_id: String,
 }
 
 /// The signable transaction body (nearcore `TransactionV0`).
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct Transaction {
 	pub signer_id: String,
 	/// Key the signer signs with; full ML-DSA-65 key, never the hash form.
@@ -216,14 +216,97 @@ pub struct Transaction {
 	pub actions: Vec<Action>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize)]
+impl Transaction {
+	/// Borsh-encode the body: the bytes NEAR hashes for signing.
+	pub fn to_bytes(&self) -> Result<Vec<u8>> {
+		borsh::to_vec(self)
+			.map_err(|e| QuantusError::Generic(format!("borsh-encoding transaction: {e}")))
+	}
+
+	/// Decode a borsh `TransactionV0`, refusing trailing bytes.
+	pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
+		borsh::from_slice(bytes).map_err(|e| {
+			QuantusError::Generic(format!("bytes are not a borsh NEAR transaction: {e}"))
+		})
+	}
+
+	/// Decode the base64 form near-cli-rs `sign-later` emits.
+	pub fn from_base64(s: &str) -> Result<Self> {
+		use base64::Engine;
+		let bytes = base64::engine::general_purpose::STANDARD
+			.decode(s.trim())
+			.map_err(|e| QuantusError::Generic(format!("unsigned transaction base64: {e}")))?;
+		Self::from_bytes(&bytes)
+	}
+
+	/// One line per action, for showing a signer what they are about to sign.
+	pub fn describe_actions(&self) -> Vec<String> {
+		self.actions.iter().map(Action::describe).collect()
+	}
+}
+
+impl Action {
+	pub fn describe(&self) -> String {
+		match self {
+			Action::CreateAccount => "CreateAccount".to_string(),
+			Action::DeployContract(a) => format!("DeployContract ({} bytes of code)", a.code.len()),
+			Action::FunctionCall(a) => format!(
+				"FunctionCall {}({}) gas {} TGas, deposit {} NEAR",
+				a.method_name,
+				String::from_utf8_lossy(&a.args),
+				a.gas / 1_000_000_000_000,
+				format_near(a.deposit)
+			),
+			Action::Transfer(a) => format!("Transfer {} NEAR", format_near(a.deposit)),
+			Action::Stake(a) => format!(
+				"Stake {} NEAR with {}",
+				format_near(a.stake),
+				a.public_key.to_near_string()
+			),
+			Action::AddKey(a) => {
+				let permission = match &a.access_key.permission {
+					AccessKeyPermission::FullAccess => "full-access".to_string(),
+					AccessKeyPermission::FunctionCall(p) =>
+						format!("function-call on {} methods {:?}", p.receiver_id, p.method_names),
+				};
+				format!("AddKey {} ({permission})", a.public_key.to_near_string())
+			},
+			Action::DeleteKey(a) => format!("DeleteKey {}", a.public_key.to_near_string()),
+			Action::DeleteAccount(a) => format!("DeleteAccount (beneficiary {})", a.beneficiary_id),
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
 pub struct SignedTransaction {
 	pub transaction: Transaction,
 	pub signature: Signature,
 }
 
+impl SignedTransaction {
+	/// The base64 form `near transaction send-signed-transaction` reads.
+	pub fn to_base64(&self) -> Result<String> {
+		use base64::Engine;
+		let bytes = borsh::to_vec(self)
+			.map_err(|e| QuantusError::Generic(format!("borsh-encoding transaction: {e}")))?;
+		Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
+	}
+}
+
 /// NEAR uses 24 decimals (yoctoNEAR).
 pub const NEAR_DECIMALS: u8 = 24;
+
+/// yoctoNEAR → decimal NEAR string, trailing zeros trimmed.
+pub fn format_near(yocto: u128) -> String {
+	let unit = 10u128.pow(NEAR_DECIMALS as u32);
+	let whole = yocto / unit;
+	let frac = yocto % unit;
+	if frac == 0 {
+		return whole.to_string();
+	}
+	let frac = format!("{frac:024}");
+	format!("{whole}.{}", frac.trim_end_matches('0'))
+}
 
 /// Light client-side validation of a NEAR account id (the chain re-validates).
 pub fn validate_account_id(account_id: &str) -> Result<()> {
@@ -289,6 +372,87 @@ mod tests {
 			hex::encode(crate::near::sign::transaction_hash(&tx).unwrap()),
 			"c2a1f5de00a9538f35cfc24316fc8748315b837299153eafc47abde7c187b92e"
 		);
+	}
+
+	/// Produced by near-cli-rs 0.30.1:
+	/// `near tokens alice.testnet send-near bob.testnet '1 NEAR' network-config testnet
+	/// sign-later --signer-public-key ed25519:29d2S7vB453rNYFdR5Ycwt7y9haRT5fwVwL9zTmBhfV2
+	/// --nonce 42 --block-hash 3JF3sEqM796hk5WFqA6EtmEwJQ9quALszsfJyvXNQKy3 display`
+	/// (0x11×32 key, 0x22×32 block hash). Pins our borsh layout and hash to
+	/// what the reference tooling emits, so `sign-later` output can be signed here.
+	const NEAR_CLI_UNSIGNED_B64: &str = "DQAAAGFsaWNlLnRlc3RuZXQAEREREREREREREREREREREREREREREREREREREREREREqAAAAAAAAAAsAAABib2IudGVzdG5ldCIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiIiAQAAAAMAAACh7czOG8LTAAAAAAAA";
+	const NEAR_CLI_HASH_HEX: &str =
+		"be358ec90e89b70256db586f72c4a280daa1199ba6f91398e9d034b72a7a6c9f";
+
+	#[test]
+	fn near_cli_sign_later_output_decodes_and_reencodes_byte_identically() {
+		let tx = Transaction::from_base64(NEAR_CLI_UNSIGNED_B64).unwrap();
+		assert_eq!(
+			tx,
+			Transaction {
+				signer_id: "alice.testnet".to_string(),
+				public_key: PublicKey::Ed25519([0x11; 32]),
+				nonce: 42,
+				receiver_id: "bob.testnet".to_string(),
+				block_hash: [0x22; 32],
+				actions: vec![Action::Transfer(TransferAction { deposit: 10u128.pow(24) })],
+			}
+		);
+		use base64::Engine;
+		assert_eq!(
+			base64::engine::general_purpose::STANDARD.encode(tx.to_bytes().unwrap()),
+			NEAR_CLI_UNSIGNED_B64
+		);
+		assert_eq!(
+			hex::encode(crate::near::sign::transaction_hash(&tx).unwrap()),
+			NEAR_CLI_HASH_HEX
+		);
+		assert_eq!(tx.describe_actions(), vec!["Transfer 1 NEAR"]);
+	}
+
+	#[test]
+	fn transaction_decode_rejects_trailing_or_truncated_bytes() {
+		let tx = Transaction::from_base64(NEAR_CLI_UNSIGNED_B64).unwrap();
+		let bytes = tx.to_bytes().unwrap();
+
+		let mut extended = bytes.clone();
+		extended.push(0);
+		assert!(Transaction::from_bytes(&extended).is_err());
+		assert!(Transaction::from_bytes(&bytes[..bytes.len() - 1]).is_err());
+		assert!(Transaction::from_base64("not base64!").is_err());
+	}
+
+	#[test]
+	fn ml_dsa_65_transaction_roundtrips_through_borsh() {
+		let tx = Transaction {
+			signer_id: "vault.alice.testnet".to_string(),
+			public_key: PublicKey::MlDsa65(Box::new([0x33; ML_DSA_65_PUBLIC_KEY_LEN])),
+			nonce: 7,
+			receiver_id: "v2.ref-finance.near".to_string(),
+			block_hash: [0x22; 32],
+			actions: vec![Action::FunctionCall(FunctionCallAction {
+				method_name: "storage_deposit".to_string(),
+				args: br#"{"registration_only":true}"#.to_vec(),
+				gas: 30_000_000_000_000,
+				deposit: 125 * 10u128.pow(21),
+			})],
+		};
+		let decoded = Transaction::from_bytes(&tx.to_bytes().unwrap()).unwrap();
+		assert_eq!(decoded, tx);
+		assert_eq!(
+			decoded.describe_actions(),
+			vec![
+				r#"FunctionCall storage_deposit({"registration_only":true}) gas 30 TGas, deposit 0.125 NEAR"#
+			]
+		);
+	}
+
+	#[test]
+	fn format_near_trims_zeros() {
+		assert_eq!(format_near(0), "0");
+		assert_eq!(format_near(10u128.pow(24)), "1");
+		assert_eq!(format_near(15 * 10u128.pow(23)), "1.5");
+		assert_eq!(format_near(1), "0.000000000000000000000001");
 	}
 
 	#[test]

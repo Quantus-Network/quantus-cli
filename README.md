@@ -6,6 +6,7 @@ A modern command line interface for interacting with the Quantus Network, featur
 
 - **Quantum-Safe Wallets**: Built with Dilithium post-quantum cryptography
 - **Cold Wallet Signing**: Air-gapped signing over QR codes with Keystone or the Quantus cold wallet app
+- **NEAR Accounts**: Control NEAR accounts with an ML-DSA-65 wallet, hot or cold, including any contract call prepared with near-cli-rs
 - **Airdrop Claims**: Find and claim testnet rewards across every historical key-derivation scheme
 - **SubXT Integration**: Modern Substrate client with type-safe API
 - **Generic Pallet Calls**: Call ANY blockchain function using metadata-driven parsing
@@ -652,6 +653,71 @@ Notes:
   and (cold wallet app only) multisig. Test against a dev node with the
   hidden `quantus developer cold-sign-sim` command, which plays the cold
   wallet side using a local hot wallet.
+
+---
+
+### NEAR Accounts
+
+NEAR accepts ML-DSA-65 access keys and signatures from protocol version 85,
+so a Quantus ML-DSA-65 wallet (`quantus wallet create --scheme ml-dsa-65`)
+can be the sole key on a NEAR account. ML-DSA-87 wallets are rejected: NEAR
+defined ML-DSA-65 only.
+
+```bash
+# The wallet's key in NEAR text form (ml-dsa-65:<base58>) and its on-chain handle
+quantus near show-key --wallet my65
+
+# Create a sub-account whose only access key is the wallet's key
+quantus near create-account --new-account vault.alice.testnet --wallet my65 \
+  --parent-credentials ~/.near-credentials/testnet/alice.testnet.json
+
+# Verify the key list from chain state
+quantus near keys --account vault.alice.testnet --wallet my65
+
+# Spend from it
+quantus near send --wallet my65 --account vault.alice.testnet --to bob.testnet --amount 1.5
+
+# Sputnik DAO membership: propose and vote
+quantus near dao propose-transfer --dao treasury.sputnik-dao.testnet --account vault.alice.testnet \
+  --wallet my65 --receiver bob.testnet --amount 10
+quantus near dao vote --dao treasury.sputnik-dao.testnet --account vault.alice.testnet \
+  --wallet my65 --id 3 --vote approve
+```
+
+#### Cold signing any NEAR transaction
+
+`quantus near sign-cold` signs a transaction prepared by
+[near-cli-rs](https://github.com/near/near-cli-rs) with a cold wallet over
+the same QR transport as Quantus extrinsics. This covers every contract
+call — swaps, lending, staking — not just the commands above.
+
+```bash
+# 1. Build the unsigned transaction offline with near-cli-rs. The signer key is
+#    the cold wallet's ML-DSA-65 key; nonce and block hash come from
+#    `near account view-account-summary` / `view-access-key` or any RPC.
+near contract call-function as-transaction v2.ref-finance.near storage_deposit \
+  json-args '{"registration_only": true}' prepaid-gas '30 Tgas' attached-deposit '0.125 NEAR' \
+  sign-as vault.alice.near network-config mainnet \
+  sign-later --signer-public-key ml-dsa-65:<base58> --nonce <nonce+1> --block-hash <recent> \
+  save-to-file unsigned.json
+
+# 2. Sign it on the cold wallet: the CLI shows the transaction as a QR,
+#    then scans the device's signature QR and verifies it against the stored
+#    address before producing a signed transaction.
+quantus near sign-cold --unsigned-tx @unsigned.json --wallet my_cold --network mainnet --out signed.b64
+
+# 3. Submit with near-cli-rs, or add --send in step 2 to submit directly.
+near transaction send-signed-transaction file-with-base64-signed-transaction signed.b64 \
+  network-config mainnet send
+```
+
+The device sees the decoded transaction (signer, receiver, nonce, every
+action) and signs only if the transaction's declared key is its own. The CLI
+accepts the response only if that key also hashes to the cold wallet's stored
+address, so a transaction built for someone else's key cannot be signed as
+`--wallet my_cold`. The hidden `quantus developer cold-sign-sim` command
+answers NEAR requests too, using a local ML-DSA-65 hot wallet, for end-to-end
+testing without a device.
 
 ---
 
