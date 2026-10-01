@@ -408,7 +408,7 @@ async fn handle_import_cold_key(wallet: &str, key: Option<String>) -> Result<()>
 		print_key(&public);
 		return Ok(());
 	}
-	manager.set_cold_near_public_key(wallet, &export.near_public_key)?;
+	manager.set_cold_near_public_key(wallet, &address, &export.near_public_key)?;
 	log_success!("✅ NEAR key of cold wallet '{wallet}' ({address}) saved");
 	print_key(&public);
 	log_print!(
