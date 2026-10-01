@@ -371,6 +371,11 @@ pub enum DeveloperCommands {
 		#[arg(long)]
 		response_file: Option<String>,
 
+		/// Instead of signing a request, emit the wallet's NEAR public key
+		/// export UR, as the cold wallet app's "Show public key" does
+		#[arg(long)]
+		export_near_key: bool,
+
 		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
@@ -672,6 +677,7 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 			wallet,
 			request_file,
 			response_file,
+			export_near_key,
 			password,
 			password_file,
 		} =>
@@ -679,6 +685,7 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 				wallet,
 				request_file,
 				response_file,
+				export_near_key,
 				password,
 				password_file,
 			)

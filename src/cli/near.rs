@@ -14,23 +14,30 @@
 //!    ML-DSA-65-controlled account is a full member with no DAO-side changes.
 //! 6. `near sign-cold` — sign a transaction prepared by near-cli-rs with a cold (air-gapped) wallet
 //!    over QR codes, for any contract call the hot commands do not cover.
+//! 7. `near import-cold-key` — read the NEAR public key a cold wallet exports as a QR, so the
+//!    commands above work with a cold wallet too: a cold wallet file holds only an SS58 address,
+//!    which cannot be turned back into the key NEAR needs.
+//!
+//! Every command that takes `--wallet` accepts a hot or a cold wallet; with a
+//! cold wallet, signing runs the QR roundtrip of `sign-cold`.
 //!
 //! ML-DSA-87 wallets are rejected: NEAR defined ML-DSA-65 only.
 
 use crate::{
-	cli::cold_signing::ColdIo,
+	cli::cold_signing::{read_signature_response, response_source, ColdIo},
 	error::{QuantusError, Result},
 	log_print, log_success, log_verbose,
 	near::{
 		cold::{load_unsigned_transaction, sign_transaction_cold},
 		protocol::{
 			validate_account_id, AccessKey, Action, AddKeyAction, FunctionCallAction, PublicKey,
-			Transaction, TransferAction, NEAR_DECIMALS,
+			SignedTransaction, Transaction, TransferAction, NEAR_DECIMALS,
 		},
 		rpc::{decode_success_value, NearRpcClient},
 		sign::{load_credentials, sign_transaction_ed25519, sign_transaction_ml_dsa_65},
 	},
-	wallet::QuantumKeyPair,
+	qr::NearPublicKeyExport,
+	wallet::{QuantumKeyPair, WalletManager, WalletSigner},
 };
 use clap::Subcommand;
 use colored::Colorize;
@@ -41,7 +48,7 @@ use std::path::PathBuf;
 pub enum NearCommands {
 	/// Show the wallet's ML-DSA-65 key in NEAR text forms
 	ShowKey {
-		/// Quantus wallet (must be ML-DSA-65)
+		/// Quantus wallet (must be ML-DSA-65); a cold wallet needs `near import-cold-key` first
 		#[arg(long, short)]
 		wallet: String,
 
@@ -167,7 +174,7 @@ pub enum NearCommands {
 		#[arg(long)]
 		unsigned_tx: String,
 
-		/// Cold wallet (created with `quantus wallet create-cold`) whose
+		/// Cold wallet (created with `quantus wallet import-cold`) whose
 		/// ML-DSA-65 key the transaction declares
 		#[arg(long, short)]
 		wallet: String,
@@ -187,6 +194,20 @@ pub enum NearCommands {
 		/// Custom NEAR RPC URL for --send (overrides --network)
 		#[arg(long)]
 		rpc_url: Option<String>,
+	},
+
+	/// Import a cold wallet's NEAR public key from the QR its device shows
+	/// (cold wallet app: account → Show public key → NEAR). The key must
+	/// belong to the wallet's address; afterwards the other commands accept
+	/// the cold wallet.
+	ImportColdKey {
+		/// Cold wallet (created with `quantus wallet import-cold`)
+		#[arg(long, short)]
+		wallet: String,
+
+		/// The key as text (`ml-dsa-65:<base58>`) instead of scanning a QR
+		#[arg(long)]
+		key: Option<String>,
 	},
 
 	/// Act in a Sputnik DAO multisig (the contract behind Trezu) as a member
@@ -348,8 +369,53 @@ pub async fn handle_near_command(command: NearCommands) -> Result<()> {
 				.await,
 		NearCommands::SignCold { unsigned_tx, wallet, network, out, send, rpc_url } =>
 			handle_sign_cold(&unsigned_tx, &wallet, &network, out, send, rpc_url).await,
+		NearCommands::ImportColdKey { wallet, key } => handle_import_cold_key(&wallet, key).await,
 		NearCommands::Dao { command } => handle_dao_command(command).await,
 	}
+}
+
+async fn handle_import_cold_key(wallet: &str, key: Option<String>) -> Result<()> {
+	let manager = WalletManager::new()?;
+	let existing = manager.cold_near_public_key(wallet)?;
+	let WalletSigner::Cold { address, .. } =
+		crate::wallet::load_signer_from_wallet(wallet, None, None)?
+	else {
+		return Err(QuantusError::Generic(format!("wallet '{wallet}' is not a cold wallet")));
+	};
+
+	let export = match key {
+		Some(key) => NearPublicKeyExport::new(address.clone(), key.trim())?,
+		None => {
+			let source = response_source(ColdIo::global())?;
+			log_print!(
+				"📷 On the cold wallet open the account, choose Show public key, then show the \
+				 NEAR key QR."
+			);
+			let export = NearPublicKeyExport::decode(&read_signature_response(&source).await?)?;
+			if export.address != address {
+				return Err(QuantusError::Generic(format!(
+					"the QR exports the key of {}, but wallet '{wallet}' is {address}",
+					export.address
+				)));
+			}
+			export
+		},
+	};
+	let public = export.public_key()?;
+
+	if existing.as_deref() == Some(export.near_public_key.as_str()) {
+		log_print!("ℹ️  Wallet '{wallet}' already holds this NEAR key");
+		print_key(&public);
+		return Ok(());
+	}
+	manager.set_cold_near_public_key(wallet, &address, &export.near_public_key)?;
+	log_success!("✅ NEAR key of cold wallet '{wallet}' ({address}) saved");
+	print_key(&public);
+	log_print!(
+		"💡 Register it on an account with `quantus near create-account --wallet {wallet} ...` or \
+		 `near account add-key`"
+	);
+	Ok(())
 }
 
 async fn handle_sign_cold(
@@ -454,22 +520,57 @@ async fn handle_dao_command(command: DaoCommands) -> Result<()> {
 	}
 }
 
+/// How a NEAR transaction gets signed: locally from a hot wallet's key, or
+/// over QR codes by a cold wallet.
+enum NearSigner {
+	Hot(QuantumKeyPair),
+	Cold { name: String, address: String },
+}
+
+impl NearSigner {
+	async fn sign(&self, tx: Transaction, network: &str) -> Result<SignedTransaction> {
+		match self {
+			NearSigner::Hot(keypair) =>
+				sign_transaction_ml_dsa_65(tx, &keypair.to_dilithium65_pair()?),
+			NearSigner::Cold { name, address } =>
+				sign_transaction_cold(tx, network, name, address, ColdIo::global()).await,
+		}
+	}
+}
+
 /// Load a wallet and its key as a NEAR public key, refusing non-65 schemes.
-fn load_ml_dsa_65_wallet(
+/// A cold wallet resolves without a password, from the key it imported with
+/// `near import-cold-key`.
+fn load_near_signer(
 	wallet: &str,
 	password: Option<String>,
 	password_file: Option<String>,
-) -> Result<(QuantumKeyPair, PublicKey)> {
-	let keypair = crate::wallet::load_keypair_from_wallet(wallet, password, password_file)?;
-	if keypair.scheme != crate::wallet::DilithiumScheme::MlDsa65 {
-		return Err(QuantusError::Generic(format!(
-			"wallet '{wallet}' is {:?}; NEAR supports ML-DSA-65 only — create one with `quantus \
-			 wallet create --scheme ml-dsa-65`",
-			keypair.scheme
-		)));
+) -> Result<(NearSigner, PublicKey)> {
+	match crate::wallet::load_signer_from_wallet(wallet, password, password_file)? {
+		WalletSigner::Hot(keypair) => {
+			if keypair.scheme != crate::wallet::DilithiumScheme::MlDsa65 {
+				return Err(QuantusError::Generic(format!(
+					"wallet '{wallet}' is {:?}; NEAR supports ML-DSA-65 only — create one with \
+					 `quantus wallet create --scheme ml-dsa-65`",
+					keypair.scheme
+				)));
+			}
+			let public = PublicKey::from_ml_dsa_65_bytes(&keypair.public_key)?;
+			Ok((NearSigner::Hot(keypair), public))
+		},
+		WalletSigner::Cold { name, address } => {
+			let key = WalletManager::new()?.cold_near_public_key(&name)?.ok_or_else(|| {
+				QuantusError::Generic(format!(
+					"cold wallet '{wallet}' has no NEAR public key yet — import it from the \
+					 device with `quantus near import-cold-key --wallet {wallet}`"
+				))
+			})?;
+			// The wallet file is unencrypted; re-check the key against the
+			// address rather than trusting what is on disk.
+			let public = NearPublicKeyExport::new(address.clone(), key)?.public_key()?;
+			Ok((NearSigner::Cold { name, address }, public))
+		},
 	}
-	let public = PublicKey::from_ml_dsa_65_bytes(&keypair.public_key)?;
-	Ok((keypair, public))
 }
 
 fn print_key(public: &PublicKey) {
@@ -484,7 +585,7 @@ fn handle_show_key(
 	password: Option<String>,
 	password_file: Option<String>,
 ) -> Result<()> {
-	let (_, public) = load_ml_dsa_65_wallet(wallet, password, password_file)?;
+	let (_, public) = load_near_signer(wallet, password, password_file)?;
 	print_key(&public);
 	Ok(())
 }
@@ -518,7 +619,7 @@ async fn handle_create_account(
 	password_file: Option<String>,
 ) -> Result<()> {
 	validate_account_id(new_account)?;
-	let (_, public) = load_ml_dsa_65_wallet(wallet, password, password_file)?;
+	let (_, public) = load_near_signer(wallet, password, password_file)?;
 	let parent = load_credentials(parent_credentials)?;
 
 	if !new_account.ends_with(&format!(".{}", parent.account_id)) {
@@ -604,7 +705,7 @@ async fn handle_keys(
 	validate_account_id(account)?;
 	let our_handle = match wallet {
 		Some(wallet) => {
-			let (_, public) = load_ml_dsa_65_wallet(&wallet, password, password_file)?;
+			let (_, public) = load_near_signer(&wallet, password, password_file)?;
 			Some((wallet, public.handle_string().expect("65 key")))
 		},
 		None => None,
@@ -639,7 +740,7 @@ async fn handle_send(
 ) -> Result<()> {
 	validate_account_id(account)?;
 	validate_account_id(to)?;
-	let (keypair, public) = load_ml_dsa_65_wallet(wallet, password, password_file)?;
+	let (signer, public) = load_near_signer(wallet, password, password_file)?;
 	let amount_yocto = crate::cli::send::parse_amount_with_decimals(amount, NEAR_DECIMALS)?;
 
 	let client = NearRpcClient::for_network(network, rpc_url)?;
@@ -667,8 +768,7 @@ async fn handle_send(
 		wallet
 	);
 
-	let pair = keypair.to_dilithium65_pair()?;
-	let signed = sign_transaction_ml_dsa_65(tx, &pair)?;
+	let signed = signer.sign(tx, network).await?;
 	let outcome = client.send_tx(&signed).await?;
 	report_outcome(network, &outcome);
 	log_success!("✅ Transfer finalized");
@@ -741,7 +841,7 @@ fn policy_proposal_bond(policy: &serde_json::Value) -> Result<u128> {
 #[allow(clippy::too_many_arguments)]
 async fn submit_dao_call(
 	client: &NearRpcClient,
-	keypair: &QuantumKeyPair,
+	signer: &NearSigner,
 	public: PublicKey,
 	account: &str,
 	dao: &str,
@@ -769,8 +869,7 @@ async fn submit_dao_call(
 		})],
 	};
 
-	let pair = keypair.to_dilithium65_pair()?;
-	let signed = sign_transaction_ml_dsa_65(tx, &pair)?;
+	let signed = signer.sign(tx, network).await?;
 	let outcome = client.send_tx(&signed).await?;
 	report_outcome(network, &outcome);
 	Ok(outcome)
@@ -793,7 +892,7 @@ async fn handle_dao_propose_transfer(
 	validate_account_id(dao)?;
 	validate_account_id(account)?;
 	validate_account_id(receiver)?;
-	let (keypair, public) = load_ml_dsa_65_wallet(wallet, password, password_file)?;
+	let (signer, public) = load_near_signer(wallet, password, password_file)?;
 	let amount_yocto = crate::cli::send::parse_amount_with_decimals(amount, NEAR_DECIMALS)?;
 
 	let client = NearRpcClient::for_network(network, rpc_url)?;
@@ -821,7 +920,7 @@ async fn handle_dao_propose_transfer(
 	let args = transfer_proposal_args(description, receiver, amount_yocto);
 	let outcome = submit_dao_call(
 		&client,
-		&keypair,
+		&signer,
 		public,
 		account,
 		dao,
@@ -863,7 +962,7 @@ async fn handle_dao_vote(
 	validate_account_id(dao)?;
 	validate_account_id(account)?;
 	let action = vote_action(vote)?;
-	let (keypair, public) = load_ml_dsa_65_wallet(wallet, password, password_file)?;
+	let (signer, public) = load_near_signer(wallet, password, password_file)?;
 
 	let client = NearRpcClient::for_network(network, rpc_url)?;
 	client.ensure_ml_dsa_support().await?;
@@ -886,7 +985,7 @@ async fn handle_dao_vote(
 	let args = serde_json::json!({ "id": id, "action": action, "proposal": kind });
 	submit_dao_call(
 		&client,
-		&keypair,
+		&signer,
 		public,
 		account,
 		dao,

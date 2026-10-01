@@ -719,6 +719,32 @@ address, so a transaction built for someone else's key cannot be signed as
 answers NEAR requests too, using a local ML-DSA-65 hot wallet, for end-to-end
 testing without a device.
 
+#### Using the NEAR commands with a cold wallet
+
+A cold wallet file holds only an SS58 address, which is a hash of the key and
+cannot be turned back into the 1952-byte ML-DSA-65 public key NEAR needs.
+Import the key once from the QR the cold wallet app shows (account → Show
+public key → NEAR); after that every `quantus near` command accepts the cold
+wallet, signing over QR where a hot wallet would sign locally.
+
+```bash
+# Scan the key export QR (or pass it as text with --key ml-dsa-65:<base58>)
+quantus near import-cold-key --wallet my_cold
+
+# Now the same commands as for a hot wallet, no password involved
+quantus near show-key --wallet my_cold
+quantus near create-account --new-account vault.alice.testnet --wallet my_cold \
+  --parent-credentials ~/.near-credentials/testnet/alice.testnet.json
+quantus near send --wallet my_cold --account vault.alice.testnet --to bob.testnet --amount 1.5
+```
+
+The import is refused unless the exported key hashes to the wallet's stored
+address, so a QR from another device cannot be attached to `my_cold`. The
+key is re-checked against the address every time it is read from the wallet
+file. For testing without a device, `quantus developer cold-sign-sim --wallet
+<hot65> --export-near-key --response-file export.ur` writes the same QR
+payload a device would show.
+
 ---
 
 ### Sending Tokens
