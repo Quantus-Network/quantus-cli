@@ -253,7 +253,7 @@ impl Action {
 			Action::FunctionCall(a) => format!(
 				"FunctionCall {}({}) gas {} TGas, deposit {} NEAR",
 				a.method_name,
-				String::from_utf8_lossy(&a.args),
+				render_args(&a.args),
 				a.gas / 1_000_000_000_000,
 				format_near(a.deposit)
 			),
@@ -266,8 +266,15 @@ impl Action {
 			Action::AddKey(a) => {
 				let permission = match &a.access_key.permission {
 					AccessKeyPermission::FullAccess => "full-access".to_string(),
-					AccessKeyPermission::FunctionCall(p) =>
-						format!("function-call on {} methods {:?}", p.receiver_id, p.method_names),
+					AccessKeyPermission::FunctionCall(p) => format!(
+						"function-call on {} methods {:?} allowance {}",
+						p.receiver_id,
+						p.method_names,
+						match p.allowance {
+							Some(allowance) => format!("{} NEAR", format_near(allowance)),
+							None => "unlimited".to_string(),
+						}
+					),
 				};
 				format!("AddKey {} ({permission})", a.public_key.to_near_string())
 			},
@@ -275,6 +282,27 @@ impl Action {
 			Action::DeleteAccount(a) => format!("DeleteAccount (beneficiary {})", a.beneficiary_id),
 		}
 	}
+}
+
+/// Function-call arguments come from whoever prepared the transaction, and
+/// are shown on the terminal that asks the user to approve it. Text is shown
+/// as-is only when every character is one a terminal renders in place:
+/// control characters could move the cursor and overwrite the lines above,
+/// and bidi/zero-width format characters could reorder or hide what is
+/// shown. Anything else, and anything that is not UTF-8, is shown as hex.
+pub fn render_args(args: &[u8]) -> String {
+	match std::str::from_utf8(args) {
+		Ok(text) if text.chars().all(is_display_safe) => text.to_string(),
+		_ => format!("0x{}", hex::encode(args)),
+	}
+}
+
+fn is_display_safe(c: char) -> bool {
+	!c.is_control() &&
+		!matches!(
+			c,
+			'\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}'
+		)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, BorshSerialize, BorshDeserialize)]
@@ -475,6 +503,61 @@ mod tests {
 		expected.extend(1u128.to_le_bytes()); // deposit
 
 		assert_eq!(borsh::to_vec(&action).unwrap(), expected);
+	}
+
+	#[test]
+	fn function_call_args_with_terminal_controls_are_shown_as_hex() {
+		let describe = |args: &[u8]| {
+			Action::FunctionCall(FunctionCallAction {
+				method_name: "m".to_string(),
+				args: args.to_vec(),
+				gas: 0,
+				deposit: 0,
+			})
+			.describe()
+		};
+		assert_eq!(
+			describe(br#"{"a":1}"#),
+			r#"FunctionCall m({"a":1}) gas 0 TGas, deposit 0 NEAR"#
+		);
+
+		// ESC, CR, LF: each could rewrite the lines already printed above.
+		for args in [b"\x1b[2Jx".as_slice(), b"a\rb", b"a\nb", b"a\tb"] {
+			let shown = describe(args);
+			assert!(shown.contains(&format!("0x{}", hex::encode(args))), "{shown:?}");
+			assert!(!shown.chars().any(char::is_control), "{shown:?}");
+		}
+		// Right-to-left override and zero-width space reorder or hide text.
+		assert!(describe("a\u{202E}b".as_bytes()).contains("0x61e280ae62"));
+		assert!(describe("a\u{200B}b".as_bytes()).contains("0x61e2808b62"));
+		// Not UTF-8 at all.
+		assert!(describe(&[0xff, 0x00]).contains("0xff00"));
+	}
+
+	#[test]
+	fn add_key_describe_shows_the_allowance() {
+		let key = PublicKey::Ed25519([0x11; 32]);
+		let add = |allowance: Option<u128>| {
+			Action::AddKey(AddKeyAction {
+				public_key: key.clone(),
+				access_key: AccessKey {
+					nonce: 0,
+					permission: AccessKeyPermission::FunctionCall(FunctionCallPermission {
+						allowance,
+						receiver_id: "app.testnet".to_string(),
+						method_names: vec!["claim".to_string()],
+					}),
+				},
+			})
+			.describe()
+		};
+		assert!(add(None).ends_with(r#"methods ["claim"] allowance unlimited)"#), "{}", add(None));
+		assert!(
+			add(Some(250_000_000_000_000_000_000_000))
+				.ends_with(r#"methods ["claim"] allowance 0.25 NEAR)"#),
+			"{}",
+			add(Some(250_000_000_000_000_000_000_000))
+		);
 	}
 
 	#[test]

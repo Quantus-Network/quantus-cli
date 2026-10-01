@@ -151,6 +151,7 @@ pub async fn sign_transaction_cold(
 	};
 	let account = parse_cold_account(wallet_name, cold_address_ss58)?;
 	let tx_bytes = tx.to_bytes()?;
+	let request = NearSignRequest::new(network, tx_bytes)?;
 
 	log_print!("🧊 Cold wallet signing with '{}'", wallet_name.bright_blue().bold());
 	log_print!("   Wallet:   {}", cold_address_ss58.bright_cyan());
@@ -164,9 +165,8 @@ pub async fn sign_transaction_cold(
 		log_print!("   Action:   {action}");
 	}
 	log_print!("   Hash:     {}", hex::encode(transaction_hash(&tx)?));
-	log_verbose!("   Transaction borsh: 0x{}", hex::encode(&tx_bytes));
+	log_verbose!("   Transaction borsh: 0x{}", hex::encode(&request.transaction));
 
-	let request = NearSignRequest::new(network, tx_bytes);
 	let interactive = present_sign_request(&request.encode(), io).await?;
 
 	let source = response_source(io)?;
@@ -345,7 +345,7 @@ mod tests {
 		let account: AccountId32 = pair.public().into_account();
 		let tx = tx_for(&pair);
 
-		let request = NearSignRequest::new("testnet", tx.to_bytes().unwrap());
+		let request = NearSignRequest::new("testnet", tx.to_bytes().unwrap()).unwrap();
 		let parts = quantus_ur::encode_bytes(&request.encode()).unwrap();
 		let received = NearSignRequest::decode(&quantus_ur::decode_bytes(&parts).unwrap()).unwrap();
 		assert_eq!(received.network, "testnet");

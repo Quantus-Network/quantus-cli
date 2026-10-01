@@ -27,7 +27,9 @@ pub const SIGN_REQUEST_VERSION: u8 = 1;
 pub const NEAR_SIGN_REQUEST_VERSION: u8 = 2;
 
 /// Largest payload a wallet will read, matching `maxPayloadBytes` in the SDK.
-const MAX_PAYLOAD_BYTES: usize = 8 * 1024;
+/// Largest payload any client accepts in a signing request, v1 or v2. Shared
+/// with the cold wallet app, so a request above it is refused on both sides.
+pub const MAX_PAYLOAD_BYTES: usize = 8 * 1024;
 
 fn encode_payload(payload: &[u8]) -> String {
 	format!("0x{}", hex::encode(payload))
@@ -107,8 +109,18 @@ struct NearWire {
 const NEAR_CHAIN: &str = "near";
 
 impl NearSignRequest {
-	pub fn new(network: impl Into<String>, transaction: Vec<u8>) -> Self {
-		Self { network: network.into(), transaction }
+	/// Refuses a transaction the decoders on the other side would refuse, so
+	/// the user hears about it before a QR is shown rather than after a
+	/// fruitless scan.
+	pub fn new(network: impl Into<String>, transaction: Vec<u8>) -> Result<Self> {
+		if transaction.len() > MAX_PAYLOAD_BYTES {
+			return Err(QuantusError::Generic(format!(
+				"Transaction is {} bytes; cold-signing requests carry at most {MAX_PAYLOAD_BYTES} bytes. \
+				 Split the call or shrink its arguments.",
+				transaction.len()
+			)));
+		}
+		Ok(Self { network: network.into(), transaction })
 	}
 
 	/// The bytes that go into the UR frames.
@@ -264,7 +276,7 @@ mod tests {
 
 	#[test]
 	fn near_request_round_trips_through_the_wire_format() {
-		let request = NearSignRequest::new("testnet", vec![0x0d, 0x00, 0x00, 0x00]);
+		let request = NearSignRequest::new("testnet", vec![0x0d, 0x00, 0x00, 0x00]).unwrap();
 		let encoded = request.encode();
 
 		assert_eq!(NearSignRequest::decode(&encoded).unwrap(), request);
@@ -288,6 +300,13 @@ mod tests {
 		assert!(error.contains("version"), "unexpected error: {error}");
 
 		assert!(AnySignRequest::decode(&[0x02, 0x00, 0x01]).is_err());
+	}
+
+	#[test]
+	fn near_request_refuses_a_transaction_its_decoder_would_refuse() {
+		assert!(NearSignRequest::new("testnet", vec![0u8; MAX_PAYLOAD_BYTES]).is_ok());
+		let err = NearSignRequest::new("testnet", vec![0u8; MAX_PAYLOAD_BYTES + 1]).unwrap_err();
+		assert!(err.to_string().contains("at most 8192 bytes"), "{err}");
 	}
 
 	#[test]
