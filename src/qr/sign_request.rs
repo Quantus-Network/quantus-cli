@@ -108,11 +108,22 @@ struct NearWire {
 
 const NEAR_CHAIN: &str = "near";
 
+/// The only network labels a NEAR request may carry, spelled exactly. The
+/// cold wallet shows the label and picks its account-name check from it, so
+/// both ends refuse anything else rather than display a lookalike.
+pub const NEAR_NETWORKS: [&str; 2] = ["mainnet", "testnet"];
+
 impl NearSignRequest {
 	/// Refuses a transaction the decoders on the other side would refuse, so
 	/// the user hears about it before a QR is shown rather than after a
 	/// fruitless scan.
 	pub fn new(network: impl Into<String>, transaction: Vec<u8>) -> Result<Self> {
+		let network = network.into();
+		if !NEAR_NETWORKS.contains(&network.as_str()) {
+			return Err(QuantusError::Generic(format!(
+				"NEAR network {network:?} is not one of {NEAR_NETWORKS:?}"
+			)));
+		}
 		if transaction.len() > MAX_PAYLOAD_BYTES {
 			return Err(QuantusError::Generic(format!(
 				"Transaction is {} bytes; cold-signing requests carry at most {MAX_PAYLOAD_BYTES} bytes. \
@@ -120,7 +131,7 @@ impl NearSignRequest {
 				transaction.len()
 			)));
 		}
-		Ok(Self { network: network.into(), transaction })
+		Ok(Self { network, transaction })
 	}
 
 	/// The bytes that go into the UR frames.
@@ -150,10 +161,7 @@ impl NearSignRequest {
 				wire.chain
 			)));
 		}
-		if wire.network.is_empty() {
-			return Err(QuantusError::Generic("Signing request names no NEAR network".to_string()));
-		}
-		Ok(Self { network: wire.network, transaction: decode_payload(&wire.payload)? })
+		Self::new(wire.network, decode_payload(&wire.payload)?)
 	}
 }
 
@@ -300,6 +308,27 @@ mod tests {
 		assert!(error.contains("version"), "unexpected error: {error}");
 
 		assert!(AnySignRequest::decode(&[0x02, 0x00, 0x01]).is_err());
+	}
+
+	#[test]
+	fn near_request_accepts_only_exact_network_labels() {
+		for network in NEAR_NETWORKS {
+			assert_eq!(NearSignRequest::new(network, vec![1]).unwrap().network, network);
+		}
+		// Each would read as a known network on the device while disabling
+		// that network's account-name check.
+		for lookalike in
+			["testnet ", " testnet", "Testnet", "test\u{200B}net", "mainnet\n", "localnet", ""]
+		{
+			assert!(NearSignRequest::new(lookalike, vec![1]).is_err(), "{lookalike:?}");
+			let wire = serde_json::json!({
+				"v": 2, "chain": "near", "network": lookalike, "payload": "0x01"
+			});
+			assert!(
+				NearSignRequest::decode(&serde_json::to_vec(&wire).unwrap()).is_err(),
+				"{lookalike:?}"
+			);
+		}
 	}
 
 	#[test]
