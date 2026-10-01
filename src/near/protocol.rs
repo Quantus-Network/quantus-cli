@@ -252,7 +252,7 @@ impl Action {
 			Action::DeployContract(a) => format!("DeployContract ({} bytes of code)", a.code.len()),
 			Action::FunctionCall(a) => format!(
 				"FunctionCall {}({}) gas {} TGas, deposit {} NEAR",
-				a.method_name,
+				render_text(&a.method_name),
 				render_args(&a.args),
 				a.gas / 1_000_000_000_000,
 				format_near(a.deposit)
@@ -266,20 +266,24 @@ impl Action {
 			Action::AddKey(a) => {
 				let permission = match &a.access_key.permission {
 					AccessKeyPermission::FullAccess => "full-access".to_string(),
-					AccessKeyPermission::FunctionCall(p) => format!(
-						"function-call on {} methods {:?} allowance {}",
-						p.receiver_id,
-						p.method_names,
-						match p.allowance {
-							Some(allowance) => format!("{} NEAR", format_near(allowance)),
-							None => "unlimited".to_string(),
-						}
-					),
+					AccessKeyPermission::FunctionCall(p) => {
+						let methods =
+							p.method_names.iter().map(|m| render_text(m)).collect::<Vec<_>>();
+						format!(
+							"function-call on {} methods {methods:?} allowance {}",
+							render_text(&p.receiver_id),
+							match p.allowance {
+								Some(allowance) => format!("{} NEAR", format_near(allowance)),
+								None => "unlimited".to_string(),
+							}
+						)
+					},
 				};
 				format!("AddKey {} ({permission})", a.public_key.to_near_string())
 			},
 			Action::DeleteKey(a) => format!("DeleteKey {}", a.public_key.to_near_string()),
-			Action::DeleteAccount(a) => format!("DeleteAccount (beneficiary {})", a.beneficiary_id),
+			Action::DeleteAccount(a) =>
+				format!("DeleteAccount (beneficiary {})", render_text(&a.beneficiary_id)),
 		}
 	}
 }
@@ -292,8 +296,18 @@ impl Action {
 /// shown. Anything else, and anything that is not UTF-8, is shown as hex.
 pub fn render_args(args: &[u8]) -> String {
 	match std::str::from_utf8(args) {
-		Ok(text) if text.chars().all(is_display_safe) => text.to_string(),
-		_ => format!("0x{}", hex::encode(args)),
+		Ok(text) => render_text(text),
+		Err(_) => format!("0x{}", hex::encode(args)),
+	}
+}
+
+/// Same rule as [`render_args`] for a string already known to be UTF-8
+/// (method names, account ids). Unsafe text is hex so it cannot move the cursor.
+pub fn render_text(text: &str) -> String {
+	if text.chars().all(is_display_safe) {
+		text.to_string()
+	} else {
+		format!("0x{}", hex::encode(text.as_bytes()))
 	}
 }
 
@@ -532,6 +546,26 @@ mod tests {
 		assert!(describe("a\u{200B}b".as_bytes()).contains("0x61e2808b62"));
 		// Not UTF-8 at all.
 		assert!(describe(&[0xff, 0x00]).contains("0xff00"));
+	}
+
+	#[test]
+	fn other_preview_strings_with_terminal_controls_are_shown_as_hex() {
+		let method = "m\rReceiver: spoofed.near";
+		let line = Action::FunctionCall(FunctionCallAction {
+			method_name: method.to_string(),
+			args: br#"{"a":1}"#.to_vec(),
+			gas: 0,
+			deposit: 0,
+		})
+		.describe();
+		assert!(!line.chars().any(char::is_control), "{line:?}");
+		assert!(line.contains(&format!("0x{}", hex::encode(method))), "{line}");
+
+		let account = "bob.testnet\nb";
+		assert_eq!(render_text("bob.testnet"), "bob.testnet");
+		let shown = render_text(account);
+		assert!(!shown.chars().any(char::is_control), "{shown:?}");
+		assert_eq!(shown, format!("0x{}", hex::encode(account)));
 	}
 
 	#[test]

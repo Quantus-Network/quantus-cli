@@ -24,7 +24,10 @@ use crate::{
 	error::{QuantusError, Result},
 	log_print, log_verbose,
 	near::{
-		protocol::{PublicKey, Signature, SignedTransaction, Transaction, ML_DSA_65_SIGNATURE_LEN},
+		protocol::{
+			render_text, PublicKey, Signature, SignedTransaction, Transaction,
+			ML_DSA_65_SIGNATURE_LEN,
+		},
 		sign::transaction_hash,
 	},
 	qr::NearSignRequest,
@@ -156,9 +159,9 @@ pub async fn sign_transaction_cold(
 	log_print!("🧊 Cold wallet signing with '{}'", wallet_name.bright_blue().bold());
 	log_print!("   Wallet:   {}", cold_address_ss58.bright_cyan());
 	log_print!("   Network:  {network}");
-	log_print!("   Signer:   {}", tx.signer_id.bright_cyan());
+	log_print!("   Signer:   {}", render_text(&tx.signer_id).bright_cyan());
 	log_print!("   Key:      {}", tx.public_key.to_near_string());
-	log_print!("   Receiver: {}", tx.receiver_id.bright_cyan());
+	log_print!("   Receiver: {}", render_text(&tx.receiver_id).bright_cyan());
 	log_print!("   Nonce:    {}", tx.nonce);
 	log_print!("   Block:    {}", bs58::encode(tx.block_hash).into_string());
 	for action in tx.describe_actions() {

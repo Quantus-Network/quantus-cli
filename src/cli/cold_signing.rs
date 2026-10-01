@@ -618,9 +618,12 @@ fn sign_near_request_as_device(
 
 	let tx = Transaction::from_bytes(&request.transaction)?;
 	log_print!("🧾 NEAR sign request ({} bytes, {})", request.transaction.len(), request.network);
-	log_print!("   Signer:   {}", tx.signer_id.bright_cyan());
+	log_print!("   Signer:   {}", crate::near::protocol::render_text(&tx.signer_id).bright_cyan());
 	log_print!("   Key:      {}", tx.public_key.to_near_string());
-	log_print!("   Receiver: {}", tx.receiver_id.bright_cyan());
+	log_print!(
+		"   Receiver: {}",
+		crate::near::protocol::render_text(&tx.receiver_id).bright_cyan()
+	);
 	log_print!("   Nonce:    {}", tx.nonce);
 	for action in tx.describe_actions() {
 		log_print!("   Action:   {action}");
