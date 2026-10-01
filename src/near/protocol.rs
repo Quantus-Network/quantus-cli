@@ -249,12 +249,13 @@ impl Action {
 	pub fn describe(&self) -> String {
 		match self {
 			Action::CreateAccount => "CreateAccount".to_string(),
-			Action::DeployContract(a) => format!("DeployContract ({} bytes of code)", a.code.len()),
+			Action::DeployContract(a) =>
+				format!("DeployContract ({} bytes, sha256 {})", a.code.len(), code_sha256(&a.code)),
 			Action::FunctionCall(a) => format!(
 				"FunctionCall {}({}) gas {} TGas, deposit {} NEAR",
 				render_text(&a.method_name),
 				render_args(&a.args),
-				a.gas / 1_000_000_000_000,
+				format_tgas(a.gas),
 				format_near(a.deposit)
 			),
 			Action::Transfer(a) => format!("Transfer {} NEAR", format_near(a.deposit)),
@@ -309,6 +310,26 @@ pub fn render_text(text: &str) -> String {
 	} else {
 		format!("0x{}", hex::encode(text.as_bytes()))
 	}
+}
+
+/// SHA-256 of deployed code, so two WASM blobs of the same length do not
+/// share a preview line. NEAR identifies contract code by this digest.
+fn code_sha256(code: &[u8]) -> String {
+	use sha2::{Digest, Sha256};
+	hex::encode(Sha256::digest(code))
+}
+
+/// Gas in TGas without rounding. 1 TGas is 10^12 gas units; a remainder is
+/// kept as a fractional TGas so 1,999,999,999,999 does not display as 1.
+fn format_tgas(gas: u64) -> String {
+	const TGAS: u64 = 1_000_000_000_000;
+	let whole = gas / TGAS;
+	let frac = gas % TGAS;
+	if frac == 0 {
+		return whole.to_string();
+	}
+	let frac = format!("{frac:012}");
+	format!("{whole}.{}", frac.trim_end_matches('0'))
 }
 
 fn is_display_safe(c: char) -> bool {
@@ -517,6 +538,48 @@ mod tests {
 		expected.extend(1u128.to_le_bytes()); // deposit
 
 		assert_eq!(borsh::to_vec(&action).unwrap(), expected);
+	}
+
+	#[test]
+	fn deploy_preview_distinguishes_same_length_code() {
+		let left = Action::DeployContract(DeployContractAction { code: b"wasm-aaaa".to_vec() });
+		let right = Action::DeployContract(DeployContractAction { code: b"wasm-bbbb".to_vec() });
+		let left = left.describe();
+		let right = right.describe();
+		assert_ne!(left, right);
+		assert!(left.contains("9 bytes"), "{left}");
+		assert!(right.contains("9 bytes"), "{right}");
+		let digest = {
+			use sha2::{Digest, Sha256};
+			hex::encode(Sha256::digest(b"wasm-aaaa"))
+		};
+		assert!(left.contains(&digest), "{left}");
+		assert!(!right.contains(&digest), "{right}");
+	}
+
+	#[test]
+	fn function_call_preview_keeps_fractional_gas() {
+		let describe = |gas| {
+			Action::FunctionCall(FunctionCallAction {
+				method_name: "m".to_string(),
+				args: Vec::new(),
+				gas,
+				deposit: 0,
+			})
+			.describe()
+		};
+		assert!(
+			describe(1_999_999_999_999).contains("gas 1.999999999999 TGas"),
+			"{}",
+			describe(1_999_999_999_999)
+		);
+		assert!(describe(1).contains("gas 0.000000000001 TGas"), "{}", describe(1));
+		assert!(
+			describe(30_000_000_000_000).contains("gas 30 TGas"),
+			"{}",
+			describe(30_000_000_000_000)
+		);
+		assert!(describe(0).contains("gas 0 TGas"), "{}", describe(0));
 	}
 
 	#[test]
