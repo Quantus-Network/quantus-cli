@@ -6,9 +6,11 @@
 //! crate), while cold-wallet addresses are plain SS58 strings in a single QR.
 
 pub mod display;
+pub mod key_export;
 pub mod scanner;
 pub mod sign_request;
 
 pub use display::{display_ur_until_enter, render_ur_frames};
+pub use key_export::NearPublicKeyExport;
 pub use scanner::{scan_quantus_address, scan_ur, UrSource};
 pub use sign_request::{AnySignRequest, NearSignRequest, SignRequest};

@@ -531,9 +531,15 @@ pub async fn handle_cold_sign_sim(
 	wallet: String,
 	request_file: Option<String>,
 	response_file: Option<String>,
+	export_near_key: bool,
 	password: Option<String>,
 	password_file: Option<String>,
 ) -> Result<()> {
+	if export_near_key {
+		let export = near_key_export_as_device(&wallet, password, password_file)?;
+		return write_sim_response(&export.encode(), response_file.as_deref());
+	}
+
 	// 1. Read the request UR (polling the file allows scripted pipelines).
 	let request_source = match &request_file {
 		Some(path) => UrSource::File(PathBuf::from(path)),
@@ -601,6 +607,30 @@ pub async fn handle_cold_sign_sim(
 	write_sim_response(&response_bytes, response_file.as_deref())
 }
 
+/// The simulator's answer to "Show public key": the wallet's ML-DSA-65 key in
+/// NEAR text form, tied to its SS58 address, as the cold wallet app exports it.
+fn near_key_export_as_device(
+	wallet: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+) -> Result<crate::qr::NearPublicKeyExport> {
+	let keypair = crate::wallet::load_keypair_from_wallet(wallet, password, password_file)?;
+	if keypair.scheme != crate::wallet::DilithiumScheme::MlDsa65 {
+		return Err(QuantusError::Generic(format!(
+			"wallet '{wallet}' is {:?}; only ML-DSA-65 keys are used on NEAR",
+			keypair.scheme
+		)));
+	}
+	let key = crate::near::protocol::PublicKey::from_ml_dsa_65_bytes(&keypair.public_key)?;
+	let export = crate::qr::NearPublicKeyExport::new(
+		keypair.try_to_account_id_ss58check()?,
+		key.to_near_string(),
+	)?;
+	log_print!("🔑 NEAR key export for {}", export.address.bright_cyan());
+	log_print!("   {}", export.near_public_key);
+	Ok(export)
+}
+
 /// The NEAR half of the simulator, mirroring what the cold wallet app will do
 /// with a v2 request: decode the borsh transaction, refuse it unless the
 /// transaction's declared key is this wallet's ML-DSA-65 key, and sign the
@@ -661,7 +691,7 @@ fn write_sim_response(response_bytes: &[u8], response_file: Option<&str>) -> Res
 			let tmp = format!("{path}.tmp");
 			std::fs::write(&tmp, parts.join("\n") + "\n")?;
 			std::fs::rename(&tmp, path)?;
-			log_print!("📤 Signature response ({} UR parts) written to {}", parts.len(), path);
+			log_print!("📤 Response ({} UR parts) written to {}", parts.len(), path);
 		},
 		None =>
 			for part in &parts {
