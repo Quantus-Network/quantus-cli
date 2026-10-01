@@ -1189,7 +1189,7 @@ pub enum WormholeCommands {
 }
 
 /// Wait mode for wormhole steps that must observe inclusion (events / next-round inputs).
-/// Honors `--finalized-tx`; otherwise waits for best-block inclusion only.
+/// Honors `--finalized`; otherwise waits for best-block inclusion only.
 fn wormhole_inclusion_mode(execution_mode: ExecutionMode) -> ExecutionMode {
 	ExecutionMode { wait_for_transaction: true, ..execution_mode }
 }
@@ -1208,16 +1208,13 @@ fn included_at_for_stage(stage: TransactionStage) -> IncludedAt {
 /// Tip block used for pre-submit storage reads and for ZK Merkle proof generation.
 ///
 /// Must match the wait mode: if funding/verify only waited for best-block inclusion,
-/// freshly written leaves are not yet in the finalized tree.
+/// freshly written leaves are not yet in the finalized tree. So it follows the mode passed
+/// in, not the switch `main` installs, which library callers never set.
 async fn wormhole_tip_block(
 	quantus_client: &QuantusClient,
 	execution_mode: ExecutionMode,
-) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
-	if execution_mode.finalized {
-		at_finalized_block(quantus_client).await
-	} else {
-		at_best_block(quantus_client).await
-	}
+) -> crate::error::Result<subxt::utils::H256> {
+	quantus_client.head_or_finalized(execution_mode.finalized).await
 }
 
 pub async fn handle_wormhole_command(
@@ -1473,41 +1470,34 @@ fn show_wormhole_address(secret_file: String) -> crate::error::Result<()> {
 /// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
 /// of the SDK surface. Network/decoding failures are wrapped in
 /// [`crate::error::QuantusError::NetworkError`].
+#[allow(dead_code)] // SDK re-export; CLI proofs use `wormhole_tip_block`.
 pub async fn at_finalized_block(
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
-	let finalized_block: subxt::utils::H256 = quantus_client
-		.rpc_client()
-		.request("chain_getFinalizedHead", rpc_params![])
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!(
-				"Failed to fetch finalized block hash: {e:?}"
-			))
-		})?;
-	let block = quantus_client.client().blocks().at(finalized_block).await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!(
-			"Failed to fetch finalized block {finalized_block:?}: {e:?}"
-		))
-	})?;
-	Ok(block)
+	head_or_finalized_block(quantus_client, true).await
 }
 
-/// Fetch the latest (best) block as a fully materialised subxt `Block`.
+/// Fetch the latest (best) block as a fully materialised subxt `Block`, whatever
+/// `--finalized` installed.
 ///
 /// Uses [`crate::error::Result`] (not `anyhow`) so it composes with the rest
 /// of the SDK surface. Network/decoding failures are wrapped in
 /// [`crate::error::QuantusError::NetworkError`].
+#[allow(dead_code)] // SDK re-export; CLI proofs use `wormhole_tip_block`.
 pub async fn at_best_block(
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
-	let best_block = quantus_client.get_latest_block().await?;
-	let block = quantus_client.client().blocks().at(best_block).await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!(
-			"Failed to fetch best block {best_block:?}: {e:?}"
-		))
-	})?;
-	Ok(block)
+	head_or_finalized_block(quantus_client, false).await
+}
+
+async fn head_or_finalized_block(
+	quantus_client: &QuantusClient,
+	finalized: bool,
+) -> crate::error::Result<Block<ChainConfig, OnlineClient<ChainConfig>>> {
+	let hash = quantus_client.head_or_finalized(finalized).await?;
+	quantus_client.client().blocks().at(hash).await.map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to fetch block {hash:?}: {e:?}"))
+	})
 }
 
 /// Load leaf-circuit common data for deserializing leaf proofs from `bins_dir`.
@@ -2732,15 +2722,12 @@ async fn execute_initial_transfers(
 	// The transfer_count used in the proof is the count at the time of transfer,
 	// which equals the count before the transfer (since it increments after).
 	let client = quantus_client.client();
-	let tip_block_hash = wormhole_tip_block(quantus_client, execution_mode)
-		.await
-		.map_err(|e| {
-			crate::error::QuantusError::Generic(format!(
-				"Failed to get tip block for transfer counts: {}",
-				e
-			))
-		})?
-		.hash();
+	let tip_block_hash = wormhole_tip_block(quantus_client, execution_mode).await.map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to get tip block for transfer counts: {}",
+			e
+		))
+	})?;
 	let mut transfer_counts_before: Vec<u64> = Vec::with_capacity(num_proofs);
 	for secret in secrets.iter() {
 		let wormhole_address = SubxtAccountId(*secret.address());
@@ -2853,12 +2840,11 @@ async fn generate_round_proofs(
 	log_print!("{}", "Step 2: Generating proofs...".bright_yellow());
 
 	// All proofs in an aggregation batch must use the same tip block for storage
-	// proofs. Use best (not finalized) unless `--finalized-tx`, otherwise freshly
+	// proofs. Use best (not finalized) unless `--finalized`, otherwise freshly
 	// included leaves from the funding/verify step are missing from the tree.
-	let proof_block = wormhole_tip_block(quantus_client, execution_mode)
+	let proof_block_hash = wormhole_tip_block(quantus_client, execution_mode)
 		.await
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Failed to get block: {}", e)))?;
-	let proof_block_hash = proof_block.hash();
 	log_print!(
 		"  Using {} block {} for all proofs",
 		if execution_mode.finalized { "finalized" } else { "best" },
@@ -3564,7 +3550,7 @@ pub fn decode_full_leaf_data(leaf_data: &[u8]) -> crate::error::Result<([u8; 32]
 /// Verify an aggregated proof and return the block hash, extrinsic hash, and transfer events.
 ///
 /// Waits for best-block inclusion by default. Prefer
-/// [`verify_private_batch_and_get_events_until`] when `--finalized-tx` is set.
+/// [`verify_private_batch_and_get_events_until`] when `--finalized` is set.
 #[allow(dead_code)] // SDK re-export; CLI uses the `_until` variant.
 pub async fn verify_private_batch_and_get_events(
 	proof_file: &str,
@@ -3683,7 +3669,7 @@ pub async fn verify_private_batch_and_get_events_until(
 /// Verify a public-batch proof and return the block hash, extrinsic hash, and transfer events.
 ///
 /// Waits for best-block inclusion by default. Prefer
-/// [`verify_public_batch_and_get_events_until`] when `--finalized-tx` is set.
+/// [`verify_public_batch_and_get_events_until`] when `--finalized` is set.
 #[allow(dead_code)] // SDK re-export; CLI uses the `_until` variant.
 pub async fn verify_public_batch_and_get_events(
 	proof_file: &str,
@@ -4184,15 +4170,13 @@ async fn run_dissolve(
 	let initial_secret = derive_wormhole_secret(&wallet.mnemonic, 0, 1)?;
 	let wormhole_address = SubxtAccountId(*initial_secret.address());
 
-	let tip_block_hash = wormhole_tip_block(&quantus_client, execution_mode)
-		.await
-		.map_err(|e| {
+	let tip_block_hash =
+		wormhole_tip_block(&quantus_client, execution_mode).await.map_err(|e| {
 			crate::error::QuantusError::Generic(format!(
 				"Failed to get tip block for dissolve transfer count: {}",
 				e
 			))
-		})?
-		.hash();
+		})?;
 	let transfer_count_before = quantus_client
 		.client()
 		.storage()
@@ -4909,7 +4893,6 @@ mod tests {
 		// written leaves are missing from the tree.
 		assert_eq!(IncludedAt::Finalized.label(), "finalized block");
 		assert_ne!(IncludedAt::Best.label(), IncludedAt::Finalized.label());
-		let _: *const () = at_finalized_block as *const ();
 		let _: *const () = at_best_block as *const ();
 		assert_eq!(wormhole_inclusion_stage(ExecutionMode::default()), TransactionStage::Included);
 		assert_eq!(
@@ -4919,6 +4902,30 @@ mod tests {
 			}),
 			TransactionStage::Finalized
 		);
+	}
+
+	/// Library callers reach the proof paths through `handle_wormhole_command` without `main`
+	/// installing `--finalized`, so the tip must come from the mode they pass.
+	#[tokio::test]
+	async fn tip_block_follows_the_supplied_mode_not_the_installed_switch() {
+		use crate::chain::client::tests::{mock_node, FINALIZED, HEAD};
+
+		let (url, _, _node) = mock_node().await;
+		let client = QuantusClient::new(&url).await.expect("connect");
+		let finalized = ExecutionMode { finalized: true, wait_for_transaction: false };
+		assert_eq!(wormhole_tip_block(&client, finalized).await.expect("tip"), FINALIZED);
+		assert_eq!(wormhole_tip_block(&client, ExecutionMode::default()).await.expect("tip"), HEAD);
+	}
+
+	/// SDK callers pick the block by name, so neither helper follows the installed switch.
+	#[tokio::test]
+	async fn sdk_block_helpers_fetch_the_block_they_name() {
+		use crate::chain::client::tests::{mock_node, FINALIZED, HEAD};
+
+		let (url, _, _node) = mock_node().await;
+		let client = QuantusClient::new(&url).await.expect("connect");
+		assert_eq!(at_finalized_block(&client).await.expect("finalized").hash(), FINALIZED);
+		assert_eq!(at_best_block(&client).await.expect("best").hash(), HEAD);
 	}
 
 	#[test]

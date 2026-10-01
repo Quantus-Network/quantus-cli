@@ -34,7 +34,28 @@ pub enum TransactionStage {
 	Finalized,
 }
 
+static GLOBAL_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 impl ExecutionMode {
+	/// Install the finality choice process-wide, once, from `main`.
+	///
+	/// Waiting for a transaction is driven by the [`ExecutionMode`] threaded through each
+	/// command, but reads are taken in ~80 places that have no reason to carry one. Rather
+	/// than thread it everywhere, the same flag is published here and read by
+	/// `QuantusClient::get_latest_block`, so one switch governs both.
+	pub fn install(self) {
+		GLOBAL_MODE.store(self.finalized, std::sync::atomic::Ordering::Relaxed);
+	}
+
+	/// Whether reads should be taken at the finalized block rather than the head.
+	///
+	/// False by default: QPoW finality trails the head by ~100 blocks, so finalized
+	/// reads serve state ~20 minutes stale — after a runtime upgrade, the *previous*
+	/// runtime's state.
+	pub fn reads_at_finalized() -> bool {
+		GLOBAL_MODE.load(std::sync::atomic::Ordering::Relaxed)
+	}
+
 	pub fn transaction_stage(self) -> TransactionStage {
 		if self.finalized {
 			TransactionStage::Finalized
@@ -188,9 +209,9 @@ fn should_check_execution_success(
 }
 
 /// Require the watched extrinsic to be present in the reported block.
-/// Returns its index for event scanning, or an error if the hash is absent.
-fn require_extrinsic_index(our_extrinsic_index: Option<usize>) -> Result<usize> {
-	our_extrinsic_index.ok_or_else(|| {
+/// Returns it for event scanning, or an error if the hash is absent.
+fn require_extrinsic<T>(our_extrinsic: Option<T>) -> Result<T> {
+	our_extrinsic.ok_or_else(|| {
 		crate::error::QuantusError::NetworkError(
 			"Extrinsic hash not found in reported block".to_string(),
 		)
@@ -696,6 +717,31 @@ pub async fn submit_transaction_with_nonce<Call>(
 where
 	Call: subxt::tx::Payload,
 {
+	let (tx_hash, _included_in) = submit_transaction_with_nonce_and_inclusion_block(
+		quantus_client,
+		signer,
+		call,
+		tip,
+		nonce,
+		execution_mode,
+	)
+	.await?;
+	Ok(tx_hash)
+}
+
+/// Like [`submit_transaction_with_nonce`], but also returns the inclusion block, as
+/// [`submit_transaction_with_inclusion_block`] does.
+pub async fn submit_transaction_with_nonce_and_inclusion_block<Call>(
+	quantus_client: &crate::chain::client::QuantusClient,
+	signer: &crate::wallet::WalletSigner,
+	call: Call,
+	tip: Option<u128>,
+	nonce: u32,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<(subxt::utils::H256, Option<subxt::utils::H256>)>
+where
+	Call: subxt::tx::Payload,
+{
 	let from_keypair = match signer {
 		crate::wallet::WalletSigner::Hot(keypair) => {
 			crate::cli::cold_signing::warn_if_cold_flags_unused();
@@ -712,8 +758,7 @@ where
 				execution_mode,
 				crate::cli::cold_signing::ColdIo::global(),
 			)
-			.await
-			.map(|(tx_hash, _included_in)| tx_hash),
+			.await,
 	};
 	ensure_keypair_scheme_supported(quantus_client, from_keypair).await?;
 	let signer = from_keypair.to_subxt_signer(quantus_client.signing_context()).map_err(|e| {
@@ -754,14 +799,14 @@ where
 			Ok(mut tx_progress) => {
 				let tx_hash = tx_progress.extrinsic_hash();
 				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
-				let _included_in = wait_tx_inclusion(
+				let included_in = wait_tx_inclusion(
 					&mut tx_progress,
 					quantus_client.client(),
 					&tx_hash,
 					execution_mode.transaction_stage(),
 				)
 				.await?;
-				Ok(tx_hash)
+				Ok((tx_hash, Some(included_in)))
 			},
 			Err(e) => {
 				log_error!("❌ Failed to submit transaction with manual nonce {}: {e:?}", nonce);
@@ -772,7 +817,7 @@ where
 		match quantus_client.client().tx().sign_and_submit(&call, &signer, params).await {
 			Ok(tx_hash) => {
 				crate::log_print!("✅ Transaction submitted: {:?}", tx_hash);
-				Ok(tx_hash)
+				Ok((tx_hash, None))
 			},
 			Err(e) => {
 				log_error!("❌ Failed to submit transaction: {e:?}");
@@ -1089,13 +1134,12 @@ pub async fn submit_preimage(
 	Ok(())
 }
 
-pub(crate) async fn check_execution_success(
+/// The first `E` the extrinsic `tx_hash` emitted in `block_hash`, if any.
+pub(crate) async fn find_extrinsic_event<E: subxt::events::StaticEvent>(
 	client: &OnlineClient<ChainConfig>,
 	block_hash: &subxt::utils::H256,
 	tx_hash: &subxt::utils::H256,
-) -> Result<()> {
-	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
-
+) -> Result<Option<E>> {
 	let block = client.blocks().at(*block_hash).await.map_err(|e| {
 		crate::error::QuantusError::NetworkError(format!("Failed to get block: {e:?}"))
 	})?;
@@ -1104,38 +1148,34 @@ pub(crate) async fn check_execution_success(
 		crate::error::QuantusError::NetworkError(format!("Failed to get extrinsics: {e:?}"))
 	})?;
 
-	let our_extrinsic_index = extrinsics
-		.iter()
-		.enumerate()
-		.find(|(_, ext)| ext.hash() == *tx_hash)
-		.map(|(idx, _)| idx);
-
-	let events = block.events().await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!("Failed to fetch events: {e:?}"))
-	})?;
-
-	let ext_idx = require_extrinsic_index(our_extrinsic_index)?;
-
-	let metadata = client.metadata();
-	for event_result in events.iter() {
-		let event = event_result.map_err(|e| {
-			crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
+	let events = require_extrinsic(extrinsics.iter().find(|ext| ext.hash() == *tx_hash))?
+		.events()
+		.await
+		.map_err(|e| {
+			crate::error::QuantusError::NetworkError(format!("Failed to fetch events: {e:?}"))
 		})?;
 
-		if let subxt::events::Phase::ApplyExtrinsic(event_ext_idx) = event.phase() {
-			if event_ext_idx == ext_idx as u32 {
-				if let Ok(Some(ExtrinsicFailed { dispatch_error, .. })) =
-					event.as_event::<ExtrinsicFailed>()
-				{
-					let error_msg = format_dispatch_error(&dispatch_error, &metadata);
-					crate::log_error!("   Transaction failed: {}", error_msg);
-					return Err(crate::error::QuantusError::NetworkError(format!(
-						"Transaction execution failed: {}",
-						error_msg
-					)));
-				}
-			}
-		}
+	events.find_first::<E>().map_err(|e| {
+		crate::error::QuantusError::NetworkError(format!("Failed to decode event: {e:?}"))
+	})
+}
+
+pub(crate) async fn check_execution_success(
+	client: &OnlineClient<ChainConfig>,
+	block_hash: &subxt::utils::H256,
+	tx_hash: &subxt::utils::H256,
+) -> Result<()> {
+	use crate::chain::quantus_subxt::api::system::events::ExtrinsicFailed;
+
+	if let Some(ExtrinsicFailed { dispatch_error, .. }) =
+		find_extrinsic_event(client, block_hash, tx_hash).await?
+	{
+		let error_msg = format_dispatch_error(&dispatch_error, &client.metadata());
+		crate::log_error!("   Transaction failed: {}", error_msg);
+		return Err(crate::error::QuantusError::NetworkError(format!(
+			"Transaction execution failed: {}",
+			error_msg
+		)));
 	}
 
 	Ok(())
@@ -1165,6 +1205,18 @@ mod tests {
 			"unexpected error: {err}"
 		);
 		assert_eq!(delay_seconds_to_millis(1).unwrap(), 1_000);
+	}
+
+	#[test]
+	fn reads_follow_the_installed_finality_flag() {
+		// Default: reads take the head, so state is never ~100 blocks stale.
+		assert!(!ExecutionMode::reads_at_finalized());
+
+		ExecutionMode { finalized: true, wait_for_transaction: false }.install();
+		assert!(ExecutionMode::reads_at_finalized());
+
+		ExecutionMode { finalized: false, wait_for_transaction: true }.install();
+		assert!(!ExecutionMode::reads_at_finalized());
 	}
 
 	#[test]
@@ -1311,7 +1363,7 @@ mod tests {
 
 	#[test]
 	fn missing_extrinsic_hash_in_reported_block_is_error() {
-		let err = require_extrinsic_index(None).expect_err("absent extrinsic must not succeed");
+		let err = require_extrinsic::<usize>(None).expect_err("absent extrinsic must not succeed");
 		match err {
 			crate::error::QuantusError::NetworkError(msg) => {
 				assert!(
@@ -1322,7 +1374,7 @@ mod tests {
 			other => panic!("expected NetworkError, got {other:?}"),
 		}
 
-		assert_eq!(require_extrinsic_index(Some(3)).unwrap(), 3);
+		assert_eq!(require_extrinsic(Some(3)).unwrap(), 3);
 	}
 
 	#[test]

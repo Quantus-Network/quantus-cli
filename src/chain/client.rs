@@ -204,6 +204,38 @@ impl QuantusClient {
 		Ok(Self { client, rpc_client: self.rpc_client.clone(), node_url: self.node_url.clone() })
 	}
 
+	/// Partial fee for an already-signed extrinsic, computed at the **head**.
+	///
+	/// subxt's own `partial_fee_estimate` calls `TransactionPaymentApi_query_info` at
+	/// `latest_finalized_block_ref`. QPoW finality trails the head by ~100 blocks, so
+	/// for ~20 minutes after a runtime upgrade that changes fees the estimate is the
+	/// *old* runtime's. That made `send` refuse transfers it could afford, quoting a
+	/// fee 10x the real one right after mainnet 152 -> 153 cut `FEE_SCALE`.
+	///
+	/// Uses [`Self::get_latest_block`], so `--finalized` moves it with every other read.
+	pub async fn partial_fee(&self, encoded_tx: &[u8]) -> Result<u128, QuantusError> {
+		use codec::Encode;
+
+		let mut params = encoded_tx.to_vec();
+		(encoded_tx.len() as u32).encode_to(&mut params);
+		let head = self.get_latest_block().await?;
+
+		// RuntimeDispatchInfo: { weight_ref_time, weight_proof_size, class, partial_fee }
+		let (_, _, _, partial_fee) = self
+			.client
+			.backend()
+			.call_decoding::<(codec::Compact<u64>, codec::Compact<u64>, u8, u128)>(
+				"TransactionPaymentApi_query_info",
+				Some(&params),
+				head,
+			)
+			.await
+			.map_err(|e| {
+				QuantusError::NetworkError(format!("Failed to estimate transaction fee: {e:?}"))
+			})?;
+		Ok(partial_fee)
+	}
+
 	/// Get reference to the underlying SubXT client
 	/// The FIPS 204 context the connected runtime verifies extrinsic signatures under. Read from
 	/// the runtime version subxt already cached at connect, so this costs no RPC.
@@ -229,9 +261,28 @@ impl QuantusClient {
 		&self.rpc_client
 	}
 
-	/// Get the latest block (best block) using RPC call
-	/// This bypasses SubXT's default behavior of using finalized blocks
+	/// The block every read in the CLI is taken at: [`Self::head_or_finalized`] under the
+	/// `--finalized` switch `main` installs.
 	pub async fn get_latest_block(&self) -> crate::error::Result<subxt::utils::H256> {
+		self.head_or_finalized(crate::cli::common::ExecutionMode::reads_at_finalized())
+			.await
+	}
+
+	/// The finalized block when `finalized`, the head otherwise.
+	///
+	/// subxt's own default is the finalized block, which on this chain is ~100 blocks (~20
+	/// minutes) behind — stale state, and after a runtime upgrade the previous runtime's state
+	/// entirely. Callers whose reads must match the [`ExecutionMode`] they were handed pass its
+	/// `finalized` here: library callers never install the switch.
+	///
+	/// [`ExecutionMode`]: crate::cli::common::ExecutionMode
+	pub async fn head_or_finalized(&self, finalized: bool) -> crate::error::Result<H256> {
+		if finalized {
+			log_verbose!("🔍 Fetching finalized block hash via RPC...");
+			let hash = finalized_block_hash(&self.rpc_client).await?;
+			log_verbose!("📦 Finalized block hash: {:?}", hash);
+			return Ok(hash);
+		}
 		log_verbose!("🔍 Fetching latest block hash via RPC...");
 		let latest_hash = best_block_hash(&self.rpc_client).await?;
 		log_verbose!("📦 Latest block hash: {:?}", latest_hash);
@@ -257,8 +308,9 @@ impl QuantusClient {
 	) -> crate::error::Result<u64> {
 		log_verbose!("🔍 Fetching account nonce from best block via RPC...");
 
-		// Get latest block hash first
-		let latest_block_hash = self.get_latest_block().await?;
+		// The head even under `--finalized`: signing with the finalized block's nonce makes the
+		// extrinsic outdated whenever the account has anything unfinalized.
+		let latest_block_hash = self.head_or_finalized(false).await?;
 		log_verbose!("📦 Latest block hash for nonce query: {:?}", latest_block_hash);
 
 		// Convert sp_core::AccountId32 to subxt::utils::AccountId32
@@ -313,6 +365,14 @@ impl QuantusClient {
 		Ok((version.spec_version, version.transaction_version))
 	}
 
+	/// `state_getRuntimeVersion` at `at`: the raw JSON and the parsed pair.
+	pub async fn get_runtime_version_at(
+		&self,
+		at: H256,
+	) -> crate::error::Result<(serde_json::Value, RuntimeVersion)> {
+		fetch_runtime_version(&self.rpc_client, Some(at)).await
+	}
+
 	/// Get runtime hash using RPC call (if available)
 	pub async fn get_runtime_hash(&self) -> crate::error::Result<Option<String>> {
 		log_verbose!("🔍 Fetching runtime hash via RPC...");
@@ -341,6 +401,17 @@ impl QuantusClient {
 		log_verbose!("⚠️  No runtime hash RPC call available");
 		Ok(None)
 	}
+}
+
+/// Finalized block hash via RPC.
+async fn finalized_block_hash(ws_client: &WsClient) -> crate::error::Result<H256> {
+	use jsonrpsee::core::client::ClientT;
+	ws_client
+		.request::<H256, [(); 0]>("chain_getFinalizedHead", [])
+		.await
+		.map_err(|e| {
+			QuantusError::NetworkError(format!("Failed to fetch finalized block hash: {e:?}"))
+		})
 }
 
 async fn best_block_hash(ws_client: &WsClient) -> crate::error::Result<H256> {
@@ -443,7 +514,7 @@ impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
 	use super::*;
 	use codec::Encode;
 	use jsonrpsee::{
@@ -458,8 +529,8 @@ mod tests {
 	const NEW_RUNTIME: RuntimeVersion =
 		RuntimeVersion { spec_version: 148, transaction_version: 6 };
 	const GENESIS: H256 = H256([0x01; 32]);
-	const FINALIZED: H256 = H256([0x44; 32]);
-	const HEAD: H256 = H256([0x48; 32]);
+	pub(crate) const FINALIZED: H256 = H256([0x44; 32]);
+	pub(crate) const HEAD: H256 = H256([0x48; 32]);
 
 	fn runtime_at(hash: H256) -> RuntimeVersion {
 		if hash == HEAD {
@@ -472,7 +543,7 @@ mod tests {
 	/// A node caught mid-upgrade the way Heisenberg is for ~20 minutes after every enactment:
 	/// the head runs the new runtime, the finalized block still runs the old one. Records the
 	/// block named by every metadata request.
-	async fn mock_node() -> (String, Arc<Mutex<Vec<H256>>>, ServerHandle) {
+	pub(crate) async fn mock_node() -> (String, Arc<Mutex<Vec<H256>>>, ServerHandle) {
 		let metadata_requests = Arc::new(Mutex::new(Vec::new()));
 		let server = Server::builder().build("127.0.0.1:0").await.expect("bind mock node");
 		let url = format!("ws://{}", server.local_addr().expect("mock node address"));
@@ -486,6 +557,17 @@ mod tests {
 		module
 			.register_method("chain_getFinalizedHead", |_, _, _| {
 				Ok::<_, ErrorObjectOwned>(FINALIZED)
+			})
+			.expect("register");
+		module
+			.register_method("chain_getHeader", |_, _, _| {
+				Ok::<_, ErrorObjectOwned>(json!({
+					"parentHash": GENESIS,
+					"number": "0x1",
+					"stateRoot": GENESIS,
+					"extrinsicsRoot": GENESIS,
+					"digest": { "logs": [] },
+				}))
 			})
 			.expect("register");
 		module
