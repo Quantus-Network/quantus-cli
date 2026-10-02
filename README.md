@@ -931,6 +931,28 @@ vesting and governance deposits) are read from the chain and never scaled.
 >   cap is too low to fund the ephemeral accounts, or if a selected phase needs more headroom
 >   than the cap leaves.
 
+### NEAR (ML-DSA-65 accounts)
+
+NEAR accepts ML-DSA-65 keys from protocol version 85, so a Quantus wallet can control a NEAR account directly. `quantus near show-key`, `create-account`, `keys`, `send` and `dao …` are documented in `quantus near --help`. Any other contract method goes through near-cli-rs's own `contract call-function` sentence, copied word for word so a script written for one runs on the other; `sign-with-wallet <WALLET>` stands where near-cli has `sign-with-keychain`:
+
+```bash
+# view method
+quantus near contract call-function as-read-only dclv2.ref-labs.near get_metadata json-args '{}' network-config mainnet now
+
+# change method, signed by the wallet that holds the account's ML-DSA-65 key
+quantus near contract call-function as-transaction wrap.near near_deposit json-args '{}' \
+  prepaid-gas '30 Tgas' attached-deposit '0.1 NEAR' sign-as vault.alice.near \
+  network-config mainnet sign-with-wallet alice send
+
+# same sentence ending in `display`: prints the transaction and the equivalent near-cli-rs
+# command without loading the wallet or touching the network
+quantus near contract call-function as-transaction wrap.near near_deposit json-args '{}' \
+  prepaid-gas '30 Tgas' attached-deposit '0.1 NEAR' sign-as vault.alice.near \
+  network-config mainnet sign-with-wallet alice display
+```
+
+Amounts use near-cli's unit strings (`'30 Tgas'`, `'0.5 NEAR'`, `'1 yoctoNEAR'`). `network-config` takes `mainnet` or `testnet` (both via FastNear RPC) or an RPC URL. `sign-with-wallet` accepts `--password-file` for scripting.
+
 ### Other Commands
 
 | Command | Description |

@@ -12,6 +12,8 @@
 //! 5. `near dao ...` — act as a co-signer in a Sputnik DAO multisig (the contract behind Trezu):
 //!    propose transfers and vote, signed by the wallet. Sputnik authorizes by account id, so an
 //!    ML-DSA-65-controlled account is a full member with no DAO-side changes.
+//! 6. `near contract call-function ...` — any contract method, in near-cli-rs's own sentence
+//!    grammar (see [`crate::cli::near_contract`]).
 //!
 //! ML-DSA-87 wallets are rejected: NEAR defined ML-DSA-65 only.
 
@@ -156,6 +158,12 @@ pub enum NearCommands {
 	Dao {
 		#[command(subcommand)]
 		command: DaoCommands,
+	},
+
+	/// Use this for contract actions: call function (near-cli-rs grammar)
+	Contract {
+		#[command(subcommand)]
+		command: crate::cli::near_contract::ContractCommands,
 	},
 }
 
@@ -309,6 +317,8 @@ pub async fn handle_near_command(command: NearCommands) -> Result<()> {
 			handle_send(&wallet, &account, &to, &amount, &network, rpc_url, password, password_file)
 				.await,
 		NearCommands::Dao { command } => handle_dao_command(command).await,
+		NearCommands::Contract { command } =>
+			crate::cli::near_contract::handle_contract_command(command).await,
 	}
 }
 
@@ -370,7 +380,7 @@ async fn handle_dao_command(command: DaoCommands) -> Result<()> {
 }
 
 /// Load a wallet and its key as a NEAR public key, refusing non-65 schemes.
-fn load_ml_dsa_65_wallet(
+pub(crate) fn load_ml_dsa_65_wallet(
 	wallet: &str,
 	password: Option<String>,
 	password_file: Option<String>,
@@ -412,7 +422,7 @@ fn explorer_tx_url(network: &str, tx_hash: &str) -> Option<String> {
 	}
 }
 
-fn report_outcome(network: &str, outcome: &serde_json::Value) {
+pub(crate) fn report_outcome(network: &str, outcome: &serde_json::Value) {
 	if let Some(hash) = outcome.pointer("/transaction/hash").and_then(|h| h.as_str()) {
 		log_print!("   Transaction: {}", hash.bright_cyan());
 		if let Some(url) = explorer_tx_url(network, hash) {
@@ -651,17 +661,17 @@ fn policy_proposal_bond(policy: &serde_json::Value) -> Result<u128> {
 		})
 }
 
-/// Sign a single function call on the DAO with the member account's
-/// ML-DSA-65 key and submit it.
+/// Sign a single function call on `receiver` with the account's ML-DSA-65
+/// key and submit it, returning the finalized outcome.
 #[allow(clippy::too_many_arguments)]
-async fn submit_dao_call(
+pub(crate) async fn submit_function_call(
 	client: &NearRpcClient,
 	keypair: &QuantumKeyPair,
 	public: PublicKey,
 	account: &str,
-	dao: &str,
+	receiver: &str,
 	method_name: &str,
-	args: serde_json::Value,
+	args: Vec<u8>,
 	gas: u64,
 	deposit: u128,
 	network: &str,
@@ -674,11 +684,11 @@ async fn submit_dao_call(
 		signer_id: account.to_string(),
 		public_key: public,
 		nonce: access_key.nonce + 1,
-		receiver_id: dao.to_string(),
+		receiver_id: receiver.to_string(),
 		block_hash: access_key.block_hash,
 		actions: vec![Action::FunctionCall(FunctionCallAction {
 			method_name: method_name.to_string(),
-			args: args.to_string().into_bytes(),
+			args,
 			gas,
 			deposit,
 		})],
@@ -734,14 +744,14 @@ async fn handle_dao_propose_transfer(
 	);
 
 	let args = transfer_proposal_args(description, receiver, amount_yocto);
-	let outcome = submit_dao_call(
+	let outcome = submit_function_call(
 		&client,
 		&keypair,
 		public,
 		account,
 		dao,
 		"add_proposal",
-		args,
+		args.to_string().into_bytes(),
 		ADD_PROPOSAL_GAS,
 		bond_yocto,
 		network,
@@ -799,14 +809,14 @@ async fn handle_dao_vote(
 	);
 
 	let args = serde_json::json!({ "id": id, "action": action, "proposal": kind });
-	submit_dao_call(
+	submit_function_call(
 		&client,
 		&keypair,
 		public,
 		account,
 		dao,
 		"act_proposal",
-		args,
+		args.to_string().into_bytes(),
 		ACT_PROPOSAL_GAS,
 		0,
 		network,

@@ -17,6 +17,7 @@ pub mod metadata;
 pub mod multisend;
 pub mod multisig;
 pub mod near;
+pub mod near_contract;
 pub mod preimage;
 pub mod reversible;
 pub mod runtime;

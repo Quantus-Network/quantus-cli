@@ -37,15 +37,19 @@ impl NearRpcClient {
 		Ok(Self { url: url.into(), http })
 	}
 
-	/// Resolve `--network`/`--rpc-url` to a client. An explicit URL wins.
+	/// Resolve `--network`/`--rpc-url` to a client. An explicit URL wins; the
+	/// network name may itself be an RPC URL. The named networks use FastNear:
+	/// `rpc.{mainnet,testnet}.near.org` is deprecated and rate-limits.
 	pub fn for_network(network: &str, rpc_url: Option<String>) -> Result<Self> {
 		let url = match (rpc_url, network) {
 			(Some(url), _) => url,
-			(None, "testnet") => "https://rpc.testnet.near.org".to_string(),
-			(None, "mainnet") => "https://rpc.mainnet.near.org".to_string(),
+			(None, "testnet") => "https://test.rpc.fastnear.com".to_string(),
+			(None, "mainnet") => "https://rpc.mainnet.fastnear.com".to_string(),
+			(None, url) if url.starts_with("https://") || url.starts_with("http://") =>
+				url.to_string(),
 			(None, other) =>
 				return Err(QuantusError::Generic(format!(
-					"unknown network '{other}' — use testnet, mainnet, or --rpc-url"
+					"unknown network '{other}' — use testnet, mainnet, an RPC URL, or --rpc-url"
 				))),
 		};
 		Self::new(url)
