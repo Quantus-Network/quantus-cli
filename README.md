@@ -661,7 +661,9 @@ Notes:
 NEAR accepts ML-DSA-65 access keys and signatures from protocol version 85,
 so a Quantus ML-DSA-65 wallet (`quantus wallet create --scheme ml-dsa-65`)
 can be the sole key on a NEAR account. ML-DSA-87 wallets are rejected: NEAR
-defined ML-DSA-65 only.
+defined ML-DSA-65 only. `--network` is `testnet` or `mainnet`, served by
+FastNear RPC, or one of their known endpoints (FastNear or `rpc.*.near.org`);
+any other endpoint goes in `--rpc-url`.
 
 ```bash
 # The wallet's key in NEAR text form (ml-dsa-65:<base58>) and its on-chain handle

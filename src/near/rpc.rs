@@ -10,6 +10,22 @@ use serde_json::{json, Value};
 /// version (the `PostQuantumSignatures` feature).
 pub const MIN_ML_DSA_PROTOCOL_VERSION: u64 = 85;
 
+/// Known NEAR networks: the label a cold wallet checks, and the RPC endpoints
+/// accepted for it, default first. FastNear is the default because
+/// `rpc.{mainnet,testnet}.near.org` is deprecated and rate-limits.
+pub const NETWORKS: [(&str, [&str; 2]); 2] = [
+	("mainnet", ["https://rpc.mainnet.fastnear.com", "https://rpc.mainnet.near.org"]),
+	("testnet", ["https://test.rpc.fastnear.com", "https://rpc.testnet.near.org"]),
+];
+
+/// The canonical label for a network name or one of its known endpoints.
+pub fn network_label(network: &str) -> Option<&'static str> {
+	NETWORKS
+		.iter()
+		.find(|(label, endpoints)| *label == network || endpoints.contains(&network))
+		.map(|(label, _)| *label)
+}
+
 pub struct NearRpcClient {
 	url: String,
 	http: reqwest::Client,
@@ -37,16 +53,29 @@ impl NearRpcClient {
 		Ok(Self { url: url.into(), http })
 	}
 
-	/// Resolve `--network`/`--rpc-url` to a client. An explicit URL wins.
+	/// Resolve `--network`/`--rpc-url` to a client. An explicit URL wins;
+	/// otherwise the network is a label or one of its known endpoints (see
+	/// [`NETWORKS`]), so a cold wallet always learns the label.
 	pub fn for_network(network: &str, rpc_url: Option<String>) -> Result<Self> {
-		let url = match (rpc_url, network) {
-			(Some(url), _) => url,
-			(None, "testnet") => "https://rpc.testnet.near.org".to_string(),
-			(None, "mainnet") => "https://rpc.mainnet.near.org".to_string(),
-			(None, other) =>
-				return Err(QuantusError::Generic(format!(
-					"unknown network '{other}' — use testnet, mainnet, or --rpc-url"
-				))),
+		let url = match rpc_url {
+			Some(url) => url,
+			None => match NETWORKS
+				.iter()
+				.find(|(label, endpoints)| *label == network || endpoints.contains(&network))
+			{
+				Some((label, endpoints)) if *label == network => endpoints[0].to_string(),
+				Some(_) => network.to_string(),
+				None => {
+					let known: Vec<&str> = NETWORKS
+						.iter()
+						.flat_map(|(_, endpoints)| endpoints.iter().copied())
+						.collect();
+					return Err(QuantusError::Generic(format!(
+						"unknown network '{network}' — use mainnet, testnet, or one of {known:?}; any \
+						 other RPC endpoint goes in --rpc-url"
+					)));
+				},
+			},
 		};
 		Self::new(url)
 	}
@@ -330,6 +359,28 @@ fn decode_block_hash(result: &Value) -> Result<[u8; 32]> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn networks_resolve_to_fastnear_and_known_endpoints_pass_through() {
+		let url = |network, rpc_url| NearRpcClient::for_network(network, rpc_url).map(|c| c.url);
+		assert_eq!(url("mainnet", None).unwrap(), "https://rpc.mainnet.fastnear.com");
+		assert_eq!(url("testnet", None).unwrap(), "https://test.rpc.fastnear.com");
+		assert_eq!(
+			url("https://rpc.testnet.near.org", None).unwrap(),
+			"https://rpc.testnet.near.org"
+		);
+		assert_eq!(
+			url("mainnet", Some("http://localhost:3030".into())).unwrap(),
+			"http://localhost:3030"
+		);
+		assert!(url("https://near.lava.build", None).is_err());
+		assert!(url("devnet", None).is_err());
+
+		assert_eq!(network_label("https://test.rpc.fastnear.com"), Some("testnet"));
+		assert_eq!(network_label("https://rpc.mainnet.near.org"), Some("mainnet"));
+		assert_eq!(network_label("mainnet"), Some("mainnet"));
+		assert_eq!(network_label("devnet"), None);
+	}
 
 	#[test]
 	fn send_tx_outcome_accepts_finalized_success() {
