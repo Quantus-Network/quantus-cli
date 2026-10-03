@@ -33,7 +33,7 @@ use crate::{
 			validate_account_id, AccessKey, Action, AddKeyAction, FunctionCallAction, PublicKey,
 			SignedTransaction, Transaction, TransferAction, NEAR_DECIMALS,
 		},
-		rpc::{decode_success_value, NearRpcClient},
+		rpc::{decode_success_value, network_label, NearRpcClient},
 		sign::{load_credentials, sign_transaction_ed25519, sign_transaction_ml_dsa_65},
 	},
 	qr::NearPublicKeyExport,
@@ -591,7 +591,7 @@ fn handle_show_key(
 }
 
 fn explorer_tx_url(network: &str, tx_hash: &str) -> Option<String> {
-	match network {
+	match network_label(network)? {
 		"testnet" => Some(format!("https://testnet.nearblocks.io/txns/{tx_hash}")),
 		"mainnet" => Some(format!("https://nearblocks.io/txns/{tx_hash}")),
 		_ => None,

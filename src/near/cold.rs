@@ -28,6 +28,7 @@ use crate::{
 			render_text, PublicKey, Signature, SignedTransaction, Transaction,
 			ML_DSA_65_SIGNATURE_LEN,
 		},
+		rpc::network_label,
 		sign::transaction_hash,
 	},
 	qr::NearSignRequest,
@@ -136,6 +137,18 @@ pub fn parse_cold_account(wallet_name: &str, cold_address_ss58: &str) -> Result<
 		})
 }
 
+/// The request for the device, with the network as its canonical label: the
+/// CLI takes a known RPC endpoint as `--network` too, the wallet takes labels only.
+fn sign_request_for(network: &str, tx_bytes: Vec<u8>) -> Result<NearSignRequest> {
+	let label = network_label(network).ok_or_else(|| {
+		QuantusError::Generic(format!(
+			"cannot cold-sign for network {network:?}: not mainnet, testnet, or one of their known \
+			 RPC endpoints"
+		))
+	})?;
+	NearSignRequest::new(label, tx_bytes)
+}
+
 /// Run the QR roundtrip for `tx` against cold wallet `wallet_name` and return
 /// the signed transaction. Nothing is submitted here.
 pub async fn sign_transaction_cold(
@@ -154,11 +167,11 @@ pub async fn sign_transaction_cold(
 	};
 	let account = parse_cold_account(wallet_name, cold_address_ss58)?;
 	let tx_bytes = tx.to_bytes()?;
-	let request = NearSignRequest::new(network, tx_bytes)?;
+	let request = sign_request_for(network, tx_bytes)?;
 
 	log_print!("🧊 Cold wallet signing with '{}'", wallet_name.bright_blue().bold());
 	log_print!("   Wallet:   {}", cold_address_ss58.bright_cyan());
-	log_print!("   Network:  {network}");
+	log_print!("   Network:  {}", request.network);
 	log_print!("   Signer:   {}", render_text(&tx.signer_id).bright_cyan());
 	log_print!("   Key:      {}", tx.public_key.to_near_string());
 	log_print!("   Receiver: {}", render_text(&tx.receiver_id).bright_cyan());
@@ -338,6 +351,15 @@ mod tests {
 
 		assert!(transaction_from_file_text(r#"{"x": "not a tx"}"#).is_err());
 		assert!(load_unsigned_transaction("@/nonexistent/path").is_err());
+	}
+
+	#[test]
+	fn known_endpoints_cold_sign_under_their_network_label() {
+		let network = |n| sign_request_for(n, vec![1]).map(|r| r.network);
+		assert_eq!(network("https://rpc.mainnet.fastnear.com").unwrap(), "mainnet");
+		assert_eq!(network("https://rpc.testnet.near.org").unwrap(), "testnet");
+		assert_eq!(network("testnet").unwrap(), "testnet");
+		assert!(network("https://near.lava.build").is_err());
 	}
 
 	/// The full simulator loop as the CLI drives it: v2 request → UR → device
