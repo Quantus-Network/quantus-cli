@@ -72,21 +72,12 @@ pub struct ProposalInfo {
 /// Parse amount from human-readable format (e.g., "10", "10.5", "0.001")
 /// or raw format (e.g., "10000000000000")
 pub fn parse_amount(amount: &str) -> crate::error::Result<u128> {
-	// If contains decimal point, parse as float and multiply by QUAN_DECIMALS
+	// Decimal inputs go through the exact string parser the rest of the CLI
+	// uses: the previous f64 path lost plancks on ordinary amounts ("2.01"
+	// became 2_009_999_999_999) and silently rounded inputs with more than
+	// 12 decimal places to 0.
 	if amount.contains('.') {
-		let amount_f64: f64 = amount
-			.parse()
-			.map_err(|e| crate::error::QuantusError::Generic(format!("Invalid amount: {}", e)))?;
-
-		if amount_f64 < 0.0 {
-			return Err(crate::error::QuantusError::Generic(
-				"Amount cannot be negative".to_string(),
-			));
-		}
-
-		// Multiply by decimals and convert to u128
-		let base_amount = (amount_f64 * QUAN_DECIMALS as f64) as u128;
-		Ok(base_amount)
+		crate::cli::send::parse_amount_with_decimals(amount, 12)
 	} else {
 		// Try parsing as u128 first (raw format)
 		if let Ok(raw) = amount.parse::<u128>() {
@@ -3565,5 +3556,35 @@ mod execute_call_tests {
 		// call index + 32-byte address + u32 proposal id, then the inner call verbatim.
 		assert_eq!(&execute[execute.len() - inner_bytes.len()..], inner_bytes.as_slice());
 		assert_eq!(execute.len(), 1 + 32 + 4 + inner_bytes.len());
+	}
+
+	#[test]
+	fn parse_amount_decimal_inputs_are_exact() {
+		// The float path lost plancks on ordinary two-decimal amounts:
+		// 2.01 * 10^12 in f64 truncates to 2_009_999_999_999.
+		assert_eq!(parse_amount("2.01").unwrap(), 2_010_000_000_000);
+		assert_eq!(parse_amount("66240.40").unwrap(), 66_240_400_000_000_000);
+		assert_eq!(parse_amount("10.5").unwrap(), 10_500_000_000_000);
+		assert_eq!(parse_amount("0.001").unwrap(), 1_000_000_000);
+		assert_eq!(parse_amount("0.000000000001").unwrap(), 1);
+	}
+
+	#[test]
+	fn parse_amount_rejects_what_float_would_silently_mangle() {
+		// 13 decimal places cannot be represented at 10^12: the float path
+		// silently rounded this to 0 instead of refusing it.
+		assert!(parse_amount("0.0000000000001").is_err());
+		// Scientific notation is not a plain decimal string; the float path
+		// read "1e3" as 1000 QUAN.
+		assert!(parse_amount("1e3").is_err());
+		assert!(parse_amount("-1.5").is_err());
+		assert!(parse_amount("1.5.2").is_err());
+	}
+
+	#[test]
+	fn parse_amount_whole_number_paths_unchanged() {
+		assert_eq!(parse_amount("10").unwrap(), 10 * QUAN_DECIMALS);
+		// Documented raw format: >= 10^10 without a decimal point is base units.
+		assert_eq!(parse_amount("10000000000000").unwrap(), 10_000_000_000_000);
 	}
 }
