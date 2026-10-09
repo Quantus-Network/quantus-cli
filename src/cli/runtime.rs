@@ -526,12 +526,7 @@ pub async fn handle_runtime_command(
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use codec::Decode;
-
-	fn metadata() -> subxt::Metadata {
-		let bytes: &[u8] = include_bytes!("../quantus_metadata.scale");
-		subxt::Metadata::decode(&mut &bytes[..]).expect("valid checked-in metadata")
-	}
+	use crate::chain::test_metadata as metadata;
 
 	#[test]
 	fn authorization_preimage_contains_only_the_runtime_hash() {
