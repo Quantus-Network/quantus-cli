@@ -1,6 +1,6 @@
 //! `quantus wallet` subcommand - wallet operations
 use crate::{
-	chain::quantus_subxt,
+	chain::{client::QuantusClient, quantus_subxt},
 	cli::address_format::QuantusSS58,
 	error::QuantusError,
 	log_error, log_print, log_success, log_verbose,
@@ -47,7 +47,7 @@ pub enum WalletCommands {
 		#[arg(long)]
 		no_derivation: bool,
 
-		/// Dilithium signature scheme (default: ml-dsa-65)
+		/// Dilithium signature scheme (default: ml-dsa-65; CLI v1.x defaulted to ml-dsa-87)
 		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
 		scheme: DilithiumScheme,
 	},
@@ -115,9 +115,19 @@ pub enum WalletCommands {
 		#[arg(long)]
 		no_derivation: bool,
 
-		/// Dilithium signature scheme (default: ml-dsa-65)
+		/// Dilithium signature scheme. Wallets created with CLI v1.x defaulted to
+		/// ml-dsa-87 (HD path …/0'); if an import lands on an empty address, use --scan
 		#[arg(long, value_enum, default_value_t = DilithiumScheme::MlDsa65)]
 		scheme: DilithiumScheme,
+
+		/// Show every address this phrase maps to under past and current CLI defaults
+		/// (with on-chain history when a node is reachable) and pick one interactively
+		#[arg(long, conflicts_with_all = ["derivation_path", "no_derivation", "scheme"])]
+		scan: bool,
+
+		/// Never contact the node (air-gapped use); skips the on-chain history check
+		#[arg(long)]
+		offline: bool,
 	},
 
 	/// Import a cold (hardware / air-gapped) wallet as watch-only
@@ -391,6 +401,252 @@ fn write_mnemonic_to_protected_file(
 fn checkphrase_line(address: &str) -> Option<String> {
 	(!address.starts_with('['))
 		.then(|| crate::wallet::checkphrase::checkphrase(address).bright_blue().to_string())
+}
+
+/// Upper bound on waiting for a node during best-effort wallet checks. Wallet
+/// commands must stay usable on air-gapped machines, so a missing node is never
+/// an error here; it only means the on-chain information is skipped.
+const NODE_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+async fn try_connect_for_probe(node_url: &str) -> Option<QuantusClient> {
+	match tokio::time::timeout(NODE_PROBE_TIMEOUT, QuantusClient::new(node_url)).await {
+		Ok(Ok(client)) => Some(client),
+		Ok(Err(e)) => {
+			log_verbose!("Node unreachable, skipping on-chain check: {}", e);
+			None
+		},
+		Err(_) => {
+			log_verbose!(
+				"Node connection timed out after {}s, skipping on-chain check",
+				NODE_PROBE_TIMEOUT.as_secs()
+			);
+			None
+		},
+	}
+}
+
+/// `System::Account` fields that show whether an address was ever used.
+struct AccountActivity {
+	nonce: u32,
+	free: u128,
+	reserved: u128,
+}
+
+impl AccountActivity {
+	fn is_used(&self) -> bool {
+		self.nonce > 0 || self.free > 0 || self.reserved > 0
+	}
+}
+
+async fn fetch_account_activity(
+	quantus_client: &QuantusClient,
+	address: &str,
+) -> crate::error::Result<AccountActivity> {
+	let (account_id_sp, _) = SpAccountId32::from_ss58check_with_version(address)
+		.map_err(|e| QuantusError::NetworkError(format!("Invalid SS58 address: {e:?}")))?;
+	let account_bytes: [u8; 32] = *account_id_sp.as_ref();
+	let account_id = subxt::ext::subxt_core::utils::AccountId32::from(account_bytes);
+
+	let storage_addr = quantus_subxt::api::storage().system().account(account_id);
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let info = quantus_client
+		.client()
+		.storage()
+		.at(latest_block_hash)
+		.fetch_or_default(&storage_addr)
+		.await
+		.map_err(|e| QuantusError::NetworkError(format!("Failed to fetch account info: {e:?}")))?;
+
+	Ok(AccountActivity { nonce: info.nonce, free: info.data.free, reserved: info.data.reserved })
+}
+
+/// Token symbol and decimals, if the node can report them.
+async fn chain_token(quantus_client: &QuantusClient) -> Option<(String, u8)> {
+	crate::cli::send::get_chain_properties(quantus_client).await.ok()
+}
+
+fn describe_activity(activity: &AccountActivity, token: Option<&(String, u8)>) -> String {
+	let total = activity.free.saturating_add(activity.reserved);
+	let balance = match token {
+		Some((symbol, decimals)) =>
+			format!("{} {symbol}", crate::cli::send::format_balance(total, *decimals)),
+		None => format!("{total} (raw units)"),
+	};
+	format!("balance {balance}, nonce {}", activity.nonce)
+}
+
+/// After a plain import, tell the user whether the derived address has ever
+/// been used on-chain. Historical CLI defaults derive different addresses from
+/// the same phrase, so a "successful" import can silently land on an empty
+/// one. Best-effort: with no node reachable only a short note is printed.
+async fn report_import_history(node_url: &str, address: &str) {
+	let Some(quantus_client) = try_connect_for_probe(node_url).await else {
+		log_print!(
+			"\n{}",
+			"ℹ️  Node unreachable; skipped the on-chain history check. If you expected funds on \
+			 this wallet, re-run with --scan to compare derivations. Use --offline to silence \
+			 this note on air-gapped machines."
+				.dimmed()
+		);
+		return;
+	};
+
+	let activity = match fetch_account_activity(&quantus_client, address).await {
+		Ok(activity) => activity,
+		Err(e) => {
+			log_verbose!("On-chain history check failed: {}", e);
+			return;
+		},
+	};
+
+	if activity.is_used() {
+		let token = chain_token(&quantus_client).await;
+		log_success!("On-chain: {}", describe_activity(&activity, token.as_ref()).bright_green());
+		return;
+	}
+
+	log_print!(
+		"\n{}",
+		"⚠️  This address has no on-chain history (never received funds or sent a transaction)."
+			.bright_yellow()
+	);
+	log_print!(
+		"{}",
+		"   If you are recovering an existing wallet, the funds are probably under a different \
+		 derivation: wallets created with CLI v1.x used --scheme ml-dsa-87 (HD path …/0'), and \
+		 some tools use --no-derivation."
+			.dimmed()
+	);
+	log_print!(
+		"   Re-run with {} to compare every derivation, or {} to find older testnet addresses.",
+		"quantus wallet import --scan".bright_green(),
+		"quantus airdrop check".bright_green()
+	);
+}
+
+/// Derive every candidate address for a phrase, show which ones have been used
+/// (when a node is reachable), and let the user choose. Works fully offline;
+/// the chain lookup only adds information.
+async fn choose_recovery_candidate(
+	mnemonic: &str,
+	node_url: &str,
+	offline: bool,
+) -> crate::error::Result<crate::wallet::RecoveryCandidate> {
+	use std::io::IsTerminal;
+
+	if !io::stdin().is_terminal() {
+		return Err(QuantusError::Generic(
+			"--scan needs an interactive terminal to choose a derivation; pass --scheme, \
+			 --derivation-path or --no-derivation explicitly instead"
+				.to_string(),
+		));
+	}
+
+	let candidates = crate::wallet::recovery_candidates(mnemonic)?;
+
+	let quantus_client = if offline { None } else { try_connect_for_probe(node_url).await };
+	let token = match &quantus_client {
+		Some(client) => chain_token(client).await,
+		None => None,
+	};
+	let mut activity: Vec<Option<AccountActivity>> = Vec::with_capacity(candidates.len());
+	for candidate in &candidates {
+		let entry = match &quantus_client {
+			Some(client) => match fetch_account_activity(client, &candidate.address).await {
+				Ok(activity) => Some(activity),
+				Err(e) => {
+					log_verbose!("History lookup failed for {}: {}", candidate.address, e);
+					None
+				},
+			},
+			None => None,
+		};
+		activity.push(entry);
+	}
+
+	log_print!("\nAddresses this recovery phrase maps to:\n");
+	for (i, (candidate, activity)) in candidates.iter().zip(&activity).enumerate() {
+		log_print!(
+			"{}. {} {}",
+			(i + 1).to_string().bright_yellow(),
+			candidate.scheme.key_type_label().bright_green(),
+			format!("({})", candidate.note).dimmed()
+		);
+		log_print!("   Path: {}", candidate.derivation_label().bright_magenta());
+		log_print!("   Address: {}", candidate.address.bright_cyan());
+		if let Some(checkphrase) = checkphrase_line(&candidate.address) {
+			log_print!("   Checkphrase: {}", checkphrase);
+		}
+		match activity {
+			Some(activity) if activity.is_used() => log_print!(
+				"   On-chain: {}",
+				describe_activity(activity, token.as_ref()).bright_green()
+			),
+			Some(_) => log_print!("   On-chain: {}", "no history".dimmed()),
+			None => {},
+		}
+		log_print!();
+	}
+	if quantus_client.is_none() {
+		log_print!(
+			"{}",
+			if offline {
+				"Offline: compare the address or checkphrase with your records."
+			} else {
+				"Node unreachable: on-chain history not shown. Compare the address or \
+				 checkphrase with your records."
+			}
+			.dimmed()
+		);
+	}
+
+	let used: Vec<usize> = activity
+		.iter()
+		.enumerate()
+		.filter_map(|(i, a)| a.as_ref().filter(|a| a.is_used()).map(|_| i))
+		.collect();
+	if used.len() > 1 {
+		log_print!("{}", "Several of these addresses have been used.".bright_yellow());
+	}
+	let default_choice = used.first().copied().unwrap_or(0);
+
+	print!(
+		"Import which one? [1-{}, Enter = {}, q to abort]: ",
+		candidates.len(),
+		default_choice + 1
+	);
+	io::stdout().flush()?;
+	let mut input = String::new();
+	if io::stdin().read_line(&mut input)? == 0 {
+		return Err(QuantusError::Generic("Import aborted: no selection made".to_string()));
+	}
+	let input = input.trim();
+
+	let index = if input.is_empty() {
+		default_choice
+	} else if input.eq_ignore_ascii_case("q") {
+		return Err(QuantusError::Generic("Import aborted".to_string()));
+	} else {
+		match input.parse::<usize>() {
+			Ok(n) if (1..=candidates.len()).contains(&n) => n - 1,
+			_ =>
+				return Err(QuantusError::Generic(format!(
+					"'{input}' is not a choice between 1 and {}",
+					candidates.len()
+				))),
+		}
+	};
+
+	let chosen = candidates[index].clone();
+	log_print!(
+		"\n{}",
+		format!(
+			"Next time, import this directly with: quantus wallet import {}",
+			chosen.cli_flags()
+		)
+		.dimmed()
+	);
+	Ok(chosen)
 }
 
 /// Handle wallet commands
@@ -740,6 +996,8 @@ pub async fn handle_wallet_command(
 			derivation_path,
 			no_derivation,
 			scheme,
+			scan,
+			offline,
 		} => {
 			log_print!("📥 Importing wallet...");
 
@@ -769,7 +1027,20 @@ pub async fn handle_wallet_command(
 				None => get_mnemonic_from_user()?,
 			};
 
-			let result = if no_derivation {
+			let result = if scan {
+				match choose_recovery_candidate(&mnemonic_phrase, node_url, offline).await {
+					Ok(candidate) =>
+						wallet_manager
+							.import_wallet_for_candidate(
+								&name,
+								&mnemonic_phrase,
+								Some(&final_password),
+								&candidate,
+							)
+							.await,
+					Err(e) => Err(e),
+				}
+			} else if no_derivation {
 				wallet_manager
 					.import_wallet_no_derivation_with_scheme(
 						&name,
@@ -810,6 +1081,10 @@ pub async fn handle_wallet_command(
 						wallet_info.created_at.format("%Y-%m-%d %H:%M:%S UTC").to_string().dimmed()
 					);
 					log_success!("✅ Wallet imported successfully!");
+					// --scan already showed on-chain history for every candidate.
+					if !scan && !offline {
+						report_import_history(node_url, &wallet_info.address).await;
+					}
 				},
 				Err(e) => {
 					log_error!("{}", format!("❌ Failed to import wallet: {e}").red());
@@ -1194,6 +1469,8 @@ mod tests {
 				derivation_path: None,
 				no_derivation: false,
 				scheme: DilithiumScheme::MlDsa65,
+				scan: false,
+				offline: true,
 			},
 			"ws://127.0.0.1:9944",
 		)
@@ -1206,6 +1483,92 @@ mod tests {
 			source.address
 		);
 		assert_eq!(imported.mnemonic.as_deref(), Some(mnemonic.trim()));
+	}
+
+	#[test]
+	fn wallet_import_scan_conflicts_with_explicit_derivation_flags() {
+		let parsed = TestCli::try_parse_from([
+			"quantus",
+			"wallet",
+			"import",
+			"--name",
+			"poc",
+			"--scan",
+			"--offline",
+		])
+		.expect("--scan --offline must parse");
+		match parsed.command {
+			crate::cli::Commands::Wallet(WalletCommands::Import { scan, offline, .. }) => {
+				assert!(scan);
+				assert!(offline);
+			},
+			other => panic!("expected Wallet(Import), got {other:?}"),
+		}
+
+		for conflicting in [
+			vec!["--scheme", "ml-dsa-87"],
+			vec!["--no-derivation"],
+			vec!["--derivation-path", "m/44'/189189'/0'/0'/0'"],
+		] {
+			let mut args = vec!["quantus", "wallet", "import", "--name", "poc", "--scan"];
+			args.extend(conflicting.iter());
+			assert!(
+				TestCli::try_parse_from(&args).is_err(),
+				"--scan must conflict with {conflicting:?}"
+			);
+		}
+	}
+
+	#[tokio::test]
+	#[serial]
+	async fn wallet_import_scan_without_terminal_asks_for_explicit_flags() {
+		let home = temp_home();
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD_SCANNED");
+
+		let mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
+		let mnemonic_path = home.path().join("mnemonic.txt");
+		write_mnemonic_to_protected_file(&mnemonic_path, mnemonic).expect("write mnemonic file");
+
+		// Test stdin is never a terminal, so the picker must refuse instead of
+		// blocking on read_line, and nothing may be written to the keystore.
+		let err = handle_wallet_command(
+			WalletCommands::Import {
+				name: "scanned".to_string(),
+				password: None,
+				password_file: None,
+				allow_empty_password: true,
+				mnemonic_file: Some(mnemonic_path.to_string_lossy().into_owned()),
+				derivation_path: None,
+				no_derivation: false,
+				scheme: DilithiumScheme::MlDsa65,
+				scan: true,
+				offline: true,
+			},
+			"ws://127.0.0.1:9944",
+		)
+		.await
+		.expect_err("--scan without a terminal must fail");
+		assert!(err.to_string().contains("--scan needs an interactive terminal"), "{err}");
+
+		let manager = WalletManager::new().expect("wallet manager");
+		assert_eq!(manager.wallet_type("scanned").expect("probe"), None);
+	}
+
+	#[test]
+	fn describe_activity_formats_with_and_without_token_info() {
+		let activity =
+			AccountActivity { nonce: 3, free: 1_500_000_000_000, reserved: 500_000_000_000 };
+		assert!(activity.is_used());
+		assert_eq!(
+			describe_activity(&activity, Some(&("QUAN".to_string(), 12))),
+			"balance 2 QUAN, nonce 3"
+		);
+		assert_eq!(
+			describe_activity(&activity, None),
+			"balance 2000000000000 (raw units), nonce 3"
+		);
+		assert!(!AccountActivity { nonce: 0, free: 0, reserved: 0 }.is_used());
+		assert!(AccountActivity { nonce: 0, free: 0, reserved: 1 }.is_used());
 	}
 
 	#[test]
