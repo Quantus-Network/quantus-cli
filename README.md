@@ -592,8 +592,8 @@ quantus wallet import --name recovered_wallet --scan
 # Air-gapped machine: never contact a node
 quantus wallet import --name recovered_wallet --scan --offline
 
-# Create from raw 32-byte seed
-quantus wallet from-seed --name raw_wallet --seed <64-hex-chars>
+# Create from raw 32-byte seed (prompts for the 64 hex characters)
+quantus wallet from-seed --name raw_wallet
 
 # List wallets
 quantus wallet list
