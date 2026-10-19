@@ -136,6 +136,11 @@ pub enum ProposeSubcommand {
 		/// Read password from file
 		#[arg(long)]
 		password_file: Option<String>,
+
+		/// Propose transfer_keep_alive instead of the default transfer_allow_death: the
+		/// transfer fails rather than reaping the multisig below the existential deposit
+		#[arg(long)]
+		keep_alive: bool,
 	},
 
 	/// Propose a custom transaction (full flexibility)
@@ -973,6 +978,7 @@ pub async fn handle_multisig_command(
 				from,
 				password,
 				password_file,
+				keep_alive,
 			} =>
 				handle_propose_transfer(
 					address,
@@ -982,6 +988,7 @@ pub async fn handle_multisig_command(
 					from,
 					password,
 					password_file,
+					keep_alive,
 					node_url,
 					execution_mode,
 				)
@@ -1359,13 +1366,15 @@ async fn handle_propose_transfer(
 	from: String,
 	password: Option<String>,
 	password_file: Option<String>,
+	keep_alive: bool,
 	node_url: &str,
 	execution_mode: ExecutionMode,
 ) -> crate::error::Result<()> {
 	log_print!("📝 {} Creating transfer proposal...", "MULTISIG".bright_magenta().bold());
 
 	// Resolve recipient address (wallet name or SS58)
-	let to_address = crate::cli::common::resolve_address(&to)?;
+	let (to_address, to_account_id) =
+		crate::cli::common::resolve_address_with_subxt_account_id(&to)?;
 
 	// Parse amount (supports both human format "10" and raw "10000000000000")
 	let amount_u128: u128 = parse_amount(&amount)?;
@@ -1407,26 +1416,24 @@ async fn handle_propose_transfer(
 		.high_security_accounts(multisig_account_id);
 	let is_high_security = storage_at.fetch(&hs_query).await?.is_some();
 
+	use subxt::tx::Payload;
 	if is_high_security {
+		if keep_alive {
+			return Err(crate::error::QuantusError::Generic(
+				"--keep-alive does not apply to a high-security multisig: its transfers are proposed as ReversibleTransfers::schedule_transfer".to_string(),
+			));
+		}
 		// HS enabled: use ReversibleTransfers::schedule_transfer (delayed + reversible)
 		log_print!(
 			"🛡️  {} High-Security detected: using delayed transfer (ReversibleTransfers::schedule_transfer)",
 			"HS".bright_green().bold()
 		);
 
-		// Build schedule_transfer call data directly
-		let (to_id, _) = SpAccountId32::from_ss58check_with_version(&to_address).map_err(|e| {
-			crate::error::QuantusError::Generic(format!("Invalid recipient address: {:?}", e))
-		})?;
-		let to_bytes: [u8; 32] = *to_id.as_ref();
-		let to_account_id = subxt::ext::subxt_core::utils::AccountId32::from(to_bytes);
 		let dest = subxt::utils::MultiAddress::Id(to_account_id);
-
 		let schedule_call = quantus_subxt::api::tx()
 			.reversible_transfers()
 			.schedule_transfer(dest, amount_u128);
 
-		use subxt::tx::Payload;
 		let call_data = schedule_call
 			.encode_call_data(&quantus_client.client().metadata())
 			.map_err(|e| {
@@ -1446,7 +1453,13 @@ async fn handle_propose_transfer(
 		)
 		.await
 	} else {
-		// No HS: use standard Balances::transfer_allow_death
+		// No HS: the Balances transfer `quantus send` makes, proposed by name
+		let call = crate::cli::send::build_transfer_call_for_account_id(
+			to_account_id,
+			amount_u128,
+			keep_alive,
+		);
+		let details = call.validation_details().expect("static balances call names itself");
 		let args_json = serde_json::to_string(&vec![
 			serde_json::Value::String(to_address),
 			serde_json::Value::String(amount_u128.to_string()),
@@ -1457,8 +1470,8 @@ async fn handle_propose_transfer(
 
 		handle_propose(
 			multisig_address,
-			"Balances".to_string(),
-			"transfer_allow_death".to_string(),
+			details.pallet_name.to_string(),
+			details.call_name.to_string(),
 			Some(args_json),
 			expiry,
 			from,
@@ -3335,6 +3348,7 @@ mod tests {
 #[cfg(test)]
 mod execute_call_tests {
 	use super::*;
+	use crate::chain::test_metadata;
 	use codec::Encode;
 	use quantus_subxt::api::runtime_types::{
 		pallet_balances::pallet::Call as BalancesCall, quantus_runtime::RuntimeCall,
@@ -3368,12 +3382,6 @@ mod execute_call_tests {
 		let address = subxt::ext::subxt_core::utils::AccountId32([0x99u8; 32]);
 		assert!(build_propose_tx(address.clone(), vec![0u8; MAX_CALL_BYTES + 1], 5000).is_err());
 		assert!(build_propose_tx(address, transfer_call().encode(), 5000).is_ok());
-	}
-
-	fn test_metadata() -> subxt::Metadata {
-		use codec::Decode;
-		let bytes: &[u8] = include_bytes!("../quantus_metadata.scale");
-		subxt::Metadata::decode(&mut &bytes[..]).expect("valid checked-in metadata")
 	}
 
 	/// Indices come from the metadata, never from a hardcoded table.

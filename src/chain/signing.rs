@@ -13,6 +13,8 @@ use qp_dilithium_crypto::types::{
 	Dilithium65Pair, Dilithium65Signature, Dilithium65SignatureWithPublic, Dilithium87Pair,
 	Dilithium87Signature, Dilithium87SignatureWithPublic,
 };
+use qp_rusty_crystals_dilithium::SensitiveBytes32;
+use rand::TryRngCore;
 use sp_core::{ByteArray, Pair};
 
 /// The FIPS 204 context runtimes from spec 148 bind extrinsic signatures to. Mirrors
@@ -26,6 +28,17 @@ pub fn context_for_runtime(spec_version: u32, transaction_version: u32) -> Optio
 		.then_some(EXTRINSIC)
 }
 
+/// Fresh randomness for one signature. Deterministic ML-DSA plus a nonce reset by reaping would
+/// re-sign a byte-identical extrinsic (same hash, the first one replayable); hedging also closes
+/// the known-mask fault attacks on deterministic signing.
+pub(crate) fn hedge() -> SensitiveBytes32 {
+	let mut hedge = SensitiveBytes32::zeroed();
+	rand::rngs::OsRng
+		.try_fill_bytes(hedge.as_mut_bytes())
+		.expect("OS randomness for the signature hedge");
+	hedge
+}
+
 macro_rules! context_sign {
 	($sign:ident, $pair:ty, $signature:ty, $sig_with_public:ty, $module:ident) => {
 		/// Sign `message` under `context`, the way the connected runtime expects.
@@ -33,8 +46,9 @@ macro_rules! context_sign {
 			let secret =
 				qp_rusty_crystals_dilithium::$module::SecretKey::from_bytes(pair.secret_bytes())
 					.expect("wallet secret key must parse");
-			let signature =
-				secret.sign(message, context, None).expect("the context is well-formed");
+			let signature = secret
+				.sign(message, context, Some(&hedge()))
+				.expect("the context is well-formed");
 			let signature = <$signature as TryFrom<&[u8]>>::try_from(signature.as_ref())
 				.expect("signature length is fixed");
 			<$sig_with_public>::new(signature, pair.public())
@@ -115,15 +129,32 @@ mod tests {
 		assert_ne!(with_context.to_bytes(), without_context.to_bytes());
 	}
 
-	/// The pre-148 runtimes verify with no context at all, so the CLI must keep signing for them
-	/// the old way. `sp_core::Pair::sign` in the published `qp-dilithium-crypto` is that old way.
+	/// The pre-148 runtimes verify with no context at all, the way `sp_core::Pair::verify` in the
+	/// published `qp-dilithium-crypto` does, so the CLI must keep signing for them that way.
 	#[test]
-	fn pre_148_runtimes_get_the_contextless_signature_pair_sign_makes() {
+	fn pre_148_runtimes_verify_the_contextless_signature() {
 		let alice = qp_dilithium_crypto::crystal_alice();
-		assert_eq!(
-			sign_ml_dsa_87(&alice, b"payload", None).to_bytes(),
-			<Dilithium87Pair as Pair>::sign(&alice, b"payload").to_bytes()
-		);
+		let signature = sign_ml_dsa_87(&alice, b"payload", None);
+		assert!(<Dilithium87Pair as Pair>::verify(&signature, b"payload", &alice.public()));
+	}
+
+	/// Signing is hedged with fresh randomness: two signatures over one payload differ, so two
+	/// otherwise identical extrinsics never share a hash, and both still verify.
+	#[test]
+	fn two_signings_of_the_same_payload_differ_and_both_verify() {
+		let alice = qp_dilithium_crypto::crystal_alice();
+		let first = sign_ml_dsa_87(&alice, b"payload", CTX);
+		let second = sign_ml_dsa_87(&alice, b"payload", CTX);
+		assert_ne!(first.to_bytes(), second.to_bytes());
+		assert!(verify_ml_dsa_87(&first, b"payload", CTX));
+		assert!(verify_ml_dsa_87(&second, b"payload", CTX));
+
+		let pair = Dilithium65Pair::from_seed(&[7u8; 32]).expect("seed is well-formed");
+		let first = sign_ml_dsa_65(&pair, b"payload", CTX);
+		let second = sign_ml_dsa_65(&pair, b"payload", CTX);
+		assert_ne!(first.to_bytes(), second.to_bytes());
+		assert!(verify_ml_dsa_65(&first, b"payload", CTX));
+		assert!(verify_ml_dsa_65(&second, b"payload", CTX));
 	}
 
 	#[test]
