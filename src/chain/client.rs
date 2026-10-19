@@ -515,8 +515,9 @@ impl subxt::tx::Signer<ChainConfig> for QuantusSigner {
 	}
 }
 
+/// In-process mock node for tests in this crate that need a real `QuantusClient`.
 #[cfg(test)]
-pub(crate) mod tests {
+pub(crate) mod test_support {
 	use super::*;
 	use codec::Encode;
 	use jsonrpsee::{
@@ -526,11 +527,11 @@ pub(crate) mod tests {
 	use serde_json::json;
 	use std::sync::Mutex;
 
-	const OLD_RUNTIME: RuntimeVersion =
+	pub(crate) const OLD_RUNTIME: RuntimeVersion =
 		RuntimeVersion { spec_version: 144, transaction_version: 3 };
-	const NEW_RUNTIME: RuntimeVersion =
+	pub(crate) const NEW_RUNTIME: RuntimeVersion =
 		RuntimeVersion { spec_version: 148, transaction_version: 6 };
-	const GENESIS: H256 = H256([0x01; 32]);
+	pub(crate) const GENESIS: H256 = H256([0x01; 32]);
 	pub(crate) const FINALIZED: H256 = H256([0x44; 32]);
 	pub(crate) const HEAD: H256 = H256([0x48; 32]);
 
@@ -542,14 +543,38 @@ pub(crate) mod tests {
 		}
 	}
 
+	pub(crate) struct MockNode {
+		pub(crate) url: String,
+		pub(crate) metadata_requests: Arc<Mutex<Vec<H256>>>,
+		_handle: ServerHandle,
+	}
+
 	/// A node caught mid-upgrade the way Heisenberg is for ~20 minutes after every enactment:
 	/// the head runs the new runtime, the finalized block still runs the old one. Records the
 	/// block named by every metadata request.
-	pub(crate) async fn mock_node() -> (String, Arc<Mutex<Vec<H256>>>, ServerHandle) {
+	///
+	/// With `stall_storage`, the node accepts connections and answers everything
+	/// `QuantusClient::new` needs, but never responds to `state_getStorage`: a node that
+	/// connects fine and then stops answering.
+	pub(crate) async fn mock_node(stall_storage: bool) -> MockNode {
 		let metadata_requests = Arc::new(Mutex::new(Vec::new()));
 		let server = Server::builder().build("127.0.0.1:0").await.expect("bind mock node");
 		let url = format!("ws://{}", server.local_addr().expect("mock node address"));
 		let mut module = RpcModule::new(metadata_requests.clone());
+		if stall_storage {
+			module
+				.register_async_method("state_getStorage", |_, _, _| async {
+					std::future::pending::<Result<Option<String>, ErrorObjectOwned>>().await
+				})
+				.expect("register");
+		} else {
+			// Empty state: every storage read is "no value".
+			module
+				.register_method("state_getStorage", |_, _, _| {
+					Ok::<Option<String>, ErrorObjectOwned>(None)
+				})
+				.expect("register");
+		}
 		module
 			.register_method("chain_getBlockHash", |params, _, _| {
 				let number: Option<u32> = params.sequence().optional_next()?;
@@ -601,7 +626,22 @@ pub(crate) mod tests {
 				))
 			})
 			.expect("register");
-		(url, metadata_requests, server.start(module))
+		MockNode { url, metadata_requests, _handle: server.start(module) }
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use serde_json::json;
+	use std::sync::Mutex;
+	use test_support::{
+		mock_node as start_mock_node, MockNode, FINALIZED, GENESIS, HEAD, NEW_RUNTIME, OLD_RUNTIME,
+	};
+
+	async fn mock_node() -> (String, Arc<Mutex<Vec<H256>>>, MockNode) {
+		let node = start_mock_node(false).await;
+		(node.url.clone(), node.metadata_requests.clone(), node)
 	}
 
 	#[tokio::test]

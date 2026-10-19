@@ -76,6 +76,72 @@ pub fn default_derivation_path(scheme: DilithiumScheme) -> &'static str {
 	}
 }
 
+/// One scheme/path combination a recovery phrase can be imported under.
+///
+/// The CLI's import defaults have changed between releases (ML-DSA-87 at
+/// `…/0'` before v2.0, ML-DSA-65 at `…/1'` since), so a single phrase maps to
+/// several distinct addresses. `recovery_candidates` enumerates them so a user
+/// can find the one that holds their funds.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RecoveryCandidate {
+	pub scheme: DilithiumScheme,
+	/// HD path, or `None` for the master seed (`--no-derivation`).
+	pub derivation_path: Option<String>,
+	pub address: String,
+	/// Which CLI default (if any) produced this combination.
+	pub note: &'static str,
+}
+
+impl RecoveryCandidate {
+	pub fn derivation_label(&self) -> &str {
+		self.derivation_path.as_deref().unwrap_or("master seed (no derivation)")
+	}
+
+	/// Flags that reproduce this candidate with a plain `wallet import`.
+	pub fn cli_flags(&self) -> String {
+		match &self.derivation_path {
+			Some(path) => format!("--scheme {} --derivation-path \"{path}\"", self.scheme),
+			None => format!("--scheme {} --no-derivation", self.scheme),
+		}
+	}
+}
+
+/// Every default scheme/path combination a CLI release has used, current
+/// default first. Pure key derivation; no network access.
+pub fn recovery_candidates(mnemonic: &str) -> Result<Vec<RecoveryCandidate>> {
+	let mut candidates = Vec::with_capacity(4);
+
+	for (scheme, note) in [
+		(DilithiumScheme::MlDsa65, "current default"),
+		(DilithiumScheme::MlDsa87, "default before CLI v2.0"),
+	] {
+		let path = default_derivation_path(scheme);
+		let keypair = derive_keypair_from_mnemonic(mnemonic, path, scheme)
+			.map_err(|_| WalletError::InvalidMnemonic)?;
+		candidates.push(RecoveryCandidate {
+			scheme,
+			derivation_path: Some(path.to_string()),
+			address: keypair.try_to_account_id_ss58check()?,
+			note,
+		});
+	}
+
+	let mut seed64 = SensitiveBytes64::zeroed();
+	mnemonic_to_seed(mnemonic.to_string(), None, &mut seed64)
+		.map_err(|_| WalletError::InvalidMnemonic)?;
+	for scheme in [DilithiumScheme::MlDsa87, DilithiumScheme::MlDsa65] {
+		let keypair = pair_from_master_seed(seed64.as_bytes(), scheme)?;
+		candidates.push(RecoveryCandidate {
+			scheme,
+			derivation_path: None,
+			address: keypair.try_to_account_id_ss58check()?,
+			note: "--no-derivation",
+		});
+	}
+
+	Ok(candidates)
+}
+
 /// Wallet information structure
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WalletInfo {
@@ -660,6 +726,29 @@ impl WalletManager {
 			key_type: scheme.key_type_label().to_string(),
 			derivation_path: derivation_path.to_string(),
 		})
+	}
+
+	/// Import a mnemonic under the scheme/path of a [`RecoveryCandidate`].
+	pub async fn import_wallet_for_candidate(
+		&self,
+		name: &str,
+		mnemonic: &str,
+		password: Option<&str>,
+		candidate: &RecoveryCandidate,
+	) -> Result<WalletInfo> {
+		match &candidate.derivation_path {
+			Some(path) =>
+				self.import_wallet_with_scheme(name, mnemonic, password, path, candidate.scheme)
+					.await,
+			None =>
+				self.import_wallet_no_derivation_with_scheme(
+					name,
+					mnemonic,
+					password,
+					candidate.scheme,
+				)
+				.await,
+		}
 	}
 
 	/// Create wallet from 32-byte seed (default scheme: ML-DSA-65).
@@ -1425,6 +1514,79 @@ mod tests {
 			imported_wallet_no_derive.address, expected_address_no_derive,
 			"no-derivation address is wrong"
 		);
+	}
+
+	#[tokio::test]
+	async fn recovery_candidates_cover_every_historical_default() {
+		sp_core::crypto::set_default_ss58_version(sp_core::crypto::Ss58AddressFormat::custom(189));
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
+
+		let candidates = recovery_candidates(mnemonic).expect("candidates");
+		assert_eq!(candidates.len(), 4);
+		assert_eq!(candidates[0].scheme, DilithiumScheme::MlDsa65);
+		assert_eq!(
+			candidates[0].derivation_path.as_deref(),
+			Some(DEFAULT_DERIVATION_PATH_ML_DSA_65),
+			"current default must be offered first"
+		);
+
+		// Pinned ML-DSA-87 vectors from `test_known_values`.
+		let hd_87 = candidates
+			.iter()
+			.find(|c| {
+				c.scheme == DilithiumScheme::MlDsa87 &&
+					c.derivation_path.as_deref() == Some(DEFAULT_DERIVATION_PATH)
+			})
+			.expect("pre-v2.0 default must be a candidate");
+		assert_eq!(hd_87.address, "qzm5QCox8Dp5A3oSXZZYHD8YoYgPz7enykZb6RPUropdCyN5h");
+		let master_87 = candidates
+			.iter()
+			.find(|c| c.scheme == DilithiumScheme::MlDsa87 && c.derivation_path.is_none())
+			.expect("ML-DSA-87 master seed must be a candidate");
+		assert_eq!(master_87.address, "qzmTAz3UUw1WGUuVh8nbFmPwcftomduwy6twq6NDR6y9qqtEs");
+
+		let mut addresses: Vec<&str> = candidates.iter().map(|c| c.address.as_str()).collect();
+		addresses.sort_unstable();
+		addresses.dedup();
+		assert_eq!(addresses.len(), 4, "every candidate must map to a distinct address");
+
+		// Importing a candidate lands on exactly the address it advertised.
+		for (i, candidate) in candidates.iter().enumerate() {
+			let info = wallet_manager
+				.import_wallet_for_candidate(&format!("cand-{i}"), mnemonic, None, candidate)
+				.await
+				.expect("import candidate");
+			assert_eq!(info.address, candidate.address);
+			assert_eq!(info.key_type, candidate.scheme.key_type_label());
+		}
+
+		assert!(matches!(
+			recovery_candidates("not a valid phrase"),
+			Err(crate::error::QuantusError::Wallet(WalletError::InvalidMnemonic))
+		));
+	}
+
+	#[test]
+	fn recovery_candidate_cli_flags_round_trip_the_choice() {
+		let hd = RecoveryCandidate {
+			scheme: DilithiumScheme::MlDsa87,
+			derivation_path: Some(DEFAULT_DERIVATION_PATH.to_string()),
+			address: String::new(),
+			note: "",
+		};
+		assert_eq!(
+			hd.cli_flags(),
+			"--scheme ml-dsa-87 --derivation-path \"m/44'/189189'/0'/0'/0'\""
+		);
+		let master = RecoveryCandidate {
+			scheme: DilithiumScheme::MlDsa65,
+			derivation_path: None,
+			address: String::new(),
+			note: "",
+		};
+		assert_eq!(master.cli_flags(), "--scheme ml-dsa-65 --no-derivation");
+		assert_eq!(master.derivation_label(), "master seed (no derivation)");
 	}
 
 	#[tokio::test]

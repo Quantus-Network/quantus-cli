@@ -747,12 +747,12 @@ mod tests {
 	#[tokio::test]
 	async fn tx_context_anchors_mortality_at_the_head_under_finalized() {
 		use crate::{
-			chain::client::tests::{mock_node, HEAD},
+			chain::client::test_support::{mock_node, HEAD},
 			cli::common::ExecutionMode,
 		};
 
-		let (url, _, _node) = mock_node().await;
-		let client = QuantusClient::new(&url).await.expect("connect");
+		let node = mock_node(false).await;
+		let client = QuantusClient::new(&node.url).await.expect("connect");
 		let ctx = ExecutionMode { finalized: true, wait_for_transaction: false }
 			.scope(capture_tx_context(&client, &alice_account(), 0, Some(7)))
 			.await

@@ -10,7 +10,7 @@ use clap::Subcommand;
 use codec::Decode;
 use colored::Colorize;
 use serde::Deserialize;
-use sp_core::{crypto::AccountId32, twox_128};
+use sp_core::{blake2_128, blake2_256, crypto::AccountId32, twox_128, twox_256, twox_64};
 use std::{collections::BTreeMap, str::FromStr};
 use subxt::OnlineClient;
 
@@ -750,7 +750,8 @@ async fn get_storage_by_parts(
 		if let Some(key_value) = &key {
 			if let Some(key_type_str) = &key_type {
 				let key_bytes = encode_storage_key(key_value, key_type_str)?;
-				storage_key.extend(key_bytes);
+				let metadata = quantus_client.client().metadata();
+				storage_key = storage_map_key(&metadata, &pallet, &name, &key_bytes)?;
 			} else {
 				log_error!("Key type (--key-type) is required when using --key parameter");
 				return Ok(());
@@ -831,6 +832,56 @@ pub async fn handle_storage_command(
 	}
 }
 
+/// Build the full storage key for a single-key map entry.
+fn storage_map_key(
+	metadata: &subxt::Metadata,
+	pallet: &str,
+	name: &str,
+	key: &[u8],
+) -> crate::error::Result<Vec<u8>> {
+	use subxt::metadata::types::{StorageEntryType, StorageHasher};
+
+	let entry = metadata
+		.pallet_by_name(pallet)
+		.and_then(|p| p.storage())
+		.and_then(|s| s.entry_by_name(name))
+		.ok_or_else(|| {
+			QuantusError::Generic(format!("Storage item {pallet}::{name} not found in metadata"))
+		})?;
+
+	let hasher = match entry.entry_type() {
+		StorageEntryType::Map { hashers, .. } if hashers.len() == 1 => hashers[0],
+		StorageEntryType::Map { hashers, .. } =>
+			return Err(QuantusError::Generic(format!(
+				"{pallet}::{name} is keyed by {} values; --key supports single-key maps only, use --storage-key instead",
+				hashers.len()
+			))),
+		StorageEntryType::Plain(_) =>
+			return Err(QuantusError::Generic(format!(
+				"{pallet}::{name} is a plain storage value and does not take --key"
+			))),
+	};
+
+	let mut storage_key = twox_128(pallet.as_bytes()).to_vec();
+	storage_key.extend(&twox_128(name.as_bytes()));
+	match hasher {
+		StorageHasher::Blake2_128 => storage_key.extend(blake2_128(key)),
+		StorageHasher::Blake2_256 => storage_key.extend(blake2_256(key)),
+		StorageHasher::Blake2_128Concat => {
+			storage_key.extend(blake2_128(key));
+			storage_key.extend(key);
+		},
+		StorageHasher::Twox128 => storage_key.extend(twox_128(key)),
+		StorageHasher::Twox256 => storage_key.extend(twox_256(key)),
+		StorageHasher::Twox64Concat => {
+			storage_key.extend(twox_64(key));
+			storage_key.extend(key);
+		},
+		StorageHasher::Identity => storage_key.extend(key),
+	}
+	Ok(storage_key)
+}
+
 /// Encode storage key parameter based on type
 fn encode_storage_key(key_value: &str, key_type: &str) -> crate::error::Result<Vec<u8>> {
 	use codec::Encode;
@@ -876,6 +927,31 @@ fn encode_storage_key(key_value: &str, key_type: &str) -> crate::error::Result<V
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	fn test_metadata() -> subxt::Metadata {
+		use codec::Decode;
+		let bytes: &[u8] = include_bytes!("../quantus_metadata.scale");
+		subxt::Metadata::decode(&mut &bytes[..]).expect("valid checked-in metadata")
+	}
+
+	#[test]
+	fn storage_map_key_matches_codegen_for_system_account() {
+		use codec::Encode;
+		let md = test_metadata();
+		let account = subxt::ext::subxt_core::utils::AccountId32([7u8; 32]);
+		let address = crate::chain::quantus_subxt::api::storage().system().account(account.clone());
+		let expected = subxt::ext::subxt_core::storage::get_address_bytes(&address, &md).unwrap();
+
+		let key = storage_map_key(&md, "System", "Account", &account.encode()).unwrap();
+		assert_eq!(hex::encode(key), hex::encode(expected));
+	}
+
+	#[test]
+	fn storage_map_key_rejects_plain_storage_value() {
+		let md = test_metadata();
+		let err = storage_map_key(&md, "System", "Number", &[0u8; 4]).unwrap_err().to_string();
+		assert!(err.contains("plain storage value"), "{err}");
+	}
 
 	#[test]
 	fn accumulate_storage_key_count_rejects_u32_overflow() {

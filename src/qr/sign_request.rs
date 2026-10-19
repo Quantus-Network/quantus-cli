@@ -174,6 +174,7 @@ pub struct SignRequest {
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct Wire {
 	v: u8,
 	signer: String,
@@ -280,6 +281,17 @@ mod tests {
 		});
 
 		assert!(SignRequest::decode(wire.to_string().as_bytes()).is_err());
+	}
+
+	#[test]
+	fn refuses_extra_keys_like_the_wallets_do() {
+		// The wallets accept exactly {v, signer, payload} for a v1 request and
+		// refuse any other key set; the NEAR envelope already enforces that
+		// here via deny_unknown_fields, the v1 envelope must too.
+		let mut extra = serde_json::json!({ "v": 1, "signer": ADDRESS, "payload": "0xab" });
+		extra["chain"] = "near".into();
+		assert!(SignRequest::decode(extra.to_string().as_bytes()).is_err());
+		assert!(AnySignRequest::decode(extra.to_string().as_bytes()).is_err());
 	}
 
 	#[test]

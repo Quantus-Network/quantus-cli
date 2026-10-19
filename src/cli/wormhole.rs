@@ -4909,10 +4909,10 @@ mod tests {
 	/// scope `execute_command` sets, so the tip must come from the mode they pass.
 	#[tokio::test]
 	async fn tip_block_follows_the_supplied_mode_not_the_scoped_one() {
-		use crate::chain::client::tests::{mock_node, FINALIZED, HEAD};
+		use crate::chain::client::test_support::{mock_node, FINALIZED, HEAD};
 
-		let (url, _, _node) = mock_node().await;
-		let client = QuantusClient::new(&url).await.expect("connect");
+		let node = mock_node(false).await;
+		let client = QuantusClient::new(&node.url).await.expect("connect");
 		let finalized = ExecutionMode { finalized: true, wait_for_transaction: false };
 		let tip = |mode| wormhole_tip_block(&client, mode);
 		assert_eq!(ExecutionMode::default().scope(tip(finalized)).await.expect("tip"), FINALIZED);
@@ -4922,10 +4922,10 @@ mod tests {
 	/// SDK callers pick the block by name, so neither helper follows a scoped mode.
 	#[tokio::test]
 	async fn sdk_block_helpers_fetch_the_block_they_name() {
-		use crate::chain::client::tests::{mock_node, FINALIZED, HEAD};
+		use crate::chain::client::test_support::{mock_node, FINALIZED, HEAD};
 
-		let (url, _, _node) = mock_node().await;
-		let client = QuantusClient::new(&url).await.expect("connect");
+		let node = mock_node(false).await;
+		let client = QuantusClient::new(&node.url).await.expect("connect");
 		let finalized = ExecutionMode { finalized: true, wait_for_transaction: false };
 		let block = ExecutionMode::default().scope(at_finalized_block(&client)).await;
 		assert_eq!(block.expect("finalized").hash(), FINALIZED);
