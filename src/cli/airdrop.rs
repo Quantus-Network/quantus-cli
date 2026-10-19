@@ -1490,7 +1490,7 @@ fn build_dilithium_claim(
 	let secret = SecretKey::from_bytes(secret_key)
 		.map_err(|_| QuantusError::Generic("invalid ML-DSA-87 secret key".into()))?;
 	let signature = secret
-		.sign(&msg, Some(CLAIM_CONTEXT), None)
+		.sign(&msg, Some(CLAIM_CONTEXT), Some(&crate::chain::signing::hedge()))
 		.map_err(|e| QuantusError::Generic(format!("ML-DSA sign failed: {e}")))?;
 	let scheme = DilithiumHash::ALL
 		.iter()
