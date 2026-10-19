@@ -6,6 +6,7 @@ pub mod scenarios;
 
 use crate::{
 	chain::{client::QuantusClient, quantus_subxt},
+	cli::common::ExecutionMode,
 	error::{QuantusError, Result},
 	wallet::{DilithiumScheme, QuantumKeyPair},
 };
@@ -151,6 +152,13 @@ impl Phase {
 }
 
 pub async fn handle_exercise_command(args: ExerciseArgs, node_url: &str) -> Result<()> {
+	// Proposals here expire a few blocks past the block read, and each step waits on the last:
+	// finality's ~100-block lag puts those deadlines in the past.
+	if ExecutionMode::reads_at_finalized() {
+		return Err(QuantusError::Generic(
+			"exercise reads and waits at the head; run it without --finalized".to_string(),
+		));
+	}
 	let seed = args.seed.unwrap_or_else(rand::random);
 	let mut selected = args.phases.clone().unwrap_or_else(Phase::default_set);
 	if (args.upgrade_wasm.is_some() || args.self_upgrade) && !selected.contains(&Phase::Upgrade) {
@@ -557,4 +565,26 @@ async fn fund_ephemeral_accounts(
 		"derived and funded {count} ephemeral accounts with {funding_per_account} raw units each \
 		 ({scheme_65}× ml-dsa-65, {scheme_87}× ml-dsa-87){note}"
 	))
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use clap::Parser;
+
+	#[derive(Parser)]
+	struct Cli {
+		#[command(flatten)]
+		args: ExerciseArgs,
+	}
+
+	#[tokio::test]
+	async fn refuses_finalized_reads_before_touching_the_node() {
+		let args = Cli::parse_from(["exercise"]).args;
+		let err = ExecutionMode { finalized: true, wait_for_transaction: false }
+			.scope(handle_exercise_command(args, "ws://127.0.0.1:1"))
+			.await
+			.expect_err("a finalized scope must be refused");
+		assert!(err.to_string().contains("without --finalized"), "{err}");
+	}
 }

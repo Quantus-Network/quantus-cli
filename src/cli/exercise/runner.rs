@@ -43,9 +43,8 @@ pub struct ExerciseCtx {
 }
 
 impl ExerciseCtx {
-	/// Every balance check follows a wait, so the wait must reach the block the check reads.
 	pub fn wait_mode(&self) -> ExecutionMode {
-		ExecutionMode::wait_at_read_finality()
+		ExecutionMode { finalized: false, wait_for_transaction: true }
 	}
 
 	/// Raw units drawn from the root account so far, net of anything swept back to it and of
