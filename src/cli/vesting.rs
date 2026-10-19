@@ -366,8 +366,6 @@ async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Resu
 	let constants = quantus_client.client().constants();
 	let payout_quantum =
 		constants.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
-	let min_claim_interval =
-		constants.at(&quantus_subxt::api::constants().vesting().min_claim_interval())?;
 
 	let latest_block_hash = quantus_client.get_latest_block().await?;
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
@@ -380,7 +378,6 @@ async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Resu
 
 	log_print!("🪙 {}", "Vesting".bright_green().bold());
 	log_print!("   Payout quantum:     {}", quantum_fmt);
-	log_print!("   Min claim interval: {} ms", min_claim_interval);
 	log_print!("   Launch:             {}", format_launch(launch));
 	log_print!("   Next schedule id:   {}", next_id.to_string().bright_yellow());
 	Ok(())
