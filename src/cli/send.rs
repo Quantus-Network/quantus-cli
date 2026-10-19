@@ -266,10 +266,13 @@ pub(crate) fn build_transfer_call_for_account_id(
 fn build_transfer_all_call_for_account_id(
 	to_account_id: SubxtAccountId32,
 	keep_alive: bool,
-) -> impl subxt::tx::Payload {
-	quantus_subxt::api::tx()
-		.balances()
-		.transfer_all(subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id), keep_alive)
+) -> Box<dyn subxt::tx::Payload + Send + Sync> {
+	Box::new(
+		quantus_subxt::api::tx().balances().transfer_all(
+			subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
+			keep_alive,
+		),
+	)
 }
 
 pub(crate) fn build_batch_transfer_call(
@@ -594,14 +597,71 @@ pub async fn batch_transfer(
 
 // (Removed custom `AccountData` struct – we now use the runtime-generated type)
 
-/// Handle the send command
+/// Handle the send command for a fixed amount
 #[allow(clippy::too_many_arguments)]
-/// `sweep_keep_alive` is `Some(keep_alive)` for `--all`, `None` for a fixed amount.
 pub async fn handle_send_command(
 	from_wallet: String,
 	to_address: String,
+	amount_str: &str,
+	node_url: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+	tip: Option<String>,
+	nonce: Option<u32>,
+	keep_alive: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<()> {
+	send_from_wallet(
+		from_wallet,
+		to_address,
+		Some(amount_str),
+		node_url,
+		password,
+		password_file,
+		tip,
+		nonce,
+		keep_alive,
+		execution_mode,
+	)
+	.await
+}
+
+/// Handle `send --all`: sweep the whole free balance with `Balances::transfer_all`, the chain
+/// deducting the exact fee. `keep_alive` leaves the existential deposit behind instead of
+/// reaping the account.
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_send_all_command(
+	from_wallet: String,
+	to_address: String,
+	node_url: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+	tip: Option<String>,
+	nonce: Option<u32>,
+	keep_alive: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<()> {
+	send_from_wallet(
+		from_wallet,
+		to_address,
+		None,
+		node_url,
+		password,
+		password_file,
+		tip,
+		nonce,
+		keep_alive,
+		execution_mode,
+	)
+	.await
+}
+
+/// `amount_str` is `None` for a sweep.
+#[allow(clippy::too_many_arguments)]
+async fn send_from_wallet(
+	from_wallet: String,
+	to_address: String,
 	amount_str: Option<&str>,
-	sweep_keep_alive: Option<bool>,
 	node_url: &str,
 	password: Option<String>,
 	password_file: Option<String>,
@@ -657,13 +717,11 @@ pub async fn handle_send_command(
 	let effective_tip = effective_tip_amount(tip_amount);
 	let submit_tip = positive_tip_amount(tip_amount);
 
-	let transfer_call = match (amount, sweep_keep_alive) {
+	let transfer_call = match amount {
 		// `transfer_all` asks the chain to move everything minus the exact fee, so the
 		// balance precheck an estimate would drive has nothing to check.
-		(None, Some(keep_alive)) =>
-			Box::new(build_transfer_all_call_for_account_id(to_account_id, keep_alive))
-				as Box<dyn subxt::tx::Payload + Send + Sync>,
-		(Some(value), _) => {
+		None => build_transfer_all_call_for_account_id(to_account_id, keep_alive),
+		Some(value) => {
 			let exact_required = checked_add(value, effective_tip, "required send balance")?;
 			let call = build_transfer_call_for_account_id(to_account_id, value, keep_alive);
 			ensure_balance_covers_call(
@@ -678,10 +736,6 @@ pub async fn handle_send_command(
 			.await?;
 			call
 		},
-		(None, None) =>
-			return Err(crate::error::QuantusError::Generic(
-				"send needs either --amount or --all".to_string(),
-			)),
 	};
 
 	// Create and submit transaction
@@ -815,34 +869,10 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 
 #[cfg(test)]
 mod tests {
-	/// `--all` must build `transfer_all`, not a transfer of a guessed amount: the
-	/// chain deducts the exact fee, which is the whole point of the flag.
-	#[test]
-	fn transfer_all_builds_the_transfer_all_call() {
-		use super::{build_transfer_all_call_for_account_id, SubxtAccountId32};
-		use subxt::tx::Payload;
-		let dest = SubxtAccountId32::from([9u8; 32]);
-		let call = build_transfer_all_call_for_account_id(dest, false);
-		let details = call.validation_details().expect("static payload");
-		assert_eq!(details.pallet_name, "Balances");
-		assert_eq!(details.call_name, "transfer_all");
-	}
-
-	#[test]
-	fn fixed_amount_still_builds_transfer_allow_death() {
-		use super::{build_transfer_call_for_account_id, SubxtAccountId32};
-		use subxt::tx::Payload;
-		let dest = SubxtAccountId32::from([9u8; 32]);
-		let call = build_transfer_call_for_account_id(dest, 1_000, false);
-		let details = call.validation_details().expect("static payload");
-		assert_eq!(details.pallet_name, "Balances");
-		assert_eq!(details.call_name, "transfer_allow_death");
-	}
-
 	use super::{
-		build_batch_transfer_call, build_transfer_call_for_account_id, effective_tip_amount,
-		format_balance, limits_from_batched_calls_limit, parse_amount_with_decimals,
-		SubxtAccountId32,
+		build_batch_transfer_call, build_transfer_all_call_for_account_id,
+		build_transfer_call_for_account_id, effective_tip_amount, format_balance,
+		limits_from_batched_calls_limit, parse_amount_with_decimals, SubxtAccountId32,
 	};
 	use subxt::tx::Payload;
 
@@ -876,6 +906,25 @@ mod tests {
 		assert_eq!(allow_death[..2], [balances, 0], "default is transfer_allow_death");
 		assert_eq!(keep_alive[..2], [balances, 3], "--keep-alive is transfer_keep_alive");
 		assert_eq!(allow_death[2..], keep_alive[2..], "only the call index differs");
+	}
+
+	/// `--all` is `transfer_all` (call index 4), not a transfer of a guessed amount: the chain
+	/// deducts the exact fee. `--keep-alive` is its trailing flag byte.
+	#[test]
+	fn send_all_builds_transfer_all_with_keep_alive_flag() {
+		let metadata = crate::chain::test_metadata();
+		let dest = SubxtAccountId32::from([9u8; 32]);
+		let reap = build_transfer_all_call_for_account_id(dest.clone(), false)
+			.encode_call_data(&metadata)
+			.unwrap();
+		let keep = build_transfer_all_call_for_account_id(dest, true)
+			.encode_call_data(&metadata)
+			.unwrap();
+		let balances = metadata.pallet_by_name("Balances").unwrap().index();
+		assert_eq!(reap[..2], [balances, 4], "--all is transfer_all");
+		assert_eq!(reap[reap.len() - 1], 0, "default reaps the sender");
+		assert_eq!(keep[keep.len() - 1], 1, "--keep-alive leaves the existential deposit");
+		assert_eq!(reap[..reap.len() - 1], keep[..keep.len() - 1], "only the flag differs");
 	}
 
 	#[test]

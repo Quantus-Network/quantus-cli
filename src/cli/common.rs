@@ -34,26 +34,29 @@ pub enum TransactionStage {
 	Finalized,
 }
 
-static GLOBAL_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+tokio::task_local! {
+	static READS_AT_FINALIZED: bool;
+}
 
 impl ExecutionMode {
-	/// Install the finality choice process-wide, once, from `main`.
+	/// Run `f` with this mode's finality governing every read inside it.
 	///
 	/// Waiting for a transaction is driven by the [`ExecutionMode`] threaded through each
-	/// command, but reads are taken in ~80 places that have no reason to carry one. Rather
-	/// than thread it everywhere, the same flag is published here and read by
-	/// `QuantusClient::get_latest_block`, so one switch governs both.
-	pub fn install(self) {
-		GLOBAL_MODE.store(self.finalized, std::sync::atomic::Ordering::Relaxed);
+	/// command, but reads are taken in ~80 places that have no reason to carry one. So the
+	/// dispatcher scopes the mode to its task and `QuantusClient::get_latest_block` consults
+	/// it: one switch governs both. Task-scoped rather than process-wide, so concurrent
+	/// library callers never see each other's choice.
+	pub async fn scope<F: std::future::Future>(self, f: F) -> F::Output {
+		READS_AT_FINALIZED.scope(self.finalized, f).await
 	}
 
 	/// Whether reads should be taken at the finalized block rather than the head.
 	///
-	/// False by default: QPoW finality trails the head by ~100 blocks, so finalized
-	/// reads serve state ~20 minutes stale — after a runtime upgrade, the *previous*
-	/// runtime's state.
+	/// False outside any [`Self::scope`], and by default: QPoW finality trails the head by
+	/// ~100 blocks, so finalized reads serve state ~20 minutes stale — after a runtime
+	/// upgrade, the *previous* runtime's state.
 	pub fn reads_at_finalized() -> bool {
-		GLOBAL_MODE.load(std::sync::atomic::Ordering::Relaxed)
+		READS_AT_FINALIZED.try_with(|finalized| *finalized).unwrap_or(false)
 	}
 
 	pub fn transaction_stage(self) -> TransactionStage {
@@ -1207,15 +1210,22 @@ mod tests {
 		assert_eq!(delay_seconds_to_millis(1).unwrap(), 1_000);
 	}
 
-	#[test]
-	fn reads_follow_the_installed_finality_flag() {
-		// Default: reads take the head, so state is never ~100 blocks stale.
+	#[tokio::test]
+	async fn reads_follow_the_scoped_finality_flag() {
+		// Outside any scope: the head, so SDK reads are never ~100 blocks stale.
 		assert!(!ExecutionMode::reads_at_finalized());
 
-		ExecutionMode { finalized: true, wait_for_transaction: false }.install();
-		assert!(ExecutionMode::reads_at_finalized());
-
-		ExecutionMode { finalized: false, wait_for_transaction: true }.install();
+		// Concurrent scopes each see their own mode, not a process-wide last write.
+		tokio::join!(
+			ExecutionMode { finalized: true, wait_for_transaction: false }.scope(async {
+				tokio::task::yield_now().await;
+				assert!(ExecutionMode::reads_at_finalized());
+			}),
+			ExecutionMode { finalized: false, wait_for_transaction: true }.scope(async {
+				tokio::task::yield_now().await;
+				assert!(!ExecutionMode::reads_at_finalized());
+			}),
+		);
 		assert!(!ExecutionMode::reads_at_finalized());
 	}
 

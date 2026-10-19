@@ -262,7 +262,9 @@ impl QuantusClient {
 	}
 
 	/// The block every read in the CLI is taken at: [`Self::head_or_finalized`] under the
-	/// `--finalized` switch `main` installs.
+	/// [`ExecutionMode`] `execute_command` scopes, so `--finalized` moves every read.
+	///
+	/// [`ExecutionMode`]: crate::cli::common::ExecutionMode
 	pub async fn get_latest_block(&self) -> crate::error::Result<subxt::utils::H256> {
 		self.head_or_finalized(crate::cli::common::ExecutionMode::reads_at_finalized())
 			.await
@@ -273,7 +275,7 @@ impl QuantusClient {
 	/// subxt's own default is the finalized block, which on this chain is ~100 blocks (~20
 	/// minutes) behind — stale state, and after a runtime upgrade the previous runtime's state
 	/// entirely. Callers whose reads must match the [`ExecutionMode`] they were handed pass its
-	/// `finalized` here: library callers never install the switch.
+	/// `finalized` here: library callers reaching them directly are outside any scope.
 	///
 	/// [`ExecutionMode`]: crate::cli::common::ExecutionMode
 	pub async fn head_or_finalized(&self, finalized: bool) -> crate::error::Result<H256> {

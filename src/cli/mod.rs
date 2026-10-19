@@ -397,8 +397,19 @@ pub enum DeveloperCommands {
 	},
 }
 
-/// Execute a CLI command
+/// Execute a CLI command, `execution_mode` governing its reads as well as its waits.
 pub async fn execute_command(
+	command: Commands,
+	node_url: &str,
+	verbose: bool,
+	execution_mode: common::ExecutionMode,
+) -> crate::error::Result<()> {
+	execution_mode
+		.scope(run_command(command, node_url, verbose, execution_mode))
+		.await
+}
+
+async fn run_command(
 	command: Commands,
 	node_url: &str,
 	verbose: bool,
@@ -416,21 +427,38 @@ pub async fn execute_command(
 			tip,
 			nonce,
 			keep_alive,
-		} =>
-			send::handle_send_command(
-				from,
-				to,
-				amount.as_deref(),
-				all.then_some(keep_alive),
-				node_url,
-				password,
-				password_file,
-				tip,
-				nonce,
-				keep_alive,
-				execution_mode,
-			)
-			.await,
+		} => match (all, amount) {
+			(false, Some(amount)) =>
+				send::handle_send_command(
+					from,
+					to,
+					&amount,
+					node_url,
+					password,
+					password_file,
+					tip,
+					nonce,
+					keep_alive,
+					execution_mode,
+				)
+				.await,
+			(true, None) =>
+				send::handle_send_all_command(
+					from,
+					to,
+					node_url,
+					password,
+					password_file,
+					tip,
+					nonce,
+					keep_alive,
+					execution_mode,
+				)
+				.await,
+			_ => Err(crate::error::QuantusError::Generic(
+				"send takes exactly one of --amount or --all".to_string(),
+			)),
+		},
 		Commands::SigningQr { from, to, amount, call_data, tip, nonce } =>
 			signing_qr::handle_signing_qr_command(from, to, amount, call_data, tip, nonce, node_url)
 				.await,

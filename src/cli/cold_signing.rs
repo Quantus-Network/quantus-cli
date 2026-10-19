@@ -174,7 +174,11 @@ impl ResponseError {
 	}
 }
 
-/// Capture nonce + latest (best) block once. `nonce_override` honors `--nonce`.
+/// Capture nonce + best block once. `nonce_override` honors `--nonce`.
+///
+/// Both come from the head even under `--finalized`: a [`MORTALITY_BLOCKS`] era anchored at
+/// the finalized block, ~100 behind, leaves the cold signer ~156 blocks to answer, and none
+/// at all once finality lags by 256.
 pub async fn capture_tx_context(
 	client: &QuantusClient,
 	signer: &AccountId32,
@@ -185,7 +189,7 @@ pub async fn capture_tx_context(
 		Some(n) => n as u64,
 		None => client.get_account_nonce_from_best_block(signer).await?,
 	};
-	let block_hash = client.get_latest_block().await?;
+	let block_hash = client.head_or_finalized(false).await?;
 	let block = client.client().blocks().at(block_hash).await?;
 	let block_number = block.header().number as u64;
 	Ok(TxContext { nonce, block_number, block_hash, tip })
@@ -735,6 +739,26 @@ mod tests {
 		crate::wallet::QuantumKeyPair::from_resonance_pair(&pair)
 			.try_to_account_id_32()
 			.expect("valid keypair")
+	}
+
+	/// The mortality anchor is the head even under `--finalized`, like the nonce: anchored
+	/// ~100 blocks back the signer would have ~156 blocks to answer, and none once finality
+	/// lags by 256.
+	#[tokio::test]
+	async fn tx_context_anchors_mortality_at_the_head_under_finalized() {
+		use crate::{
+			chain::client::tests::{mock_node, HEAD},
+			cli::common::ExecutionMode,
+		};
+
+		let (url, _, _node) = mock_node().await;
+		let client = QuantusClient::new(&url).await.expect("connect");
+		let ctx = ExecutionMode { finalized: true, wait_for_transaction: false }
+			.scope(capture_tx_context(&client, &alice_account(), 0, Some(7)))
+			.await
+			.expect("context");
+		assert_eq!(ctx.block_hash, HEAD);
+		assert_eq!(ctx.nonce, 7);
 	}
 
 	fn transfer_call() -> impl subxt::tx::Payload {

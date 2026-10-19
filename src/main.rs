@@ -94,9 +94,6 @@ async fn main() -> Result<(), QuantusError> {
 		finalized: cli.finalized,
 		wait_for_transaction: cli.wait_for_transaction,
 	};
-	// Published process-wide so reads honour the same flag without being threaded
-	// through every call site.
-	execution_mode.install();
 
 	// Cold-wallet QR I/O config for the submit stage (used only when the
 	// signing wallet is watch-only).

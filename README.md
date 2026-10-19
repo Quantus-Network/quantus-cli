@@ -126,6 +126,8 @@ Every command supports `--verbose` for detailed debugging information:
 These options work on every command:
 - `--verbose` / `-v`: Enable debug logging with detailed output
 - `--node-url <URL>`: Specify node endpoint (default: `ws://127.0.0.1:9944`)
+- `--wait-for-transaction`: Return once the transaction is in a best block
+- `--finalized`: Read every query at the finalized block and wait for finalization before returning (implies `--wait-for-transaction`). Off by default: finality trails the head by ~100 blocks, so finalized reads are ~20 minutes stale
 - `--help` / `-h`: Show help for any command or subcommand
 
 ### Command Structure
@@ -758,8 +760,8 @@ quantus send --from crystal_alice --to <address> --amount 10.5
 # Wait for inclusion in a best block
 quantus send --from crystal_alice --to <address> --amount 10.5 --wait-for-transaction
 
-# Wait for finalization (implies --wait-for-transaction)
-quantus send --from crystal_alice --to <address> --amount 10.5 --finalized-tx
+# Wait for finalization, reading at the finalized block (implies --wait-for-transaction)
+quantus send --from crystal_alice --to <address> --amount 10.5 --finalized
 
 # Optional advanced: add a tip to prioritize the transaction
 quantus send --from crystal_alice --to <address> --amount 10 --tip 0.1
@@ -769,6 +771,12 @@ quantus send --from crystal_alice --to <address> --amount 10 --nonce 42
 
 # Refuse to reap the sender: transfer_keep_alive instead of the default transfer_allow_death
 quantus send --from crystal_alice --to <address> --amount 10 --keep-alive
+
+# Sweep the whole free balance (transfer_all): the chain deducts the exact fee, reaping the sender
+quantus send --from crystal_alice --to <address> --all
+
+# Sweep but leave the existential deposit so the sender survives
+quantus send --from crystal_alice --to <address> --all --keep-alive
 ```
 
 Transaction status terms:
