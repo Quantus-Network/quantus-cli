@@ -428,6 +428,11 @@ pub struct EncryptedWallet {
 	pub aes_nonce: Vec<u8>,      // AES-GCM nonce
 	pub encryption_version: u32, // Version for future crypto upgrades
 	pub created_at: chrono::DateTime<chrono::Utc>,
+	/// NEAR public key (`ml-dsa-65:<base58>`) imported from a cold device's
+	/// key-export QR. Only set on cold wallets; hot wallets derive it from
+	/// their key material.
+	#[serde(default, skip_serializing_if = "Option::is_none")]
+	pub near_public_key: Option<String>,
 }
 
 impl EncryptedWallet {
@@ -445,6 +450,7 @@ impl EncryptedWallet {
 			aes_nonce: vec![],
 			encryption_version: 0,
 			created_at: chrono::Utc::now(),
+			near_public_key: None,
 		}
 	}
 }
@@ -751,6 +757,7 @@ impl Keystore {
 			aes_nonce: nonce.to_vec(),
 			encryption_version: 2, // Version 2: Argon2 params+salt only (no digest) + AES-256-GCM
 			created_at: chrono::Utc::now(),
+			near_public_key: None,
 		})
 	}
 
@@ -1447,6 +1454,7 @@ mod tests {
 			aes_nonce: nonce.to_vec(),
 			encryption_version: 1,
 			created_at: chrono::Utc::now(),
+			near_public_key: None,
 		}
 	}
 
@@ -1561,6 +1569,7 @@ mod tests {
 			aes_nonce: nonce_bytes.to_vec(),
 			encryption_version: 2,
 			created_at: chrono::Utc::now(),
+			near_public_key: None,
 		}
 	}
 

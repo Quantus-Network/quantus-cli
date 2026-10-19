@@ -16,6 +16,7 @@ pub mod high_security;
 pub mod metadata;
 pub mod multisend;
 pub mod multisig;
+pub mod near;
 pub mod preimage;
 pub mod reversible;
 pub mod runtime;
@@ -50,16 +51,10 @@ pub enum Commands {
 		#[arg(short, long, required_unless_present = "all", conflicts_with = "all")]
 		amount: Option<String>,
 
-		/// Send the whole free balance, letting the chain deduct the fee exactly.
-		///
-		/// Uses `Balances::transfer_all`, so no fee estimate has to be guessed and
-		/// nothing is stranded. The account is reaped unless `--keep-alive`.
+		/// Send the whole free balance with transfer_all, letting the chain deduct the exact
+		/// fee so nothing is stranded. Reaps the sender unless --keep-alive
 		#[arg(long)]
 		all: bool,
-
-		/// With `--all`, leave the existential deposit behind so the account survives.
-		#[arg(long, requires = "all")]
-		keep_alive: bool,
 
 		/// Wallet name to send from
 		#[arg(short, long)]
@@ -80,6 +75,12 @@ pub enum Commands {
 		/// Manual nonce override (use with caution - must be exact next nonce for account)
 		#[arg(long)]
 		nonce: Option<u32>,
+
+		/// Never reap the sender: transfer_keep_alive instead of the default
+		/// transfer_allow_death, so the transfer fails rather than drop the sender below the
+		/// existential deposit; with --all, leave the deposit behind
+		#[arg(long)]
+		keep_alive: bool,
 	},
 
 	/// Print the QR a cold wallet scans to sign a call for an account, and stop
@@ -124,6 +125,10 @@ pub enum Commands {
 	/// Multisig commands (multi-signature wallets)
 	#[command(subcommand)]
 	Multisig(multisig::MultisigCommands),
+
+	/// NEAR accounts controlled by ML-DSA-65 wallets
+	#[command(subcommand)]
+	Near(near::NearCommands),
 
 	/// Scheduler commands
 	#[command(subcommand)]
@@ -377,6 +382,11 @@ pub enum DeveloperCommands {
 		#[arg(long)]
 		response_file: Option<String>,
 
+		/// Instead of signing a request, emit the wallet's NEAR public key
+		/// export UR, as the cold wallet app's "Show public key" does
+		#[arg(long)]
+		export_near_key: bool,
+
 		/// Password for the wallet
 		#[arg(short, long)]
 		password: Option<String>,
@@ -401,11 +411,11 @@ pub async fn execute_command(
 			to,
 			amount,
 			all,
-			keep_alive,
 			password,
 			password_file,
 			tip,
 			nonce,
+			keep_alive,
 		} =>
 			send::handle_send_command(
 				from,
@@ -417,6 +427,7 @@ pub async fn execute_command(
 				password_file,
 				tip,
 				nonce,
+				keep_alive,
 				execution_mode,
 			)
 			.await,
@@ -431,6 +442,7 @@ pub async fn execute_command(
 			high_security::handle_high_security_command(hs_cmd, node_url, execution_mode).await,
 		Commands::Multisig(multisig_cmd) =>
 			multisig::handle_multisig_command(multisig_cmd, node_url, execution_mode).await,
+		Commands::Near(near_cmd) => near::handle_near_command(near_cmd).await,
 		Commands::Scheduler(scheduler_cmd) =>
 			scheduler::handle_scheduler_command(scheduler_cmd, node_url, execution_mode).await,
 		Commands::Storage(storage_cmd) =>
@@ -537,7 +549,8 @@ pub async fn execute_command(
 		Commands::Block(block_cmd) => block::handle_block_command(block_cmd, node_url).await,
 		Commands::Wormhole(wormhole_cmd) =>
 			wormhole::handle_wormhole_command(wormhole_cmd, node_url, execution_mode).await,
-		Commands::Airdrop(airdrop_cmd) => airdrop::handle_airdrop_command(airdrop_cmd).await,
+		Commands::Airdrop(airdrop_cmd) =>
+			airdrop::handle_airdrop_command(airdrop_cmd, node_url, execution_mode).await,
 		Commands::Multisend {
 			from,
 			addresses_file,
@@ -687,6 +700,7 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 			wallet,
 			request_file,
 			response_file,
+			export_near_key,
 			password,
 			password_file,
 		} =>
@@ -694,6 +708,7 @@ pub async fn handle_developer_command(command: DeveloperCommands) -> crate::erro
 				wallet,
 				request_file,
 				response_file,
+				export_near_key,
 				password,
 				password_file,
 			)

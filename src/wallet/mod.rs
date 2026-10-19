@@ -335,6 +335,58 @@ impl WalletManager {
 		})
 	}
 
+	fn load_cold_wallet(
+		&self,
+		keystore: &Keystore,
+		name: &str,
+	) -> Result<keystore::EncryptedWallet> {
+		let wallet = keystore.load_wallet(name)?.ok_or(WalletError::NotFound)?;
+		if wallet.wallet_type != keystore::WalletType::Cold {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"wallet '{name}' is a hot wallet; its NEAR public key comes from its own key \
+				 material — see `quantus near show-key`"
+			)));
+		}
+		Ok(wallet)
+	}
+
+	/// The NEAR public key (`ml-dsa-65:<base58>`) a cold wallet imported from
+	/// its device, if any. Errors if `name` is not a cold wallet.
+	pub fn cold_near_public_key(&self, name: &str) -> Result<Option<String>> {
+		let keystore = Keystore::new(&self.wallets_dir);
+		Ok(self.load_cold_wallet(&keystore, name)?.near_public_key)
+	}
+
+	/// Record the NEAR public key a cold wallet's device exported. The caller
+	/// has checked that the key belongs to `address`; the save is refused if
+	/// the wallet on disk no longer has that address (e.g. it was deleted and
+	/// re-imported while the QR scan was waiting).
+	pub fn set_cold_near_public_key(
+		&self,
+		name: &str,
+		address: &str,
+		near_public_key: &str,
+	) -> Result<()> {
+		let keystore = Keystore::new(&self.wallets_dir);
+		let current = self.load_cold_wallet(&keystore, name)?;
+		if current.address != address {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"wallet '{name}' is now {}, not {address}; the key was checked against the old \
+				 address, so nothing was saved — retry",
+				current.address
+			)));
+		}
+		let mut updated = keystore::EncryptedWallet::new_cold(name, &current.address);
+		updated.created_at = current.created_at;
+		updated.near_public_key = Some(near_public_key.to_string());
+		if !keystore.save_wallet_if_current(&updated, &current)? {
+			return Err(crate::error::QuantusError::Generic(format!(
+				"wallet '{name}' changed on disk while importing the key; retry"
+			)));
+		}
+		Ok(())
+	}
+
 	/// Cheap wallet-type probe from the unencrypted wallet file.
 	/// Returns `None` if no wallet with that name exists.
 	pub fn wallet_type(&self, name: &str) -> Result<Option<keystore::WalletType>> {
@@ -1613,6 +1665,63 @@ mod tests {
 			result,
 			Err(crate::error::QuantusError::Wallet(WalletError::ColdWalletNoKeys(_)))
 		));
+	}
+
+	#[tokio::test]
+	async fn test_cold_wallet_near_public_key_round_trip() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let address = cold_test_address();
+		wallet_manager.create_cold_wallet("frosty", &address).unwrap();
+
+		// Absent until imported, and absent from the file rather than null
+		assert_eq!(wallet_manager.cold_near_public_key("frosty").unwrap(), None);
+		let file = wallet_manager.wallets_dir.join("frosty.json");
+		assert!(!fs::read_to_string(&file).unwrap().contains("near_public_key"));
+
+		wallet_manager
+			.set_cold_near_public_key("frosty", &address, "ml-dsa-65:abc")
+			.unwrap();
+		assert_eq!(
+			wallet_manager.cold_near_public_key("frosty").unwrap().as_deref(),
+			Some("ml-dsa-65:abc")
+		);
+		let json: serde_json::Value =
+			serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+		assert_eq!(json["wallet_type"], "cold");
+		assert_eq!(json["address"], address);
+		assert_eq!(json["near_public_key"], "ml-dsa-65:abc");
+
+		// Hot and missing wallets are refused
+		wallet_manager.create_wallet("hot-one", Some("pw")).await.unwrap();
+		assert!(wallet_manager.cold_near_public_key("hot-one").is_err());
+		assert!(wallet_manager
+			.set_cold_near_public_key("hot-one", &address, "ml-dsa-65:abc")
+			.is_err());
+		assert!(matches!(
+			wallet_manager.cold_near_public_key("nobody"),
+			Err(crate::error::QuantusError::Wallet(WalletError::NotFound))
+		));
+	}
+
+	#[tokio::test]
+	async fn test_cold_wallet_near_public_key_save_is_bound_to_the_validated_address() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let address = cold_test_address();
+		wallet_manager.create_cold_wallet("frosty", &address).unwrap();
+
+		// The wallet name is deleted and re-imported with another address
+		// between validating the key and saving it.
+		let other = QuantumKeyPair::from_resonance_pair(&qp_dilithium_crypto::dilithium_bob())
+			.try_to_account_id_ss58check()
+			.unwrap();
+		fs::remove_file(wallet_manager.wallets_dir.join("frosty.json")).unwrap();
+		wallet_manager.create_cold_wallet("frosty", &other).unwrap();
+
+		let err = wallet_manager
+			.set_cold_near_public_key("frosty", &address, "ml-dsa-65:abc")
+			.unwrap_err();
+		assert!(err.to_string().contains("nothing was saved"), "{err}");
+		assert_eq!(wallet_manager.cold_near_public_key("frosty").unwrap(), None);
 	}
 
 	#[tokio::test]

@@ -246,14 +246,18 @@ pub(crate) fn positive_tip_amount(tip: Option<u128>) -> Option<u128> {
 	tip.filter(|tip_amount| *tip_amount > 0)
 }
 
-fn build_transfer_call_for_account_id(
+pub(crate) fn build_transfer_call_for_account_id(
 	to_account_id: SubxtAccountId32,
 	amount: u128,
-) -> impl subxt::tx::Payload {
-	quantus_subxt::api::tx().balances().transfer_allow_death(
-		subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
-		amount,
-	)
+	keep_alive: bool,
+) -> Box<dyn subxt::tx::Payload + Send + Sync> {
+	let dest = subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id);
+	let balances = quantus_subxt::api::tx().balances();
+	if keep_alive {
+		Box::new(balances.transfer_keep_alive(dest, amount))
+	} else {
+		Box::new(balances.transfer_allow_death(dest, amount))
+	}
 }
 
 /// Move the whole free balance, with the chain deducting the exact fee.
@@ -478,7 +482,7 @@ pub async fn transfer_with_nonce(
 
 	log_verbose!("✍️  Creating balance transfer extrinsic...");
 
-	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount);
+	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount, false);
 	let submit_tip = positive_tip_amount(tip);
 
 	// Submit the transaction with optional manual nonce
@@ -603,6 +607,7 @@ pub async fn handle_send_command(
 	password_file: Option<String>,
 	tip: Option<String>,
 	nonce: Option<u32>,
+	keep_alive: bool,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	// Create quantus chain client
@@ -657,11 +662,10 @@ pub async fn handle_send_command(
 		// balance precheck an estimate would drive has nothing to check.
 		(None, Some(keep_alive)) =>
 			Box::new(build_transfer_all_call_for_account_id(to_account_id, keep_alive))
-				as Box<dyn subxt::tx::Payload>,
+				as Box<dyn subxt::tx::Payload + Send + Sync>,
 		(Some(value), _) => {
 			let exact_required = checked_add(value, effective_tip, "required send balance")?;
-			let call = Box::new(build_transfer_call_for_account_id(to_account_id, value))
-				as Box<dyn subxt::tx::Payload>;
+			let call = build_transfer_call_for_account_id(to_account_id, value, keep_alive);
 			ensure_balance_covers_call(
 				&quantus_client,
 				&signer,
@@ -829,15 +833,16 @@ mod tests {
 		use super::{build_transfer_call_for_account_id, SubxtAccountId32};
 		use subxt::tx::Payload;
 		let dest = SubxtAccountId32::from([9u8; 32]);
-		let call = build_transfer_call_for_account_id(dest, 1_000);
+		let call = build_transfer_call_for_account_id(dest, 1_000, false);
 		let details = call.validation_details().expect("static payload");
 		assert_eq!(details.pallet_name, "Balances");
 		assert_eq!(details.call_name, "transfer_allow_death");
 	}
 
 	use super::{
-		build_batch_transfer_call, effective_tip_amount, format_balance,
-		limits_from_batched_calls_limit, parse_amount_with_decimals,
+		build_batch_transfer_call, build_transfer_call_for_account_id, effective_tip_amount,
+		format_balance, limits_from_batched_calls_limit, parse_amount_with_decimals,
+		SubxtAccountId32,
 	};
 	use subxt::tx::Payload;
 
@@ -853,6 +858,24 @@ mod tests {
 			details.call_name, "batch_all",
 			"user-facing batch transfers must be atomic (utility.batch_all), not utility.batch"
 		);
+	}
+
+	/// `send` keeps `transfer_allow_death` (call index 0) as its default; `--keep-alive` changes
+	/// the call index alone, to `transfer_keep_alive` (3).
+	#[test]
+	fn send_transfers_allow_death_unless_keep_alive() {
+		let metadata = crate::chain::test_metadata();
+		let dest = SubxtAccountId32::from([7u8; 32]);
+		let allow_death = build_transfer_call_for_account_id(dest.clone(), 1, false)
+			.encode_call_data(&metadata)
+			.unwrap();
+		let keep_alive = build_transfer_call_for_account_id(dest, 1, true)
+			.encode_call_data(&metadata)
+			.unwrap();
+		let balances = metadata.pallet_by_name("Balances").unwrap().index();
+		assert_eq!(allow_death[..2], [balances, 0], "default is transfer_allow_death");
+		assert_eq!(keep_alive[..2], [balances, 3], "--keep-alive is transfer_keep_alive");
+		assert_eq!(allow_death[2..], keep_alive[2..], "only the call index differs");
 	}
 
 	#[test]

@@ -6,6 +6,7 @@ A modern command line interface for interacting with the Quantus Network, featur
 
 - **Quantum-Safe Wallets**: Built with Dilithium post-quantum cryptography
 - **Cold Wallet Signing**: Air-gapped signing over QR codes with Keystone or the Quantus cold wallet app
+- **NEAR Accounts**: Control NEAR accounts with an ML-DSA-65 wallet, hot or cold, including any contract call prepared with near-cli-rs
 - **Airdrop Claims**: Find and claim testnet rewards across every historical key-derivation scheme
 - **SubXT Integration**: Modern Substrate client with type-safe API
 - **Generic Pallet Calls**: Call ANY blockchain function using metadata-driven parsing
@@ -375,8 +376,8 @@ Output:
 ```
 Snapshot v1 (3f9c2a81be04) — 1234 rewarded addresses
 2 snapshot match(es):
-  qDx...  150.00 QUAN  Resonance  dilithium-v08-padded (dilithium)  [claimable]
-  qDy...  75.50 QUAN   Planck     wormhole-rate8-compact (wormhole)  [claimable]
+  qDx...  150.00 QTC  Resonance  dilithium-v08-padded (dilithium)  [claimable]
+  qDy...  75.50 QTC   Planck     wormhole-rate8-compact (wormhole)  [claimable]
 ```
 
 - `--wallet`: Hot wallet used to derive Dilithium and HD wormhole addresses.
@@ -438,6 +439,81 @@ For each match the CLI builds the appropriate proof:
 
 The command exits non-zero if any claim fails, and prints a summary of
 recorded, skipped, and failed claims.
+
+#### `quantus airdrop pay`
+
+Operator command: pay out recorded (claimed but unpaid) rewards and mark them
+paid on the claim server. It fetches the server's unpaid list, presents every
+pending payout for review, batches the transfers into as few extrinsics as the
+chain's batch limit allows, and marks each claim paid once its batch is in a
+block.
+
+```bash
+# Review and pay everything pending, confirming interactively
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token
+
+# Air-gapped payout: any cold wallet works, one QR roundtrip per batch
+quantus airdrop pay --from my_cold --admin-token-file ./admin.token
+
+# See the full payout plan without touching the chain or the server
+quantus airdrop pay --from treasury_wallet --dry-run
+
+# Test the flow end-to-end by paying a single claim first
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token --limit 1
+
+# Or pay one specific rewarded address
+quantus airdrop pay --from treasury_wallet --admin-token-file ./admin.token --only qRewarded1
+
+# Unattended (skips the review prompt)
+quantus airdrop pay --from treasury_wallet --yes \
+  --password-file ./pass --admin-token-file ./admin.token
+```
+
+Example review output:
+
+```
+3 recorded claim(s) awaiting payout:
+  qRewarded1  →  qPayout1 [Apple-River-Stone-Cloud-Fox]  150.00 QTC  dilithium-v08-padded  (verified 2026-09-20 11:02 UTC)
+  qRewarded2  →  qPayout2 [Maple-Tiger-Coral-Dawn-Iris]  75.50 QTC   wormhole-rate8-compact  (verified 2026-09-21 08:44 UTC)
+  qRewarded3  →  qPayout3 [Cedar-Whale-Amber-Frost-Owl]  10.00 QTC   dilithium-v10-padded  (verified 2026-09-21 09:15 UTC)
+Total: 235.50 QTC to 3 account(s); 1201 snapshot row(s) remain unclaimed.
+Plan: 1 batch extrinsic(s) of up to 256 transfer(s) each.
+Pay 235.50 QTC to 3 account(s) in 1 batch(es) from 'treasury_wallet'? [y/N]
+```
+
+Every destination address is shown with its human checkphrase (the same
+five-word phrase the wallet apps display), so payout accounts can be verified
+against the recipient out of band before confirming.
+
+- `--from`: Wallet that funds the payouts — hot or cold. Cold wallets follow
+  the standard QR signing flow, one roundtrip per batch extrinsic.
+- `--admin-token-file`: File with the claim server's admin token (`chmod
+  600`), used for `mark-paid`. Falls back to the `QUANTUS_AIRDROP_ADMIN_TOKEN`
+  environment variable. Required up front, before anything is paid, so every
+  completed payout can be marked.
+- `--limit`: Pay at most this many claims this run — `--limit 1` to test the
+  whole flow on a single claim before paying the rest (a re-run pays the
+  remainder, since paid claims drop off `/unpaid`).
+- `--only`: Pay only the given rewarded address(es) (repeatable). Errors if
+  an address has no recorded unpaid claim.
+- `--batch-size`: Max transfers per batch extrinsic (default: the chain's
+  safe `utility.batch` limit).
+- `--tip`: Optional tip per batch extrinsic.
+- `--yes`: Skip the interactive review confirmation.
+- `--dry-run`: Print the payout plan (rows, batches, raw amounts) without
+  submitting transfers or marking anything paid.
+- `--server`: Claim server base URL.
+
+Safety properties: each batch is waited on until it is in a block before its
+claims are marked paid, and a claim is only marked after its transfer
+succeeded. If a `mark-paid` call fails after payment, the command prints the
+affected addresses loudly and exits non-zero — mark them manually before
+re-running, or those rows would be paid twice. If a batch fails, everything
+already paid is already marked, but the failed batch's transaction may still go
+through, so check the chain before re-running or those rows will be paid twice.
+After all batches land, the command re-fetches `/unpaid` and verifies none of
+the paid addresses are still listed, failing loudly if any are. Like
+passwords, the bearer token is never accepted as a command-line value.
 
 ---
 
@@ -580,6 +656,99 @@ Notes:
 
 ---
 
+### NEAR Accounts
+
+NEAR accepts ML-DSA-65 access keys and signatures from protocol version 85,
+so a Quantus ML-DSA-65 wallet (`quantus wallet create --scheme ml-dsa-65`)
+can be the sole key on a NEAR account. ML-DSA-87 wallets are rejected: NEAR
+defined ML-DSA-65 only. `--network` is `testnet` or `mainnet`, served by
+FastNear RPC, or one of their known endpoints (FastNear or `rpc.*.near.org`);
+any other endpoint goes in `--rpc-url`.
+
+```bash
+# The wallet's key in NEAR text form (ml-dsa-65:<base58>) and its on-chain handle
+quantus near show-key --wallet my65
+
+# Create a sub-account whose only access key is the wallet's key
+quantus near create-account --new-account vault.alice.testnet --wallet my65 \
+  --parent-credentials ~/.near-credentials/testnet/alice.testnet.json
+
+# Verify the key list from chain state
+quantus near keys --account vault.alice.testnet --wallet my65
+
+# Spend from it
+quantus near send --wallet my65 --account vault.alice.testnet --to bob.testnet --amount 1.5
+
+# Sputnik DAO membership: propose and vote
+quantus near dao propose-transfer --dao treasury.sputnik-dao.testnet --account vault.alice.testnet \
+  --wallet my65 --receiver bob.testnet --amount 10
+quantus near dao vote --dao treasury.sputnik-dao.testnet --account vault.alice.testnet \
+  --wallet my65 --id 3 --vote approve
+```
+
+#### Cold signing any NEAR transaction
+
+`quantus near sign-cold` signs a transaction prepared by
+[near-cli-rs](https://github.com/near/near-cli-rs) with a cold wallet over
+the same QR transport as Quantus extrinsics. This covers every contract
+call — swaps, lending, staking — not just the commands above.
+
+```bash
+# 1. Build the unsigned transaction offline with near-cli-rs. The signer key is
+#    the cold wallet's ML-DSA-65 key; nonce and block hash come from
+#    `near account view-account-summary` / `view-access-key` or any RPC.
+near contract call-function as-transaction v2.ref-finance.near storage_deposit \
+  json-args '{"registration_only": true}' prepaid-gas '30 Tgas' attached-deposit '0.125 NEAR' \
+  sign-as vault.alice.near network-config mainnet \
+  sign-later --signer-public-key ml-dsa-65:<base58> --nonce <nonce+1> --block-hash <recent> \
+  save-to-file unsigned.json
+
+# 2. Sign it on the cold wallet: the CLI shows the transaction as a QR,
+#    then scans the device's signature QR and verifies it against the stored
+#    address before producing a signed transaction.
+quantus near sign-cold --unsigned-tx @unsigned.json --wallet my_cold --network mainnet --out signed.b64
+
+# 3. Submit with near-cli-rs, or add --send in step 2 to submit directly.
+near transaction send-signed-transaction file-with-base64-signed-transaction signed.b64 \
+  network-config mainnet send
+```
+
+The device sees the decoded transaction (signer, receiver, nonce, every
+action) and signs only if the transaction's declared key is its own. The CLI
+accepts the response only if that key also hashes to the cold wallet's stored
+address, so a transaction built for someone else's key cannot be signed as
+`--wallet my_cold`. The hidden `quantus developer cold-sign-sim` command
+answers NEAR requests too, using a local ML-DSA-65 hot wallet, for end-to-end
+testing without a device.
+
+#### Using the NEAR commands with a cold wallet
+
+A cold wallet file holds only an SS58 address, which is a hash of the key and
+cannot be turned back into the 1952-byte ML-DSA-65 public key NEAR needs.
+Import the key once from the QR the cold wallet app shows (account → Show
+public key → NEAR); after that every `quantus near` command accepts the cold
+wallet, signing over QR where a hot wallet would sign locally.
+
+```bash
+# Scan the key export QR (or pass it as text with --key ml-dsa-65:<base58>)
+quantus near import-cold-key --wallet my_cold
+
+# Now the same commands as for a hot wallet, no password involved
+quantus near show-key --wallet my_cold
+quantus near create-account --new-account vault.alice.testnet --wallet my_cold \
+  --parent-credentials ~/.near-credentials/testnet/alice.testnet.json
+quantus near send --wallet my_cold --account vault.alice.testnet --to bob.testnet --amount 1.5
+```
+
+The import is refused unless the exported key hashes to the wallet's stored
+address, so a QR from another device cannot be attached to `my_cold`. The
+key is re-checked against the address every time it is read from the wallet
+file. For testing without a device, `quantus developer cold-sign-sim --wallet
+<hot65> --export-near-key --response-file export.ur` writes the same QR
+payload a device would show.
+
+---
+
 ### Sending Tokens
 
 ```bash
@@ -597,6 +766,9 @@ quantus send --from crystal_alice --to <address> --amount 10 --tip 0.1
 
 # With manual nonce
 quantus send --from crystal_alice --to <address> --amount 10 --nonce 42
+
+# Refuse to reap the sender: transfer_keep_alive instead of the default transfer_allow_death
+quantus send --from crystal_alice --to <address> --amount 10 --keep-alive
 ```
 
 Transaction status terms:
@@ -976,6 +1148,9 @@ quantus multisig propose transfer \
   --amount 10 \
   --expiry <future_block_number> \
   --from signer_wallet
+
+# --keep-alive proposes transfer_keep_alive instead of the default transfer_allow_death
+# (the transfer fails rather than reaping the multisig; not for high-security multisigs)
 
 # Amount formats supported:
 #   10       → 10 QUAN
