@@ -711,16 +711,13 @@ mod tests {
 	use subxt::{client::ClientState, config::substrate::H256, utils::MultiAddress, OfflineClient};
 
 	fn test_client_state() -> ClientState<ChainConfig> {
-		let metadata_bytes: &[u8] = include_bytes!("../quantus_metadata.scale");
-		let metadata = <subxt::Metadata as codec::Decode>::decode(&mut &metadata_bytes[..])
-			.expect("valid metadata");
 		ClientState {
 			genesis_hash: H256::from([0x49u8; 32]),
 			runtime_version: subxt::client::RuntimeVersion {
 				spec_version: 136,
 				transaction_version: 3,
 			},
-			metadata,
+			metadata: crate::chain::test_metadata(),
 		}
 	}
 

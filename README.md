@@ -766,6 +766,9 @@ quantus send --from crystal_alice --to <address> --amount 10 --tip 0.1
 
 # With manual nonce
 quantus send --from crystal_alice --to <address> --amount 10 --nonce 42
+
+# Refuse to reap the sender: transfer_keep_alive instead of the default transfer_allow_death
+quantus send --from crystal_alice --to <address> --amount 10 --keep-alive
 ```
 
 Transaction status terms:
@@ -1145,6 +1148,9 @@ quantus multisig propose transfer \
   --amount 10 \
   --expiry <future_block_number> \
   --from signer_wallet
+
+# --keep-alive proposes transfer_keep_alive instead of the default transfer_allow_death
+# (the transfer fails rather than reaping the multisig; not for high-security multisigs)
 
 # Amount formats supported:
 #   10       → 10 QUAN

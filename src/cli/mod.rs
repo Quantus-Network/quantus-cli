@@ -70,6 +70,11 @@ pub enum Commands {
 		/// Manual nonce override (use with caution - must be exact next nonce for account)
 		#[arg(long)]
 		nonce: Option<u32>,
+
+		/// Send with transfer_keep_alive instead of the default transfer_allow_death: the
+		/// transfer fails rather than reaping the sender below the existential deposit
+		#[arg(long)]
+		keep_alive: bool,
 	},
 
 	/// Print the QR a cold wallet scans to sign a call for an account, and stop
@@ -395,7 +400,7 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip, nonce } =>
+		Commands::Send { from, to, amount, password, password_file, tip, nonce, keep_alive } =>
 			send::handle_send_command(
 				from,
 				to,
@@ -405,6 +410,7 @@ pub async fn execute_command(
 				password_file,
 				tip,
 				nonce,
+				keep_alive,
 				execution_mode,
 			)
 			.await,
