@@ -260,6 +260,21 @@ pub(crate) fn build_transfer_call_for_account_id(
 	}
 }
 
+/// Move the whole free balance, with the chain deducting the exact fee.
+///
+/// `keep_alive` leaves the existential deposit behind instead of reaping the account.
+fn build_transfer_all_call_for_account_id(
+	to_account_id: SubxtAccountId32,
+	keep_alive: bool,
+) -> Box<dyn subxt::tx::Payload + Send + Sync> {
+	Box::new(
+		quantus_subxt::api::tx().balances().transfer_all(
+			subxt::ext::subxt_core::utils::MultiAddress::Id(to_account_id),
+			keep_alive,
+		),
+	)
+}
+
 pub(crate) fn build_batch_transfer_call(
 	transfers: &[(String, u128)],
 ) -> Result<impl subxt::tx::Payload> {
@@ -333,11 +348,7 @@ where
 				))
 			})?;
 
-	signed_tx.partial_fee_estimate().await.map_err(|e| {
-		crate::error::QuantusError::NetworkError(format!(
-			"Failed to estimate transaction fee: {e:?}"
-		))
-	})
+	quantus_client.partial_fee(signed_tx.encoded()).await
 }
 
 pub(crate) async fn ensure_balance_covers_call<Call>(
@@ -409,13 +420,13 @@ async fn submit_transfer_call<Call>(
 	submit_tip: Option<u128>,
 	nonce: Option<u32>,
 	execution_mode: crate::cli::common::ExecutionMode,
-) -> Result<subxt::utils::H256>
+) -> Result<(subxt::utils::H256, Option<subxt::utils::H256>)>
 where
 	Call: subxt::tx::Payload,
 {
 	if let Some(manual_nonce) = nonce {
 		log_verbose!("🔢 Using manual nonce: {}", manual_nonce);
-		crate::cli::common::submit_transaction_with_nonce(
+		crate::cli::common::submit_transaction_with_nonce_and_inclusion_block(
 			quantus_client,
 			signer,
 			transfer_call,
@@ -425,7 +436,7 @@ where
 		)
 		.await
 	} else {
-		crate::cli::common::submit_transaction(
+		crate::cli::common::submit_transaction_with_inclusion_block(
 			quantus_client,
 			signer,
 			transfer_call,
@@ -478,7 +489,7 @@ pub async fn transfer_with_nonce(
 	let submit_tip = positive_tip_amount(tip);
 
 	// Submit the transaction with optional manual nonce
-	let tx_hash = submit_transfer_call(
+	let (tx_hash, _) = submit_transfer_call(
 		quantus_client,
 		signer,
 		transfer_call,
@@ -586,7 +597,7 @@ pub async fn batch_transfer(
 
 // (Removed custom `AccountData` struct – we now use the runtime-generated type)
 
-/// Handle the send command
+/// Handle the send command for a fixed amount
 #[allow(clippy::too_many_arguments)]
 pub async fn handle_send_command(
 	from_wallet: String,
@@ -600,12 +611,77 @@ pub async fn handle_send_command(
 	keep_alive: bool,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
+	send_from_wallet(
+		from_wallet,
+		to_address,
+		Some(amount_str),
+		node_url,
+		password,
+		password_file,
+		tip,
+		nonce,
+		keep_alive,
+		execution_mode,
+	)
+	.await
+}
+
+/// Handle `send --all`: sweep the whole free balance with `Balances::transfer_all`, the chain
+/// deducting the exact fee. `keep_alive` leaves the existential deposit behind instead of
+/// reaping the account.
+#[allow(clippy::too_many_arguments)]
+pub async fn handle_send_all_command(
+	from_wallet: String,
+	to_address: String,
+	node_url: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+	tip: Option<String>,
+	nonce: Option<u32>,
+	keep_alive: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<()> {
+	send_from_wallet(
+		from_wallet,
+		to_address,
+		None,
+		node_url,
+		password,
+		password_file,
+		tip,
+		nonce,
+		keep_alive,
+		execution_mode,
+	)
+	.await
+}
+
+/// `amount_str` is `None` for a sweep.
+#[allow(clippy::too_many_arguments)]
+async fn send_from_wallet(
+	from_wallet: String,
+	to_address: String,
+	amount_str: Option<&str>,
+	node_url: &str,
+	password: Option<String>,
+	password_file: Option<String>,
+	tip: Option<String>,
+	nonce: Option<u32>,
+	keep_alive: bool,
+	execution_mode: crate::cli::common::ExecutionMode,
+) -> Result<()> {
 	// Create quantus chain client
 	let quantus_client = QuantusClient::new(node_url).await?;
 
-	// Parse and validate the amount
-	let (amount, formatted_amount) =
-		validate_and_format_amount(&quantus_client, amount_str).await?;
+	// Parse and validate the amount. With `--all` the chain computes it, so there is
+	// nothing to validate and nothing to reserve against.
+	let (amount, formatted_amount) = match amount_str {
+		Some(raw) => {
+			let (value, formatted) = validate_and_format_amount(&quantus_client, raw).await?;
+			(Some(value), formatted)
+		},
+		None => (None, "the entire free balance".to_string()),
+	};
 
 	// Resolve the destination address (could be wallet name or SS58 address)
 	let (resolved_address, to_account_id) = resolve_address_with_subxt_account_id(&to_address)?;
@@ -640,24 +716,33 @@ pub async fn handle_send_command(
 	};
 	let effective_tip = effective_tip_amount(tip_amount);
 	let submit_tip = positive_tip_amount(tip_amount);
-	let exact_required = checked_add(amount, effective_tip, "required send balance")?;
-	let transfer_call = build_transfer_call_for_account_id(to_account_id, amount, keep_alive);
-	ensure_balance_covers_call(
-		&quantus_client,
-		&signer,
-		&transfer_call,
-		balance,
-		exact_required,
-		submit_tip,
-		"send",
-	)
-	.await?;
+
+	let transfer_call = match amount {
+		// `transfer_all` asks the chain to move everything minus the exact fee, so the
+		// balance precheck an estimate would drive has nothing to check.
+		None => build_transfer_all_call_for_account_id(to_account_id, keep_alive),
+		Some(value) => {
+			let exact_required = checked_add(value, effective_tip, "required send balance")?;
+			let call = build_transfer_call_for_account_id(to_account_id, value, keep_alive);
+			ensure_balance_covers_call(
+				&quantus_client,
+				&signer,
+				&call,
+				balance,
+				exact_required,
+				submit_tip,
+				"send",
+			)
+			.await?;
+			call
+		},
+	};
 
 	// Create and submit transaction
 	log_verbose!("✍️  {} Signing transaction...", "SIGN".bright_magenta().bold());
 
 	// Submit transaction
-	let tx_hash = submit_transfer_call(
+	let (tx_hash, included_in) = submit_transfer_call(
 		&quantus_client,
 		&signer,
 		transfer_call,
@@ -667,17 +752,15 @@ pub async fn handle_send_command(
 	)
 	.await?;
 
-	print_send_result(&quantus_client, &from_account_id, balance, amount, tx_hash, execution_mode)
-		.await
+	print_send_result(&quantus_client, &from_account_id, tx_hash, included_in, execution_mode).await
 }
 
 /// Print the post-submission summary (status, new balance, fee).
 async fn print_send_result(
 	quantus_client: &QuantusClient,
 	from_account_id: &str,
-	balance_before: u128,
-	amount: u128,
 	tx_hash: subxt::utils::H256,
+	included_in: Option<subxt::utils::H256>,
 	execution_mode: crate::cli::common::ExecutionMode,
 ) -> Result<()> {
 	let transaction_stage = execution_mode.transaction_stage();
@@ -688,13 +771,13 @@ async fn print_send_result(
 		tx_hash
 	);
 
-	if !execution_mode.should_watch_transaction() {
+	let Some(block_hash) = included_in else {
 		log_print!(
-			"ℹ️  The transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized-tx to wait before returning.",
+			"ℹ️  The transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized to wait before returning.",
 			transaction_stage.success_detail()
 		);
 		return Ok(());
-	}
+	};
 
 	log_success!(
 		"🎉 {} Transaction {}.",
@@ -706,10 +789,23 @@ async fn print_send_result(
 	let new_balance = get_balance(quantus_client, from_account_id).await?;
 	let formatted_new_balance = format_balance_with_symbol(quantus_client, new_balance).await?;
 
-	// Calculate and display transaction fee in verbose mode
-	let fee_paid = balance_before.saturating_sub(new_balance).saturating_sub(amount);
-	if fee_paid > 0 {
-		let formatted_fee = format_balance_with_symbol(quantus_client, fee_paid).await?;
+	// What the chain took, tip included, read from the included transaction: a balance delta
+	// cannot separate it from what `--all` moved. Not `TransactionFeePaid`, which omits the
+	// refund an account reaped by `--all` forfeits.
+	if crate::log::is_verbose() {
+		use quantus_subxt::api::mining_rewards::events::FeesCollected;
+		let collected = crate::cli::common::find_extrinsic_event::<FeesCollected>(
+			quantus_client.client(),
+			&block_hash,
+			&tx_hash,
+		)
+		.await?
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Transaction {tx_hash:?} emitted no MiningRewards::FeesCollected event"
+			))
+		})?;
+		let formatted_fee = format_balance_with_symbol(quantus_client, collected.amount).await?;
 		log_verbose!("💸 Transaction fee: {}", formatted_fee.bright_cyan());
 	}
 
@@ -774,9 +870,9 @@ pub async fn get_batch_limits(quantus_client: &QuantusClient) -> Result<(u32, u3
 #[cfg(test)]
 mod tests {
 	use super::{
-		build_batch_transfer_call, build_transfer_call_for_account_id, effective_tip_amount,
-		format_balance, limits_from_batched_calls_limit, parse_amount_with_decimals,
-		SubxtAccountId32,
+		build_batch_transfer_call, build_transfer_all_call_for_account_id,
+		build_transfer_call_for_account_id, effective_tip_amount, format_balance,
+		limits_from_batched_calls_limit, parse_amount_with_decimals, SubxtAccountId32,
 	};
 	use subxt::tx::Payload;
 
@@ -810,6 +906,25 @@ mod tests {
 		assert_eq!(allow_death[..2], [balances, 0], "default is transfer_allow_death");
 		assert_eq!(keep_alive[..2], [balances, 3], "--keep-alive is transfer_keep_alive");
 		assert_eq!(allow_death[2..], keep_alive[2..], "only the call index differs");
+	}
+
+	/// `--all` is `transfer_all` (call index 4), not a transfer of a guessed amount: the chain
+	/// deducts the exact fee. `--keep-alive` is its trailing flag byte.
+	#[test]
+	fn send_all_builds_transfer_all_with_keep_alive_flag() {
+		let metadata = crate::chain::test_metadata();
+		let dest = SubxtAccountId32::from([9u8; 32]);
+		let reap = build_transfer_all_call_for_account_id(dest.clone(), false)
+			.encode_call_data(&metadata)
+			.unwrap();
+		let keep = build_transfer_all_call_for_account_id(dest, true)
+			.encode_call_data(&metadata)
+			.unwrap();
+		let balances = metadata.pallet_by_name("Balances").unwrap().index();
+		assert_eq!(reap[..2], [balances, 4], "--all is transfer_all");
+		assert_eq!(reap[reap.len() - 1], 0, "default reaps the sender");
+		assert_eq!(keep[keep.len() - 1], 1, "--keep-alive leaves the existential deposit");
+		assert_eq!(reap[..reap.len() - 1], keep[..keep.len() - 1], "only the flag differs");
 	}
 
 	#[test]

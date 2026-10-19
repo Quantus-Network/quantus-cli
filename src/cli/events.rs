@@ -1,5 +1,7 @@
 use crate::{
-	chain::client::QuantusClient, cli::address_format::QuantusSS58, log_print, log_verbose,
+	chain::client::QuantusClient,
+	cli::{address_format::QuantusSS58, common::ExecutionMode},
+	log_print, log_verbose,
 };
 use colored::Colorize;
 use jsonrpsee::core::client::ClientT;
@@ -58,52 +60,22 @@ pub async fn handle_events_command(
 		};
 
 		(hash, block_num)
-	} else if finalized {
-		log_print!("📋 Querying events from finalized block");
+	} else {
+		let finalized = finalized || ExecutionMode::reads_at_finalized();
+		log_print!(
+			"📋 Querying events from {} block",
+			if finalized { "finalized" } else { "latest" }
+		);
 
-		// Get finalized head
-		let hash: subxt::utils::H256 = quantus_client
-			.rpc_client()
-			.request::<subxt::utils::H256, [(); 0]>("chain_getFinalizedHead", [])
-			.await
-			.map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get finalized head: {e:?}"
-				))
-			})?;
+		let hash = quantus_client.head_or_finalized(finalized).await?;
 
-		// Get block number from finalized head
 		let block_header: serde_json::Value = quantus_client
 			.rpc_client()
 			.request::<serde_json::Value, [String; 1]>("chain_getHeader", [format!("0x{hash:x}")])
 			.await
 			.map_err(|e| {
 				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get finalized block header: {e:?}"
-				))
-			})?;
-
-		let block_num = if let Some(block_number_str) = block_header["number"].as_str() {
-			u64::from_str_radix(&block_number_str[2..], 16).map(|n| n as u32).unwrap_or(0)
-		} else {
-			0
-		};
-
-		(hash, block_num)
-	} else {
-		// Use latest block (default)
-		log_print!("📋 Querying events from latest block");
-
-		let hash = quantus_client.get_latest_block().await?;
-
-		// Get block number from latest block
-		let block_header: serde_json::Value = quantus_client
-			.rpc_client()
-			.request::<serde_json::Value, [(); 0]>("chain_getHeader", [])
-			.await
-			.map_err(|e| {
-				crate::error::QuantusError::NetworkError(format!(
-					"Failed to get latest block header: {e:?}"
+					"Failed to get block header for {hash:?}: {e:?}"
 				))
 			})?;
 

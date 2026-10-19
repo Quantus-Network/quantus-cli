@@ -44,11 +44,12 @@ struct Cli {
 	#[arg(long, global = true, default_value = "ws://127.0.0.1:9944")]
 	node_url: String,
 
-	/// Wait for transaction finalization before returning
-	/// Implies `--wait-for-transaction`
-	/// NOTE: waiting for finalized transaction may take a while in PoW chain
-	#[arg(long, global = true, default_value = "false")]
-	finalized_tx: bool,
+	/// Use the finalized block for every read, and wait for finalization before returning
+	///
+	/// Off by default: QPoW finality trails the head by ~100 blocks, so finalized reads
+	/// serve state ~20 minutes stale. Implies `--wait-for-transaction`.
+	#[arg(long, global = true, alias = "finalized-tx", default_value = "false")]
+	finalized: bool,
 
 	/// Wait for transaction inclusion in a best block before returning
 	/// Default: false
@@ -83,13 +84,14 @@ async fn main() -> Result<(), QuantusError> {
 	log_verbose!("");
 
 	// Display warning about finalization
-	if cli.finalized_tx {
-		log_print!("⚠️ Warning: Waiting for finalized block may take a while in PoW chain.");
+	if cli.finalized {
+		log_print!("⚠️ Warning: reads and waits use the finalized block; on this PoW chain it");
+		log_print!("   trails the head by ~100 blocks, so this may take a while.");
 	}
 
 	// Create execution mode from CLI args
 	let execution_mode = cli::common::ExecutionMode {
-		finalized: cli.finalized_tx,
+		finalized: cli.finalized,
 		wait_for_transaction: cli.wait_for_transaction,
 	};
 
@@ -134,5 +136,31 @@ async fn main() -> Result<(), QuantusError> {
 			version_check::finish_update_check(update_refresh).await;
 			std::process::exit(1);
 		},
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// `events` has its own `--finalized`, which shadows the global one and its alias there.
+	#[test]
+	fn finalized_tx_alias_parses_on_either_side_of_events() {
+		let before = Cli::try_parse_from(["quantus", "--finalized-tx", "events"]).expect("parse");
+		assert!(before.finalized);
+		let after = Cli::try_parse_from(["quantus", "events", "--finalized-tx"]).expect("parse");
+		assert!(matches!(after.command, Commands::Events { finalized: true, .. }));
+		let send = Cli::try_parse_from([
+			"quantus",
+			"send",
+			"--finalized-tx",
+			"--all",
+			"--from",
+			"a",
+			"--to",
+			"b",
+		])
+		.expect("parse");
+		assert!(send.finalized);
 	}
 }

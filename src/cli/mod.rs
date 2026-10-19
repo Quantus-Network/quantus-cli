@@ -47,9 +47,14 @@ pub enum Commands {
 		#[arg(short, long)]
 		to: String,
 
-		/// Amount to send (e.g., "10", "10.5", "0.0001")
-		#[arg(short, long)]
-		amount: String,
+		/// Amount to send (e.g., "10", "10.5", "0.0001"). Omit with `--all`.
+		#[arg(short, long, required_unless_present = "all", conflicts_with = "all")]
+		amount: Option<String>,
+
+		/// Send the whole free balance with transfer_all, letting the chain deduct the exact
+		/// fee so nothing is stranded. Reaps the sender unless --keep-alive
+		#[arg(long)]
+		all: bool,
 
 		/// Wallet name to send from
 		#[arg(short, long)]
@@ -71,8 +76,9 @@ pub enum Commands {
 		#[arg(long)]
 		nonce: Option<u32>,
 
-		/// Send with transfer_keep_alive instead of the default transfer_allow_death: the
-		/// transfer fails rather than reaping the sender below the existential deposit
+		/// Never reap the sender: transfer_keep_alive instead of the default
+		/// transfer_allow_death, so the transfer fails rather than drop the sender below the
+		/// existential deposit; with --all, leave the deposit behind
 		#[arg(long)]
 		keep_alive: bool,
 	},
@@ -229,7 +235,7 @@ pub enum Commands {
 		latest: bool,
 
 		/// Query events from finalized block (full support)
-		#[arg(long)]
+		#[arg(long, alias = "finalized-tx")]
 		finalized: bool,
 
 		/// Filter events by pallet name (e.g., "Balances")
@@ -391,8 +397,19 @@ pub enum DeveloperCommands {
 	},
 }
 
-/// Execute a CLI command
+/// Execute a CLI command, `execution_mode` governing its reads as well as its waits.
 pub async fn execute_command(
+	command: Commands,
+	node_url: &str,
+	verbose: bool,
+	execution_mode: common::ExecutionMode,
+) -> crate::error::Result<()> {
+	execution_mode
+		.scope(run_command(command, node_url, verbose, execution_mode))
+		.await
+}
+
+async fn run_command(
 	command: Commands,
 	node_url: &str,
 	verbose: bool,
@@ -400,20 +417,48 @@ pub async fn execute_command(
 ) -> crate::error::Result<()> {
 	match command {
 		Commands::Wallet(wallet_cmd) => wallet::handle_wallet_command(wallet_cmd, node_url).await,
-		Commands::Send { from, to, amount, password, password_file, tip, nonce, keep_alive } =>
-			send::handle_send_command(
-				from,
-				to,
-				&amount,
-				node_url,
-				password,
-				password_file,
-				tip,
-				nonce,
-				keep_alive,
-				execution_mode,
-			)
-			.await,
+		Commands::Send {
+			from,
+			to,
+			amount,
+			all,
+			password,
+			password_file,
+			tip,
+			nonce,
+			keep_alive,
+		} => match (all, amount) {
+			(false, Some(amount)) =>
+				send::handle_send_command(
+					from,
+					to,
+					&amount,
+					node_url,
+					password,
+					password_file,
+					tip,
+					nonce,
+					keep_alive,
+					execution_mode,
+				)
+				.await,
+			(true, None) =>
+				send::handle_send_all_command(
+					from,
+					to,
+					node_url,
+					password,
+					password_file,
+					tip,
+					nonce,
+					keep_alive,
+					execution_mode,
+				)
+				.await,
+			_ => Err(crate::error::QuantusError::Generic(
+				"send takes exactly one of --amount or --all".to_string(),
+			)),
+		},
 		Commands::SigningQr { from, to, amount, call_data, tip, nonce } =>
 			signing_qr::handle_signing_qr_command(from, to, amount, call_data, tip, nonce, node_url)
 				.await,

@@ -219,6 +219,7 @@ Passing `None` for the tip means no tip is attached. Use `Some(raw_tip)` only wh
 - `wait_for_transaction = false`: return after submission (`submitted`)
 - `wait_for_transaction = true`: return after best-block inclusion (`included`)
 - `finalized = true`: return after finalization (`finalized`); this implies waiting
+- `finalized = true` also moves every chain read inside `cli::execute_command` to the finalized block; `ExecutionMode::scope` does the same for any future, and `QuantusClient` reads outside a scope take the head
 
 ### Service Architecture
 

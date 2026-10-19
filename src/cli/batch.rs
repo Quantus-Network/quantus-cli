@@ -194,7 +194,7 @@ async fn handle_batch_send_command(
 
 	if !execution_mode.should_watch_transaction() {
 		log_print!(
-			"ℹ️  The batch transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized-tx to wait before returning.",
+			"ℹ️  The batch transaction was {} but this command did not wait for block inclusion. Use --wait-for-transaction or --finalized to wait before returning.",
 			transaction_stage.success_detail()
 		);
 		return Ok(());
