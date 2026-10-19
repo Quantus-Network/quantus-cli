@@ -156,7 +156,7 @@ async fn handle_query_command(
 		);
 		log_print!(
 			"  Privacy level: ~1/{} of address space per query",
-			(1u64 << (prefix_len * 4)).to_string().bright_green()
+			privacy_ratio(prefix_len).bright_green()
 		);
 		log_print!("");
 	}
@@ -281,10 +281,21 @@ fn handle_hash_address_command(address: &str, prefix_len: usize) -> Result<()> {
 	log_print!(
 		"  Privacy: With prefix length {}, your query will match ~1/{} of all addresses",
 		prefix_len,
-		(1u64 << (prefix_len * 4)).to_string().bright_cyan()
+		privacy_ratio(prefix_len).bright_cyan()
 	);
 
 	Ok(())
+}
+
+/// Denominator of the "~1/N of the address space" a prefix of `prefix_len` hex characters
+/// matches. Each hex character is 4 bits, so N = 2^(4 * prefix_len); past u64 it is shown as a
+/// power of two.
+fn privacy_ratio(prefix_len: usize) -> String {
+	let bits = prefix_len.saturating_mul(4);
+	match u32::try_from(bits).ok().and_then(|bits| 1u64.checked_shl(bits)) {
+		Some(n) => n.to_string(),
+		None => format!("2^{bits}"),
+	}
 }
 
 /// Truncate an address for display
@@ -327,6 +338,20 @@ mod tests {
 			parse_transfer_amount(&sample_transfer("12345", "2024-01-01T00:00:00.000Z")).unwrap(),
 			12345
 		);
+	}
+
+	#[test]
+	fn privacy_ratio_does_not_overflow_long_prefixes() {
+		assert_eq!(privacy_ratio(4), "65536");
+		assert_eq!(privacy_ratio(15), "1152921504606846976");
+		assert_eq!(privacy_ratio(16), "2^64");
+		assert_eq!(privacy_ratio(64), "2^256");
+	}
+
+	#[test]
+	fn hash_address_accepts_a_full_length_prefix() {
+		let address = AccountId32::new([7u8; 32]).to_ss58check();
+		handle_hash_address_command(&address, 64).unwrap();
 	}
 
 	#[test]
