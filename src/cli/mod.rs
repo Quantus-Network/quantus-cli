@@ -235,7 +235,7 @@ pub enum Commands {
 		latest: bool,
 
 		/// Query events from finalized block (full support)
-		#[arg(long)]
+		#[arg(long, alias = "finalized-tx")]
 		finalized: bool,
 
 		/// Filter events by pallet name (e.g., "Balances")

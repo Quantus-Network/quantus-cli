@@ -138,3 +138,29 @@ async fn main() -> Result<(), QuantusError> {
 		},
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// `events` has its own `--finalized`, which shadows the global one and its alias there.
+	#[test]
+	fn finalized_tx_alias_parses_on_either_side_of_events() {
+		let before = Cli::try_parse_from(["quantus", "--finalized-tx", "events"]).expect("parse");
+		assert!(before.finalized);
+		let after = Cli::try_parse_from(["quantus", "events", "--finalized-tx"]).expect("parse");
+		assert!(matches!(after.command, Commands::Events { finalized: true, .. }));
+		let send = Cli::try_parse_from([
+			"quantus",
+			"send",
+			"--finalized-tx",
+			"--all",
+			"--from",
+			"a",
+			"--to",
+			"b",
+		])
+		.expect("parse");
+		assert!(send.finalized);
+	}
+}

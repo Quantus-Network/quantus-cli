@@ -59,6 +59,12 @@ impl ExecutionMode {
 		READS_AT_FINALIZED.try_with(|finalized| *finalized).unwrap_or(false)
 	}
 
+	/// Wait for each transaction to the finality reads are taken at, so a read after the wait
+	/// sees what it waited for.
+	pub fn wait_at_read_finality() -> Self {
+		Self { finalized: Self::reads_at_finalized(), wait_for_transaction: true }
+	}
+
 	pub fn transaction_stage(self) -> TransactionStage {
 		if self.finalized {
 			TransactionStage::Finalized
@@ -1227,6 +1233,16 @@ mod tests {
 			}),
 		);
 		assert!(!ExecutionMode::reads_at_finalized());
+	}
+
+	#[tokio::test]
+	async fn waits_follow_the_scoped_read_finality() {
+		for finalized in [false, true] {
+			let mode = ExecutionMode { finalized, wait_for_transaction: false }
+				.scope(async { ExecutionMode::wait_at_read_finality() })
+				.await;
+			assert_eq!(mode, ExecutionMode { finalized, wait_for_transaction: true });
+		}
 	}
 
 	#[test]
