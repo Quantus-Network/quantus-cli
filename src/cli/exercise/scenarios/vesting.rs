@@ -62,8 +62,6 @@ async fn constants_and_schedules(ctx: &mut ExerciseCtx) -> Result<String> {
 	let constants = ctx.client.client().constants();
 	let payout_quantum =
 		constants.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
-	let min_claim_interval =
-		constants.at(&quantus_subxt::api::constants().vesting().min_claim_interval())?;
 
 	if payout_quantum == 0 {
 		return Err(QuantusError::Generic(
@@ -102,7 +100,7 @@ async fn constants_and_schedules(ctx: &mut ExerciseCtx) -> Result<String> {
 	}
 
 	Ok(format!(
-		"quantum {payout_quantum}, claim interval {min_claim_interval}ms, {launch_note}; \
+		"quantum {payout_quantum}, {launch_note}; \
 		 {} schedule(s), next id {next_id}",
 		schedules.len()
 	))
@@ -206,7 +204,7 @@ async fn admin_create_and_claim(
 		)));
 	}
 	let reclaim = quantus_subxt::api::tx().vesting().claim(schedule_id);
-	submit_expect_failure(ctx, &charlie, reclaim, &["NothingToClaim", "ClaimTooSoon"]).await?;
+	submit_expect_failure(ctx, &charlie, reclaim, &["NothingToClaim"]).await?;
 
 	Ok(format!(
 		"schedule #{schedule_id} created via treasury multisig, {total} claimed \

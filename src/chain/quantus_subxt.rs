@@ -12747,23 +12747,6 @@ pub mod api {
 						],
 					)
 				}
-				#[doc = " Minimum elapsed milliseconds between successful claims on one schedule."]
-				pub fn min_claim_interval(
-					&self,
-				) -> ::subxt::ext::subxt_core::constants::address::StaticAddress<
-					::core::primitive::u64,
-				> {
-					::subxt::ext::subxt_core::constants::address::StaticAddress::new_static(
-						"Vesting",
-						"MinClaimInterval",
-						[
-							128u8, 214u8, 205u8, 242u8, 181u8, 142u8, 124u8, 231u8, 190u8, 146u8,
-							59u8, 226u8, 157u8, 101u8, 103u8, 117u8, 249u8, 65u8, 18u8, 191u8,
-							103u8, 119u8, 53u8, 85u8, 81u8, 96u8, 220u8, 42u8, 184u8, 239u8, 42u8,
-							246u8,
-						],
-					)
-				}
 			}
 		}
 	}
@@ -16258,18 +16241,15 @@ pub mod api {
 					#[doc = "below the non-final alignment otherwise)."]
 					NothingToClaim,
 					#[codec(index = 3)]
-					#[doc = "This schedule has already paid out within the minimum claim interval."]
-					ClaimTooSoon,
-					#[codec(index = 4)]
 					#[doc = "The treasury account is not configured or aliases the vesting pot."]
 					TreasuryNotConfigured,
-					#[codec(index = 5)]
+					#[codec(index = 4)]
 					#[doc = "The pot does not hold its existential-deposit buffer; endow it first."]
 					PotUnderfunded,
-					#[codec(index = 6)]
+					#[codec(index = 5)]
 					#[doc = "The beneficiary must not be the pot, and retargeting must change the account."]
 					InvalidBeneficiary,
-					#[codec(index = 7)]
+					#[codec(index = 6)]
 					#[doc = "The proof recorder reported the transfer credit as dropped: no wormhole leaf"]
 					#[doc = "was created, so the transfer is rolled back rather than finalized without a"]
 					#[doc = "leaf."]

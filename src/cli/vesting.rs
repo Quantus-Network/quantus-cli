@@ -62,6 +62,26 @@ pub enum VestingCommands {
 		password_file: Option<String>,
 	},
 
+	/// Claim every schedule as soon as the next payout vests, so each non-final
+	/// payout is one 25 QTC step. Runs until Ctrl-C.
+	Drip {
+		/// Wallet name to sign with (any funded account; the payout goes to the beneficiary)
+		#[arg(short, long)]
+		from: String,
+
+		/// Only drip schedules for this beneficiary (address or wallet name)
+		#[arg(long)]
+		beneficiary: Option<String>,
+
+		/// Password for the wallet (or use environment variables)
+		#[arg(short, long, hide = true)]
+		password: Option<String>,
+
+		/// Read password from file (for scripting)
+		#[arg(long)]
+		password_file: Option<String>,
+	},
+
 	/// Create a schedule, moving `total` from the treasury into the vesting pot
 	/// (requires the treasury origin; use --call-data-only to route via multisig)
 	CreateSchedule {
@@ -170,6 +190,14 @@ pub async fn handle_vesting_command(
 		VestingCommands::Claim { schedule_id, from, password, password_file } => {
 			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
 			claim(&quantus_client, &signer, schedule_id, execution_mode).await
+		},
+		VestingCommands::Drip { from, beneficiary, password, password_file } => {
+			let signer = crate::wallet::load_signer_from_wallet(&from, password, password_file)?;
+			let beneficiary = match beneficiary {
+				Some(value) => Some(crate::cli::common::resolve_to_subxt_account_id(&value)?),
+				None => None,
+			};
+			drip(&quantus_client, &signer, beneficiary, execution_mode).await
 		},
 		VestingCommands::CreateSchedule {
 			beneficiary,
@@ -338,8 +366,6 @@ async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Resu
 	let constants = quantus_client.client().constants();
 	let payout_quantum =
 		constants.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
-	let min_claim_interval =
-		constants.at(&quantus_subxt::api::constants().vesting().min_claim_interval())?;
 
 	let latest_block_hash = quantus_client.get_latest_block().await?;
 	let storage_at = quantus_client.client().storage().at(latest_block_hash);
@@ -352,7 +378,6 @@ async fn show_info(quantus_client: &crate::chain::client::QuantusClient) -> Resu
 
 	log_print!("🪙 {}", "Vesting".bright_green().bold());
 	log_print!("   Payout quantum:     {}", quantum_fmt);
-	log_print!("   Min claim interval: {} ms", min_claim_interval);
 	log_print!("   Launch:             {}", format_launch(launch));
 	log_print!("   Next schedule id:   {}", next_id.to_string().bright_yellow());
 	Ok(())
@@ -491,29 +516,396 @@ async fn claim(
 	)
 	.await?;
 
-	// Report the actual payout from the Claimed event in the inclusion block.
 	if let Some(block_hash) = included_in {
-		let events = quantus_client.client().events().at(block_hash).await?;
-		for event in events.find::<quantus_subxt::api::vesting::events::Claimed>().flatten() {
-			if event.schedule_id == schedule_id {
-				let amount_fmt =
-					crate::cli::send::format_balance_with_symbol(quantus_client, event.amount)
-						.await?;
-				log_success!(
-					"✅ Paid {} to {}",
-					amount_fmt,
-					event.beneficiary.to_quantus_ss58().bright_cyan()
-				);
-			}
-		}
+		report_claimed(quantus_client, block_hash, &[schedule_id]).await?;
 	}
 	log_success!("✅ Claim submitted. Tx: {:?}", tx_hash);
+	Ok(())
+}
+
+/// One `utility.batch_all` of `vesting.claim` calls. `batch_all` is atomic: if any
+/// claim fails, none of them pay.
+fn build_claim_batch(schedule_ids: &[u64]) -> impl subxt::tx::Payload {
+	use quantus_subxt::api::runtime_types::{
+		pallet_vesting::pallet::Call as VestingCall, quantus_runtime::RuntimeCall,
+	};
+
+	let calls = schedule_ids
+		.iter()
+		.map(|schedule_id| RuntimeCall::Vesting(VestingCall::claim { schedule_id: *schedule_id }))
+		.collect();
+	quantus_subxt::api::tx().utility().batch_all(calls)
+}
+
+async fn report_claimed(
+	quantus_client: &crate::chain::client::QuantusClient,
+	block_hash: subxt::utils::H256,
+	schedule_ids: &[u64],
+) -> Result<()> {
+	let events = quantus_client.client().events().at(block_hash).await?;
+	for event in events.find::<quantus_subxt::api::vesting::events::Claimed>().flatten() {
+		if schedule_ids.contains(&event.schedule_id) {
+			let amount_fmt =
+				crate::cli::send::format_balance_with_symbol(quantus_client, event.amount).await?;
+			log_success!(
+				"✅ Paid {} to {}",
+				amount_fmt,
+				event.beneficiary.to_quantus_ss58().bright_cyan()
+			);
+		}
+	}
+	Ok(())
+}
+
+/// Non-final claims round down to this many leaf quanta. At the runtime quantum
+/// (`10^10` = 0.01 QTC) that is 25 QTC, matching `pallet_vesting::NON_FINAL_PAYOUT_QUANTA`.
+const NON_FINAL_PAYOUT_QUANTA: u128 = 2_500;
+
+/// Re-read the chain at least this often so a clock skew or a new schedule is noticed.
+const DRIP_MAX_SLEEP_MS: u64 = 60_000;
+
+struct VestingTerms {
+	start: u64,
+	cliff: u64,
+	end: u64,
+	total: u128,
+	claimed: u128,
+}
+
+fn vested_amount(schedule: &VestingTerms, now: u64) -> u128 {
+	if now < schedule.cliff {
+		return 0;
+	}
+	if now >= schedule.end || schedule.end <= schedule.start {
+		return schedule.total;
+	}
+	let elapsed = u128::from(now.saturating_sub(schedule.start));
+	let duration = u128::from(schedule.end.saturating_sub(schedule.start));
+	mul_div_floor(schedule.total, elapsed, duration)
+}
+
+/// What `claim` would pay at `now`: the largest non-final multiple of `step`, or the
+/// exact remainder once the schedule is fully vested. `0` when nothing is claimable.
+fn claimable(schedule: &VestingTerms, now: u64, step: u128) -> u128 {
+	if step == 0 || schedule.claimed >= schedule.total {
+		return 0;
+	}
+	let owed = vested_amount(schedule, now).saturating_sub(schedule.claimed);
+	let remaining = schedule.total - schedule.claimed;
+	if owed == 0 {
+		return 0;
+	}
+	if owed >= remaining {
+		remaining
+	} else {
+		owed - owed % step
+	}
+}
+
+/// First unix-ms at which `claim` pays something. `None` when the grant is exhausted.
+///
+/// A non-final payout appears at the moment vested funds reach the next `step`.
+/// Claiming then pays exactly one step, unless a cliff (or a late start) has already
+/// accrued several steps — `claim` pays the whole aligned amount in one call.
+fn next_claim_ms(schedule: &VestingTerms, step: u128) -> Option<u64> {
+	if step == 0 || schedule.claimed >= schedule.total || schedule.end <= schedule.start {
+		return None;
+	}
+	let remaining = schedule.total - schedule.claimed;
+	if remaining <= step {
+		return Some(schedule.end);
+	}
+	let target = schedule.claimed + step;
+	let duration = u128::from(schedule.end - schedule.start);
+	let elapsed = match mul_div_ceil(target, duration, schedule.total) {
+		Some(elapsed) => elapsed,
+		None => return Some(schedule.end),
+	};
+	let linear = schedule.start.saturating_add(u64::try_from(elapsed).unwrap_or(u64::MAX));
+	let at = linear.max(schedule.cliff);
+	Some(if at >= schedule.end { schedule.end } else { at })
+}
+
+fn mul_div_floor(a: u128, b: u128, d: u128) -> u128 {
+	if d == 0 {
+		return 0;
+	}
+	match a.checked_mul(b) {
+		Some(product) => product / d,
+		None => {
+			let (quot, rem) = (a / d, a % d);
+			quot.saturating_mul(b).saturating_add(rem.saturating_mul(b) / d)
+		},
+	}
+}
+
+fn mul_div_ceil(a: u128, b: u128, d: u128) -> Option<u128> {
+	if d == 0 {
+		return None;
+	}
+	let product = a.checked_mul(b)?;
+	let floor = product / d;
+	if product % d == 0 {
+		Some(floor)
+	} else {
+		floor.checked_add(1)
+	}
+}
+
+enum DripStep {
+	Wait(std::time::Duration),
+	Submit(Vec<u64>),
+}
+
+/// One Ctrl-C listener for the whole drip.
+///
+/// Tokio leaves its process-wide SIGINT handler installed after a `ctrl_c` future is
+/// dropped, and a signal that arrives with no live listener is swallowed. This task
+/// stays polled during RPC and submission so a stop is latched and the next claim
+/// is skipped.
+async fn spawn_ctrl_c_watch() -> tokio::sync::watch::Receiver<bool> {
+	let (flag_tx, flag) = tokio::sync::watch::channel(false);
+	let (ready_tx, ready) = tokio::sync::oneshot::channel();
+	tokio::spawn(async move {
+		let ctrl_c = tokio::signal::ctrl_c();
+		tokio::pin!(ctrl_c);
+		// Poll once so the handler is registered before callers start waiting.
+		tokio::select! {
+			biased;
+			result = &mut ctrl_c => {
+				let _ = ready_tx.send(());
+				if result.is_ok() {
+					let _ = flag_tx.send(true);
+				}
+			},
+			_ = std::future::ready(()) => {
+				let _ = ready_tx.send(());
+				if ctrl_c.await.is_ok() {
+					let _ = flag_tx.send(true);
+				}
+			},
+		}
+	});
+	let _ = ready.await;
+	flag
+}
+
+fn drip_stopped(shutdown: &tokio::sync::watch::Receiver<bool>) -> bool {
+	*shutdown.borrow()
+}
+
+async fn drive_drip<N, S>(
+	shutdown: &mut tokio::sync::watch::Receiver<bool>,
+	mut next_step: N,
+	mut submit: S,
+) -> Result<()>
+where
+	N: std::ops::AsyncFnMut() -> Result<DripStep>,
+	S: std::ops::AsyncFnMut(&[u64]) -> Result<()>,
+{
+	loop {
+		if drip_stopped(shutdown) {
+			log_print!("🪙 Drip stopped.");
+			return Ok(());
+		}
+		match next_step().await? {
+			DripStep::Wait(duration) => {
+				tokio::select! {
+					biased;
+					_ = shutdown.changed() => {
+						log_print!("🪙 Drip stopped.");
+						return Ok(());
+					},
+					_ = tokio::time::sleep(duration) => {},
+				}
+			},
+			DripStep::Submit(ids) => {
+				if drip_stopped(shutdown) {
+					log_print!("🪙 Drip stopped.");
+					return Ok(());
+				}
+				submit(&ids).await?;
+				if drip_stopped(shutdown) {
+					log_print!("🪙 Drip stopped.");
+					return Ok(());
+				}
+			},
+		}
+	}
+}
+
+async fn chain_now_ms(quantus_client: &crate::chain::client::QuantusClient) -> Result<u64> {
+	let latest = quantus_client.get_latest_block().await?;
+	let storage = quantus_client.client().storage().at(latest);
+	let addr = quantus_subxt::api::storage().timestamp().now();
+	Ok(storage.fetch_or_default(&addr).await?)
+}
+
+async fn drip(
+	quantus_client: &crate::chain::client::QuantusClient,
+	signer: &crate::wallet::WalletSigner,
+	beneficiary: Option<crate::cli::common::SubxtAccountId32>,
+	execution_mode: ExecutionMode,
+) -> Result<()> {
+	let quantum = quantus_client
+		.client()
+		.constants()
+		.at(&quantus_subxt::api::constants().vesting().payout_quantum())?;
+	let step = quantum.checked_mul(NON_FINAL_PAYOUT_QUANTA).ok_or_else(|| {
+		QuantusError::Generic("vesting payout step overflows (quantum × 2500)".into())
+	})?;
+	let step_fmt = crate::cli::send::format_balance_with_symbol(quantus_client, step).await?;
+	log_print!("🪙 Dripping vesting claims at {step_fmt} per non-final payout. Ctrl-C to stop.");
+
+	let mut shutdown = spawn_ctrl_c_watch().await;
+	let stop = shutdown.clone();
+	drive_drip(
+		&mut shutdown,
+		async || {
+			let now = chain_now_ms(quantus_client).await?;
+			let mut schedules = fetch_all_schedules(quantus_client).await?;
+			if let Some(filter) = &beneficiary {
+				schedules.retain(|(_, schedule)| &schedule.beneficiary == filter);
+			}
+
+			let mut due: Vec<(u64, u128)> = Vec::new();
+			let mut soonest: Option<(u64, u64)> = None;
+			for (id, schedule) in &schedules {
+				let terms = VestingTerms {
+					start: schedule.start,
+					cliff: schedule.cliff,
+					end: schedule.end,
+					total: schedule.total,
+					claimed: schedule.claimed,
+				};
+				let amount = claimable(&terms, now, step);
+				if amount > 0 {
+					due.push((*id, amount));
+				} else if let Some(at) = next_claim_ms(&terms, step) {
+					match soonest {
+						Some((_, earliest)) if at >= earliest => {},
+						_ => soonest = Some((*id, at)),
+					}
+				}
+			}
+
+			if due.is_empty() {
+				let wait_ms = match soonest {
+					Some((id, at)) => {
+						log_print!("   Next payout is schedule #{id} at {}", format_moment(at));
+						at.saturating_sub(now).clamp(1_000, DRIP_MAX_SLEEP_MS)
+					},
+					None => {
+						log_print!("   No claimable schedules. Checking again in 60s.");
+						DRIP_MAX_SLEEP_MS
+					},
+				};
+				return Ok(DripStep::Wait(std::time::Duration::from_millis(wait_ms)));
+			}
+
+			for (id, amount) in &due {
+				if *amount > step {
+					let amount_fmt =
+						crate::cli::send::format_balance_with_symbol(quantus_client, *amount)
+							.await?;
+					log_print!(
+						"   Schedule #{id} pays {amount_fmt}, not one step — accrual is already past the next {step_fmt} boundary, and one claim pays the whole aligned amount."
+					);
+				}
+			}
+			Ok(DripStep::Submit(due.into_iter().map(|(id, _)| id).collect()))
+		},
+		async |ids| {
+			submit_due_claims(quantus_client, signer, ids, execution_mode, &stop).await?;
+			Ok(())
+		},
+	)
+	.await
+}
+
+/// Submit every due claim. One schedule is a plain `claim`; several go out as one
+/// `utility.batch_all`, split only when they exceed the runtime's call limit.
+async fn submit_due_claims(
+	quantus_client: &crate::chain::client::QuantusClient,
+	signer: &crate::wallet::WalletSigner,
+	schedule_ids: &[u64],
+	execution_mode: ExecutionMode,
+	shutdown: &tokio::sync::watch::Receiver<bool>,
+) -> Result<()> {
+	if schedule_ids.len() <= 1 {
+		return submit_claim_extrinsics(schedule_ids, 1, shutdown, async |chunk| {
+			let Some(&schedule_id) = chunk.first() else {
+				return Ok(());
+			};
+			claim(quantus_client, signer, schedule_id, execution_mode).await
+		})
+		.await;
+	}
+
+	let limit = quantus_client
+		.client()
+		.constants()
+		.at(&quantus_subxt::api::constants().utility().batched_calls_limit())
+		.map_err(|e| {
+			QuantusError::Generic(format!(
+				"Failed to read Utility::batched_calls_limit from runtime metadata: {e:?}"
+			))
+		})?;
+	if limit == 0 {
+		return Err(QuantusError::Generic(
+			"Utility::batched_calls_limit is 0, so claims cannot be batched".into(),
+		));
+	}
+
+	let wait_mode = ExecutionMode { wait_for_transaction: true, ..execution_mode };
+	submit_claim_extrinsics(schedule_ids, limit, shutdown, async |chunk| {
+		log_print!("🪙 Claiming {} schedules in one batch...", chunk.len());
+		let (tx_hash, included_in) = crate::cli::common::submit_transaction_with_inclusion_block(
+			quantus_client,
+			signer,
+			build_claim_batch(chunk),
+			None,
+			wait_mode,
+		)
+		.await?;
+		if let Some(block_hash) = included_in {
+			report_claimed(quantus_client, block_hash, chunk).await?;
+		}
+		log_success!("✅ Batch submitted. Tx: {:?}", tx_hash);
+		Ok(())
+	})
+	.await
+}
+
+/// Submit each extrinsic, stopping before the next one once Ctrl-C has been latched.
+/// One schedule is a single chunk; several are split by `limit`. Returns after a
+/// stop even if later chunks were not sent.
+async fn submit_claim_extrinsics<S>(
+	schedule_ids: &[u64],
+	limit: u32,
+	shutdown: &tokio::sync::watch::Receiver<bool>,
+	mut submit: S,
+) -> Result<()>
+where
+	S: std::ops::AsyncFnMut(&[u64]) -> Result<()>,
+{
+	if schedule_ids.is_empty() || limit == 0 {
+		return Ok(());
+	}
+	let chunk_size = if schedule_ids.len() == 1 { schedule_ids.len() } else { limit as usize };
+	for chunk in schedule_ids.chunks(chunk_size) {
+		if drip_stopped(shutdown) {
+			return Ok(());
+		}
+		submit(chunk).await?;
+	}
 	Ok(())
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use subxt::tx::Payload;
 
 	#[test]
 	fn parse_moment_rejects_relative_seconds_overflow() {
@@ -530,5 +922,126 @@ mod tests {
 		let now = parse_moment("now").expect("now");
 		let later = parse_moment("+1").expect("+1s");
 		assert!(later >= now + 1_000, "expected +1s to add 1000ms");
+	}
+
+	fn sample() -> VestingTerms {
+		VestingTerms { start: 0, cliff: 0, end: 400_000, total: 10_000_000, claimed: 0 }
+	}
+
+	const STEP: u128 = 2_500_000;
+
+	#[test]
+	fn next_non_final_claim_pays_exactly_one_step() {
+		let schedule = sample();
+		let at = next_claim_ms(&schedule, STEP).unwrap();
+		assert_eq!(at, 100_000);
+		assert_eq!(claimable(&schedule, at - 1, STEP), 0);
+		assert_eq!(claimable(&schedule, at, STEP), STEP);
+	}
+
+	#[test]
+	fn each_following_step_is_also_one_chunk() {
+		let mut schedule = sample();
+		schedule.claimed = STEP;
+		let at = next_claim_ms(&schedule, STEP).unwrap();
+		assert_eq!(claimable(&schedule, at - 1, STEP), 0);
+		assert_eq!(claimable(&schedule, at, STEP), STEP);
+	}
+
+	#[test]
+	fn a_late_claim_pays_every_step_that_has_already_vested() {
+		assert_eq!(claimable(&sample(), 300_000, STEP), 7_500_000);
+	}
+
+	#[test]
+	fn remainder_below_a_step_waits_until_the_schedule_ends() {
+		let mut schedule = sample();
+		schedule.claimed = 8_000_000;
+		assert_eq!(next_claim_ms(&schedule, STEP), Some(schedule.end));
+		assert_eq!(claimable(&schedule, schedule.end - 1, STEP), 0);
+		assert_eq!(claimable(&schedule, schedule.end, STEP), 2_000_000);
+	}
+
+	#[test]
+	fn a_cliff_can_unlock_more_than_one_step() {
+		let schedule = VestingTerms { cliff: 200_000, ..sample() };
+		assert_eq!(next_claim_ms(&schedule, STEP), Some(200_000));
+		assert_eq!(claimable(&schedule, 199_999, STEP), 0);
+		assert_eq!(claimable(&schedule, 200_000, STEP), 5_000_000);
+	}
+
+	#[test]
+	fn several_claims_are_one_atomic_batch() {
+		let call = build_claim_batch(&[1, 4, 9]);
+		let details = call.validation_details().expect("static payload exposes call metadata");
+		assert_eq!(details.pallet_name, "Utility");
+		assert_eq!(details.call_name, "batch_all");
+	}
+
+	#[test]
+	fn an_exhausted_schedule_is_not_claimable() {
+		let mut schedule = sample();
+		schedule.claimed = schedule.total;
+		assert_eq!(next_claim_ms(&schedule, STEP), None);
+		assert_eq!(claimable(&schedule, schedule.end, STEP), 0);
+	}
+
+	#[tokio::test]
+	async fn stop_during_a_batch_skips_the_next_chunk() {
+		let (tx, shutdown) = tokio::sync::watch::channel(false);
+		let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let seen = calls.clone();
+		submit_claim_extrinsics(&[1, 2, 3], 1, &shutdown, async |chunk| {
+			seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+			assert_eq!(chunk, &[1]);
+			tx.send(true).expect("latch stop");
+			Ok(())
+		})
+		.await
+		.expect("submit");
+		assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+	}
+
+	#[cfg(unix)]
+	#[tokio::test]
+	async fn sigint_during_submit_stops_before_another_claim() {
+		let mut shutdown = spawn_ctrl_c_watch().await;
+		let stop = shutdown.clone();
+		let steps = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let submits = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+		let steps_tick = steps.clone();
+		let submits_tick = submits.clone();
+
+		let result = drive_drip(
+			&mut shutdown,
+			async move || {
+				let n = steps_tick.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+				if n == 0 {
+					return Ok(DripStep::Wait(std::time::Duration::from_millis(20)));
+				}
+				if n > 2 {
+					return Err(QuantusError::Generic("drip kept running after SIGINT".into()));
+				}
+				Ok(DripStep::Submit(vec![n as u64]))
+			},
+			async move |_ids| {
+				let n = submits_tick.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+				if n == 0 {
+					unsafe {
+						libc::kill(libc::getpid(), libc::SIGINT);
+					}
+					let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(2);
+					while !drip_stopped(&stop) && tokio::time::Instant::now() < deadline {
+						tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+					}
+				}
+				Ok(())
+			},
+		)
+		.await;
+
+		assert!(result.is_ok(), "drip returned {result:?}");
+		assert_eq!(submits.load(std::sync::atomic::Ordering::SeqCst), 1);
+		assert_eq!(steps.load(std::sync::atomic::Ordering::SeqCst), 2);
 	}
 }

@@ -882,6 +882,13 @@ quantus vesting show --schedule-id 0
 # Claim the vested payout of a schedule (any funded wallet can sign)
 quantus vesting claim --schedule-id 0 --from my_wallet
 
+# Keep claiming every schedule the moment the next 25 QTC step vests.
+# Due claims go out as one utility.batch_all. One claim pays the whole aligned
+# amount, so this has to stay running or a late claim comes out as a multiple
+# of 25 QTC. Ctrl-C to stop.
+quantus vesting drip --from my_wallet
+quantus vesting drip --from my_wallet --beneficiary qz...
+
 # Admin: create a schedule (moments are unix ms, "now", or "+<seconds>")
 quantus vesting create-schedule \
   --beneficiary qz... \
