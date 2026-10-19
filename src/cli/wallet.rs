@@ -406,24 +406,12 @@ fn checkphrase_line(address: &str) -> Option<String> {
 /// Upper bound on waiting for a node during best-effort wallet checks. Wallet
 /// commands must stay usable on air-gapped machines, so a missing node is never
 /// an error here; it only means the on-chain information is skipped.
-const NODE_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
-
-async fn try_connect_for_probe(node_url: &str) -> Option<QuantusClient> {
-	match tokio::time::timeout(NODE_PROBE_TIMEOUT, QuantusClient::new(node_url)).await {
-		Ok(Ok(client)) => Some(client),
-		Ok(Err(e)) => {
-			log_verbose!("Node unreachable, skipping on-chain check: {}", e);
-			None
-		},
-		Err(_) => {
-			log_verbose!(
-				"Node connection timed out after {}s, skipping on-chain check",
-				NODE_PROBE_TIMEOUT.as_secs()
-			);
-			None
-		},
-	}
-}
+///
+/// The deadline covers the whole probe (connect, every account read, token
+/// lookup), not just the connection: a node that accepts the connection and
+/// then stops answering must not hold the import for the RPC client's own
+/// 30-second request timeout, once per read.
+const NODE_PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 /// `System::Account` fields that show whether an address was ever used.
 struct AccountActivity {
@@ -436,6 +424,72 @@ impl AccountActivity {
 	fn is_used(&self) -> bool {
 		self.nonce > 0 || self.free > 0 || self.reserved > 0
 	}
+}
+
+/// Outcome of the best-effort on-chain probe. Reads that did not finish
+/// before the deadline are `None`; whatever did finish is kept.
+struct OnChainProbe {
+	/// The node accepted a connection (so missing entries mean it stopped
+	/// answering, not that there is no node).
+	reachable: bool,
+	/// Every requested read finished before the deadline.
+	complete: bool,
+	token: Option<(String, u8)>,
+	activity: Vec<Option<AccountActivity>>,
+}
+
+impl OnChainProbe {
+	fn unreachable(len: usize) -> Self {
+		Self {
+			reachable: false,
+			complete: false,
+			token: None,
+			activity: (0..len).map(|_| None).collect(),
+		}
+	}
+}
+
+/// Look up `addresses` on-chain under one overall `deadline`. Never fails:
+/// a missing or stalled node only leaves entries unfilled.
+async fn probe_on_chain(
+	node_url: &str,
+	addresses: &[&str],
+	deadline: std::time::Duration,
+) -> OnChainProbe {
+	let mut probe = OnChainProbe::unreachable(addresses.len());
+
+	// The future borrows `probe` so partial results survive the timeout.
+	let work = async {
+		let quantus_client = match QuantusClient::new(node_url).await {
+			Ok(client) => client,
+			Err(e) => {
+				log_verbose!("Node unreachable, skipping on-chain check: {}", e);
+				return;
+			},
+		};
+		probe.reachable = true;
+
+		for (i, address) in addresses.iter().enumerate() {
+			match fetch_account_activity(&quantus_client, address).await {
+				Ok(activity) => probe.activity[i] = Some(activity),
+				Err(e) => log_verbose!("On-chain lookup failed for {}: {}", address, e),
+			}
+		}
+		// Only needed to format a balance, so skip the extra round-trip when
+		// nothing was found.
+		if probe.activity.iter().flatten().any(AccountActivity::is_used) {
+			probe.token = chain_token(&quantus_client).await;
+		}
+		probe.complete = true;
+	};
+
+	if tokio::time::timeout(deadline, work).await.is_err() {
+		log_verbose!(
+			"On-chain check did not finish within {}s; continuing with what was read",
+			deadline.as_secs()
+		);
+	}
+	probe
 }
 
 async fn fetch_account_activity(
@@ -480,7 +534,8 @@ fn describe_activity(activity: &AccountActivity, token: Option<&(String, u8)>) -
 /// the same phrase, so a "successful" import can silently land on an empty
 /// one. Best-effort: with no node reachable only a short note is printed.
 async fn report_import_history(node_url: &str, address: &str) {
-	let Some(quantus_client) = try_connect_for_probe(node_url).await else {
+	let probe = probe_on_chain(node_url, &[address], NODE_PROBE_TIMEOUT).await;
+	if !probe.reachable {
 		log_print!(
 			"\n{}",
 			"ℹ️  Node unreachable; skipped the on-chain history check. If you expected funds on \
@@ -489,19 +544,23 @@ async fn report_import_history(node_url: &str, address: &str) {
 				.dimmed()
 		);
 		return;
-	};
+	}
 
-	let activity = match fetch_account_activity(&quantus_client, address).await {
-		Ok(activity) => activity,
-		Err(e) => {
-			log_verbose!("On-chain history check failed: {}", e);
-			return;
-		},
+	let Some(activity) = probe.activity.first().and_then(Option::as_ref) else {
+		log_print!(
+			"\n{}",
+			"ℹ️  The node stopped answering before the on-chain history check finished. If you \
+			 expected funds on this wallet, re-run with --scan to compare derivations."
+				.dimmed()
+		);
+		return;
 	};
 
 	if activity.is_used() {
-		let token = chain_token(&quantus_client).await;
-		log_success!("On-chain: {}", describe_activity(&activity, token.as_ref()).bright_green());
+		log_success!(
+			"On-chain: {}",
+			describe_activity(activity, probe.token.as_ref()).bright_green()
+		);
 		return;
 	}
 
@@ -524,48 +583,47 @@ async fn report_import_history(node_url: &str, address: &str) {
 	);
 }
 
+/// `--scan` ends in an interactive choice, so it must be refused up front,
+/// before any password or recovery-phrase prompt is shown: `rpassword` reads
+/// the controlling terminal even when stdin is redirected, so checking later
+/// would leave a non-interactive invocation parked at a hidden prompt.
+fn ensure_scan_is_interactive() -> crate::error::Result<()> {
+	use std::io::IsTerminal;
+
+	if io::stdin().is_terminal() {
+		return Ok(());
+	}
+	Err(QuantusError::Generic(
+		"--scan needs an interactive terminal to choose a derivation; pass --scheme, \
+		 --derivation-path or --no-derivation explicitly instead"
+			.to_string(),
+	))
+}
+
 /// Derive every candidate address for a phrase, show which ones have been used
 /// (when a node is reachable), and let the user choose. Works fully offline;
-/// the chain lookup only adds information.
+/// the chain lookup only adds information and is bounded by one deadline, so
+/// the locally derived candidates are always shown.
 async fn choose_recovery_candidate(
 	mnemonic: &str,
 	node_url: &str,
 	offline: bool,
 ) -> crate::error::Result<crate::wallet::RecoveryCandidate> {
-	use std::io::IsTerminal;
-
-	if !io::stdin().is_terminal() {
-		return Err(QuantusError::Generic(
-			"--scan needs an interactive terminal to choose a derivation; pass --scheme, \
-			 --derivation-path or --no-derivation explicitly instead"
-				.to_string(),
-		));
-	}
+	ensure_scan_is_interactive()?;
 
 	let candidates = crate::wallet::recovery_candidates(mnemonic)?;
 
-	let quantus_client = if offline { None } else { try_connect_for_probe(node_url).await };
-	let token = match &quantus_client {
-		Some(client) => chain_token(client).await,
-		None => None,
+	let probe = if offline {
+		OnChainProbe::unreachable(candidates.len())
+	} else {
+		let addresses: Vec<&str> = candidates.iter().map(|c| c.address.as_str()).collect();
+		probe_on_chain(node_url, &addresses, NODE_PROBE_TIMEOUT).await
 	};
-	let mut activity: Vec<Option<AccountActivity>> = Vec::with_capacity(candidates.len());
-	for candidate in &candidates {
-		let entry = match &quantus_client {
-			Some(client) => match fetch_account_activity(client, &candidate.address).await {
-				Ok(activity) => Some(activity),
-				Err(e) => {
-					log_verbose!("History lookup failed for {}: {}", candidate.address, e);
-					None
-				},
-			},
-			None => None,
-		};
-		activity.push(entry);
-	}
+	let token = probe.token.as_ref();
+	let activity = &probe.activity;
 
 	log_print!("\nAddresses this recovery phrase maps to:\n");
-	for (i, (candidate, activity)) in candidates.iter().zip(&activity).enumerate() {
+	for (i, (candidate, activity)) in candidates.iter().zip(activity).enumerate() {
 		log_print!(
 			"{}. {} {}",
 			(i + 1).to_string().bright_yellow(),
@@ -578,25 +636,30 @@ async fn choose_recovery_candidate(
 			log_print!("   Checkphrase: {}", checkphrase);
 		}
 		match activity {
-			Some(activity) if activity.is_used() => log_print!(
-				"   On-chain: {}",
-				describe_activity(activity, token.as_ref()).bright_green()
-			),
+			Some(activity) if activity.is_used() =>
+				log_print!("   On-chain: {}", describe_activity(activity, token).bright_green()),
 			Some(_) => log_print!("   On-chain: {}", "no history".dimmed()),
+			None if probe.reachable =>
+				log_print!("   On-chain: {}", "unknown (no answer)".dimmed()),
 			None => {},
 		}
 		log_print!();
 	}
-	if quantus_client.is_none() {
+	if offline {
+		log_print!("{}", "Offline: compare the address or checkphrase with your records.".dimmed());
+	} else if !probe.reachable {
 		log_print!(
 			"{}",
-			if offline {
-				"Offline: compare the address or checkphrase with your records."
-			} else {
-				"Node unreachable: on-chain history not shown. Compare the address or \
-				 checkphrase with your records."
-			}
-			.dimmed()
+			"Node unreachable: on-chain history not shown. Compare the address or checkphrase \
+			 with your records."
+				.dimmed()
+		);
+	} else if !probe.complete {
+		log_print!(
+			"{}",
+			"The node stopped answering before every address was checked; entries marked \
+			 unknown were not verified."
+				.dimmed()
 		);
 	}
 
@@ -1000,6 +1063,11 @@ pub async fn handle_wallet_command(
 			offline,
 		} => {
 			log_print!("📥 Importing wallet...");
+
+			// Refuse a doomed --scan before any secret is read or prompted for.
+			if scan {
+				ensure_scan_is_interactive()?;
+			}
 
 			let wallet_manager = WalletManager::new()?;
 
@@ -1459,23 +1527,13 @@ mod tests {
 		let mnemonic_path = home.path().join("mnemonic.txt");
 		write_mnemonic_to_protected_file(&mnemonic_path, &mnemonic).expect("write mnemonic file");
 
-		handle_wallet_command(
-			WalletCommands::Import {
-				name: "imported".to_string(),
-				password: None,
-				password_file: None,
-				allow_empty_password: true,
-				mnemonic_file: Some(mnemonic_path.to_string_lossy().into_owned()),
-				derivation_path: None,
-				no_derivation: false,
-				scheme: DilithiumScheme::MlDsa65,
-				scan: false,
-				offline: true,
-			},
-			"ws://127.0.0.1:9944",
-		)
-		.await
-		.expect("import from mnemonic file");
+		let mut args = import_args("imported", Some(mnemonic_path.to_string_lossy().into_owned()));
+		if let WalletCommands::Import { offline, .. } = &mut args {
+			*offline = true;
+		}
+		handle_wallet_command(args, "ws://127.0.0.1:9944")
+			.await
+			.expect("import from mnemonic file");
 
 		let imported = manager.load_wallet("imported", "").expect("load imported");
 		assert_eq!(
@@ -1519,39 +1577,139 @@ mod tests {
 		}
 	}
 
+	const TEST_MNEMONIC: &str = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
+
+	fn import_args(name: &str, mnemonic_file: Option<String>) -> WalletCommands {
+		WalletCommands::Import {
+			name: name.to_string(),
+			password: None,
+			password_file: None,
+			allow_empty_password: true,
+			mnemonic_file,
+			derivation_path: None,
+			no_derivation: false,
+			scheme: DilithiumScheme::MlDsa65,
+			scan: false,
+			offline: false,
+		}
+	}
+
 	#[tokio::test]
 	#[serial]
-	async fn wallet_import_scan_without_terminal_asks_for_explicit_flags() {
+	async fn wallet_import_scan_without_terminal_fails_before_any_prompt() {
 		let home = temp_home();
 		std::env::remove_var("QUANTUS_WALLET_PASSWORD_SCANNED");
 
-		let mnemonic = "orchard answer curve patient visual flower maze noise retreat penalty cage small earth domain scan pitch bottom crunch theme club client swap slice raven";
-		let mnemonic_path = home.path().join("mnemonic.txt");
-		write_mnemonic_to_protected_file(&mnemonic_path, mnemonic).expect("write mnemonic file");
+		// No password source at all: without the up-front terminal check this
+		// would park at the hidden password prompt (rpassword reads the
+		// controlling tty, not stdin), so a regression shows up as a timeout
+		// rather than a hang. The mnemonic file must not be read either, so
+		// point at a path that does not exist.
+		let missing_mnemonic = home.path().join("does-not-exist.txt");
+		let args = WalletCommands::Import {
+			name: "scanned".to_string(),
+			password: None,
+			password_file: None,
+			allow_empty_password: false,
+			mnemonic_file: Some(missing_mnemonic.to_string_lossy().into_owned()),
+			derivation_path: None,
+			no_derivation: false,
+			scheme: DilithiumScheme::MlDsa65,
+			scan: true,
+			offline: true,
+		};
 
-		// Test stdin is never a terminal, so the picker must refuse instead of
-		// blocking on read_line, and nothing may be written to the keystore.
-		let err = handle_wallet_command(
-			WalletCommands::Import {
-				name: "scanned".to_string(),
-				password: None,
-				password_file: None,
-				allow_empty_password: true,
-				mnemonic_file: Some(mnemonic_path.to_string_lossy().into_owned()),
-				derivation_path: None,
-				no_derivation: false,
-				scheme: DilithiumScheme::MlDsa65,
-				scan: true,
-				offline: true,
-			},
-			"ws://127.0.0.1:9944",
+		let result = tokio::time::timeout(
+			std::time::Duration::from_secs(5),
+			handle_wallet_command(args, "ws://127.0.0.1:9"),
 		)
 		.await
-		.expect_err("--scan without a terminal must fail");
+		.expect("--scan without a terminal must fail immediately, not wait at a prompt");
+		let err = result.expect_err("--scan without a terminal must fail");
 		assert!(err.to_string().contains("--scan needs an interactive terminal"), "{err}");
 
 		let manager = WalletManager::new().expect("wallet manager");
 		assert_eq!(manager.wallet_type("scanned").expect("probe"), None);
+	}
+
+	/// A node that accepts the connection and then never answers storage reads
+	/// must not hold the probe for the RPC client's per-request timeout.
+	#[tokio::test]
+	async fn probe_on_chain_is_bounded_when_node_connects_then_stalls() {
+		let node = crate::chain::client::test_support::mock_node(true).await;
+		let candidates = crate::wallet::recovery_candidates(TEST_MNEMONIC).expect("candidates");
+		let addresses: Vec<&str> = candidates.iter().map(|c| c.address.as_str()).collect();
+
+		let deadline = std::time::Duration::from_secs(2);
+		let started = std::time::Instant::now();
+		let probe = probe_on_chain(&node.url, &addresses, deadline).await;
+		let elapsed = started.elapsed();
+
+		assert!(probe.reachable, "connection succeeded, so the node counts as reachable");
+		assert!(!probe.complete, "stalled reads must be reported as incomplete");
+		assert_eq!(probe.activity.len(), 4);
+		assert!(probe.activity.iter().all(Option::is_none), "no read can have finished");
+		assert!(probe.token.is_none());
+		assert!(
+			elapsed < deadline + std::time::Duration::from_secs(3),
+			"probe must return shortly after its deadline, took {elapsed:?}"
+		);
+	}
+
+	#[tokio::test]
+	async fn probe_on_chain_reads_empty_accounts_from_a_healthy_node() {
+		let node = crate::chain::client::test_support::mock_node(false).await;
+		let candidates = crate::wallet::recovery_candidates(TEST_MNEMONIC).expect("candidates");
+		let addresses: Vec<&str> = candidates.iter().map(|c| c.address.as_str()).collect();
+
+		let probe = probe_on_chain(&node.url, &addresses, NODE_PROBE_TIMEOUT).await;
+		assert!(probe.reachable);
+		assert!(probe.complete);
+		assert_eq!(probe.activity.len(), 4);
+		for activity in &probe.activity {
+			let activity = activity.as_ref().expect("healthy node answers every read");
+			assert!(!activity.is_used(), "empty state means no history");
+		}
+	}
+
+	#[tokio::test]
+	async fn probe_on_chain_marks_unreachable_node() {
+		let probe = probe_on_chain("ws://127.0.0.1:9", &["qzabc"], NODE_PROBE_TIMEOUT).await;
+		assert!(!probe.reachable);
+		assert!(!probe.complete);
+		assert_eq!(probe.activity.len(), 1);
+		assert!(probe.activity[0].is_none());
+	}
+
+	/// End-to-end: a plain import against a node that connects and then stops
+	/// answering still succeeds, and returns well inside the client's 30s
+	/// request timeout (previously ~31s).
+	#[tokio::test]
+	#[serial]
+	async fn wallet_import_completes_promptly_when_node_connects_then_stalls() {
+		let home = temp_home();
+		std::env::remove_var("QUANTUS_WALLET_PASSWORD_STALLED");
+		let node = crate::chain::client::test_support::mock_node(true).await;
+
+		let mnemonic_path = home.path().join("mnemonic.txt");
+		write_mnemonic_to_protected_file(&mnemonic_path, TEST_MNEMONIC).expect("write mnemonic");
+
+		let started = std::time::Instant::now();
+		handle_wallet_command(
+			import_args("stalled", Some(mnemonic_path.to_string_lossy().into_owned())),
+			&node.url,
+		)
+		.await
+		.expect("import must succeed even though the node stalls");
+		let elapsed = started.elapsed();
+
+		assert!(
+			elapsed < NODE_PROBE_TIMEOUT + std::time::Duration::from_secs(5),
+			"import must be bounded by the probe deadline, took {elapsed:?}"
+		);
+		let manager = WalletManager::new().expect("wallet manager");
+		let imported = manager.load_wallet("stalled", "").expect("wallet written");
+		assert_eq!(imported.keypair.scheme, DilithiumScheme::MlDsa65);
 	}
 
 	#[test]
