@@ -617,8 +617,8 @@ and derivation path, and the CLI's defaults have changed:
 A plain `wallet import` uses the current default, so a phrase from an older
 wallet imports "successfully" onto a brand-new, empty address. After a plain
 import the CLI checks the address on-chain (when a node is reachable) and warns
-if it has never been used. `--scan` derives all of the combinations above,
-shows which have on-chain history, and lets you pick; it also prints the
+if it has no current balance or nonce. `--scan` derives all of the combinations
+above, shows the current balance and nonce of each, and lets you pick; it also prints the
 explicit `--scheme`/`--derivation-path` flags for next time. For even older
 testnet addresses, use `quantus airdrop check`.
 

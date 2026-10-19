@@ -121,7 +121,7 @@ pub enum WalletCommands {
 		scheme: DilithiumScheme,
 
 		/// Show every address this phrase maps to under past and current CLI defaults
-		/// (with on-chain history when a node is reachable) and pick one interactively
+		/// (with current balance and nonce when a node is reachable) and pick one interactively
 		#[arg(long, conflicts_with_all = ["derivation_path", "no_derivation", "scheme"])]
 		scan: bool,
 
@@ -564,14 +564,10 @@ async fn report_import_history(node_url: &str, address: &str) {
 		return;
 	}
 
-	log_print!(
-		"\n{}",
-		"⚠️  This address has no on-chain history (never received funds or sent a transaction)."
-			.bright_yellow()
-	);
+	log_print!("\n{}", "⚠️  No current balance or nonce found for this address.".bright_yellow());
 	log_print!(
 		"{}",
-		"   If you are recovering an existing wallet, the funds are probably under a different \
+		"   If you are recovering an existing wallet, the funds may be under a different \
 		 derivation: wallets created with CLI v1.x used --scheme ml-dsa-87 (HD path …/0'), and \
 		 some tools use --no-derivation."
 			.dimmed()
@@ -638,7 +634,7 @@ async fn choose_recovery_candidate(
 		match activity {
 			Some(activity) if activity.is_used() =>
 				log_print!("   On-chain: {}", describe_activity(activity, token).bright_green()),
-			Some(_) => log_print!("   On-chain: {}", "no history".dimmed()),
+			Some(_) => log_print!("   On-chain: {}", "no current balance or nonce".dimmed()),
 			None if probe.reachable =>
 				log_print!("   On-chain: {}", "unknown (no answer)".dimmed()),
 			None => {},
@@ -1668,7 +1664,7 @@ mod tests {
 		assert_eq!(probe.activity.len(), 4);
 		for activity in &probe.activity {
 			let activity = activity.as_ref().expect("healthy node answers every read");
-			assert!(!activity.is_used(), "empty state means no history");
+			assert!(!activity.is_used(), "default state means no current balance or nonce");
 		}
 	}
 
