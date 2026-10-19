@@ -1,0 +1,7 @@
+[advisories]
+ignore = [
+	# ruzstd 0.8 decompression bomb. Reached only via subxt-lightclient -> smoldot,
+	# an optional subxt feature this crate never enables, so it is in Cargo.lock
+	# but never compiled. Every smoldot release pins ruzstd ^0.8.
+	"RUSTSEC-2026-0344",
+]
