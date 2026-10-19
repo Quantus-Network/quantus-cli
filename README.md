@@ -584,6 +584,12 @@ quantus wallet import --name recovered_wallet --mnemonic-file ./mnemonic.txt
 # Import as ML-DSA-87 (same secure prompt)
 quantus wallet import --name recovered_87 --scheme ml-dsa-87
 
+# Recovering an existing wallet? Show every address the phrase maps to and pick one
+quantus wallet import --name recovered_wallet --scan
+
+# Air-gapped machine: never contact a node
+quantus wallet import --name recovered_wallet --scan --offline
+
 # Create from raw 32-byte seed
 quantus wallet from-seed --name raw_wallet --seed <64-hex-chars>
 
@@ -596,6 +602,29 @@ quantus wallet view --name my_wallet
 # Export mnemonic
 quantus wallet export --name my_wallet --format mnemonic
 ```
+
+#### Recovering a wallet that shows no funds
+
+The same recovery phrase maps to a different address for each signature scheme
+and derivation path, and the CLI's defaults have changed:
+
+| Created with | Scheme | HD path |
+|---|---|---|
+| CLI v2.0 and later (current default) | ML-DSA-65 | `m/44'/189189'/0'/0'/1'` |
+| CLI v1.x | ML-DSA-87 | `m/44'/189189'/0'/0'/0'` |
+| `--no-derivation` (either scheme) | — | master seed |
+
+A plain `wallet import` uses the current default, so a phrase from an older
+wallet imports "successfully" onto a brand-new, empty address. After a plain
+import the CLI checks the address on-chain (when a node is reachable) and warns
+if it has no current balance or nonce. `--scan` derives all of the combinations
+above, shows the current balance and nonce of each, and lets you pick; it also prints the
+explicit `--scheme`/`--derivation-path` flags for next time. For even older
+testnet addresses, use `quantus airdrop check`.
+
+Wallet commands never require a node. The on-chain check waits at most a few
+seconds and is skipped when nothing answers; pass `--offline` to not attempt it
+at all.
 
 ---
 
