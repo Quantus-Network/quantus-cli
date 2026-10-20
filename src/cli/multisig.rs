@@ -1859,6 +1859,18 @@ async fn handle_propose_nested_approve(
 		)));
 	}
 
+	// A high-security multisig may only propose whitelisted calls; propose would
+	// reject Multisig::approve and burn the fee.
+	let hs_query = quantus_subxt::api::storage()
+		.reversible_transfers()
+		.high_security_accounts(multisig_id.clone());
+	if storage_at.fetch(&hs_query).await?.is_some() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"{} is high-security and cannot propose Multisig::approve",
+			multisig_ss58
+		)));
+	}
+
 	let target_multisig = storage_at
 		.fetch(&quantus_subxt::api::storage().multisig().multisigs(target_id.clone()))
 		.await?
