@@ -1222,6 +1222,29 @@ quantus multisig approve \
   --from signer_wallet
 ```
 
+#### Approve From a Multisig (multisig as a signer)
+A multisig holds no key, so when it is a signer of another multisig it cannot run
+`approve` itself. Instead it proposes `Multisig::approve` on its own account; executing
+that proposal records the approval on the target. The stored call of the target
+proposal is fetched and bound automatically.
+```bash
+# 1. A signer of the member multisig proposes the approval
+quantus multisig propose approve \
+  --address <member_multisig_address> \
+  --target <target_multisig_address> \
+  --proposal-id <target_proposal_id> \
+  --from signer_wallet
+
+# 2. Other signers of the member multisig approve it, then any of them executes it
+quantus multisig approve --address <member_multisig_address> --proposal-id <id> --from signer_wallet
+quantus multisig execute --address <member_multisig_address> --proposal-id <id> --from signer_wallet
+
+# 3. Once the target reaches threshold, a keyed signer of it executes the original proposal
+quantus multisig execute --address <target_multisig_address> --proposal-id <target_proposal_id> --from signer_wallet
+```
+`--expiry` defaults to head + ~2h, capped at the target proposal's expiry: the member
+proposal must execute before the target proposal expires.
+
 #### Cancel Proposal (proposer only)
 ```bash
 quantus multisig cancel \
