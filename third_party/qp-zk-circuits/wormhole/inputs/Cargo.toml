@@ -1,0 +1,27 @@
+# Vendored from Quantus-Network/qp-zk-circuits 3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05 (MIT).
+# Published as its own crate so quantus-cli can depend on this revision. The
+# crates.io name qp-wormhole-inputs 4.4.0 is an older, incompatible release.
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autotests = false
+description = "Public input types for Wormhole circuit proofs (qp-zk-circuits 3ba7cef)"
+edition = "2021"
+license = "MIT"
+name = "quantus-wormhole-inputs"
+publish = true
+readme = false
+repository = "https://github.com/Quantus-Network/quantus-cli"
+version = "4.5.0"
+
+[lib]
+name = "qp_wormhole_inputs"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { version = "=1.0.104", default-features = false }
+
+[features]
+default = ["std"]
+std = ["anyhow/std"]

@@ -1,0 +1,26 @@
+# Vendored from Quantus-Network/qp-zk-circuits 3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05 (MIT).
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autotests = false
+description = "Wormhole circuit artifact generation (qp-zk-circuits 3ba7cef)"
+edition = "2021"
+license = "MIT"
+name = "quantus-wormhole-circuit-builder"
+publish = true
+readme = false
+repository = "https://github.com/Quantus-Network/quantus-cli"
+version = "4.5.0"
+
+[lib]
+name = "qp_wormhole_circuit_builder"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { version = "=1.0.104", default-features = false, features = ["std"] }
+qp-plonky2 = { version = "=1.6.0", default-features = false, features = ["std"] }
+rand = { version = "=0.10.1", default-features = false, features = ["thread_rng"] }
+wormhole-aggregator = { package = "quantus-wormhole-aggregator", version = "=4.5.0", path = "../aggregator", default-features = false, features = ["std"] }
+wormhole-circuit = { package = "quantus-wormhole-circuit", version = "=4.5.0", path = "../circuit", default-features = false, features = ["std"] }
+zk-circuits-common = { package = "quantus-zk-circuits-common", version = "=4.5.0", path = "../../common" }

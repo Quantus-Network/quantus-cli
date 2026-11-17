@@ -196,11 +196,44 @@ pub fn quantize_amount(amount: u128) -> Result<u32> {
 	Ok(quantized as u32)
 }
 
-/// Compute output amount after fee deduction.
+/// Floor of one leaf's fee-adjusted amount.
 ///
-/// output = input * (10000 - fee_bps) / 10000
+/// `output = input * (10000 - fee_bps) / 10000`. A batch must not sum these
+/// floors: the private-batch circuit allows
+/// `floor(sum(inputs) * (10000 - fee_bps) / 10000)`, and the difference is
+/// stranded once the nullifiers are spent. Use [`compute_batch_output_amount`].
+///
+/// The binary target compiles this module and does not call the helper; the
+/// library re-export and the unit tests do.
+#[allow(dead_code)]
 pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 	((input_amount as u64) * (10000 - fee_bps as u64) / 10000) as u32
+}
+
+/// Maximum exit total the private-batch circuit will prove.
+///
+/// The fee is applied once to the sum of real leaf burns (dummy burns are
+/// already zero), then rounded down:
+/// `floor(sum(inputs) * (10_000 - fee_bps) / 10_000)`.
+/// A fee above 10_000 bps yields nothing.
+pub fn compute_batch_output_amount(
+	input_amounts: impl IntoIterator<Item = u32>,
+	fee_bps: u32,
+) -> u64 {
+	let Some(keep) = 10_000u128.checked_sub(u128::from(fee_bps)) else {
+		return 0;
+	};
+	let total_input: u128 = input_amounts.into_iter().map(u128::from).sum();
+	u64::try_from(total_input * keep / 10_000).unwrap_or(u64::MAX)
+}
+
+/// [`compute_batch_output_amount`] as the u32 exit amount the circuit stores.
+pub fn batch_withdrawal_amount(
+	input_amounts: impl IntoIterator<Item = u32>,
+	fee_bps: u32,
+) -> std::result::Result<u32, String> {
+	let total = compute_batch_output_amount(input_amounts, fee_bps);
+	u32::try_from(total).map_err(|_| format!("fee-adjusted burn total {total} exceeds u32"))
 }
 
 /// Generate a wormhole proof from raw inputs.
@@ -354,6 +387,18 @@ mod tests {
 		// 1000 input with 10 bps fee -> 999
 		let result = compute_output_amount(1000, 10);
 		assert_eq!(result, 999);
+	}
+
+	#[test]
+	fn batch_fee_rounds_once_on_the_sum() {
+		assert_eq!(compute_batch_output_amount([100u32; 8], 4), 799);
+		assert_eq!(batch_withdrawal_amount([100u32; 8], 4).unwrap(), 799);
+		assert_eq!(compute_batch_output_amount([1u32; 8], 4), 7);
+		assert_eq!(
+			compute_batch_output_amount([0u32, 100], 4),
+			compute_output_amount(100, 4) as u64
+		);
+		assert_eq!(compute_batch_output_amount([50u32], 10_001), 0);
 	}
 
 	#[test]

@@ -1,0 +1,26 @@
+# Vendored from Quantus-Network/qp-zk-circuits 3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05 (MIT).
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autotests = false
+description = "Public inputs for the wormhole-address ownership circuit (qp-zk-circuits 3ba7cef)"
+edition = "2021"
+license = "MIT"
+name = "quantus-ownership-inputs"
+publish = true
+readme = false
+repository = "https://github.com/Quantus-Network/quantus-cli"
+version = "4.5.0"
+
+[lib]
+name = "qp_ownership_inputs"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { version = "=1.0.104", default-features = false }
+qp-wormhole-inputs = { package = "quantus-wormhole-inputs", version = "=4.5.0", path = "../../wormhole/inputs", default-features = false }
+
+[features]
+default = ["std"]
+std = ["anyhow/std", "qp-wormhole-inputs/std"]

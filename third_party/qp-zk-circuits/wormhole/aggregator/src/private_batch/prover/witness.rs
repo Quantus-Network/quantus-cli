@@ -1,0 +1,107 @@
+//! Witness filling for the prebuilt private-batch aggregation prover.
+
+use anyhow::{anyhow, bail, Result};
+use plonky2::{
+	field::types::Field,
+	iop::witness::{PartialWitness, WitnessWrite},
+	plonk::proof::ProofWithPublicInputs,
+};
+use qp_wormhole_inputs::WithdrawalOutput;
+
+use zk_circuits_common::{
+	circuit::{C, D, F},
+	utils::bytes_to_digest,
+};
+
+use crate::{
+	common::utils::ensure_proof_shape_matches_targets,
+	private_batch::circuit::circuit_logic::PrivateBatchCircuitTargets,
+};
+
+/// Fill the partial witness for the prebuilt private-batch aggregation circuit.
+pub fn fill_private_batch_witness(
+	pw: &mut PartialWitness<F>,
+	targets: &PrivateBatchCircuitTargets,
+	proofs: &[ProofWithPublicInputs<F, C, D>],
+	outputs: &[WithdrawalOutput],
+	volume_fee_bps: u32,
+	dummy_nullifier_pre_images: &[[F; 4]],
+) -> Result<()> {
+	let n_targets = targets.leaf_proofs.len();
+
+	if proofs.len() != n_targets {
+		bail!(
+			"proof count mismatch: got {}, but circuit expects {} leaf proofs",
+			proofs.len(),
+			n_targets
+		);
+	}
+
+	if outputs.len() != targets.exit_slots.len() {
+		bail!(
+			"output count mismatch: got {}, but circuit expects {} exit slots",
+			outputs.len(),
+			targets.exit_slots.len()
+		);
+	}
+
+	if targets.dummy_nullifier_pre_images.len() != n_targets {
+		bail!(
+            "target layout is inconsistent: dummy_nullifier_pre_image target count {} != leaf proof target count {}",
+            targets.dummy_nullifier_pre_images.len(),
+            n_targets
+        );
+	}
+
+	if dummy_nullifier_pre_images.len() != n_targets {
+		bail!(
+			"dummy nullifier preimage count mismatch: got {}, but circuit expects {}",
+			dummy_nullifier_pre_images.len(),
+			n_targets
+		);
+	}
+
+	for (i, (proof_t, proof)) in targets.leaf_proofs.iter().zip(proofs.iter()).enumerate() {
+		// Full proof-shape preflight at this Result boundary: a malformed
+		// proof (wrong PI count, truncated FRI query rounds, inconsistent
+		// opening vectors, ...) would otherwise panic inside plonky2's
+		// witness writer or silently leave targets unset.
+		ensure_proof_shape_matches_targets(proof_t, proof, i, "leaf proof")?;
+		pw.set_proof_with_pis_target(proof_t, proof)
+			.map_err(|e| anyhow!("failed to set leaf proof target at slot {}: {}", i, e))?;
+	}
+
+	pw.set_target(targets.volume_fee_bps, F::from_canonical_u32(volume_fee_bps))
+		.map_err(|e| anyhow!("failed to set volume_fee_bps target: {}", e))?;
+
+	for (i, (slot_t, output)) in targets.exit_slots.iter().zip(outputs).enumerate() {
+		let account = bytes_to_digest(output.exit_account);
+		for (limb, (t, v)) in slot_t.exit_account.iter().zip(account).enumerate() {
+			pw.set_target(*t, v).map_err(|e| {
+				anyhow!("failed to set exit account target at slot {}, limb {}: {}", i, limb, e)
+			})?;
+		}
+		pw.set_target(slot_t.amount, F::from_canonical_u32(output.amount))
+			.map_err(|e| anyhow!("failed to set exit amount target at slot {}: {}", i, e))?;
+	}
+
+	for (i, (nullifier_targets, nullifier_vals)) in targets
+		.dummy_nullifier_pre_images
+		.iter()
+		.zip(dummy_nullifier_pre_images.iter())
+		.enumerate()
+	{
+		for limb in 0..4 {
+			pw.set_target(nullifier_targets[limb], nullifier_vals[limb]).map_err(|e| {
+				anyhow!(
+					"failed to set dummy nullifier preimage target at slot {}, limb {}: {}",
+					i,
+					limb,
+					e
+				)
+			})?;
+		}
+	}
+
+	Ok(())
+}

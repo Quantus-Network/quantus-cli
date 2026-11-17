@@ -24,7 +24,7 @@ use crate::{
 		compute_address_hash, get_hash_prefix, SubsquidClient, Transfer, TransferQueryParams,
 	},
 	wormhole_lib,
-	wormhole_lib::{compute_output_amount, NATIVE_ASSET_ID, VOLUME_FEE_BPS},
+	wormhole_lib::{batch_withdrawal_amount, NATIVE_ASSET_ID, VOLUME_FEE_BPS},
 };
 
 use plonky2::plonk::proof::ProofWithPublicInputs;
@@ -856,19 +856,15 @@ fn aggregate_proof_bytes(
 		CollectRewardsError::from(format!("Failed to load private-batch prover: {}", e))
 	})?;
 
-	let mut total_output: u64 = 0;
+	let mut amounts = Vec::with_capacity(proofs.len());
 	for proof in &proofs {
 		let pi = PublicCircuitInputs::try_from_proof(proof).map_err(|e| {
 			CollectRewardsError::from(format!("Failed to parse leaf public inputs: {e}"))
 		})?;
-		total_output = total_output
-			.saturating_add(compute_output_amount(pi.input_amount, VOLUME_FEE_BPS) as u64);
+		amounts.push(pi.input_amount);
 	}
-	let amount = u32::try_from(total_output).map_err(|_| {
-		CollectRewardsError::from(format!(
-			"Fee-adjusted burn total {total_output} exceeds the u32 exit amount"
-		))
-	})?;
+	let amount =
+		batch_withdrawal_amount(amounts, VOLUME_FEE_BPS).map_err(CollectRewardsError::from)?;
 	if destination == [0u8; 32] {
 		return Err(CollectRewardsError::from("Exit account must be non-zero".to_string()));
 	}

@@ -6,13 +6,19 @@
 description = "Pure Quantus RUST implementation of HD wallet functionality with post-quantum cryptography"
 edition = "2021"
 license = "Apache-2.0"
-name = "qp-rusty-crystals-hdwallet"
-publish = false
-version = "4.1.1"
+name = "quantus-crystals-hdwallet"
+publish = true
+readme = false
+repository = "https://github.com/Quantus-Network/quantus-cli"
+version = "4.2.0"
+
+[lib]
+name = "qp_rusty_crystals_hdwallet"
+path = "src/lib.rs"
 
 [dependencies]
 qp-poseidon-core = { version = "=3.1.0", default-features = false }
-qp-rusty-crystals-dilithium = { path = "../dilithium", version = "4.1.1", default-features = false }
+qp-rusty-crystals-dilithium = { package = "quantus-crystals-dilithium", path = "../dilithium", version = "=4.2.0", default-features = false }
 sha2 = { version = "=0.10.9", default-features = false }
 unicode-normalization = { version = "=0.1.25", default-features = false }
 zeroize = { version = "=1.9.1", default-features = false, features = ["alloc", "derive"] }

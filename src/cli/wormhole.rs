@@ -38,7 +38,8 @@ use subxt::{
 // Re-export constants and functions from wormhole_lib module for backward compatibility
 use crate::wormhole_lib;
 pub use crate::wormhole_lib::{
-	compute_output_amount, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
+	batch_withdrawal_amount, compute_batch_output_amount, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR,
+	VOLUME_FEE_BPS,
 };
 
 // ============================================================================
@@ -446,6 +447,62 @@ pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> 
 	parts
 }
 
+/// Split `payout` across `weights` so the shares sum to `payout`.
+///
+/// Largest-remainder: each share starts at `floor(payout * weight / sum)` and
+/// the leftover units go to the largest remainders, lowest index first on a tie.
+fn apportion_by_weight(weights: &[u32], payout: u64) -> Vec<u64> {
+	let n = weights.len();
+	if n == 0 {
+		return Vec::new();
+	}
+	let weight_sum: u128 = weights.iter().map(|w| u128::from(*w)).sum();
+	if weight_sum == 0 || payout == 0 {
+		return vec![0; n];
+	}
+	let payout = u128::from(payout);
+	let mut shares = vec![0u64; n];
+	let mut remainders = Vec::with_capacity(n);
+	let mut assigned = 0u128;
+	for (i, weight) in weights.iter().copied().enumerate() {
+		let product = payout * u128::from(weight);
+		let share = product / weight_sum;
+		assigned += share;
+		shares[i] = u64::try_from(share).unwrap_or(u64::MAX);
+		remainders.push((product % weight_sum, i));
+	}
+	remainders.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+	let mut leftover = payout - assigned;
+	for (_, index) in remainders {
+		if leftover == 0 {
+			break;
+		}
+		shares[index] = shares[index].saturating_add(1);
+		leftover -= 1;
+	}
+	shares
+}
+
+/// Two child exit amounts per input. Their sum is the batch fee applied once.
+fn dissolve_child_amounts(
+	quantized_inputs: &[u32],
+	fee_bps: u32,
+) -> Result<Vec<(u32, u32)>, String> {
+	let payout = compute_batch_output_amount(quantized_inputs.iter().copied(), fee_bps);
+	apportion_by_weight(quantized_inputs, payout)
+		.into_iter()
+		.map(|share| {
+			let half = share / 2;
+			let rest = share - half;
+			let first = u32::try_from(half)
+				.map_err(|_| format!("dissolve child amount {half} exceeds u32"))?;
+			let second = u32::try_from(rest)
+				.map_err(|_| format!("dissolve child amount {rest} exceeds u32"))?;
+			Ok((first, second))
+		})
+		.collect()
+}
+
 /// One payout of a private batch. The leaf proof only burns; exits live here.
 #[derive(Debug, Clone)]
 pub struct BatchExit {
@@ -485,13 +542,11 @@ pub fn compute_batch_exits(
 		));
 	}
 
-	let total_output: u64 = input_amounts
+	let quantized: Vec<u32> = input_amounts
 		.iter()
-		.map(|&amount| {
-			let quantized = quantize_funding_amount(amount).unwrap_or(0);
-			compute_output_amount(quantized, fee_bps) as u64
-		})
-		.sum();
+		.map(|&amount| quantize_funding_amount(amount).unwrap_or(0))
+		.collect();
+	let total_output = compute_batch_output_amount(quantized, fee_bps);
 	let n = unique.len();
 	let min_per_target = if total_output >= 3 * n as u64 { 3 } else { 0 };
 	let parts = random_partition(total_output as u128, n, min_per_target);
@@ -1372,13 +1427,13 @@ fn fee_adjusted_burn_total(proofs: &[ProofWithPublicInputs<F, C, D>]) -> Result<
 	use qp_wormhole_circuit::inputs::ParsePublicInputs;
 	use qp_wormhole_inputs::PublicCircuitInputs;
 
-	let mut total: u64 = 0;
+	let mut amounts = Vec::with_capacity(proofs.len());
 	for proof in proofs {
 		let pi = PublicCircuitInputs::try_from_proof(proof)
 			.map_err(|e| format!("Failed to parse leaf public inputs: {e}"))?;
-		total = total.saturating_add(compute_output_amount(pi.input_amount, VOLUME_FEE_BPS) as u64);
+		amounts.push(pi.input_amount);
 	}
-	u32::try_from(total).map_err(|_| format!("fee-adjusted burn total {total} exceeds u32"))
+	batch_withdrawal_amount(amounts, VOLUME_FEE_BPS)
 }
 
 fn resolve_cli_exits(
@@ -4186,7 +4241,8 @@ async fn run_dissolve(
 				)));
 			}
 
-			// Each input splits into 2 outputs (equal split)
+			// Each input splits into 2 outputs. The fee is applied once to the
+			// batch sum, then the payout is split across those children.
 			let mut proof_files = Vec::new();
 			let mut batch_exits: Vec<BatchExit> = Vec::new();
 			let proof_gen_start = std::time::Instant::now();
@@ -4196,17 +4252,20 @@ async fn run_dissolve(
 			// were created in the same verification block from the previous layer).
 			let batch_proof_block_hash = batch_inputs[0].proof_block_hash;
 			let mut expected_child_outputs: Vec<([u8; 32], ExpectedTransferEvent)> = Vec::new();
+			let quantized_inputs = batch_inputs
+				.iter()
+				.map(|input| quantize_funding_amount(input.amount))
+				.collect::<Result<Vec<_>, _>>()
+				.map_err(crate::error::QuantusError::Generic)?;
+			let child_amounts = dissolve_child_amounts(&quantized_inputs, VOLUME_FEE_BPS)
+				.map_err(crate::error::QuantusError::Generic)?;
 
 			for (i, input) in batch_inputs.iter().enumerate() {
 				let global_idx = batch_start + i;
 				let exit_1_idx = global_idx * 2;
 				let exit_2_idx = global_idx * 2 + 1;
 
-				let input_quantized = quantize_funding_amount(input.amount)
-					.map_err(crate::error::QuantusError::Generic)?;
-				let total_output = compute_output_amount(input_quantized, VOLUME_FEE_BPS);
-				let output_1 = total_output / 2;
-				let output_2 = total_output - output_1;
+				let (output_1, output_2) = child_amounts[i];
 				let children = [(exit_1_idx, output_1), (exit_2_idx, output_2)];
 				for (exit_idx, output_amount) in children {
 					if output_amount == 0 {
@@ -4725,6 +4784,7 @@ async fn run_check_nullifier(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::wormhole_lib::compute_output_amount;
 	use qp_zk_circuits_common::zk_merkle::MAX_DEPTH;
 	use serde_json::json;
 	use std::collections::HashMap;
@@ -5236,21 +5296,10 @@ mod tests {
 			.collect()
 	}
 
-	fn proof_outputs_for_inputs(input_amounts: &[u128], fee_bps: u32) -> Vec<u32> {
-		input_amounts
-			.iter()
-			.map(|&input| {
-				let input_quantized = quantize_funding_amount(input).unwrap_or(0);
-				compute_output_amount(input_quantized, fee_bps)
-			})
-			.collect()
-	}
-
 	fn total_output_for_inputs(input_amounts: &[u128], fee_bps: u32) -> u64 {
-		proof_outputs_for_inputs(input_amounts, fee_bps)
-			.into_iter()
-			.map(|x| x as u64)
-			.sum()
+		let quantized =
+			input_amounts.iter().map(|&input| quantize_funding_amount(input).unwrap_or(0));
+		compute_batch_output_amount(quantized, fee_bps)
 	}
 
 	/// Find some input that yields at least `min_out` quantized output after fee.
@@ -5335,6 +5384,39 @@ mod tests {
 	// --------------------------
 	// compute_batch_exits tests
 	// --------------------------
+
+	#[test]
+	fn batch_fee_is_applied_once_before_rounding() {
+		// Eight burns of 100 quantized units at 4 bps.
+		// floor(800 * 9996 / 10000) = 799. Per-leaf floors would pay 8 * 99 = 792.
+		let hundred = 100 * SCALE_DOWN_FACTOR;
+		let inputs = vec![hundred; 8];
+		assert_eq!(compute_batch_output_amount([100u32; 8], VOLUME_FEE_BPS), 799);
+		assert_eq!(total_output_for_inputs(&inputs, VOLUME_FEE_BPS), 799);
+		let exits = compute_batch_exits(&inputs, &mk_accounts(1), VOLUME_FEE_BPS, 32).unwrap();
+		assert_eq!(exits.len(), 1);
+		assert_eq!(exits[0].output_amount, 799);
+
+		// Eight 1-unit burns: per-leaf floors pay nothing; the batch may pay 7.
+		assert_eq!(compute_batch_output_amount([1u32; 8], VOLUME_FEE_BPS), 7);
+		assert_eq!(batch_withdrawal_amount([1u32; 8], VOLUME_FEE_BPS).unwrap(), 7);
+		let one = SCALE_DOWN_FACTOR;
+		let ones = [one; 8];
+		let exits = compute_batch_exits(&ones, &mk_accounts(1), VOLUME_FEE_BPS, 32).unwrap();
+		assert_eq!(exits[0].output_amount, 7);
+
+		let children = dissolve_child_amounts(&[100u32; 8], VOLUME_FEE_BPS).unwrap();
+		let child_total: u32 = children.iter().map(|(a, b)| a + b).sum();
+		assert_eq!(child_total, 799);
+		assert_eq!(children.len(), 8);
+
+		// The payout is the largest integer the circuit inequality accepts.
+		let total_input = 800u128;
+		let keep = 10_000 - VOLUME_FEE_BPS as u128;
+		let payout = 799u128;
+		assert!(payout * 10_000 <= total_input * keep);
+		assert!((payout + 1) * 10_000 > total_input * keep);
+	}
 
 	#[test]
 	fn compute_batch_exits_empty_inputs_or_targets() {

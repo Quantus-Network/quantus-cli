@@ -1459,25 +1459,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "790eea4361631c5e7d22598ecd5723ff611904e3344ce8720784c93e3d83d40b"
 
 [[package]]
-name = "crossbeam-deque"
-version = "0.8.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5181e0de7b61eb03a81e347d6dd8797bae9da5146707b51077e2d71a54ec0ceb"
-dependencies = [
- "crossbeam-epoch",
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-epoch"
-version = "0.9.20"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
 name = "crossbeam-queue"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2537,7 +2518,6 @@ checksum = "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1"
 dependencies = [
  "ahash",
  "allocator-api2",
- "rayon",
  "serde",
 ]
 
@@ -4535,9 +4515,6 @@ name = "plonky2_maybe_rayon"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e1e554181dc95243b8d9948ae7bae5759c7fb2502fed28f671f95ef38079406"
-dependencies = [
- "rayon",
-]
 
 [[package]]
 name = "plonky2_util"
@@ -4808,24 +4785,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
 
 [[package]]
-name = "qp-dilithium-crypto"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb9273e5fb0af1d9444f2d6f1ac1c89fe990a0ee182c2d77eff3e860376f2b71"
-dependencies = [
- "log",
- "parity-scale-codec",
- "qp-poseidon-core 3.1.0",
- "qp-rusty-crystals-dilithium",
- "qp-rusty-crystals-hdwallet",
- "scale-info",
- "sp-core",
- "sp-runtime",
- "thiserror 2.0.18",
- "zeroize",
-]
-
-[[package]]
 name = "qp-human-checkphrase"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4836,39 +4795,6 @@ dependencies = [
  "pbkdf2",
  "reqwest 0.12.28",
  "sha2 0.10.9",
-]
-
-[[package]]
-name = "qp-ownership-circuit"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "qp-ownership-inputs",
- "qp-plonky2",
- "qp-wormhole-circuit",
- "qp-zk-circuits-common",
-]
-
-[[package]]
-name = "qp-ownership-inputs"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "qp-wormhole-inputs",
-]
-
-[[package]]
-name = "qp-ownership-prover"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "qp-ownership-circuit",
- "qp-plonky2",
- "qp-wormhole-circuit",
- "qp-zk-circuits-common",
 ]
 
 [[package]]
@@ -4896,7 +4822,6 @@ dependencies = [
  "serde",
  "static_assertions",
  "unroll",
- "web-time",
 ]
 
 [[package]]
@@ -4982,110 +4907,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5872607e25ea4ee5fb37e64bf1462168e1a36a4e719cdc8a105533c708253918"
 
 [[package]]
-name = "qp-rusty-crystals-dilithium"
-version = "4.1.1"
-dependencies = [
- "zeroize",
-]
-
-[[package]]
-name = "qp-rusty-crystals-hdwallet"
-version = "4.1.1"
-dependencies = [
- "qp-poseidon-core 3.1.0",
- "qp-rusty-crystals-dilithium",
- "sha2 0.10.9",
- "unicode-normalization",
- "zeroize",
-]
-
-[[package]]
-name = "qp-wormhole-aggregator"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "hex",
- "qp-plonky2",
- "qp-wormhole-circuit",
- "qp-wormhole-inputs",
- "qp-wormhole-prover",
- "qp-zk-circuits-common",
- "rand 0.10.1",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "qp-wormhole-circuit"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "qp-plonky2",
- "qp-wormhole-inputs",
- "qp-zk-circuits-common",
- "zeroize",
-]
-
-[[package]]
-name = "qp-wormhole-circuit-builder"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "clap",
- "qp-plonky2",
- "qp-wormhole-aggregator",
- "qp-wormhole-circuit",
- "qp-zk-circuits-common",
- "rand 0.10.1",
-]
-
-[[package]]
-name = "qp-wormhole-inputs"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
-]
-
-[[package]]
-name = "qp-wormhole-prover"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "qp-plonky2",
- "qp-wormhole-circuit",
- "qp-zk-circuits-common",
-]
-
-[[package]]
-name = "qp-wormhole-verifier"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "qp-plonky2-verifier",
- "qp-wormhole-inputs",
- "tiny-keccak",
-]
-
-[[package]]
-name = "qp-zk-circuits-common"
-version = "4.4.0"
-source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
-dependencies = [
- "anyhow",
- "qp-plonky2",
- "qp-poseidon-core 3.1.0",
- "qp-wormhole-inputs",
- "serde",
- "serde_json",
-]
-
-[[package]]
 name = "qrcode"
 version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5120,24 +4941,24 @@ dependencies = [
  "p3-goldilocks",
  "p3-symmetric",
  "parity-scale-codec",
- "qp-dilithium-crypto",
  "qp-human-checkphrase",
- "qp-ownership-circuit",
- "qp-ownership-prover",
  "qp-plonky2",
  "qp-plonky2-verifier",
  "qp-poseidon-core 0.9.5",
  "qp-poseidon-core 3.1.0",
- "qp-rusty-crystals-dilithium",
- "qp-rusty-crystals-hdwallet",
- "qp-wormhole-aggregator",
- "qp-wormhole-circuit",
- "qp-wormhole-circuit-builder",
- "qp-wormhole-inputs",
- "qp-wormhole-prover",
- "qp-wormhole-verifier",
- "qp-zk-circuits-common",
  "qrcode",
+ "quantus-crystals-dilithium",
+ "quantus-crystals-hdwallet",
+ "quantus-dilithium-crypto",
+ "quantus-ownership-circuit",
+ "quantus-ownership-prover",
+ "quantus-wormhole-aggregator",
+ "quantus-wormhole-circuit",
+ "quantus-wormhole-circuit-builder",
+ "quantus-wormhole-inputs",
+ "quantus-wormhole-prover",
+ "quantus-wormhole-verifier",
+ "quantus-zk-circuits-common",
  "quantus_ur",
  "quinn-proto",
  "rand 0.9.5",
@@ -5163,6 +4984,148 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
+name = "quantus-crystals-dilithium"
+version = "4.2.0"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
+name = "quantus-crystals-hdwallet"
+version = "4.2.0"
+dependencies = [
+ "qp-poseidon-core 3.1.0",
+ "quantus-crystals-dilithium",
+ "sha2 0.10.9",
+ "unicode-normalization",
+ "zeroize",
+]
+
+[[package]]
+name = "quantus-dilithium-crypto"
+version = "0.7.0"
+dependencies = [
+ "log",
+ "parity-scale-codec",
+ "qp-poseidon-core 3.1.0",
+ "quantus-crystals-dilithium",
+ "quantus-crystals-hdwallet",
+ "scale-info",
+ "sp-core",
+ "sp-runtime",
+ "thiserror 2.0.18",
+ "zeroize",
+]
+
+[[package]]
+name = "quantus-ownership-circuit"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "qp-plonky2",
+ "quantus-ownership-inputs",
+ "quantus-wormhole-circuit",
+ "quantus-zk-circuits-common",
+]
+
+[[package]]
+name = "quantus-ownership-inputs"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "quantus-wormhole-inputs",
+]
+
+[[package]]
+name = "quantus-ownership-prover"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "qp-plonky2",
+ "quantus-ownership-circuit",
+ "quantus-wormhole-circuit",
+ "quantus-zk-circuits-common",
+]
+
+[[package]]
+name = "quantus-wormhole-aggregator"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "hex",
+ "qp-plonky2",
+ "quantus-wormhole-circuit",
+ "quantus-wormhole-inputs",
+ "quantus-wormhole-prover",
+ "quantus-zk-circuits-common",
+ "rand 0.10.1",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "quantus-wormhole-circuit"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "qp-plonky2",
+ "quantus-wormhole-inputs",
+ "quantus-zk-circuits-common",
+ "zeroize",
+]
+
+[[package]]
+name = "quantus-wormhole-circuit-builder"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "qp-plonky2",
+ "quantus-wormhole-aggregator",
+ "quantus-wormhole-circuit",
+ "quantus-zk-circuits-common",
+ "rand 0.10.1",
+]
+
+[[package]]
+name = "quantus-wormhole-inputs"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
+name = "quantus-wormhole-prover"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "qp-plonky2",
+ "quantus-wormhole-circuit",
+ "quantus-zk-circuits-common",
+]
+
+[[package]]
+name = "quantus-wormhole-verifier"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "qp-plonky2-verifier",
+ "quantus-wormhole-inputs",
+ "tiny-keccak",
+]
+
+[[package]]
+name = "quantus-zk-circuits-common"
+version = "4.5.0"
+dependencies = [
+ "anyhow",
+ "qp-plonky2",
+ "qp-poseidon-core 3.1.0",
+ "quantus-wormhole-inputs",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5361,26 +5324,6 @@ name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
-
-[[package]]
-name = "rayon"
-version = "1.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
-dependencies = [
- "either",
- "rayon-core",
-]
-
-[[package]]
-name = "rayon-core"
-version = "1.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
-dependencies = [
- "crossbeam-deque",
- "crossbeam-utils",
-]
 
 [[package]]
 name = "redox_syscall"

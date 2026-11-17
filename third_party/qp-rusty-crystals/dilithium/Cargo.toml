@@ -7,9 +7,15 @@
 description = "Pure Quantus RUST implementation of CRYSTALS-Dilithium digital signature scheme"
 edition = "2021"
 license = "Apache-2.0"
-name = "qp-rusty-crystals-dilithium"
-publish = false
-version = "4.1.1"
+name = "quantus-crystals-dilithium"
+publish = true
+readme = false
+repository = "https://github.com/Quantus-Network/quantus-cli"
+version = "4.2.0"
+
+[lib]
+name = "qp_rusty_crystals_dilithium"
+path = "src/lib.rs"
 
 [dependencies]
 zeroize = { version = "=1.9.1", default-features = false, features = ["derive"] }
