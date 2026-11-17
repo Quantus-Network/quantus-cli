@@ -38,6 +38,7 @@ no_zk = []
 profile = ["qp-plonky2/rand", "qp-plonky2/timing", "std"]
 std = [
 	"anyhow/std",
+	"qp-plonky2/rand",
 	"qp-plonky2/std",
 	"wormhole-circuit/std",
 	"wormhole-prover/std",
