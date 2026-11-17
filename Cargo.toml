@@ -116,11 +116,19 @@ bytes = "1.11.1"
 # Force patched version of quinn-proto (RUSTSEC-2026-0037, RUSTSEC-2026-0338 .. 0342)
 quinn-proto = "0.11.18"
 
+# Force patched quinn-udp (RUSTSEC-2026-0538). quinn 0.11 allows ^0.5.
+quinn-udp = { version = "0.5.16", default-features = false, features = ["tracing"] }
+
 # Force patched version of rustls (RUSTSEC-2026-0346 .. 0349)
 rustls = { version = "0.23.46", default-features = false }
 
-# Force patched version of rustls-webpki (RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104)
-rustls-webpki = "0.103.13"
+# Force patched version of rustls-webpki (RUSTSEC-2026-0098, RUSTSEC-2026-0099,
+# RUSTSEC-2026-0104, RUSTSEC-2026-0382). rustls 0.23.46 allows ^0.103.14.
+rustls-webpki = "0.103.17"
+
+# Force patched Mozilla root bundles (RUSTSEC-2026-0381, RUSTSEC-2026-0383).
+webpki-root-certs = "1.0.12"
+webpki-roots = "1.0.12"
 
 # Force patched event-listener (RUSTSEC-2026-0221); smoldot allows ^5.3
 event-listener = "5.4.2"
