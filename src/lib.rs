@@ -46,9 +46,10 @@ pub use cli::multisig::{
 
 // Re-export wormhole library functions for SDK usage
 pub use wormhole_lib::{
-	compute_nullifier, compute_output_amount, compute_wormhole_address,
-	generate_proof as generate_wormhole_proof, quantize_amount, ProofGenerationInput,
-	ProofGenerationOutput, WormholeLibError, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
+	batch_withdrawal_amount, compute_batch_output_amount, compute_nullifier, compute_output_amount,
+	compute_wormhole_address, generate_proof as generate_wormhole_proof, quantize_amount,
+	ProofGenerationInput, ProofGenerationOutput, WormholeLibError, NATIVE_ASSET_ID,
+	SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
 };
 
 // Re-export wormhole on-chain helpers for SDK usage.
@@ -64,7 +65,7 @@ pub use cli::wormhole::{
 	aggregate_proofs, at_best_block, at_finalized_block, compute_merkle_positions,
 	decode_full_leaf_data, get_zk_merkle_proof, parse_transfer_events, prepare_public_batches,
 	read_proof_file, submit_unsigned_verify_private_batch, verify_private_batch_and_get_events,
-	write_proof_file, IncludedAt, TransferInfo,
+	write_proof_file, BatchExit, IncludedAt, TransferInfo,
 };
 
 // Re-export collect rewards library for SDK usage

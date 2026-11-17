@@ -128,16 +128,6 @@ pub struct ProofGenerationInput {
 	pub zk_merkle_siblings: Vec<[[u8; 32]; SIBLINGS_PER_LEVEL]>,
 	/// Position hints (0-3) for each level
 	pub zk_merkle_positions: Vec<u8>,
-	/// Exit account 1 as 32 bytes
-	pub exit_account_1: [u8; 32],
-	/// Exit account 2 as 32 bytes (use zeros for single output)
-	pub exit_account_2: [u8; 32],
-	/// Output amount 1 (quantized, 2 decimals)
-	pub output_amount_1: u32,
-	/// Output amount 2 (quantized, 2 decimals, 0 for single output)
-	pub output_amount_2: u32,
-	/// Volume fee in basis points
-	pub volume_fee_bps: u32,
 	/// Asset ID (0 for native token)
 	pub asset_id: u32,
 }
@@ -206,11 +196,44 @@ pub fn quantize_amount(amount: u128) -> Result<u32> {
 	Ok(quantized as u32)
 }
 
-/// Compute output amount after fee deduction.
+/// Floor of one leaf's fee-adjusted amount.
 ///
-/// output = input * (10000 - fee_bps) / 10000
+/// `output = input * (10000 - fee_bps) / 10000`. A batch must not sum these
+/// floors: the private-batch circuit allows
+/// `floor(sum(inputs) * (10000 - fee_bps) / 10000)`, and the difference is
+/// stranded once the nullifiers are spent. Use [`compute_batch_output_amount`].
+///
+/// The binary target compiles this module and does not call the helper; the
+/// library re-export and the unit tests do.
+#[allow(dead_code)]
 pub fn compute_output_amount(input_amount: u32, fee_bps: u32) -> u32 {
 	((input_amount as u64) * (10000 - fee_bps as u64) / 10000) as u32
+}
+
+/// Maximum exit total the private-batch circuit will prove.
+///
+/// The fee is applied once to the sum of real leaf burns (dummy burns are
+/// already zero), then rounded down:
+/// `floor(sum(inputs) * (10_000 - fee_bps) / 10_000)`.
+/// A fee above 10_000 bps yields nothing.
+pub fn compute_batch_output_amount(
+	input_amounts: impl IntoIterator<Item = u32>,
+	fee_bps: u32,
+) -> u64 {
+	let Some(keep) = 10_000u128.checked_sub(u128::from(fee_bps)) else {
+		return 0;
+	};
+	let total_input: u128 = input_amounts.into_iter().map(u128::from).sum();
+	u64::try_from(total_input * keep / 10_000).unwrap_or(u64::MAX)
+}
+
+/// [`compute_batch_output_amount`] as the u32 exit amount the circuit stores.
+pub fn batch_withdrawal_amount(
+	input_amounts: impl IntoIterator<Item = u32>,
+	fee_bps: u32,
+) -> std::result::Result<u32, String> {
+	let total = compute_batch_output_amount(input_amounts, fee_bps);
+	u32::try_from(total).map_err(|_| format!("fee-adjusted burn total {total} exceeds u32"))
 }
 
 /// Generate a wormhole proof from raw inputs.
@@ -264,16 +287,6 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 		.as_slice()
 		.try_into()
 		.map_err(|e| WormholeLibError::from(format!("Invalid extrinsics root: {:?}", e)))?;
-	let exit_account_1 = input
-		.exit_account_1
-		.as_slice()
-		.try_into()
-		.map_err(|e| WormholeLibError::from(format!("Invalid exit account 1: {:?}", e)))?;
-	let exit_account_2 = input
-		.exit_account_2
-		.as_slice()
-		.try_into()
-		.map_err(|e| WormholeLibError::from(format!("Invalid exit account 2: {:?}", e)))?;
 	let block_hash = input
 		.block_hash
 		.as_slice()
@@ -316,12 +329,7 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 	let circuit_inputs = ZeroizingCircuitInputs(CircuitInputs {
 		public: PublicCircuitInputs {
 			asset_id: input.asset_id,
-			output_amount_1: input.output_amount_1,
-			output_amount_2: input.output_amount_2,
-			volume_fee_bps: input.volume_fee_bps,
 			nullifier: nullifier_bytes,
-			exit_account_1,
-			exit_account_2,
 			block_hash,
 			block_number: input.block_number,
 			input_amount: input.input_amount,
@@ -382,6 +390,18 @@ mod tests {
 	}
 
 	#[test]
+	fn batch_fee_rounds_once_on_the_sum() {
+		assert_eq!(compute_batch_output_amount([100u32; 8], 4), 799);
+		assert_eq!(batch_withdrawal_amount([100u32; 8], 4).unwrap(), 799);
+		assert_eq!(compute_batch_output_amount([1u32; 8], 4), 7);
+		assert_eq!(
+			compute_batch_output_amount([0u32, 100], 4),
+			compute_output_amount(100, 4) as u64
+		);
+		assert_eq!(compute_batch_output_amount([50u32], 10_001), 0);
+	}
+
+	#[test]
 	fn test_compute_wormhole_address() {
 		// Just verify it doesn't panic and returns 32 bytes
 		let secret = [42u8; 32];
@@ -408,7 +428,9 @@ mod tests {
 			secret,
 			transfer_count,
 			wormhole_address,
-			input_amount: 100,
+			// The fixture's block hash is the all-zero dummy sentinel. The
+			// proof-of-burn circuit forces that leaf's burn amount to zero.
+			input_amount: 0,
 			block_hash: [0u8; 32],
 			block_number: 0,
 			parent_hash: [0u8; 32],
@@ -426,11 +448,6 @@ mod tests {
 			zk_tree_root: [0u8; 32],
 			zk_merkle_siblings: vec![],
 			zk_merkle_positions: vec![],
-			exit_account_1: [0u8; 32],
-			exit_account_2: [0u8; 32],
-			output_amount_1: 0,
-			output_amount_2: 0,
-			volume_fee_bps: VOLUME_FEE_BPS,
 			asset_id: NATIVE_ASSET_ID,
 		};
 
@@ -469,11 +486,6 @@ mod tests {
 			zk_tree_root: [0u8; 32],
 			zk_merkle_siblings: vec![],
 			zk_merkle_positions: vec![],
-			exit_account_1: [0u8; 32],
-			exit_account_2: [0u8; 32],
-			output_amount_1: 0,
-			output_amount_2: 0,
-			volume_fee_bps: VOLUME_FEE_BPS,
 			asset_id: NATIVE_ASSET_ID,
 		};
 

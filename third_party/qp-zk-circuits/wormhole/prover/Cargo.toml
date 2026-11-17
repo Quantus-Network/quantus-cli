@@ -1,0 +1,33 @@
+# Vendored from Quantus-Network/qp-zk-circuits 3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05 (MIT).
+[package]
+autobenches = false
+autobins = false
+autoexamples = false
+autotests = false
+description = "Wormhole leaf prover (qp-zk-circuits 3ba7cef)"
+edition = "2021"
+license = "MIT"
+name = "quantus-wormhole-prover"
+publish = true
+readme = false
+repository = "https://github.com/Quantus-Network/quantus-cli"
+version = "4.5.0"
+
+[lib]
+name = "qp_wormhole_prover"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = { version = "=1.0.104", default-features = false }
+qp-plonky2 = { version = "=1.6.0", default-features = false }
+wormhole-circuit = { package = "quantus-wormhole-circuit", version = "=4.5.0", path = "../circuit" }
+zk-circuits-common = { package = "quantus-zk-circuits-common", version = "=4.5.0", path = "../../common" }
+
+[features]
+default = ["std"]
+std = [
+	"anyhow/std",
+	"qp-plonky2/std",
+	"wormhole-circuit/std",
+	"zk-circuits-common/std",
+]

@@ -985,7 +985,8 @@ fn derive_hd_wormhole_secrets(
 	for branch in 0..=scan_rounds {
 		for &index in &indexes {
 			let path = format!("m/44'/{}/0'/{}'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, branch, index);
-			let pair = generate_wormhole_from_seed(seed, &path)
+			let mut pair = qp_rusty_crystals_hdwallet::WormholePair::zeroed();
+			generate_wormhole_from_seed(seed, &path, &mut pair)
 				.map_err(|e| QuantusError::Generic(format!("HD derivation failed: {e:?}")))?;
 			out.push((SpendSecret(*pair.secret().as_bytes()), format!("hd {path}")));
 		}
@@ -1126,7 +1127,8 @@ fn derive_historical_dilithium(seed: &SensitiveBytes64, id: &str) -> Result<Hist
 				"keygen id {id:?} is inconsistent: no v1-era wallet used the Dilithium-seed tree"
 			)));
 		}
-		let keypair = qp_rusty_crystals_hdwallet::ml_dsa_87::derive_key_from_seed(seed, path)
+		let mut keypair = qp_rusty_crystals_hdwallet::ml_dsa_87::Keypair::zeroed();
+		qp_rusty_crystals_hdwallet::ml_dsa_87::derive_key_from_seed(seed, path, &mut keypair)
 			.map_err(|e| QuantusError::Generic(format!("HD derivation failed at {path}: {e:?}")))?;
 		// `to_bytes` returns a `Zeroizing` buffer, wiped when it drops here.
 		let secret = SecretKeyBytes(keypair.secret().to_bytes().to_vec());
@@ -2057,9 +2059,14 @@ mod tests {
 		// A `wormhole multiround` round-2 address must be in the scan and match
 		// direct derivation.
 		let path = format!("m/44'/{}/0'/2'/1'", QUANTUS_WORMHOLE_CHAIN_ID);
-		let direct =
-			qp_rusty_crystals_hdwallet::derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path)
-				.unwrap();
+		let mut direct = qp_rusty_crystals_hdwallet::WormholePair::zeroed();
+		qp_rusty_crystals_hdwallet::derive_wormhole_from_mnemonic(
+			TEST_MNEMONIC,
+			None,
+			&path,
+			&mut direct,
+		)
+		.unwrap();
 		let (secret, _) = secrets
 			.iter()
 			.find(|(_, label)| label == &format!("hd {path}"))
@@ -2078,7 +2085,8 @@ mod tests {
 	fn scan_rounds_flag_reaches_round_nine() {
 		let seed = test_seed();
 		let path = format!("m/44'/{}/0'/9'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
-		let direct = generate_wormhole_from_seed(&seed, &path).unwrap();
+		let mut direct = qp_rusty_crystals_hdwallet::WormholePair::zeroed();
+		generate_wormhole_from_seed(&seed, &path, &mut direct).unwrap();
 
 		let default_window = derive_hd_wormhole_secrets(&seed, None, 8).unwrap();
 		assert!(!default_window.iter().any(|(_, label)| label == &format!("hd {path}")));

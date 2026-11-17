@@ -8,6 +8,9 @@ keywords = ["blockchain", "cli", "crypto", "quantum", "quantus-network"]
 license = "Apache-2.0"
 name = "quantus-cli"
 readme = "README.md"
+# Vendored crates are published on their own. The CLI package depends on
+# those versions; it does not bundle this tree.
+exclude = ["third_party"]
 repository = "https://github.com/Quantus-Network/quantus-cli"
 version = "2.3.0"
 
@@ -68,10 +71,10 @@ argon2 = "0.5"   # Password-based key derivation (quantum-safe)
 rand = "0.9"
 
 # Quantus crypto dependencies (aligned with chain / dilithium-crypto 0.6.1).
-qp-dilithium-crypto = { version = "0.6.1", features = ["serde"] }
+qp-dilithium-crypto = { package = "quantus-dilithium-crypto", version = "=0.7.0", path = "third_party/qp-dilithium-crypto", features = ["serde"] }
 qp-human-checkphrase = "2.2.1"
-qp-rusty-crystals-dilithium = { version = "4.1.1", features = ["ml-dsa-65", "ml-dsa-87"] }
-qp-rusty-crystals-hdwallet = { version = "4.1.1", features = ["ml-dsa-65"] }
+qp-rusty-crystals-dilithium = { package = "quantus-crystals-dilithium", version = "=4.2.0", path = "third_party/qp-rusty-crystals/dilithium", features = ["ml-dsa-65", "ml-dsa-87"] }
+qp-rusty-crystals-hdwallet = { package = "quantus-crystals-hdwallet", version = "=4.2.0", path = "third_party/qp-rusty-crystals/hdwallet", features = ["ml-dsa-65"] }
 # The pre-March-2026 BIP32 tree ("Bitcoin seed" master HMAC key, soft child
 # support): historical Dilithium accounts and wormhole entropies in
 # cli/airdrop.rs derive through it. Same crate qp-rusty-crystals-hdwallet
@@ -113,11 +116,22 @@ bytes = "1.11.1"
 # Force patched version of quinn-proto (RUSTSEC-2026-0037, RUSTSEC-2026-0338 .. 0342)
 quinn-proto = "0.11.18"
 
+# Force patched quinn-udp (RUSTSEC-2026-0538). quinn 0.11 allows ^0.5.
+quinn-udp = { version = "0.5.16", default-features = false, features = ["tracing"] }
+
 # Force patched version of rustls (RUSTSEC-2026-0346 .. 0349)
 rustls = { version = "0.23.46", default-features = false }
 
-# Force patched version of rustls-webpki (RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104)
-rustls-webpki = "0.103.13"
+# Oldest release that fixes RUSTSEC-2026-0382 (and the earlier webpki
+# advisories). rustls 0.23.46 allows ^0.103.14. Published 2026-10-20, so it
+# is still inside the 30-day dependency cooldown.
+rustls-webpki = "0.103.16"
+
+# Oldest bundles that drop the distrusted emSign intermediates
+# (RUSTSEC-2026-0381, RUSTSEC-2026-0383). Published 2026-10-19, still inside
+# the 30-day dependency cooldown.
+webpki-root-certs = "1.0.10"
+webpki-roots = "1.0.10"
 
 # Force patched event-listener (RUSTSEC-2026-0221); smoldot allows ^5.3
 event-listener = "5.4.2"
@@ -144,21 +158,25 @@ anyhow = "1.0"
 p3-field = { version = "0.3.0", default-features = false }
 p3-goldilocks = { version = "0.3.0", default-features = false }
 p3-symmetric = { version = "0.3.0", default-features = false }
-qp-ownership-circuit = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-ownership-prover = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-plonky2 = { version = "1.5.5", default-features = false, features = ["rand", "std"] }
-qp-plonky2-verifier = { version = "1.5.5", default-features = false }
+# qp-zk-circuits 3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05, vendored under
+# third_party and published as quantus-* 4.5.0. crates.io qp-* 4.4.0 is the
+# older tagged release; this revision is the proof-of-burn circuits
+# (production shape 8 leaves / 32 exit slots / 89 public-batch arity).
+qp-ownership-circuit = { package = "quantus-ownership-circuit", version = "=4.5.0", path = "third_party/qp-zk-circuits/ownership/circuit", default-features = false, features = ["std"] }
+qp-ownership-prover = { package = "quantus-ownership-prover", version = "=4.5.0", path = "third_party/qp-zk-circuits/ownership/prover", default-features = false, features = ["std"] }
+qp-plonky2 = { version = "=1.6.0", default-features = false, features = ["rand", "std"] }
+qp-plonky2-verifier = { version = "=1.6.0", default-features = false }
 qp-poseidon-core = "3.1.0"
 rand_chacha = { version = "0.9", default-features = false }
 # Resonance-era (v0.9.x) permutation constants differ from the current ones.
 qp-poseidon-core-v09 = { package = "qp-poseidon-core", version = "=0.9.5" }
-qp-wormhole-aggregator = { version = "=4.4.0", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-circuit = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = "=4.4.0"
-qp-wormhole-inputs = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "=4.4.0", default-features = false, features = ["std"] }
+qp-wormhole-aggregator = { package = "quantus-wormhole-aggregator", version = "=4.5.0", path = "third_party/qp-zk-circuits/wormhole/aggregator", default-features = false, features = ["std"] }
+qp-wormhole-circuit = { package = "quantus-wormhole-circuit", version = "=4.5.0", path = "third_party/qp-zk-circuits/wormhole/circuit", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { package = "quantus-wormhole-circuit-builder", version = "=4.5.0", path = "third_party/qp-zk-circuits/wormhole/circuit-builder" }
+qp-wormhole-inputs = { package = "quantus-wormhole-inputs", version = "=4.5.0", path = "third_party/qp-zk-circuits/wormhole/inputs", default-features = false, features = ["std"] }
+qp-wormhole-prover = { package = "quantus-wormhole-prover", version = "=4.5.0", path = "third_party/qp-zk-circuits/wormhole/prover", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { package = "quantus-wormhole-verifier", version = "=4.5.0", path = "third_party/qp-zk-circuits/wormhole/verifier", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { package = "quantus-zk-circuits-common", version = "=4.5.0", path = "third_party/qp-zk-circuits/common", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -166,7 +184,7 @@ libc = "0.2"
 [build-dependencies]
 hex = "0.4"
 qp-poseidon-core = "3.1.0"
-qp-wormhole-circuit-builder = "=4.4.0"
+qp-wormhole-circuit-builder = { package = "quantus-wormhole-circuit-builder", version = "=4.5.0", path = "third_party/qp-zk-circuits/wormhole/circuit-builder" }
 sha2 = "0.10"
 
 [dev-dependencies]

@@ -58,6 +58,7 @@ fn write_manifest(
 	dir: &Path,
 	pkg_version: &str,
 	num_leaf_proofs: usize,
+	num_exit_slots: usize,
 	num_private_batch_proofs: usize,
 ) {
 	let mut content = String::new();
@@ -65,6 +66,7 @@ fn write_manifest(
 	content.push_str("  \"manifest_version\": 1,\n");
 	content.push_str(&format!("  \"package_version\": \"{}\",\n", json_escape(pkg_version)));
 	content.push_str(&format!("  \"num_leaf_proofs\": {},\n", num_leaf_proofs));
+	content.push_str(&format!("  \"num_exit_slots\": {},\n", num_exit_slots));
 	content.push_str(&format!("  \"num_private_batch_proofs\": {},\n", num_private_batch_proofs));
 	content.push_str("  \"files\": {\n");
 	for (idx, filename) in MANIFESTED_FILES.iter().enumerate() {
@@ -98,6 +100,10 @@ fn main() {
 		.map(|v| v.parse().expect("QP_NUM_LEAF_PROOFS must be a valid usize"))
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS);
 
+	let num_exit_slots: usize = env::var("QP_NUM_EXIT_SLOTS")
+		.map(|v| v.parse().expect("QP_NUM_EXIT_SLOTS must be a valid usize"))
+		.unwrap_or(DEFAULT_NUM_EXIT_SLOTS);
+
 	let num_private_batch_proofs: usize = env::var("QP_NUM_PRIVATE_BATCH_PROOFS")
 		.map(|v| v.parse().expect("QP_NUM_PRIVATE_BATCH_PROOFS must be a valid usize"))
 		.unwrap_or(DEFAULT_NUM_PRIVATE_BATCH_PROOFS);
@@ -113,11 +119,12 @@ fn main() {
 	// directories whose manifest records a different package version or sizing and
 	// regenerates them on first use.
 	println!("cargo:rerun-if-env-changed=QP_NUM_LEAF_PROOFS");
+	println!("cargo:rerun-if-env-changed=QP_NUM_EXIT_SLOTS");
 	println!("cargo:rerun-if-env-changed=QP_NUM_PRIVATE_BATCH_PROOFS");
 
 	println!(
-		"cargo:warning=[quantus-cli] Generating ZK circuit binaries (num_leaf_proofs={}, num_private_batch_proofs={})...",
-		num_leaf_proofs, num_private_batch_proofs
+		"cargo:warning=[quantus-cli] Generating ZK circuit binaries (num_leaf_proofs={}, num_exit_slots={}, num_private_batch_proofs={})...",
+		num_leaf_proofs, num_exit_slots, num_private_batch_proofs
 	);
 
 	let start = Instant::now();
@@ -125,10 +132,12 @@ fn main() {
 	std::fs::create_dir_all(&build_output_dir)
 		.expect("Failed to create generated-bins directory in OUT_DIR");
 
+	let shape =
+		qp_wormhole_circuit_builder::PrivateBatchShape::new(num_leaf_proofs, num_exit_slots);
 	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
 		&build_output_dir,
 		true,
-		num_leaf_proofs,
+		shape,
 		Some(num_private_batch_proofs),
 	)
 	.expect("Failed to generate circuit binaries");
@@ -136,7 +145,13 @@ fn main() {
 	let pkg_version = env::var("CARGO_PKG_VERSION").expect("CARGO_PKG_VERSION not set");
 	std::fs::write(build_output_dir.join(VERSION_MARKER), &pkg_version)
 		.expect("Failed to write version marker");
-	write_manifest(&build_output_dir, &pkg_version, num_leaf_proofs, num_private_batch_proofs);
+	write_manifest(
+		&build_output_dir,
+		&pkg_version,
+		num_leaf_proofs,
+		num_exit_slots,
+		num_private_batch_proofs,
+	);
 
 	let elapsed = start.elapsed();
 	println!(

@@ -38,7 +38,8 @@ use subxt::{
 // Re-export constants and functions from wormhole_lib module for backward compatibility
 use crate::wormhole_lib;
 pub use crate::wormhole_lib::{
-	compute_output_amount, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
+	batch_withdrawal_amount, compute_batch_output_amount, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR,
+	VOLUME_FEE_BPS,
 };
 
 // ============================================================================
@@ -446,258 +447,118 @@ pub fn random_partition(total: u128, n: usize, min_per_part: u128) -> Vec<u128> 
 	parts
 }
 
-/// Output assignment for a single proof (supports dual outputs)
-#[derive(Debug, Clone)]
-pub struct ProofOutputAssignment {
-	/// Amount for output 1 (quantized, 2 decimal places)
-	pub output_amount_1: u32,
-	/// Exit account for output 1
-	pub exit_account_1: [u8; 32],
-	/// Amount for output 2 (quantized, 0 if unused)
-	pub output_amount_2: u32,
-	/// Exit account for output 2 (all zeros if unused)
-	pub exit_account_2: [u8; 32],
+/// Split `payout` across `weights` so the shares sum to `payout`.
+///
+/// Largest-remainder: each share starts at `floor(payout * weight / sum)` and
+/// the leftover units go to the largest remainders, lowest index first on a tie.
+fn apportion_by_weight(weights: &[u32], payout: u64) -> Vec<u64> {
+	let n = weights.len();
+	if n == 0 {
+		return Vec::new();
+	}
+	let weight_sum: u128 = weights.iter().map(|w| u128::from(*w)).sum();
+	if weight_sum == 0 || payout == 0 {
+		return vec![0; n];
+	}
+	let payout = u128::from(payout);
+	let mut shares = vec![0u64; n];
+	let mut remainders = Vec::with_capacity(n);
+	let mut assigned = 0u128;
+	for (i, weight) in weights.iter().copied().enumerate() {
+		let product = payout * u128::from(weight);
+		let share = product / weight_sum;
+		assigned += share;
+		shares[i] = u64::try_from(share).unwrap_or(u64::MAX);
+		remainders.push((product % weight_sum, i));
+	}
+	remainders.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
+	let mut leftover = payout - assigned;
+	for (_, index) in remainders {
+		if leftover == 0 {
+			break;
+		}
+		shares[index] = shares[index].saturating_add(1);
+		leftover -= 1;
+	}
+	shares
 }
 
-/// Compute random output assignments for a set of proofs.
+/// Two child exit amounts per input. Their sum is the batch fee applied once.
+fn dissolve_child_amounts(
+	quantized_inputs: &[u32],
+	fee_bps: u32,
+) -> Result<Vec<(u32, u32)>, String> {
+	let payout = compute_batch_output_amount(quantized_inputs.iter().copied(), fee_bps);
+	apportion_by_weight(quantized_inputs, payout)
+		.into_iter()
+		.map(|share| {
+			let half = share / 2;
+			let rest = share - half;
+			let first = u32::try_from(half)
+				.map_err(|_| format!("dissolve child amount {half} exceeds u32"))?;
+			let second = u32::try_from(rest)
+				.map_err(|_| format!("dissolve child amount {rest} exceeds u32"))?;
+			Ok((first, second))
+		})
+		.collect()
+}
+
+/// One payout of a private batch. The leaf proof only burns; exits live here.
+#[derive(Debug, Clone)]
+pub struct BatchExit {
+	pub exit_account: [u8; 32],
+	pub output_amount: u32,
+}
+
+/// Partition a batch's fee-adjusted burn total across distinct exit accounts.
 ///
-/// This takes the input amounts for each proof and randomly distributes the outputs
-/// across the target exit accounts. Each proof can have up to 2 outputs.
-///
-/// # Algorithm:
-/// 1. Compute total output amount (sum of inputs after fee deduction)
-/// 2. Randomly partition total output across all target addresses
-/// 3. Greedily assign outputs to proofs, using dual outputs when necessary
-///
-/// # Arguments
-/// * `input_amounts` - The input amount for each proof (in planck, before fee)
-/// * `target_accounts` - The exit accounts to distribute outputs to
-/// * `fee_bps` - Fee in basis points
-///
-/// # Returns
-/// A vector of output assignments, one per proof, or an error if quantization fails
-pub fn compute_random_output_assignments(
+/// Duplicate targets collapse to one slot (first-seen order). When the total
+/// can fund 3 quantized units per account, every account receives at least
+/// that, so the next multiround hop still has a mint to capture.
+pub fn compute_batch_exits(
 	input_amounts: &[u128],
 	target_accounts: &[[u8; 32]],
 	fee_bps: u32,
-) -> Result<Vec<ProofOutputAssignment>, String> {
-	use rand::seq::SliceRandom;
-
-	let num_proofs = input_amounts.len();
-	let num_targets = target_accounts.len();
-
-	if num_proofs == 0 || num_targets == 0 {
-		return Ok(vec![]);
+	max_slots: usize,
+) -> Result<Vec<BatchExit>, String> {
+	if input_amounts.is_empty() || target_accounts.is_empty() {
+		return Ok(Vec::new());
 	}
 
-	// Step 1: Compute output amounts per proof (after fee deduction)
-	let mut proof_outputs: Vec<u32> = Vec::with_capacity(input_amounts.len());
-	for (i, &input) in input_amounts.iter().enumerate() {
-		let input_quantized = quantize_funding_amount(input).map_err(|e| {
-			format!("Failed to quantize input amount {} for proof {}: {}", input, i, e)
-		})?;
-		proof_outputs.push(compute_output_amount(input_quantized, fee_bps));
+	let mut unique: Vec<[u8; 32]> = Vec::new();
+	for account in target_accounts {
+		if *account == [0u8; 32] {
+			return Err("exit account must be non-zero".to_string());
+		}
+		if !unique.contains(account) {
+			unique.push(*account);
+		}
+	}
+	if unique.len() > max_slots {
+		return Err(format!(
+			"need {} exit slots for distinct accounts, but the private batch has {}",
+			unique.len(),
+			max_slots
+		));
 	}
 
-	let total_output: u64 = proof_outputs.iter().map(|&x| x as u64).sum();
-
-	// Step 2: Randomly partition total output across target accounts
-	// Minimum 3 quantized units (0.03 DEV) per target. After a VOLUME_FEE_BPS
-	// haircut in the next round: compute_output_amount(3, 4) = 2, which is safe.
-	// With 1: compute_output_amount(1, 4) = 0, which drops the transfer event.
-	let min_per_target = 3u128;
-	let target_amounts_u128 = random_partition(total_output as u128, num_targets, min_per_target);
-	let target_amounts: Vec<u32> = target_amounts_u128.iter().map(|&x| x as u32).collect();
-
-	// Step 3: Assign outputs to proofs.
-	// Each proof can have at most 2 outputs to different targets.
-	//
-	// Strategy:
-	//   Pass 1 - Guarantee every target gets at least one output slot by round-robin
-	//            assigning each target as output_1 of successive proofs.
-	//   Pass 2 - Fill remaining capacity (output_2 slots and any leftover amounts)
-	//            greedily from targets that still have remaining allocation.
-	//
-	// This ensures every target address appears in at least one proof output,
-	// which is critical for the multiround flow where each target is a next-round
-	// wormhole address that must receive minted tokens.
-
-	let mut rng = rand::rng();
-
-	// Track remaining needs per target
-	let mut target_remaining: Vec<u32> = target_amounts.clone();
-
-	// Pre-allocate assignments with output_1 = full proof output, output_2 = 0
-	let mut assignments: Vec<ProofOutputAssignment> = proof_outputs
+	let quantized: Vec<u32> = input_amounts
 		.iter()
-		.map(|&po| ProofOutputAssignment {
-			output_amount_1: po,
-			exit_account_1: [0u8; 32],
-			output_amount_2: 0,
-			exit_account_2: [0u8; 32],
-		})
+		.map(|&amount| quantize_funding_amount(amount).unwrap_or(0))
 		.collect();
-
-	// Pass 1: Round-robin assign each target to a proof's output_1.
-	// If num_targets <= num_proofs, each target gets its own proof.
-	// If num_targets > num_proofs, later targets share proofs via output_2.
-	let mut shuffled_targets: Vec<usize> = (0..num_targets).collect();
-	shuffled_targets.shuffle(&mut rng);
-
-	for (assign_idx, &tidx) in shuffled_targets.iter().enumerate() {
-		let proof_idx = assign_idx % num_proofs;
-		let assignment = &mut assignments[proof_idx];
-
-		if assignment.exit_account_1 == [0u8; 32] {
-			// First target for this proof -> use output_1
-			let assign = assignment.output_amount_1.min(target_remaining[tidx]);
-			assignment.exit_account_1 = target_accounts[tidx];
-			// We'll fix up the exact amounts in pass 2; for now just mark the account
-			assignment.output_amount_1 = assign;
-			target_remaining[tidx] -= assign;
-		} else if assignment.exit_account_2 == [0u8; 32] {
-			// Second target for this proof -> use output_2
-			let avail = proof_outputs[proof_idx].saturating_sub(assignment.output_amount_1);
-			let assign = avail.min(target_remaining[tidx]);
-			assignment.exit_account_2 = target_accounts[tidx];
-			assignment.output_amount_2 = assign;
-			target_remaining[tidx] -= assign;
-		}
-		// If both slots taken, skip (shouldn't happen when num_targets <= 2*num_proofs)
-	}
-
-	// Pass 2: Distribute any remaining target allocations into available proof outputs.
-	// Also ensure each proof's output_1 + output_2 == proof_outputs[i].
-	for proof_idx in 0..num_proofs {
-		let total_proof_output = proof_outputs[proof_idx];
-		let current_sum =
-			assignments[proof_idx].output_amount_1 + assignments[proof_idx].output_amount_2;
-		let mut shortfall = total_proof_output.saturating_sub(current_sum);
-
-		if shortfall > 0 {
-			// Add shortfall to output_1 (its account is already set)
-			assignments[proof_idx].output_amount_1 += shortfall;
-			shortfall = 0;
-		}
-
-		// If output_1_account is still [0;32] (shouldn't happen), assign first target as fallback
-		if assignments[proof_idx].exit_account_1 == [0u8; 32] && num_targets > 0 {
-			assignments[proof_idx].exit_account_1 = target_accounts[0];
-		}
-
-		let _ = shortfall; // suppress unused warning
-	}
-
-	// Pass 3: redistribute toward the partition. Per-proof totals are fixed by
-	// the deposits (input minus fee), so passes 1-2 effectively give each
-	// target its paired proof's whole output and ignore the partition's
-	// per-target amounts. Left alone, that strands targets paired with dust
-	// proofs: the chain mints dust (or nothing) to those addresses, and a
-	// multiround flow dies within two rounds (a dust input's output quantizes
-	// to zero, and the address after that receives no mint to capture). It
-	// also stops amounts from actually being re-randomized each round.
-	//
-	// Every address is lifted toward its partition demand by donations from
-	// proofs whose address holds more than its own demand; a donation splits
-	// the donor proof's output across its free second output slot.
-	// Aggregation sums exit amounts per account, so a topped-up target still
-	// receives a single mint. A donor proof has only one spare slot, so a
-	// single rich proof cannot lift every dust sibling. When every target
-	// could have been mentioned (slot count) and the pot covers the
-	// minimum, leftover deficits are a submit-time error: committing that
-	// round would mint below the floor and kill multiround two rounds later.
-	let min_needed = min_per_target as u32;
-	let mut received: std::collections::HashMap<[u8; 32], u32> = std::collections::HashMap::new();
-	for assignment in &assignments {
-		if assignment.exit_account_1 != [0u8; 32] {
-			*received.entry(assignment.exit_account_1).or_default() += assignment.output_amount_1;
-		}
-		if assignment.exit_account_2 != [0u8; 32] {
-			*received.entry(assignment.exit_account_2).or_default() += assignment.output_amount_2;
-		}
-	}
-	// Per-address demand (duplicate target addresses sum their partition
-	// slices).
-	let mut demand: std::collections::HashMap<[u8; 32], u32> = std::collections::HashMap::new();
-	for (tidx, &addr) in target_accounts.iter().enumerate() {
-		*demand.entry(addr).or_default() += target_amounts[tidx];
-	}
-	// Only enforceable when there is enough value for every unique address
-	// (mirrors random_partition's fallback when the total is too small).
-	if (total_output as u128) >= min_per_target * received.len() as u128 {
-		let mut wanted_addrs: Vec<[u8; 32]> = demand.keys().copied().collect();
-		// Neediest first, so the limited donor slots cover actual starvation
-		// (a dust address would otherwise kill a multiround flow) before
-		// cosmetic re-randomization.
-		wanted_addrs.sort_by_key(|addr| received.get(addr).copied().unwrap_or(0));
-		for addr in wanted_addrs {
-			let wanted = demand[&addr].max(min_needed);
-			let mut deficit = wanted.saturating_sub(received.get(&addr).copied().unwrap_or(0));
-			while deficit > 0 {
-				// Donor: the proof holding the most excess over its own
-				// address's demand in output_1, with a free output_2 slot.
-				let donation = (0..num_proofs)
-					.filter_map(|donor_idx| {
-						let donor = &assignments[donor_idx];
-						if donor.exit_account_2 != [0u8; 32] ||
-							donor.exit_account_1 == addr ||
-							donor.exit_account_1 == [0u8; 32]
-						{
-							return None;
-						}
-						let donor_addr = donor.exit_account_1;
-						let donor_total = received.get(&donor_addr).copied().unwrap_or(0);
-						let donor_keeps =
-							demand.get(&donor_addr).copied().unwrap_or(0).max(min_needed);
-						let spare =
-							donor.output_amount_1.min(donor_total.saturating_sub(donor_keeps));
-						if spare == 0 {
-							return None;
-						}
-						Some((donor_idx, spare))
-					})
-					.max_by_key(|&(_, spare)| spare);
-				let Some((donor_idx, spare)) = donation else {
-					break;
-				};
-				let take = spare.min(deficit);
-				let donor = &mut assignments[donor_idx];
-				let donor_addr = donor.exit_account_1;
-				donor.output_amount_1 -= take;
-				donor.exit_account_2 = addr;
-				donor.output_amount_2 = take;
-				*received.entry(donor_addr).or_default() -= take;
-				*received.entry(addr).or_default() += take;
-				deficit -= take;
-			}
-		}
-	}
-
-	// Fail closed when the assignment is supposed to fund every next-round
-	// address (enough slots and enough total value) but some address is
-	// still below the floor. Two-output capacity cannot move a rich proof's
-	// excess onto more than one sibling, so this is reachable with inputs
-	// the partition admits (e.g. four 3-unit proofs plus one large one).
-	let unique_targets = demand.len();
-	if num_targets <= 2 * num_proofs &&
-		(total_output as u128) >= min_per_target * unique_targets as u128
-	{
-		for &addr in demand.keys() {
-			let got = received.get(&addr).copied().unwrap_or(0);
-			if got < min_needed {
-				return Err(format!(
-					"Unable to fund next-round address {} with at least {} quantized \
-					 units (got {got}); no remaining proof has a free second output \
-					 slot with spare funds. Reduce the number of proofs or increase \
-					 their amounts before submitting.",
-					hex::encode(addr),
-					min_per_target,
-				));
-			}
-		}
-	}
-
-	Ok(assignments)
+	let total_output = compute_batch_output_amount(quantized, fee_bps);
+	let n = unique.len();
+	let min_per_target = if total_output >= 3 * n as u64 { 3 } else { 0 };
+	let parts = random_partition(total_output as u128, n, min_per_target);
+	parts
+		.into_iter()
+		.zip(unique)
+		.map(|(amount, exit_account)| {
+			let output_amount = u32::try_from(amount)
+				.map_err(|_| format!("exit amount {amount} exceeds the u32 quantized range"))?;
+			Ok(BatchExit { exit_account, output_amount })
+		})
+		.collect()
 }
 
 /// Result of checking proof verification events
@@ -886,7 +747,10 @@ pub enum WormholeCommands {
 		#[arg(long)]
 		secret_file: String,
 	},
-	/// Generate a wormhole proof from an existing transfer
+	/// Generate a leaf proof of burn from an existing transfer.
+	///
+	/// The burned amount is read from the ZK leaf. Payout accounts are supplied
+	/// later, to `wormhole aggregate`.
 	Prove {
 		/// File containing the secret (32-byte hex string) used for the transfer.
 		/// On Unix the file must be a regular file owned by the current user with
@@ -894,13 +758,9 @@ pub enum WormholeCommands {
 		#[arg(long)]
 		secret_file: String,
 
-		/// Funding amount that was transferred
+		/// Funding amount that was transferred (the circuit reads the ZK leaf)
 		#[arg(long)]
 		amount: u128,
-
-		/// Exit account (where funds will be withdrawn, hex or SS58)
-		#[arg(long)]
-		exit_account: String,
 
 		/// Block hash to generate proof against (hex)
 		#[arg(long)]
@@ -922,11 +782,23 @@ pub enum WormholeCommands {
 		#[arg(short, long, default_value = "proof.hex")]
 		output: String,
 	},
-	/// Aggregate multiple wormhole proofs into a single proof
+	/// Aggregate leaf proofs of burn into a private batch.
+	///
+	/// Repeat `--exit-account` for each payout. With one account and no
+	/// `--exit-amount`, that account receives the fee-adjusted burn total.
 	Aggregate {
 		/// Input proof files (hex-encoded)
 		#[arg(short, long, num_args = 1..)]
 		proofs: Vec<String>,
+
+		/// Exit account (hex or SS58). Repeat for multiple payouts.
+		#[arg(long, required = true)]
+		exit_account: Vec<String>,
+
+		/// Quantized payout for each `--exit-account`, in the same order.
+		/// Omit to pay the fee-adjusted total to the single exit account.
+		#[arg(long)]
+		exit_amount: Vec<u32>,
 
 		/// Output file for the aggregated proof (default: aggregated_proof.hex)
 		#[arg(short, long, default_value = "aggregated_proof.hex")]
@@ -1227,57 +1099,31 @@ pub async fn handle_wormhole_command(
 		WormholeCommands::Address { secret_file } => show_wormhole_address(secret_file),
 		WormholeCommands::Prove {
 			secret_file,
-			amount,
-			exit_account,
+			amount: _amount,
 			block,
 			transfer_count,
 			leaf_index,
-			funding_account,
+			funding_account: _funding_account,
 			output,
 		} => {
-			log_print!("Generating proof from existing transfer...");
+			log_print!("Generating proof of burn from existing transfer...");
 
 			// Connect to node
 			let quantus_client = QuantusClient::new(node_url).await.map_err(|e| {
 				crate::error::QuantusError::Generic(format!("Failed to connect: {}", e))
 			})?;
 
-			// Parse exit account
-			let exit_account_bytes =
-				parse_exit_account(&exit_account).map_err(crate::error::QuantusError::Generic)?;
-
-			// Quantize amount and compute output (single output, no change)
-			let input_amount_quantized =
-				quantize_funding_amount(amount).map_err(crate::error::QuantusError::Generic)?;
-			let output_amount = compute_output_amount(input_amount_quantized, VOLUME_FEE_BPS);
-
-			let output_assignment = ProofOutputAssignment {
-				output_amount_1: output_amount,
-				exit_account_1: exit_account_bytes,
-				output_amount_2: 0,
-				exit_account_2: [0u8; 32],
-			};
-
 			let secret = read_secret_hex_file(&secret_file)?;
 
 			let prove_start = std::time::Instant::now();
-			generate_proof(
-				&secret,
-				amount,
-				&output_assignment,
-				&block,
-				transfer_count,
-				&funding_account,
-				leaf_index,
-				&output,
-				&quantus_client,
-			)
-			.await?;
+			generate_proof(&secret, &block, transfer_count, leaf_index, &output, &quantus_client)
+				.await?;
 			let prove_elapsed = prove_start.elapsed();
 			log_print!("Proof generation: {:.2}s", prove_elapsed.as_secs_f64());
 			Ok(())
 		},
-		WormholeCommands::Aggregate { proofs, output } => aggregate_proofs(proofs, output).await,
+		WormholeCommands::Aggregate { proofs, exit_account, exit_amount, output } =>
+			aggregate_proofs_for_accounts(proofs, exit_account, exit_amount, output).await,
 		WormholeCommands::VerifyAggregated { proof } =>
 			verify_private_batch(proof, node_url, execution_mode).await,
 		WormholeCommands::AggregatePublic { proofs, aggregator, output } =>
@@ -1547,8 +1393,8 @@ fn cached_private_batch_prover(
 }
 
 /// Process-wide public-batch prover; see [`cached_private_batch_prover`].
-/// Building the 53-slot public-batch circuit takes tens of seconds, so paying
-/// it once per process instead of once per batch is the difference between
+/// Building the production public-batch circuit (arity 89, degree 19) takes tens of seconds, so
+/// paying it once per process instead of once per batch is the difference between
 /// ~65s and ~21s per public batch.
 fn cached_public_batch_prover(
 ) -> crate::error::Result<&'static qp_wormhole_aggregator::public_batch::prover::PublicBatchProver>
@@ -1572,8 +1418,109 @@ fn cached_public_batch_prover(
 	Ok(PROVER.get_or_init(|| prover))
 }
 
+enum ExitSource {
+	Ready(Vec<BatchExit>),
+	Accounts { accounts: Vec<String>, amounts: Vec<u32> },
+}
+
+fn fee_adjusted_burn_total(proofs: &[ProofWithPublicInputs<F, C, D>]) -> Result<u32, String> {
+	use qp_wormhole_circuit::inputs::ParsePublicInputs;
+	use qp_wormhole_inputs::PublicCircuitInputs;
+
+	let mut amounts = Vec::with_capacity(proofs.len());
+	for proof in proofs {
+		let pi = PublicCircuitInputs::try_from_proof(proof)
+			.map_err(|e| format!("Failed to parse leaf public inputs: {e}"))?;
+		amounts.push(pi.input_amount);
+	}
+	batch_withdrawal_amount(amounts, VOLUME_FEE_BPS)
+}
+
+fn resolve_cli_exits(
+	proofs: &[ProofWithPublicInputs<F, C, D>],
+	accounts: &[String],
+	amounts: &[u32],
+) -> Result<Vec<BatchExit>, String> {
+	if accounts.is_empty() {
+		return Err("at least one --exit-account is required".to_string());
+	}
+	let parsed = accounts
+		.iter()
+		.map(|account| parse_exit_account(account))
+		.collect::<Result<Vec<_>, _>>()?;
+	for account in &parsed {
+		if *account == [0u8; 32] {
+			return Err("exit account must be non-zero".to_string());
+		}
+	}
+	if amounts.is_empty() {
+		if parsed.len() != 1 {
+			return Err(
+				"pass --exit-amount for each --exit-account when paying more than one account"
+					.to_string(),
+			);
+		}
+		let total = fee_adjusted_burn_total(proofs)?;
+		if total == 0 {
+			return Err("fee-adjusted burn total is 0; nothing to withdraw".to_string());
+		}
+		return Ok(vec![BatchExit { exit_account: parsed[0], output_amount: total }]);
+	}
+	if amounts.len() != parsed.len() {
+		return Err(format!(
+			"got {} --exit-amount values for {} --exit-account values",
+			amounts.len(),
+			parsed.len()
+		));
+	}
+	Ok(parsed
+		.into_iter()
+		.zip(amounts.iter().copied())
+		.map(|(exit_account, output_amount)| BatchExit { exit_account, output_amount })
+		.collect())
+}
+
+fn to_withdrawal_outputs(
+	exits: &[BatchExit],
+) -> Result<Vec<qp_wormhole_inputs::WithdrawalOutput>, String> {
+	exits
+		.iter()
+		.map(|exit| {
+			if exit.exit_account == [0u8; 32] {
+				return Err("exit account must be non-zero".to_string());
+			}
+			let exit_account = qp_wormhole_inputs::BytesDigest::try_from(exit.exit_account)
+				.map_err(|e| format!("invalid exit account: {e:?}"))?;
+			Ok(qp_wormhole_inputs::WithdrawalOutput { exit_account, amount: exit.output_amount })
+		})
+		.collect()
+}
+
 pub async fn aggregate_proofs(
 	proof_files: Vec<String>,
+	exits: Vec<BatchExit>,
+	output_file: String,
+) -> crate::error::Result<()> {
+	aggregate_proofs_inner(proof_files, ExitSource::Ready(exits), output_file).await
+}
+
+async fn aggregate_proofs_for_accounts(
+	proof_files: Vec<String>,
+	exit_accounts: Vec<String>,
+	exit_amounts: Vec<u32>,
+	output_file: String,
+) -> crate::error::Result<()> {
+	aggregate_proofs_inner(
+		proof_files,
+		ExitSource::Accounts { accounts: exit_accounts, amounts: exit_amounts },
+		output_file,
+	)
+	.await
+}
+
+async fn aggregate_proofs_inner(
+	proof_files: Vec<String>,
+	exits: ExitSource,
 	output_file: String,
 ) -> crate::error::Result<()> {
 	log_print!("Aggregating {} proofs...", proof_files.len());
@@ -1626,12 +1573,36 @@ pub async fn aggregate_proofs(
 		proofs.push(proof);
 	}
 
+	let exits = match exits {
+		ExitSource::Ready(exits) => exits,
+		ExitSource::Accounts { accounts, amounts } =>
+			resolve_cli_exits(&proofs, &accounts, &amounts)
+				.map_err(crate::error::QuantusError::Generic)?,
+	};
+	if exits.is_empty() {
+		return Err(crate::error::QuantusError::Generic(
+			"at least one exit account is required".to_string(),
+		));
+	}
+	if exits.len() > agg_config.num_exit_slots {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Too many exit accounts: {} provided, max {} supported by circuit",
+			exits.len(),
+			agg_config.num_exit_slots
+		)));
+	}
+	let outputs = to_withdrawal_outputs(&exits).map_err(crate::error::QuantusError::Generic)?;
+
 	let prover = cached_private_batch_prover()?;
 
 	log_print!("  Running aggregation...");
 	let agg_start = std::time::Instant::now();
 	let aggregated_proof = prover
-		.aggregate(proofs)
+		.aggregate(qp_wormhole_aggregator::private_batch::prover::PrivateBatchInputs {
+			leaf_proofs: proofs,
+			outputs,
+			volume_fee_bps: VOLUME_FEE_BPS,
+		})
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("  Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
@@ -1652,19 +1623,18 @@ pub async fn aggregate_proofs(
 	log_print!("  Exit accounts in aggregated proof:");
 	for (idx, account_data) in aggregated_public_inputs.account_data.iter().enumerate() {
 		let exit_bytes: &[u8] = account_data.exit_account.as_ref();
-		let is_dummy = exit_bytes.iter().all(|&b| b == 0) || account_data.summed_output_amount == 0;
+		let is_dummy = exit_bytes.iter().all(|&b| b == 0) || account_data.output_amount == 0;
 		if is_dummy {
 			log_verbose!("    [{}] DUMMY (skipped)", idx);
 		} else {
 			// De-quantize to show actual amount that will be minted
-			let dequantized_amount =
-				(account_data.summed_output_amount as u128) * SCALE_DOWN_FACTOR;
+			let dequantized_amount = (account_data.output_amount as u128) * SCALE_DOWN_FACTOR;
 			let ss58_address = slice_to_quantus_ss58(exit_bytes)?;
 			log_print!(
 				"    [{}] {} -> {} quantized ({} planck = {})",
 				idx,
 				ss58_address,
-				account_data.summed_output_amount,
+				account_data.output_amount,
 				dequantized_amount,
 				format_balance(dequantized_amount)
 			);
@@ -1866,7 +1836,7 @@ pub async fn prepare_public_batches(
 
 		// Final-round style: exit back to the funding wallet.
 		let exit_accounts = vec![wallet.wallet_account_id.clone(); num_proofs];
-		let RoundProofGeneration { proof_files, .. } = generate_round_proofs(
+		let RoundProofGeneration { proof_files, exits, .. } = generate_round_proofs(
 			quantus_client,
 			&secrets,
 			&transfers,
@@ -1880,7 +1850,7 @@ pub async fn prepare_public_batches(
 
 		let aggregated_file = format!("{batch_dir}/aggregated.hex");
 		refuse_existing_path(&aggregated_file)?;
-		aggregate_proofs(proof_files, aggregated_file.clone()).await?;
+		aggregate_proofs(proof_files, exits, aggregated_file.clone()).await?;
 
 		refuse_existing_path(&public_batch_file)?;
 		aggregate_public_batch(
@@ -1995,7 +1965,7 @@ pub async fn aggregate_public_batch(
 	let public_inputs = PublicBatchPublicInputs::try_from_u64_slice(
 		&pi_u64s,
 		num_private_batch_proofs,
-		agg_config.num_leaf_proofs,
+		agg_config.private_batch_shape(),
 	)
 	.map_err(|e| {
 		crate::error::QuantusError::Generic(format!(
@@ -2008,12 +1978,11 @@ pub async fn aggregate_public_batch(
 	log_print!("  Exit accounts in public batch:");
 	for (idx, account_data) in public_inputs.account_data.iter().enumerate() {
 		let exit_bytes: &[u8] = account_data.exit_account.as_ref();
-		let is_dummy = exit_bytes.iter().all(|&b| b == 0) || account_data.summed_output_amount == 0;
+		let is_dummy = exit_bytes.iter().all(|&b| b == 0) || account_data.output_amount == 0;
 		if is_dummy {
 			log_verbose!("    [{}] DUMMY (skipped)", idx);
 		} else {
-			let dequantized_amount =
-				(account_data.summed_output_amount as u128) * SCALE_DOWN_FACTOR;
+			let dequantized_amount = (account_data.output_amount as u128) * SCALE_DOWN_FACTOR;
 			log_print!(
 				"    [{}] {} -> {}",
 				idx,
@@ -2414,6 +2383,7 @@ struct ExpectedTransferEvent {
 struct RoundProofGeneration {
 	proof_files: Vec<String>,
 	expected_transfers: Vec<ExpectedTransferEvent>,
+	exits: Vec<BatchExit>,
 }
 
 fn push_expected_transfer(
@@ -2503,8 +2473,11 @@ fn derive_wormhole_secret(
 ) -> Result<WormholePair, crate::error::QuantusError> {
 	// QUANTUS_WORMHOLE_CHAIN_ID already includes the ' (e.g., "189189189'")
 	let path = format!("m/44'/{}/0'/{}'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, round, index);
-	derive_wormhole_from_mnemonic(mnemonic, None, &path)
-		.map_err(|e| crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e)))
+	let mut pair = WormholePair::zeroed();
+	derive_wormhole_from_mnemonic(mnemonic, None, &path, &mut pair).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e))
+	})?;
+	Ok(pair)
 }
 
 /// Approximate total still in the circuit after `round` volume-fee haircuts on
@@ -2852,61 +2825,45 @@ async fn generate_round_proofs(
 		hex::encode(proof_block_hash.0)
 	);
 
-	// Collect input amounts and exit accounts for random assignment
+	// Collect input amounts and exit accounts. Payouts are batch-level slots.
 	let input_amounts: Vec<u128> = transfers.iter().map(|t| t.amount).collect();
 	let exit_account_bytes: Vec<[u8; 32]> = exit_accounts.iter().map(|a| a.0).collect();
+	let bins_dir = crate::bins::ensure_bins_dir()?;
+	let agg_config = CircuitBinsConfig::load(&bins_dir).map_err(|e| {
+		crate::error::QuantusError::Generic(format!(
+			"Failed to load circuit bins config from {:?}: {}",
+			bins_dir, e
+		))
+	})?;
+	let exits = compute_batch_exits(
+		&input_amounts,
+		&exit_account_bytes,
+		VOLUME_FEE_BPS,
+		agg_config.num_exit_slots,
+	)
+	.map_err(crate::error::QuantusError::Generic)?;
 
-	// Compute random output assignments (each proof can have 2 outputs)
-	let output_assignments =
-		compute_random_output_assignments(&input_amounts, &exit_account_bytes, VOLUME_FEE_BPS)
-			.map_err(crate::error::QuantusError::Generic)?;
-
-	// Log the random partition
-	log_print!("  Random output partition:");
+	log_print!("  Exit partition:");
 	let mut expected_transfers = Vec::new();
-	for (i, assignment) in output_assignments.iter().enumerate() {
-		let amt1_planck = (assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR;
-		let ss58_1 = bytes_to_quantus_ss58(&assignment.exit_account_1);
-		if assignment.output_amount_1 > 0 {
+	for (i, exit) in exits.iter().enumerate() {
+		let planck = (exit.output_amount as u128) * SCALE_DOWN_FACTOR;
+		if exit.output_amount > 0 {
 			push_expected_transfer(
 				&mut expected_transfers,
-				SubxtAccountId(assignment.exit_account_1),
+				SubxtAccountId(exit.exit_account),
 				minting_account.clone(),
-				amt1_planck,
+				planck,
 				None,
 				None,
 			);
 		}
-		if assignment.output_amount_2 > 0 {
-			let amt2_planck = (assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR;
-			let ss58_2 = bytes_to_quantus_ss58(&assignment.exit_account_2);
-			push_expected_transfer(
-				&mut expected_transfers,
-				SubxtAccountId(assignment.exit_account_2),
-				minting_account.clone(),
-				amt2_planck,
-				None,
-				None,
-			);
-			log_print!(
-				"    Proof {}: {} ({}) -> {}, {} ({}) -> {}",
-				i + 1,
-				assignment.output_amount_1,
-				format_balance(amt1_planck),
-				ss58_1,
-				assignment.output_amount_2,
-				format_balance(amt2_planck),
-				ss58_2
-			);
-		} else {
-			log_print!(
-				"    Proof {}: {} ({}) -> {}",
-				i + 1,
-				assignment.output_amount_1,
-				format_balance(amt1_planck),
-				ss58_1
-			);
-		}
+		log_print!(
+			"    Exit {}: {} ({}) -> {}",
+			i + 1,
+			exit.output_amount,
+			format_balance(planck),
+			bytes_to_quantus_ss58(&exit.exit_account),
+		);
 	}
 
 	let pb = ProgressBar::new(num_proofs as u64);
@@ -2924,22 +2881,16 @@ async fn generate_round_proofs(
 
 		let proof_file = format!("{}/proof_{}.hex", round_dir, i + 1);
 
-		// Use the funding account from the transfer info
-		let funding_account_hex = format!("0x{}", hex::encode(transfer.funding_account.0));
-
 		let single_start = std::time::Instant::now();
 
-		// Generate proof with dual output assignment. Bind the hex-encoded
-		// secret so it can be wiped instead of dropping as a temporary.
+		// Bind the hex-encoded secret so it can be wiped instead of dropping
+		// as a temporary.
 		let mut secret_hex = hex::encode(secret.secret().as_bytes());
 		let proof_result = generate_proof(
 			&secret_hex,
-			transfer.amount, // Use actual transfer amount for storage key
-			&output_assignments[i],
 			&format!("0x{}", hex::encode(proof_block_hash.0)),
 			transfer.transfer_count,
-			&funding_account_hex,
-			transfer.leaf_index, // ZK trie leaf index for Merkle proof lookup
+			transfer.leaf_index,
 			&proof_file,
 			quantus_client,
 		)
@@ -2962,7 +2913,7 @@ async fn generate_round_proofs(
 		proof_gen_elapsed.as_secs_f64() / num_proofs as f64,
 	);
 
-	Ok(RoundProofGeneration { proof_files, expected_transfers })
+	Ok(RoundProofGeneration { proof_files, expected_transfers, exits })
 }
 
 /// Derive wormhole secrets for a round
@@ -3201,23 +3152,24 @@ async fn run_multiround(
 		}
 
 		// Step 2: Generate proofs with random output partitioning
-		let RoundProofGeneration { proof_files, expected_transfers } = generate_round_proofs(
-			&quantus_client,
-			&secrets,
-			&current_transfers,
-			&exit_accounts,
-			&minting_account,
-			&round_dir,
-			num_proofs,
-			execution_mode,
-		)
-		.await?;
+		let RoundProofGeneration { proof_files, expected_transfers, exits } =
+			generate_round_proofs(
+				&quantus_client,
+				&secrets,
+				&current_transfers,
+				&exit_accounts,
+				&minting_account,
+				&round_dir,
+				num_proofs,
+				execution_mode,
+			)
+			.await?;
 
 		// Step 3: Aggregate proofs
 		log_print!("{}", "Step 3: Aggregating proofs...".bright_yellow());
 
 		let aggregated_file = format!("{}/aggregated.hex", round_dir);
-		aggregate_proofs(proof_files, aggregated_file.clone()).await?;
+		aggregate_proofs(proof_files, exits, aggregated_file.clone()).await?;
 
 		log_print!("  Aggregated proof saved to {}", aggregated_file);
 
@@ -3364,18 +3316,16 @@ async fn run_multiround(
 	Ok(())
 }
 
-/// Generate a wormhole proof with dual outputs (used for random partitioning in multiround)
+/// Generate a leaf proof of burn.
 ///
 /// This function fetches the necessary data from the chain and delegates to
-/// `wormhole_lib::generate_proof` for the actual proof generation.
+/// `wormhole_lib::generate_proof` for the actual proof generation. The burned
+/// amount comes from the ZK leaf; payouts are chosen when the leaves are aggregated.
 async fn generate_proof(
 	secret_hex: &str,
-	_funding_amount: u128, // No longer needed - input_amount comes from ZK leaf
-	output_assignment: &ProofOutputAssignment,
 	block_hash_str: &str,
 	transfer_count: u64,
-	_funding_account_str: &str, // No longer needed - no `from` field in ZK leaf
-	leaf_index: u64,            // ZK trie leaf index for Merkle proof lookup
+	leaf_index: u64,
 	output_file: &str,
 	quantus_client: &QuantusClient,
 ) -> crate::error::Result<()> {
@@ -3443,11 +3393,6 @@ async fn generate_proof(
 		zk_tree_root: zk_proof.root,
 		zk_merkle_siblings: sorted_siblings,
 		zk_merkle_positions: positions,
-		exit_account_1: output_assignment.exit_account_1,
-		exit_account_2: output_assignment.exit_account_2,
-		output_amount_1: output_assignment.output_amount_1,
-		output_amount_2: output_assignment.output_amount_2,
-		volume_fee_bps: VOLUME_FEE_BPS,
 		asset_id: NATIVE_ASSET_ID,
 	};
 	crate::wallet::keystore::zeroize_bytes(&mut secret);
@@ -3878,7 +3823,7 @@ async fn parse_proof_file(
 		match PublicBatchPublicInputs::try_from_u64_slice(
 			&pi_u64s,
 			num_private_batch_proofs,
-			agg_config.num_leaf_proofs,
+			agg_config.private_batch_shape(),
 		) {
 			Ok(inputs) => {
 				log_print!("\n=== Parsed Public-Batch Public Inputs ===");
@@ -3897,7 +3842,7 @@ async fn parse_proof_file(
 					log_print!(
 						"  [{}] amount={}, exit=0x{}",
 						i,
-						acct.summed_output_amount,
+						acct.output_amount,
 						hex::encode(acct.exit_account.as_ref())
 					);
 				}
@@ -3963,7 +3908,7 @@ async fn parse_proof_file(
 					log_print!(
 						"  [{}] amount={}, exit=0x{}",
 						i,
-						acct.summed_output_amount,
+						acct.output_amount,
 						hex::encode(acct.exit_account.as_ref())
 					);
 				}
@@ -4021,14 +3966,10 @@ async fn parse_proof_file(
 
 		log_print!("\n=== Parsed Leaf Public Inputs ===");
 		log_print!("Asset ID: {}", pi.asset_id);
-		log_print!("Output Amount 1: {}", pi.output_amount_1);
-		log_print!("Output Amount 2: {}", pi.output_amount_2);
-		log_print!("Volume Fee BPS: {}", pi.volume_fee_bps);
 		log_print!("Nullifier: 0x{}", hex::encode(pi.nullifier.as_ref()));
-		log_print!("Exit Account 1: 0x{}", hex::encode(pi.exit_account_1.as_ref()));
-		log_print!("Exit Account 2: 0x{}", hex::encode(pi.exit_account_2.as_ref()));
 		log_print!("Block Hash: 0x{}", hex::encode(pi.block_hash.as_ref()));
 		log_print!("Block Number: {}", pi.block_number);
+		log_print!("Input Amount: {}", pi.input_amount);
 
 		// Verify if requested
 		if verify {
@@ -4292,9 +4233,18 @@ async fn run_dissolve(
 			let batch_num_proofs = batch_inputs.len();
 
 			log_print!("  Batch {}/{}: {} proofs", batch_idx + 1, num_batches, batch_num_proofs);
+			if batch_num_proofs * 2 > agg_config.num_exit_slots {
+				return Err(crate::error::QuantusError::Generic(format!(
+					"Dissolve splits each input into 2 exits ({} slots) but the private batch has {}",
+					batch_num_proofs * 2,
+					agg_config.num_exit_slots
+				)));
+			}
 
-			// Each input splits into 2 outputs (equal split)
+			// Each input splits into 2 outputs. The fee is applied once to the
+			// batch sum, then the payout is split across those children.
 			let mut proof_files = Vec::new();
+			let mut batch_exits: Vec<BatchExit> = Vec::new();
 			let proof_gen_start = std::time::Instant::now();
 
 			// All inputs in a batch must use the same block for proof generation.
@@ -4302,44 +4252,38 @@ async fn run_dissolve(
 			// were created in the same verification block from the previous layer).
 			let batch_proof_block_hash = batch_inputs[0].proof_block_hash;
 			let mut expected_child_outputs: Vec<([u8; 32], ExpectedTransferEvent)> = Vec::new();
+			let quantized_inputs = batch_inputs
+				.iter()
+				.map(|input| quantize_funding_amount(input.amount))
+				.collect::<Result<Vec<_>, _>>()
+				.map_err(crate::error::QuantusError::Generic)?;
+			let child_amounts = dissolve_child_amounts(&quantized_inputs, VOLUME_FEE_BPS)
+				.map_err(crate::error::QuantusError::Generic)?;
 
 			for (i, input) in batch_inputs.iter().enumerate() {
 				let global_idx = batch_start + i;
 				let exit_1_idx = global_idx * 2;
 				let exit_2_idx = global_idx * 2 + 1;
 
-				let input_quantized = quantize_funding_amount(input.amount)
-					.map_err(crate::error::QuantusError::Generic)?;
-				let total_output = compute_output_amount(input_quantized, VOLUME_FEE_BPS);
-				let output_1 = total_output / 2;
-				let output_2 = total_output - output_1;
-
-				let assignment = ProofOutputAssignment {
-					output_amount_1: output_1.max(1),
-					exit_account_1: *next_secrets[exit_1_idx].address(),
-					output_amount_2: output_2.max(1),
-					exit_account_2: *next_secrets[exit_2_idx].address(),
-				};
-				expected_child_outputs.push((
-					*next_secrets[exit_1_idx].secret().as_bytes(),
-					ExpectedTransferEvent {
-						wormhole_address: SubxtAccountId(*next_secrets[exit_1_idx].address()),
-						funding_account: Some(minting_account.clone()),
-						amount: Some((assignment.output_amount_1 as u128) * SCALE_DOWN_FACTOR),
-						transfer_count: None,
-						leaf_index: None,
-					},
-				));
-				expected_child_outputs.push((
-					*next_secrets[exit_2_idx].secret().as_bytes(),
-					ExpectedTransferEvent {
-						wormhole_address: SubxtAccountId(*next_secrets[exit_2_idx].address()),
-						funding_account: Some(minting_account.clone()),
-						amount: Some((assignment.output_amount_2 as u128) * SCALE_DOWN_FACTOR),
-						transfer_count: None,
-						leaf_index: None,
-					},
-				));
+				let (output_1, output_2) = child_amounts[i];
+				let children = [(exit_1_idx, output_1), (exit_2_idx, output_2)];
+				for (exit_idx, output_amount) in children {
+					if output_amount == 0 {
+						continue;
+					}
+					let exit_account = *next_secrets[exit_idx].address();
+					batch_exits.push(BatchExit { exit_account, output_amount });
+					expected_child_outputs.push((
+						*next_secrets[exit_idx].secret().as_bytes(),
+						ExpectedTransferEvent {
+							wormhole_address: SubxtAccountId(exit_account),
+							funding_account: Some(minting_account.clone()),
+							amount: Some((output_amount as u128) * SCALE_DOWN_FACTOR),
+							transfer_count: None,
+							leaf_index: None,
+						},
+					));
+				}
 
 				let proof_file = format!("{}/batch{}_proof{}.hex", layer_dir, batch_idx, i);
 
@@ -4348,12 +4292,9 @@ async fn run_dissolve(
 				let mut secret_hex = hex::encode(input.secret);
 				let proof_result = generate_proof(
 					&secret_hex,
-					input.amount,
-					&assignment,
 					&format!("0x{}", hex::encode(batch_proof_block_hash.0)),
 					input.transfer_count,
-					&format!("0x{}", hex::encode(input.funding_account.0)),
-					input.leaf_index, // ZK trie leaf index for Merkle proof lookup
+					input.leaf_index,
 					&proof_file,
 					&quantus_client,
 				)
@@ -4374,7 +4315,7 @@ async fn run_dissolve(
 			// Aggregate
 			log_print!("    Aggregating...");
 			let aggregated_file = format!("{}/batch{}_aggregated.hex", layer_dir, batch_idx);
-			aggregate_proofs_to_file(&proof_files, &aggregated_file)?;
+			aggregate_proofs_to_file(&proof_files, &batch_exits, &aggregated_file)?;
 
 			// Verify on-chain
 			log_print!("    Verifying on-chain...");
@@ -4617,7 +4558,11 @@ async fn run_collect_rewards(
 }
 
 /// Helper to aggregate proof files and write the result (used by dissolve command)
-fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate::error::Result<()> {
+fn aggregate_proofs_to_file(
+	proof_files: &[String],
+	exits: &[BatchExit],
+	output_file: &str,
+) -> crate::error::Result<()> {
 	let bins_dir = crate::bins::ensure_bins_dir()?;
 	let common_data = load_leaf_common_data(&bins_dir)?;
 
@@ -4634,11 +4579,28 @@ fn aggregate_proofs_to_file(proof_files: &[String], output_file: &str) -> crate:
 		proofs.push(proof);
 	}
 
+	if exits.is_empty() {
+		return Err(crate::error::QuantusError::Generic(
+			"at least one exit account is required".to_string(),
+		));
+	}
+	let outputs = to_withdrawal_outputs(exits).map_err(crate::error::QuantusError::Generic)?;
 	let prover = cached_private_batch_prover()?;
+	if outputs.len() > prover.num_exit_slots() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Too many exit accounts: {} provided, max {} supported by circuit",
+			outputs.len(),
+			prover.num_exit_slots()
+		)));
+	}
 
 	let agg_start = std::time::Instant::now();
 	let proof = prover
-		.aggregate(proofs)
+		.aggregate(qp_wormhole_aggregator::private_batch::prover::PrivateBatchInputs {
+			leaf_proofs: proofs,
+			outputs,
+			volume_fee_bps: VOLUME_FEE_BPS,
+		})
 		.map_err(|e| crate::error::QuantusError::Generic(format!("Aggregation failed: {}", e)))?;
 	let agg_elapsed = agg_start.elapsed();
 	log_print!("    Aggregation: {:.2}s", agg_elapsed.as_secs_f64());
@@ -4709,7 +4671,8 @@ async fn run_check_nullifier(
 
 		// Derive wormhole secret using HD path for miner rewards (purpose = 1)
 		let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
-		let wormhole_pair = derive_wormhole_from_mnemonic(&mnemonic, None, &path).map_err(|e| {
+		let mut wormhole_pair = WormholePair::zeroed();
+		derive_wormhole_from_mnemonic(&mnemonic, None, &path, &mut wormhole_pair).map_err(|e| {
 			crate::error::QuantusError::Generic(format!("HD derivation failed: {:?}", e))
 		})?;
 
@@ -4821,9 +4784,10 @@ async fn run_check_nullifier(
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::wormhole_lib::compute_output_amount;
 	use qp_zk_circuits_common::zk_merkle::MAX_DEPTH;
 	use serde_json::json;
-	use std::collections::{HashMap, HashSet};
+	use std::collections::HashMap;
 	use tempfile::NamedTempFile;
 
 	fn hash_bytes(seed: u16) -> Vec<u8> {
@@ -5253,28 +5217,19 @@ mod tests {
 	fn test_public_inputs_structure() {
 		use qp_wormhole_inputs::{
 			ASSET_ID_INDEX, BLOCK_HASH_END_INDEX, BLOCK_HASH_START_INDEX, BLOCK_NUMBER_INDEX,
-			EXIT_ACCOUNT_1_END_INDEX, EXIT_ACCOUNT_1_START_INDEX, EXIT_ACCOUNT_2_END_INDEX,
-			EXIT_ACCOUNT_2_START_INDEX, INPUT_AMOUNT_INDEX, NULLIFIER_END_INDEX,
-			NULLIFIER_START_INDEX, OUTPUT_AMOUNT_1_INDEX, OUTPUT_AMOUNT_2_INDEX,
-			PUBLIC_INPUTS_FELTS_LEN, VOLUME_FEE_BPS_INDEX,
+			INPUT_AMOUNT_INDEX, NULLIFIER_END_INDEX, NULLIFIER_START_INDEX,
+			PUBLIC_INPUTS_FELTS_LEN,
 		};
 
-		// Verify expected public inputs layout for dual-output circuit
-		assert_eq!(PUBLIC_INPUTS_FELTS_LEN, 22, "Public inputs should be 22 field elements");
+		// Leaf public inputs are a proof of burn: 11 felts, no exit accounts.
+		assert_eq!(PUBLIC_INPUTS_FELTS_LEN, 11, "Public inputs should be 11 field elements");
 		assert_eq!(ASSET_ID_INDEX, 0, "Asset ID should be first");
-		assert_eq!(OUTPUT_AMOUNT_1_INDEX, 1, "Output amount 1 should be at index 1");
-		assert_eq!(OUTPUT_AMOUNT_2_INDEX, 2, "Output amount 2 should be at index 2");
-		assert_eq!(VOLUME_FEE_BPS_INDEX, 3, "Volume fee BPS should be at index 3");
-		assert_eq!(NULLIFIER_START_INDEX, 4, "Nullifier should start at index 4");
-		assert_eq!(NULLIFIER_END_INDEX, 8, "Nullifier should end at index 8");
-		assert_eq!(EXIT_ACCOUNT_1_START_INDEX, 8, "Exit account 1 should start at index 8");
-		assert_eq!(EXIT_ACCOUNT_1_END_INDEX, 12, "Exit account 1 should end at index 12");
-		assert_eq!(EXIT_ACCOUNT_2_START_INDEX, 12, "Exit account 2 should start at index 12");
-		assert_eq!(EXIT_ACCOUNT_2_END_INDEX, 16, "Exit account 2 should end at index 16");
-		assert_eq!(BLOCK_HASH_START_INDEX, 16, "Block hash should start at index 16");
-		assert_eq!(BLOCK_HASH_END_INDEX, 20, "Block hash should end at index 20");
-		assert_eq!(BLOCK_NUMBER_INDEX, 20, "Block number should be at index 20");
-		assert_eq!(INPUT_AMOUNT_INDEX, 21, "Input amount should be at index 21");
+		assert_eq!(NULLIFIER_START_INDEX, 1, "Nullifier should start at index 1");
+		assert_eq!(NULLIFIER_END_INDEX, 5, "Nullifier should end at index 5");
+		assert_eq!(BLOCK_HASH_START_INDEX, 5, "Block hash should start at index 5");
+		assert_eq!(BLOCK_HASH_END_INDEX, 9, "Block hash should end at index 9");
+		assert_eq!(BLOCK_NUMBER_INDEX, 9, "Block number should be at index 9");
+		assert_eq!(INPUT_AMOUNT_INDEX, 10, "Input amount should be at index 10");
 	}
 
 	/// Test that constants match expected on-chain configuration
@@ -5309,21 +5264,25 @@ mod tests {
 		// If the upstream adds/removes/renames fields, this test will catch it.
 		let json = r#"{
 			"num_leaf_proofs": 8,
+			"num_exit_slots": 32,
 			"num_private_batch_proofs": null
 		}"#;
 
 		let config: CircuitBinsConfig = serde_json::from_str(json).unwrap();
 		assert_eq!(config.num_leaf_proofs, 8);
+		assert_eq!(config.num_exit_slots, 32);
 		assert_eq!(config.num_private_batch_proofs, None);
 
 		// Legacy config.json files (pre-rename) must still deserialize via the
 		// serde alias on the upstream field.
 		let legacy_json = r#"{
 			"num_leaf_proofs": 8,
+			"num_exit_slots": 32,
 			"num_layer0_proofs": 4
 		}"#;
 
 		let legacy: CircuitBinsConfig = serde_json::from_str(legacy_json).unwrap();
+		assert_eq!(legacy.num_exit_slots, 32);
 		assert_eq!(legacy.num_private_batch_proofs, Some(4));
 	}
 
@@ -5337,21 +5296,10 @@ mod tests {
 			.collect()
 	}
 
-	fn proof_outputs_for_inputs(input_amounts: &[u128], fee_bps: u32) -> Vec<u32> {
-		input_amounts
-			.iter()
-			.map(|&input| {
-				let input_quantized = quantize_funding_amount(input).unwrap_or(0);
-				compute_output_amount(input_quantized, fee_bps)
-			})
-			.collect()
-	}
-
 	fn total_output_for_inputs(input_amounts: &[u128], fee_bps: u32) -> u64 {
-		proof_outputs_for_inputs(input_amounts, fee_bps)
-			.into_iter()
-			.map(|x| x as u64)
-			.sum()
+		let quantized =
+			input_amounts.iter().map(|&input| quantize_funding_amount(input).unwrap_or(0));
+		compute_batch_output_amount(quantized, fee_bps)
 	}
 
 	/// Find some input that yields at least `min_out` quantized output after fee.
@@ -5434,89 +5382,101 @@ mod tests {
 	}
 
 	// --------------------------
-	// compute_random_output_assignments tests
+	// compute_batch_exits tests
 	// --------------------------
 
 	#[test]
-	fn compute_random_output_assignments_empty_inputs_or_targets() {
-		let targets = mk_accounts(3);
-		assert!(compute_random_output_assignments(&[], &targets, 0).unwrap().is_empty());
+	fn batch_fee_is_applied_once_before_rounding() {
+		// Eight burns of 100 quantized units at 4 bps.
+		// floor(800 * 9996 / 10000) = 799. Per-leaf floors would pay 8 * 99 = 792.
+		let hundred = 100 * SCALE_DOWN_FACTOR;
+		let inputs = vec![hundred; 8];
+		assert_eq!(compute_batch_output_amount([100u32; 8], VOLUME_FEE_BPS), 799);
+		assert_eq!(total_output_for_inputs(&inputs, VOLUME_FEE_BPS), 799);
+		let exits = compute_batch_exits(&inputs, &mk_accounts(1), VOLUME_FEE_BPS, 32).unwrap();
+		assert_eq!(exits.len(), 1);
+		assert_eq!(exits[0].output_amount, 799);
 
-		let inputs = vec![1u128, 2u128, 3u128];
-		assert!(compute_random_output_assignments(&inputs, &[], 0).unwrap().is_empty());
+		// Eight 1-unit burns: per-leaf floors pay nothing; the batch may pay 7.
+		assert_eq!(compute_batch_output_amount([1u32; 8], VOLUME_FEE_BPS), 7);
+		assert_eq!(batch_withdrawal_amount([1u32; 8], VOLUME_FEE_BPS).unwrap(), 7);
+		let one = SCALE_DOWN_FACTOR;
+		let ones = [one; 8];
+		let exits = compute_batch_exits(&ones, &mk_accounts(1), VOLUME_FEE_BPS, 32).unwrap();
+		assert_eq!(exits[0].output_amount, 7);
+
+		let children = dissolve_child_amounts(&[100u32; 8], VOLUME_FEE_BPS).unwrap();
+		let child_total: u32 = children.iter().map(|(a, b)| a + b).sum();
+		assert_eq!(child_total, 799);
+		assert_eq!(children.len(), 8);
+
+		// The payout is the largest integer the circuit inequality accepts.
+		let total_input = 800u128;
+		let keep = 10_000 - VOLUME_FEE_BPS as u128;
+		let payout = 799u128;
+		assert!(payout * 10_000 <= total_input * keep);
+		assert!((payout + 1) * 10_000 > total_input * keep);
 	}
 
 	#[test]
-	fn compute_random_output_assignments_basic_invariants() {
-		let fee_bps = 0u32;
+	fn compute_batch_exits_empty_inputs_or_targets() {
+		let targets = mk_accounts(3);
+		assert!(compute_batch_exits(&[], &targets, 0, 32).unwrap().is_empty());
 
-		// ensure non-zero outputs for meaningful checks
+		let inputs = vec![1u128, 2u128, 3u128];
+		assert!(compute_batch_exits(&inputs, &[], 0, 32).unwrap().is_empty());
+	}
+
+	#[test]
+	fn compute_batch_exits_basic_invariants() {
+		let fee_bps = 0u32;
 		let input = find_input_for_min_output(fee_bps, 5);
 		let input_amounts = vec![input, input, input, input, input];
 		let targets = mk_accounts(4);
 
-		let assignments =
-			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
-		assert_eq!(assignments.len(), input_amounts.len());
+		let exits = compute_batch_exits(&input_amounts, &targets, fee_bps, 32).unwrap();
+		assert_eq!(exits.len(), targets.len());
 
-		let proof_outputs = proof_outputs_for_inputs(&input_amounts, fee_bps);
-
-		// per-proof sum matches
-		for (i, a) in assignments.iter().enumerate() {
-			let per_proof_sum = a.output_amount_1 as u64 + a.output_amount_2 as u64;
-			assert_eq!(per_proof_sum, proof_outputs[i] as u64);
-
-			// If an output amount is non-zero, the account must be in targets
-			if a.output_amount_1 > 0 {
-				assert!(targets.contains(&a.exit_account_1));
-			} else {
-				// if amount is zero, account can be zero or anything; current impl keeps default
-				// [0;32]
-			}
-			if a.output_amount_2 > 0 {
-				assert!(targets.contains(&a.exit_account_2));
-				assert_ne!(a.exit_account_2, a.exit_account_1); // should be different if both used
-			} else {
-				// current impl keeps default [0;32]
-				assert_eq!(a.exit_account_2, [0u8; 32]);
-			}
+		let total_assigned: u64 = exits.iter().map(|e| e.output_amount as u64).sum();
+		assert_eq!(total_assigned, total_output_for_inputs(&input_amounts, fee_bps));
+		for exit in &exits {
+			assert!(targets.contains(&exit.exit_account));
+			assert!(exit.output_amount >= 3);
 		}
-
-		// total sum matches
-		let total_assigned: u64 = assignments
-			.iter()
-			.map(|a| a.output_amount_1 as u64 + a.output_amount_2 as u64)
-			.sum();
-
-		let total_expected = total_output_for_inputs(&input_amounts, fee_bps);
-		assert_eq!(total_assigned, total_expected);
 	}
 
 	#[test]
-	fn compute_random_output_assignments_multiround_feedback_never_starves_a_target() {
-		// Round N's per-address mints fund round N+1's proofs (the multiround
-		// flow; the chain mints once per exit account, summing over slots).
-		// Every address must collect at least 3 quantized units every round:
-		// a dust input's output quantizes to zero, and the round after that
-		// has no mint event to capture for the next-round address.
-		// Fees burn roughly one quantized unit per proof per round, so the pot
-		// must comfortably outlast the simulated rounds (as it must in a real
-		// multiround run).
+	fn compute_batch_exits_merges_duplicate_targets() {
+		let fee_bps = 0u32;
+		let input = find_input_for_min_output(fee_bps, 10);
+		let account = mk_accounts(1)[0];
+		let targets = vec![account; 4];
+		let inputs = vec![input; 4];
+
+		let exits = compute_batch_exits(&inputs, &targets, fee_bps, 32).unwrap();
+		assert_eq!(exits.len(), 1);
+		assert_eq!(exits[0].exit_account, account);
+		assert_eq!(exits[0].output_amount as u64, total_output_for_inputs(&inputs, fee_bps));
+	}
+
+	#[test]
+	fn compute_batch_exits_multiround_feedback_never_starves_a_target() {
+		// Round N's per-address mints fund round N+1's proofs. Every address
+		// must collect at least 3 quantized units every round: a dust input's
+		// output quantizes to zero, and the round after that has no mint event
+		// to capture for the next-round address.
 		let fee_bps = VOLUME_FEE_BPS;
 		let n = 7usize;
 		let mut inputs: Vec<u128> =
 			random_partition(100_000, n, 3).iter().map(|&q| q * SCALE_DOWN_FACTOR).collect();
 		for round in 0..200 {
 			let targets = mk_accounts(n);
-			let assignments =
-				compute_random_output_assignments(&inputs, &targets, fee_bps).unwrap();
+			let exits = compute_batch_exits(&inputs, &targets, fee_bps, n).unwrap();
+			assert_eq!(exits.len(), n);
 			let mut minted: HashMap<[u8; 32], u128> = HashMap::new();
-			for a in &assignments {
-				if a.output_amount_1 > 0 {
-					*minted.entry(a.exit_account_1).or_default() += a.output_amount_1 as u128;
-				}
-				if a.output_amount_2 > 0 {
-					*minted.entry(a.exit_account_2).or_default() += a.output_amount_2 as u128;
+			for exit in &exits {
+				if exit.output_amount > 0 {
+					*minted.entry(exit.exit_account).or_default() += exit.output_amount as u128;
 				}
 			}
 			inputs = targets
@@ -5531,95 +5491,51 @@ mod tests {
 	}
 
 	#[test]
-	fn compute_random_output_assignments_skewed_dust_proofs_fail_closed() {
-		// Four min-partition proofs plus one rich proof. After 4 bps the
-		// outputs are [2, 2, 2, 2, 99]: one donor slot can lift only one
-		// sibling, so three addresses would mint 2 and drop the next-round
-		// transfer two rounds later. Refuse that assignment.
+	fn compute_batch_exits_skewed_inputs_fund_every_target() {
+		// Four min-sized inputs plus one rich input. The fee-adjusted total is
+		// pooled, so every target still clears the 3-unit floor.
 		let fee_bps = VOLUME_FEE_BPS;
 		let dust = 3 * SCALE_DOWN_FACTOR;
 		let rich = 100 * SCALE_DOWN_FACTOR;
 		let inputs = vec![dust, dust, dust, dust, rich];
 		let targets = mk_accounts(5);
-		let err = compute_random_output_assignments(&inputs, &targets, fee_bps)
-			.expect_err("four dust proofs plus one rich proof cannot fund every target");
-		assert!(err.contains("Unable to fund next-round address"), "unexpected error: {err}");
+		let exits = compute_batch_exits(&inputs, &targets, fee_bps, 32).unwrap();
+		assert_eq!(exits.len(), targets.len());
+		assert!(exits.iter().all(|e| e.output_amount >= 3));
+		let total: u64 = exits.iter().map(|e| e.output_amount as u64).sum();
+		assert_eq!(total, total_output_for_inputs(&inputs, fee_bps));
 	}
 
 	#[test]
-	fn compute_random_output_assignments_more_targets_than_capacity_still_conserves_funds() {
-		// Capacity: each proof can hit at most 2 targets, so distinct-used-targets <= 2 *
-		// num_proofs. Set num_targets > 2*num_proofs and ensure total_output >= num_targets so
-		// the partition *wants* to give each target >= 1 (though algorithm can't satisfy it).
+	fn compute_batch_exits_rejects_more_targets_than_slots() {
 		let fee_bps = 0u32;
-		let num_proofs = 1usize;
-		let num_targets = 5usize;
-
-		let input = find_input_for_min_output(fee_bps, 10); // ensure total_output is "big enough"
-		let input_amounts = vec![input; num_proofs];
-		let targets = mk_accounts(num_targets);
-
-		let assignments =
-			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
-		assert_eq!(assignments.len(), num_proofs);
-
-		// total preserved
-		let total_assigned: u64 = assignments
-			.iter()
-			.map(|a| a.output_amount_1 as u64 + a.output_amount_2 as u64)
-			.sum();
-		let total_expected = total_output_for_inputs(&input_amounts, fee_bps);
-		assert_eq!(total_assigned, total_expected);
-
-		// used targets bounded by 2*num_proofs and thus < num_targets
-		let mut used = HashSet::new();
-		for a in &assignments {
-			if a.output_amount_1 > 0 {
-				used.insert(a.exit_account_1);
-			}
-			if a.output_amount_2 > 0 {
-				used.insert(a.exit_account_2);
-			}
-		}
-		assert!(used.len() <= 2 * num_proofs);
-		assert!(used.len() < num_targets);
+		let input = find_input_for_min_output(fee_bps, 10);
+		let targets = mk_accounts(5);
+		let err = compute_batch_exits(&[input], &targets, fee_bps, 2).unwrap_err();
+		assert!(err.contains("exit slots"), "unexpected error: {err}");
 	}
 
 	#[test]
-	fn compute_random_output_assignments_total_output_less_than_num_targets_does_not_panic_and_conserves(
-	) {
-		// This forces random_partition into its fallback branch inside
-		// compute_random_output_assignments because min_per_target = 1 and total_output <
-		// num_targets.
-		let fee_bps = 0u32;
+	fn compute_batch_exits_rejects_zero_account() {
+		let err = compute_batch_exits(&[SCALE_DOWN_FACTOR], &[[0u8; 32]], 0, 4).unwrap_err();
+		assert!(err.contains("non-zero"), "unexpected error: {err}");
+	}
 
+	#[test]
+	fn compute_batch_exits_small_total_conserves_without_panic() {
+		let fee_bps = 0u32;
 		let num_targets = 50usize;
 		let targets = mk_accounts(num_targets);
-
-		// Try to get very small total output: two proofs with output likely >= 1 each,
-		// but still far less than 50.
 		let input = find_input_for_min_output(fee_bps, 1);
 		let input_amounts = vec![input, input];
 
-		let assignments =
-			compute_random_output_assignments(&input_amounts, &targets, fee_bps).unwrap();
-		assert_eq!(assignments.len(), input_amounts.len());
-
-		let total_assigned: u64 = assignments
-			.iter()
-			.map(|a| a.output_amount_1 as u64 + a.output_amount_2 as u64)
-			.sum();
-		let total_expected = total_output_for_inputs(&input_amounts, fee_bps);
-		assert_eq!(total_assigned, total_expected);
-
-		// For each assignment: if non-zero amount then account must be in targets.
-		for a in &assignments {
-			if a.output_amount_1 > 0 {
-				assert!(targets.contains(&a.exit_account_1));
-			}
-			if a.output_amount_2 > 0 {
-				assert!(targets.contains(&a.exit_account_2));
-				assert_ne!(a.exit_account_2, a.exit_account_1);
+		let exits = compute_batch_exits(&input_amounts, &targets, fee_bps, 64).unwrap();
+		assert_eq!(exits.len(), num_targets);
+		let total: u64 = exits.iter().map(|e| e.output_amount as u64).sum();
+		assert_eq!(total, total_output_for_inputs(&input_amounts, fee_bps));
+		for exit in &exits {
+			if exit.output_amount > 0 {
+				assert!(targets.contains(&exit.exit_account));
 			}
 		}
 	}
@@ -5706,8 +5622,6 @@ mod tests {
 				secret,
 				"--amount",
 				"1",
-				"--exit-account",
-				"0x1111111111111111111111111111111111111111111111111111111111111111",
 				"--block",
 				"0x2222222222222222222222222222222222222222222222222222222222222222",
 				"--transfer-count",

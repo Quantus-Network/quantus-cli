@@ -26,22 +26,25 @@ const MANIFESTED_FILES: &[&str] = &[
 	VERSION_MARKER,
 ];
 
-/// Number of leaf proofs aggregated into a single batch.
+/// Number of leaf proofs aggregated into a single private batch.
 ///
-/// 7 is optimal for mobile devices: fits in degree_bits=15 (~1.5 GB peak memory).
-/// 8+ leaves require degree_bits=16 (~2.5 GB peak), limiting to 6GB+ devices.
+/// Matches `qp_wormhole_inputs::production::NUM_LEAF_PROOFS`. Eight is the
+/// largest batch that stays at degree 15 with the rate-3 / 36-query FRI config.
 ///
 /// Used by:
 /// - build.rs: build-time circuit generation
-/// - bins.rs: runtime lazy circuit generation  
+/// - bins.rs: runtime lazy circuit generation
 /// - collect_rewards_lib.rs: batching proofs for aggregation
-pub const DEFAULT_NUM_LEAF_PROOFS: usize = 7;
+pub const DEFAULT_NUM_LEAF_PROOFS: usize = 8;
+
+/// Exit slots on each private batch.
+///
+/// Matches `qp_wormhole_inputs::production::NUM_EXIT_SLOTS`. Payouts are batch
+/// witnesses, independent of how many leaves the batch verifies.
+pub const DEFAULT_NUM_EXIT_SLOTS: usize = 32;
 
 /// Number of private-batch proofs aggregated into a single public batch.
 ///
-/// Must match the chain's pallet-wormhole build default (QP_NUM_PRIVATE_BATCH_PROOFS)
-/// or on-chain verification of public batches will fail. The chain moved to 53
-/// (larger batches amortize aggregator proving cost at the 4-bps volume fee);
-/// nodes reject public batches generated with the previous sizing of 4 as
-/// InvalidTransaction.
-pub const DEFAULT_NUM_PRIVATE_BATCH_PROOFS: usize = 53;
+/// Matches `qp_wormhole_inputs::production::PUBLIC_BATCH_ARITY` (degree 19).
+/// On-chain verification requires a node built from the same circuits.
+pub const DEFAULT_NUM_PRIVATE_BATCH_PROOFS: usize = 89;
