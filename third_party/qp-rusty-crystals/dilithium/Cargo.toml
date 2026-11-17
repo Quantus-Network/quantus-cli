@@ -1,0 +1,22 @@
+# Vendored from Quantus-Network/qp-rusty-crystals 279cd773 (Apache-2.0).
+# The only change from that commit is `zeroize = "=1.9.1"` so this crate can
+# unify with qp-zk-circuits 3ba7cef. Library sources are otherwise unchanged.
+# Dev-dependencies, benches, and examples are omitted; they are not built
+# through the CLI.
+[package]
+description = "Pure Quantus RUST implementation of CRYSTALS-Dilithium digital signature scheme"
+edition = "2021"
+license = "Apache-2.0"
+name = "qp-rusty-crystals-dilithium"
+publish = false
+version = "4.1.1"
+
+[dependencies]
+zeroize = { version = "=1.9.1", default-features = false, features = ["derive"] }
+
+[features]
+ct-internals = []
+default = ["ml-dsa-87"]
+ml-dsa-44 = []
+ml-dsa-65 = []
+ml-dsa-87 = []

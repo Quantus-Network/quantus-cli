@@ -1,0 +1,25 @@
+# Vendored from Quantus-Network/qp-rusty-crystals 279cd773 (Apache-2.0).
+# Dependency pins are the only change: zeroize 1.9.1 (and no serde_json) so
+# this crate unifies with qp-zk-circuits 3ba7cef. Upstream hdwallet at that
+# commit already dropped serde_json from the library.
+[package]
+description = "Pure Quantus RUST implementation of HD wallet functionality with post-quantum cryptography"
+edition = "2021"
+license = "Apache-2.0"
+name = "qp-rusty-crystals-hdwallet"
+publish = false
+version = "4.1.1"
+
+[dependencies]
+qp-poseidon-core = { version = "=3.1.0", default-features = false }
+qp-rusty-crystals-dilithium = { path = "../dilithium", version = "4.1.1", default-features = false }
+sha2 = { version = "=0.10.9", default-features = false }
+unicode-normalization = { version = "=0.1.25", default-features = false }
+zeroize = { version = "=1.9.1", default-features = false, features = ["alloc", "derive"] }
+
+[features]
+default = ["ml-dsa-87", "std"]
+ml-dsa-44 = ["qp-rusty-crystals-dilithium/ml-dsa-44"]
+ml-dsa-65 = ["qp-rusty-crystals-dilithium/ml-dsa-65"]
+ml-dsa-87 = ["qp-rusty-crystals-dilithium/ml-dsa-87"]
+std = []

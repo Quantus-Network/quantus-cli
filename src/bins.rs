@@ -63,6 +63,8 @@ struct ArtifactManifest {
 	manifest_version: u32,
 	package_version: String,
 	num_leaf_proofs: usize,
+	#[serde(default)]
+	num_exit_slots: usize,
 	num_private_batch_proofs: usize,
 	files: std::collections::BTreeMap<String, String>,
 }
@@ -131,8 +133,9 @@ pub fn ensure_bins_dir() -> Result<PathBuf> {
 	}
 
 	let num_leaf_proofs = env_num_leaf_proofs();
+	let num_exit_slots = env_num_exit_slots();
 	let num_private_batch_proofs = env_num_private_batch_proofs();
-	generate(&dir, num_leaf_proofs, num_private_batch_proofs)?;
+	generate(&dir, num_leaf_proofs, num_exit_slots, num_private_batch_proofs)?;
 	Ok(dir)
 }
 
@@ -151,11 +154,14 @@ fn stale_artifact_provenance(dir: &Path) -> Option<String> {
 				return Some(format!("built by quantus-cli {}", manifest.package_version));
 			}
 			if manifest.num_leaf_proofs != env_num_leaf_proofs() ||
+				manifest.num_exit_slots != env_num_exit_slots() ||
 				manifest.num_private_batch_proofs != env_num_private_batch_proofs()
 			{
 				return Some(format!(
-					"sized for num_leaf_proofs={}, num_private_batch_proofs={}",
-					manifest.num_leaf_proofs, manifest.num_private_batch_proofs
+					"sized for num_leaf_proofs={}, num_exit_slots={}, num_private_batch_proofs={}",
+					manifest.num_leaf_proofs,
+					manifest.num_exit_slots,
+					manifest.num_private_batch_proofs
 				));
 			}
 			return None;
@@ -300,6 +306,7 @@ fn validate_manifest(dir: &Path, manifest: &ArtifactManifest) -> Result<()> {
 		));
 	}
 	if manifest.num_leaf_proofs != env_num_leaf_proofs() ||
+		manifest.num_exit_slots != env_num_exit_slots() ||
 		manifest.num_private_batch_proofs != env_num_private_batch_proofs()
 	{
 		return Err(QuantusError::Generic(
@@ -330,6 +337,7 @@ fn validate_manifest(dir: &Path, manifest: &ArtifactManifest) -> Result<()> {
 fn write_manifest(
 	dir: &Path,
 	num_leaf_proofs: usize,
+	num_exit_slots: usize,
 	num_private_batch_proofs: usize,
 ) -> Result<()> {
 	let mut files = std::collections::BTreeMap::new();
@@ -341,6 +349,7 @@ fn write_manifest(
 		manifest_version: 1,
 		package_version: env!("CARGO_PKG_VERSION").to_string(),
 		num_leaf_proofs,
+		num_exit_slots,
 		num_private_batch_proofs,
 		files,
 	};
@@ -364,6 +373,13 @@ fn env_num_leaf_proofs() -> usize {
 		.ok()
 		.and_then(|v| v.parse().ok())
 		.unwrap_or(DEFAULT_NUM_LEAF_PROOFS)
+}
+
+fn env_num_exit_slots() -> usize {
+	std::env::var("QP_NUM_EXIT_SLOTS")
+		.ok()
+		.and_then(|v| v.parse().ok())
+		.unwrap_or(DEFAULT_NUM_EXIT_SLOTS)
 }
 
 fn env_num_private_batch_proofs() -> usize {
@@ -425,7 +441,12 @@ fn write_version_marker_safely(dir: &Path) -> Result<()> {
 	atomic_write_new_file(&dir.join(VERSION_MARKER), env!("CARGO_PKG_VERSION").as_bytes())
 }
 
-fn generate(dir: &Path, num_leaf_proofs: usize, num_private_batch_proofs: usize) -> Result<()> {
+fn generate(
+	dir: &Path,
+	num_leaf_proofs: usize,
+	num_exit_slots: usize,
+	num_private_batch_proofs: usize,
+) -> Result<()> {
 	std::fs::create_dir_all(dir).map_err(|e| {
 		QuantusError::Generic(format!("Failed to create bins directory {}: {}", dir.display(), e))
 	})?;
@@ -435,20 +456,23 @@ fn generate(dir: &Path, num_leaf_proofs: usize, num_private_batch_proofs: usize)
 	log_print!("🛠️  Generating ZK circuit binaries (first-time setup, ~30s)...");
 	log_print!("   Target: {}", dir.display());
 	log_print!("   num_leaf_proofs: {}", num_leaf_proofs);
+	log_print!("   num_exit_slots: {}", num_exit_slots);
 	log_print!("   num_private_batch_proofs: {}", num_private_batch_proofs);
 
 	let start = std::time::Instant::now();
+	let shape =
+		qp_wormhole_circuit_builder::PrivateBatchShape::new(num_leaf_proofs, num_exit_slots);
 	qp_wormhole_circuit_builder::generate_all_circuit_binaries(
 		dir,
 		true,
-		num_leaf_proofs,
+		shape,
 		Some(num_private_batch_proofs),
 	)
 	.map_err(|e| QuantusError::Generic(format!("Failed to generate circuit binaries: {}", e)))?;
 	ensure_safe_bins_dir(dir)?;
 
 	write_version_marker_safely(dir)?;
-	write_manifest(dir, num_leaf_proofs, num_private_batch_proofs)?;
+	write_manifest(dir, num_leaf_proofs, num_exit_slots, num_private_batch_proofs)?;
 
 	let elapsed = start.elapsed();
 	log_success!("Circuit binaries ready in {:.1}s", elapsed.as_secs_f64());
@@ -474,7 +498,13 @@ mod tests {
 	}
 
 	fn write_valid_manifest_for_dir(dir: &Path) {
-		write_manifest(dir, env_num_leaf_proofs(), env_num_private_batch_proofs()).unwrap();
+		write_manifest(
+			dir,
+			env_num_leaf_proofs(),
+			env_num_exit_slots(),
+			env_num_private_batch_proofs(),
+		)
+		.unwrap();
 	}
 
 	#[test]

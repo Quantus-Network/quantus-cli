@@ -12,7 +12,7 @@
 //!  5. fetch block header + ZK Merkle proof at a recent block
 //!  6. compute_merkle_positions                    -> (siblings, positions)
 //!  7. wormhole_lib::generate_proof                -> leaf proof bytes
-//!  8. aggregate_proofs([leaf])                    -> agg.hex
+//!  8. aggregate_proofs([leaf], [exit])            -> agg.hex
 //!  9. verify_private_batch_and_get_events            -> minted NativeTransferred
 //! ```
 //!
@@ -59,7 +59,7 @@ use quantus_cli::{
 	wormhole_lib::{
 		self, ProofGenerationInput, NATIVE_ASSET_ID, SCALE_DOWN_FACTOR, VOLUME_FEE_BPS,
 	},
-	write_proof_file, NativeTransferred,
+	write_proof_file, BatchExit, NativeTransferred,
 };
 use rand::RngCore;
 use subxt::{ext::codec::Encode, utils::H256};
@@ -262,11 +262,6 @@ async fn main() -> Result<()> {
 		zk_tree_root: proof.root,
 		zk_merkle_siblings: siblings,
 		zk_merkle_positions: positions,
-		exit_account_1: exit_account,
-		exit_account_2: [0u8; 32],
-		output_amount_1: output_amount,
-		output_amount_2: 0,
-		volume_fee_bps: VOLUME_FEE_BPS,
 		asset_id: NATIVE_ASSET_ID,
 	};
 
@@ -301,6 +296,7 @@ async fn main() -> Result<()> {
 	let agg_start = std::time::Instant::now();
 	aggregate_proofs(
 		vec![leaf_path.to_string_lossy().into_owned()],
+		vec![BatchExit { exit_account, output_amount }],
 		agg_path.to_string_lossy().into_owned(),
 	)
 	.await?;

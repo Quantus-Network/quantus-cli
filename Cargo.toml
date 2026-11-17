@@ -144,21 +144,24 @@ anyhow = "1.0"
 p3-field = { version = "0.3.0", default-features = false }
 p3-goldilocks = { version = "0.3.0", default-features = false }
 p3-symmetric = { version = "0.3.0", default-features = false }
-qp-ownership-circuit = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-ownership-prover = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-plonky2 = { version = "1.5.5", default-features = false, features = ["rand", "std"] }
-qp-plonky2-verifier = { version = "1.5.5", default-features = false }
+# qp-zk-circuits main @ 3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05.
+# crates.io 4.4.0 is the older tagged release; this revision is the proof-of-burn
+# circuits (production shape 8 leaves / 32 exit slots / 89 public-batch arity).
+qp-ownership-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
+qp-ownership-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
+qp-plonky2 = { version = "=1.6.0", default-features = false, features = ["rand", "std"] }
+qp-plonky2-verifier = { version = "=1.6.0", default-features = false }
 qp-poseidon-core = "3.1.0"
 rand_chacha = { version = "0.9", default-features = false }
 # Resonance-era (v0.9.x) permutation constants differ from the current ones.
 qp-poseidon-core-v09 = { package = "qp-poseidon-core", version = "=0.9.5" }
-qp-wormhole-aggregator = { version = "=4.4.0", default-features = false, features = ["rayon", "std"] }
-qp-wormhole-circuit = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-circuit-builder = "=4.4.0"
-qp-wormhole-inputs = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-prover = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-wormhole-verifier = { version = "=4.4.0", default-features = false, features = ["std"] }
-qp-zk-circuits-common = { version = "=4.4.0", default-features = false, features = ["std"] }
+qp-wormhole-aggregator = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
+qp-wormhole-circuit = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
+qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05" }
+qp-wormhole-inputs = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
+qp-wormhole-prover = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
+qp-wormhole-verifier = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
+qp-zk-circuits-common = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05", default-features = false, features = ["std"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
@@ -166,7 +169,7 @@ libc = "0.2"
 [build-dependencies]
 hex = "0.4"
 qp-poseidon-core = "3.1.0"
-qp-wormhole-circuit-builder = "=4.4.0"
+qp-wormhole-circuit-builder = { git = "https://github.com/Quantus-Network/qp-zk-circuits", rev = "3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05" }
 sha2 = "0.10"
 
 [dev-dependencies]
@@ -183,3 +186,11 @@ opt-level = 3
 
 [profile.release.build-override]
 opt-level = 3
+
+# Published qp-rusty-crystals 4.1.1 pins zeroize =1.8.2 and serde_json =1.0.150,
+# which cannot unify with qp-zk-circuits (zeroize =1.9.1, serde_json =1.0.154).
+# third_party vendors the Apache-2.0 rewrite at 279cd773 (same seed, wormhole
+# address, and ML-DSA public key as 4.1.1) with zeroize =1.9.1.
+[patch.crates-io]
+qp-rusty-crystals-dilithium = { path = "third_party/qp-rusty-crystals/dilithium" }
+qp-rusty-crystals-hdwallet = { path = "third_party/qp-rusty-crystals/hdwallet" }

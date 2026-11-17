@@ -8,39 +8,33 @@
 use crate::error::{QuantusError, Result};
 use qp_plonky2_verifier::util::serialization::DefaultGateSerializer;
 use qp_wormhole_aggregator::config::CircuitBinsConfig;
+use qp_wormhole_inputs::PrivateBatchShape;
 use qp_wormhole_verifier::{
 	CircuitConfig, CommonCircuitData, VerifierCircuitData, VerifierOnlyCircuitData,
-	WormholeVerifier, D, F, MIN_LEAF_SECURITY_BITS, PUBLIC_INPUTS_FELTS_LEN,
+	WormholeVerifier, D, F, MIN_LEAF_SECURITY_BITS,
+};
+use qp_zk_circuits_common::circuit::{
+	wormhole_private_batch_circuit_config, wormhole_public_batch_circuit_config,
 };
 use std::path::Path;
 
-/// Header felts of the private-batch PI layout (must match pallet-wormhole /
-/// `PrivateBatchPublicInputs::try_from_u64_slice`).
-const PRIVATE_BATCH_PI_HEADER_FELTS: usize = 8;
-
 fn private_batch_expected_config() -> CircuitConfig {
-	// Must match `qp_zk_circuits_common::circuit::wormhole_private_batch_circuit_config`.
-	CircuitConfig {
-		num_wires: 135,
-		num_routed_wires: 60,
-		..CircuitConfig::standard_recursion_zk_config()
-	}
+	wormhole_private_batch_circuit_config()
 }
 
 fn public_batch_expected_config() -> CircuitConfig {
-	// Must match `qp_zk_circuits_common::circuit::wormhole_public_batch_circuit_config`.
-	CircuitConfig::standard_recursion_config()
+	wormhole_public_batch_circuit_config()
 }
 
-fn private_batch_expected_public_inputs(num_leaf_proofs: usize) -> usize {
-	PRIVATE_BATCH_PI_HEADER_FELTS + num_leaf_proofs * PUBLIC_INPUTS_FELTS_LEN
+fn private_batch_expected_public_inputs(shape: PrivateBatchShape) -> usize {
+	qp_wormhole_inputs::private_batch_pi::pi_len(shape)
 }
 
 fn public_batch_expected_public_inputs(
 	num_private_batch_proofs: usize,
-	num_leaf_proofs: usize,
+	shape: PrivateBatchShape,
 ) -> usize {
-	qp_wormhole_inputs::public_batch_pi::pi_len(num_private_batch_proofs, num_leaf_proofs)
+	qp_wormhole_inputs::public_batch_pi::pi_len(num_private_batch_proofs, shape)
 }
 
 fn ensure_batch_verifier_profile(
@@ -138,7 +132,7 @@ pub fn load_private_batch_verifier(bins_dir: &Path) -> Result<WormholeVerifier> 
 		&bins_dir.join("private_batch_verifier.bin"),
 		&bins_dir.join("private_batch_common.bin"),
 		&private_batch_expected_config(),
-		private_batch_expected_public_inputs(config.num_leaf_proofs),
+		private_batch_expected_public_inputs(config.private_batch_shape()),
 		"private batch",
 	)
 }
@@ -163,7 +157,7 @@ pub fn load_public_batch_verifier(bins_dir: &Path) -> Result<WormholeVerifier> {
 		&bins_dir.join("public_batch_verifier.bin"),
 		&bins_dir.join("public_batch_common.bin"),
 		&public_batch_expected_config(),
-		public_batch_expected_public_inputs(num_private_batch_proofs, config.num_leaf_proofs),
+		public_batch_expected_public_inputs(num_private_batch_proofs, config.private_batch_shape()),
 		"public batch",
 	)
 }

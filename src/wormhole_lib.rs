@@ -128,16 +128,6 @@ pub struct ProofGenerationInput {
 	pub zk_merkle_siblings: Vec<[[u8; 32]; SIBLINGS_PER_LEVEL]>,
 	/// Position hints (0-3) for each level
 	pub zk_merkle_positions: Vec<u8>,
-	/// Exit account 1 as 32 bytes
-	pub exit_account_1: [u8; 32],
-	/// Exit account 2 as 32 bytes (use zeros for single output)
-	pub exit_account_2: [u8; 32],
-	/// Output amount 1 (quantized, 2 decimals)
-	pub output_amount_1: u32,
-	/// Output amount 2 (quantized, 2 decimals, 0 for single output)
-	pub output_amount_2: u32,
-	/// Volume fee in basis points
-	pub volume_fee_bps: u32,
 	/// Asset ID (0 for native token)
 	pub asset_id: u32,
 }
@@ -264,16 +254,6 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 		.as_slice()
 		.try_into()
 		.map_err(|e| WormholeLibError::from(format!("Invalid extrinsics root: {:?}", e)))?;
-	let exit_account_1 = input
-		.exit_account_1
-		.as_slice()
-		.try_into()
-		.map_err(|e| WormholeLibError::from(format!("Invalid exit account 1: {:?}", e)))?;
-	let exit_account_2 = input
-		.exit_account_2
-		.as_slice()
-		.try_into()
-		.map_err(|e| WormholeLibError::from(format!("Invalid exit account 2: {:?}", e)))?;
 	let block_hash = input
 		.block_hash
 		.as_slice()
@@ -316,12 +296,7 @@ fn generate_proof_inner(input: &ProofGenerationInput) -> Result<ProofGenerationO
 	let circuit_inputs = ZeroizingCircuitInputs(CircuitInputs {
 		public: PublicCircuitInputs {
 			asset_id: input.asset_id,
-			output_amount_1: input.output_amount_1,
-			output_amount_2: input.output_amount_2,
-			volume_fee_bps: input.volume_fee_bps,
 			nullifier: nullifier_bytes,
-			exit_account_1,
-			exit_account_2,
 			block_hash,
 			block_number: input.block_number,
 			input_amount: input.input_amount,
@@ -408,7 +383,9 @@ mod tests {
 			secret,
 			transfer_count,
 			wormhole_address,
-			input_amount: 100,
+			// The fixture's block hash is the all-zero dummy sentinel. The
+			// proof-of-burn circuit forces that leaf's burn amount to zero.
+			input_amount: 0,
 			block_hash: [0u8; 32],
 			block_number: 0,
 			parent_hash: [0u8; 32],
@@ -426,11 +403,6 @@ mod tests {
 			zk_tree_root: [0u8; 32],
 			zk_merkle_siblings: vec![],
 			zk_merkle_positions: vec![],
-			exit_account_1: [0u8; 32],
-			exit_account_2: [0u8; 32],
-			output_amount_1: 0,
-			output_amount_2: 0,
-			volume_fee_bps: VOLUME_FEE_BPS,
 			asset_id: NATIVE_ASSET_ID,
 		};
 
@@ -469,11 +441,6 @@ mod tests {
 			zk_tree_root: [0u8; 32],
 			zk_merkle_siblings: vec![],
 			zk_merkle_positions: vec![],
-			exit_account_1: [0u8; 32],
-			exit_account_2: [0u8; 32],
-			output_amount_1: 0,
-			output_amount_2: 0,
-			volume_fee_bps: VOLUME_FEE_BPS,
 			asset_id: NATIVE_ASSET_ID,
 		};
 

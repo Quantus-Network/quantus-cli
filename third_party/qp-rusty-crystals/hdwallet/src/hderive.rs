@@ -1,0 +1,538 @@
+use alloc::vec::Vec;
+use core::str::FromStr;
+use sha2::{
+	digest::{generic_array::GenericArray, Digest},
+	Sha512,
+};
+use zeroize::Zeroizing;
+
+use crate::{SensitiveBytes32, MAX_DERIVATION_DEPTH, MAX_DERIVATION_PATH_BYTES};
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum Error {
+	InvalidChildNumber,
+	InvalidDerivationPath,
+	NotHardened,
+	PathTooLong(usize),
+	PathTooDeep(usize),
+	InvalidSeedLength(usize),
+}
+
+/// SHA-512 block and output sizes (bytes), fixed by the hash function.
+const HMAC_BLOCK_BYTES: usize = 128;
+const HMAC_OUTPUT_BYTES: usize = 64;
+
+/// Hashers that [`digest_wiped`] may overwrite with zeros in place.
+///
+/// # Safety
+/// The implementing type must be a flat struct (word state, length counter,
+/// block buffer, position), containing no pointers or Drop glue, so writing
+/// zeros over it is sound and it may be dropped afterwards.
+pub(crate) unsafe trait FlatHasher: Digest + sha2::digest::FixedOutputReset {}
+
+// SAFETY: `sha2` 0.10 defines both as flat structs of exactly that shape.
+unsafe impl FlatHasher for sha2::Sha256 {}
+unsafe impl FlatHasher for Sha512 {}
+
+/// Digest `D` over `first` followed by the concatenation of `rest`, writing
+/// the `N`-byte digest into `out` and volatile-wiping the hasher state in
+/// place afterwards.
+///
+/// Together with the [`FlatHasher`] impls above, and apart from the volatile
+/// felt wipe in `wormhole.rs`, this is the only `unsafe` in the crate; every other
+/// primitive that hashes secret material is built on it. It exists because
+/// `sha2` 0.10 has no zeroizing drop semantics: a plainly dropped `Sha512`
+/// leaves its block buffer — still holding input bytes verbatim — in a dead
+/// stack frame (security review). The hasher here is only driven through
+/// `&mut` methods (never moved), so wiping it in place erases every copy.
+pub(crate) fn digest_wiped<D: FlatHasher, const N: usize>(
+	first: &[u8],
+	rest: &[&[u8]],
+	out: &mut [u8; N],
+) {
+	let mut hasher = D::new();
+	Digest::update(&mut hasher, first);
+	for part in rest {
+		Digest::update(&mut hasher, part);
+	}
+	Digest::finalize_into_reset(&mut hasher, GenericArray::from_mut_slice(&mut out[..]));
+
+	// SAFETY: `D` is a flat struct (see [`FlatHasher`]), so writing zeros
+	// over it is sound and it may be dropped afterwards.
+	unsafe { zeroize::zeroize_flat_type(&mut hasher) };
+}
+
+/// HMAC-SHA512 over `key` and the concatenation of `message_parts`, writing
+/// the tag into `out`.
+///
+/// This replaces the `hmac` crate, whose 0.12 state objects have no zeroizing
+/// drop semantics (security review): its key-schedule local leaves
+/// `key ^ opad` — and, depending on codegen, the raw key — in a dead stack
+/// frame, its block buffer holds message bytes verbatim, and its consuming
+/// `finalize(self)` moves all of that around the stack unwiped. Here every
+/// secret-bearing buffer is under our control: the ipad/opad key blocks are
+/// self-wiping and both hash passes go through [`digest_wiped`].
+///
+/// Only keys up to one block are supported (the longer-key hashing step of
+/// RFC 2104 is intentionally omitted); callers pass 14, 32, or 64 bytes.
+// Never inlined: its buffers must stay out of callers' frames and its body
+// must exist only once (hardware-wallet code and stack budget).
+#[inline(never)]
+fn hmac_sha512(key: &[u8], message_parts: &[&[u8]], out: &mut [u8; HMAC_OUTPUT_BYTES]) {
+	debug_assert!(key.len() <= HMAC_BLOCK_BYTES, "keys longer than one block are unsupported");
+
+	let mut ipad = Zeroizing::new([0x36u8; HMAC_BLOCK_BYTES]);
+	let mut opad = Zeroizing::new([0x5cu8; HMAC_BLOCK_BYTES]);
+	for (i, b) in key.iter().enumerate() {
+		ipad[i] ^= *b;
+		opad[i] ^= *b;
+	}
+
+	// The pads are always passed as slices: passing the (Copy) arrays by
+	// value would leave unwiped copies of key material on the stack.
+	let mut inner_hash = Zeroizing::new([0u8; HMAC_OUTPUT_BYTES]);
+	digest_wiped::<Sha512, HMAC_OUTPUT_BYTES>(ipad.as_slice(), message_parts, &mut inner_hash);
+	digest_wiped::<Sha512, HMAC_OUTPUT_BYTES>(opad.as_slice(), &[inner_hash.as_slice()], out);
+}
+
+/// PBKDF2-HMAC-SHA512 restricted to a single 64-byte output block (all this
+/// crate needs: BIP39 seed stretching), built on the zeroizing [`hmac_sha512`].
+///
+/// This replaces `bip39::Mnemonic::to_seed_normalized`, which returns the
+/// stretched seed as a plain `[u8; 64]` from a non-inlinable external
+/// function: its internal seed local is dropped unwiped in a dead stack
+/// frame, out of reach of any caller-side hygiene (security review). Here the
+/// caller provides the output buffer and every intermediate is self-wiping.
+pub(crate) fn pbkdf2_hmac_sha512(
+	password: &[u8],
+	salt_parts: &[&[u8]],
+	rounds: u32,
+	out: &mut [u8; HMAC_OUTPUT_BYTES],
+) {
+	// HMAC keys longer than one block are pre-hashed, exactly as RFC 2104
+	// prescribes (and as any HMAC implementation would do internally), so
+	// `hmac_sha512`'s one-block key limit holds. A 24-word mnemonic phrase —
+	// the PBKDF2 password — is typically longer than 128 bytes.
+	let mut hashed_key = Zeroizing::new([0u8; HMAC_OUTPUT_BYTES]);
+	let key: &[u8] = if password.len() > HMAC_BLOCK_BYTES {
+		digest_wiped::<Sha512, HMAC_OUTPUT_BYTES>(password, &[], &mut hashed_key);
+		&hashed_key[..]
+	} else {
+		password
+	};
+
+	// U1 = HMAC(P, salt || INT_32_BE(1)); the single output block is
+	// U1 ^ U2 ^ ... ^ Uc with U_i = HMAC(P, U_{i-1}).
+	let mut u = Zeroizing::new([0u8; HMAC_OUTPUT_BYTES]);
+	let mut next = Zeroizing::new([0u8; HMAC_OUTPUT_BYTES]);
+	let mut first_parts: Vec<&[u8]> = salt_parts.to_vec();
+	let block_index = 1u32.to_be_bytes();
+	first_parts.push(&block_index);
+	hmac_sha512(key, &first_parts, &mut u);
+	out.copy_from_slice(&*u);
+
+	for _ in 1..rounds {
+		hmac_sha512(key, &[&u[..]], &mut next);
+		u.copy_from_slice(&*next);
+		for (o, v) in out.iter_mut().zip(u.iter()) {
+			*o ^= v;
+		}
+	}
+}
+
+/// Master-seed length bounds (bytes), per BIP32 (128..=512 bits). The
+/// higher-level wrappers always pass a fixed 64-byte BIP39 seed; this bound
+/// keeps the public low-level entrypoint from doing unbounded HMAC work over
+/// an attacker-sized buffer.
+pub const MIN_SEED_BYTES: usize = 16;
+pub const MAX_SEED_BYTES: usize = 64;
+
+/// Reject paths whose raw byte length or `/`-segment count exceed the workspace caps.
+/// Runs before any allocation so attacker-controlled paths cannot drive memory or CPU.
+pub(crate) fn check_path_bounds(path: &str) -> Result<(), Error> {
+	if path.len() > MAX_DERIVATION_PATH_BYTES {
+		return Err(Error::PathTooLong(path.len()));
+	}
+	let depth = path.bytes().filter(|b| *b == b'/').count();
+	if depth > MAX_DERIVATION_DEPTH {
+		return Err(Error::PathTooDeep(depth));
+	}
+	Ok(())
+}
+
+/// Bit 31 of a hashed child number marks it hardened; path indexes lie below it.
+const HARDENED: u32 = 1 << 31;
+
+/// The index of a hardened child, as written in a path (without the hardened bit).
+#[derive(Debug, PartialEq)]
+pub struct ChildNumber {
+	index: u32,
+}
+
+impl ChildNumber {
+	fn parse(component: &[u8]) -> Result<Self, Error> {
+		let Some((b'\'', digits)) = component.split_last() else {
+			return Err(Error::NotHardened);
+		};
+		// Enforce a canonical decimal encoding before parsing. `u32::from_str`
+		// tolerates a leading '+' and any number of leading zeros, so "44'",
+		// "+44'", "0044'" and "000000044'" would all decode to the same child
+		// index. Since the child index (not the string) feeds the HMAC step,
+		// those distinct path strings would derive byte-identical keys and
+		// addresses — collapsing textually distinct paths onto one identity.
+		// Require: non-empty, ASCII digits only, and no redundant leading zero.
+		if matches!(digits, [] | [b'0', _, ..]) {
+			return Err(Error::InvalidChildNumber);
+		}
+		let mut index = 0;
+		for byte in digits {
+			let digit = byte.wrapping_sub(b'0');
+			index = match u32::try_from(u64::from(index) * 10 + u64::from(digit)) {
+				Ok(index) if digit <= 9 && index < HARDENED => index,
+				_ => return Err(Error::InvalidChildNumber),
+			};
+		}
+		Ok(Self { index })
+	}
+}
+
+impl FromStr for ChildNumber {
+	type Err = Error;
+
+	fn from_str(child: &str) -> Result<Self, Error> {
+		Self::parse(child.as_bytes())
+	}
+}
+
+/// Validates `path` and passes its child numbers to `visit`, from the master key downwards.
+fn for_each_child(path: &str, mut visit: impl FnMut(ChildNumber)) -> Result<(), Error> {
+	check_path_bounds(path)?;
+	let mut components = path.as_bytes().split(|byte| *byte == b'/');
+	let Some(b"m") = components.next() else {
+		return Err(Error::InvalidDerivationPath);
+	};
+	for component in components {
+		visit(ChildNumber::parse(component)?);
+	}
+	Ok(())
+}
+
+/// Proof that a string is a valid path of hardened children below the master key `m`.
+#[derive(Debug)]
+pub struct DerivationPath(());
+
+impl FromStr for DerivationPath {
+	type Err = Error;
+
+	fn from_str(path: &str) -> Result<Self, Error> {
+		for_each_child(path, |_| ())?;
+		Ok(Self(()))
+	}
+}
+
+pub struct ExtendedPrivKey {
+	// Debug intentionally omitted to avoid leaking key material.
+	// Clone intentionally omitted: the embedded SensitiveBytes32 fields are move-only.
+	secret_key: SensitiveBytes32,
+	chain_code: SensitiveBytes32,
+}
+
+impl ExtendedPrivKey {
+	/// All-zero key, intended to be filled by [`Self::derive`].
+	pub fn zeroed() -> ExtendedPrivKey {
+		ExtendedPrivKey {
+			secret_key: SensitiveBytes32::zeroed(),
+			chain_code: SensitiveBytes32::zeroed(),
+		}
+	}
+
+	/// Derives the extended private key at `path`, writing it into the
+	/// caller-provided `out`.
+	///
+	/// The path is parsed and validated first and the seed length is bounded
+	/// to [`MIN_SEED_BYTES`]`..=`[`MAX_SEED_BYTES`], so malformed requests are
+	/// rejected before any HMAC work is spent on the seed. On error, `out` is
+	/// untouched.
+	///
+	/// The key is written in place rather than returned by value (security
+	/// review): Rust moves are copies that leave the moved-from stack slot
+	/// dead and unwiped (`ZeroizeOnDrop` only wipes the value's final resting
+	/// place), so a by-value return would leave the secret key and chain code
+	/// in a dead `Result` slot. With an out-parameter the key material only
+	/// ever exists inside the caller's self-zeroizing value; the
+	/// stack-residue regression test pins this.
+	pub fn derive(seed: &[u8], path: &str, out: &mut ExtendedPrivKey) -> Result<(), Error> {
+		DerivationPath::from_str(path)?;
+		if seed.len() < MIN_SEED_BYTES || seed.len() > MAX_SEED_BYTES {
+			return Err(Error::InvalidSeedLength(seed.len()));
+		}
+		out.master_in_place(seed);
+		for_each_child(path, |child| out.child_in_place(child))
+	}
+
+	/// Overwrites this key with the master key of `seed`.
+	// Never inlined: the HMAC output buffer must not sit in `derive`'s frame
+	// while the child steps run (hardware-wallet stack budget).
+	#[inline(never)]
+	fn master_in_place(&mut self, seed: &[u8]) {
+		// `result` holds secret_key || chain_code; the self-wiping buffer is
+		// zeroized on drop, after the halves are copied into this key's
+		// self-zeroizing `SensitiveBytes32` fields.
+		let mut result = Zeroizing::new([0u8; HMAC_OUTPUT_BYTES]);
+		hmac_sha512(b"Dilithium seed", &[seed], &mut result);
+		self.store(&result);
+	}
+
+	/// Borrow the derived secret key.
+	///
+	/// Returns a reference to the internal self-zeroizing storage rather
+	/// than a raw `[u8; 32]` copy (security review): the raw accessor
+	/// silently materialized an unguarded duplicate of the private key that
+	/// every caller had to remember to wipe. No copy is made here; a caller
+	/// that needs an owned copy must create it deliberately, inside a
+	/// self-zeroizing wrapper (e.g. fill a `SensitiveBytes32` in place).
+	pub fn secret(&self) -> &SensitiveBytes32 {
+		&self.secret_key
+	}
+
+	/// Overwrites this key with its child key at `child`, in place.
+	///
+	/// This replaces the by-value `child()` (security review): returning a
+	/// fresh `ExtendedPrivKey` moved the child's secret key and chain code
+	/// through a dead `Result` slot on every derivation step (see
+	/// [`Self::derive`]). Stepping in place keeps the key material inside
+	/// this value's self-zeroizing fields; the parent's bytes are destroyed
+	/// by being overwritten with the child's.
+	// Never inlined, for the stack budget as in `master_in_place`.
+	#[inline(never)]
+	pub fn child_in_place(&mut self, child: ChildNumber) {
+		let index = (child.index | HARDENED).to_be_bytes();
+		// See `master_in_place` for the lifecycle of the self-wiping `result` buffer.
+		let mut result = Zeroizing::new([0u8; HMAC_OUTPUT_BYTES]);
+		hmac_sha512(
+			self.chain_code.as_bytes(),
+			&[&[0], self.secret_key.as_bytes(), &index],
+			&mut result,
+		);
+		self.store(&result);
+	}
+
+	// Never inlined: both steps share one body and keep a smaller frame
+	// (hardware-wallet code and stack budget).
+	#[inline(never)]
+	fn store(&mut self, result: &[u8; HMAC_OUTPUT_BYTES]) {
+		self.secret_key.as_mut_bytes().copy_from_slice(&result[..32]);
+		self.chain_code.as_mut_bytes().copy_from_slice(&result[32..]);
+	}
+}
+
+impl core::fmt::Debug for ExtendedPrivKey {
+	fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
+		f.debug_struct("ExtendedPrivKey").finish_non_exhaustive()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use alloc::vec;
+
+	// The in-crate zeroizing HMAC must be a correct HMAC-SHA512. Pin it to the
+	// official RFC 4231 test vectors (cases 1-4; the remaining cases use
+	// truncated outputs or keys longer than one block, which this
+	// implementation intentionally does not support).
+	#[test]
+	fn hmac_sha512_matches_rfc4231_vectors() {
+		use hex_literal::hex;
+
+		let cases: &[(&[u8], &[u8], [u8; 64])] = &[
+			(
+				&[0x0b; 20],
+				b"Hi There",
+				hex!(
+					"87aa7cdea5ef619d4ff0b4241a1d6cb02379f4e2ce4ec2787ad0b30545e17cde"
+					"daa833b7d6b8a702038b274eaea3f4e4be9d914eeb61f1702e696c203a126854"
+				),
+			),
+			(
+				b"Jefe",
+				b"what do ya want for nothing?",
+				hex!(
+					"164b7a7bfcf819e2e395fbe73b56e0a387bd64222e831fd610270cd7ea250554"
+					"9758bf75c05a994a6d034f65f8f0e6fdcaeab1a34d4a6b4b636e070a38bce737"
+				),
+			),
+			(
+				&[0xaa; 20],
+				&[0xdd; 50],
+				hex!(
+					"fa73b0089d56a284efb0f0756c890be9b1b5dbdd8ee81a3655f83e33b2279d39"
+					"bf3e848279a722c806b485a47e67c807b946a337bee8942674278859e13292fb"
+				),
+			),
+			(
+				&hex!("0102030405060708090a0b0c0d0e0f10111213141516171819"),
+				&[0xcd; 50],
+				hex!(
+					"b0ba465637458c6990e5a8c5f61d4af7e576d97ff94b872de76f8050361ee3db"
+					"a91ca5c11aa25eb4d679275cc5788063a5f19741120c4f2de2adebeb10a298dd"
+				),
+			),
+		];
+
+		for (i, (key, data, expected)) in cases.iter().enumerate() {
+			let mut out = [0u8; 64];
+			hmac_sha512(key, &[data], &mut out);
+			assert_eq!(&out, expected, "RFC 4231 test case {} failed", i + 1);
+		}
+	}
+
+	// Cross-check against the `hmac` crate (the previous implementation, kept
+	// as a dev-dependency) across key lengths up to a full block and across
+	// message-part splits, including boundary-straddling ones. This covers the
+	// exact shapes used by `derive` (14-byte key, one part) and `child`
+	// (32-byte key, three parts) and everything in between.
+	#[test]
+	fn hmac_sha512_matches_reference_implementation() {
+		use hmac::{Hmac, Mac};
+
+		let msg: Vec<u8> = (0..200u32).map(|i| (i.wrapping_mul(31) ^ 0x5f) as u8).collect();
+		for key_len in [0usize, 1, 14, 32, 63, 64, 65, 127, 128] {
+			let key: Vec<u8> = (0..key_len as u32).map(|i| (i.wrapping_mul(7) + 3) as u8).collect();
+
+			let mut reference: Hmac<sha2::Sha512> = Hmac::new_from_slice(&key).unwrap();
+			reference.update(&msg);
+			let expected = reference.finalize().into_bytes();
+
+			let splits: &[&[&[u8]]] = &[
+				&[&msg],
+				&[&msg[..1], &msg[1..]],
+				&[&msg[..37], &msg[37..37], &msg[37..]],
+				// straddles the first SHA-512 block boundary of the inner
+				// hash (128-byte ipad block + 64 message bytes)
+				&[&msg[..64], &msg[64..]],
+				&[&msg[..128], &msg[128..]],
+			];
+			for parts in splits {
+				let mut out = [0u8; 64];
+				hmac_sha512(&key, parts, &mut out);
+				assert_eq!(
+					out[..],
+					expected[..],
+					"mismatch vs reference for key_len={key_len}, {} part(s)",
+					parts.len()
+				);
+			}
+		}
+	}
+
+	// Hardened-only is the documented contract (README "Why Hardened Keys
+	// Only?"): lattice keys have no public-derivability, so an unhardened
+	// level cannot mean what BIP-32 implies. This pins both sides of the
+	// contract — the documented standard path parses, and any unhardened
+	// spelling of it is rejected before derivation.
+	#[test]
+	fn non_hardened_path_rejected() {
+		assert!("m/44'/189189'/0'/0'/0'".parse::<DerivationPath>().is_ok());
+
+		assert_eq!("m/44'/60'/0".parse::<DerivationPath>().unwrap_err(), Error::NotHardened);
+		assert_eq!(
+			"m/44'/189189'/0'/0/0".parse::<DerivationPath>().unwrap_err(),
+			Error::NotHardened
+		);
+		assert_eq!("0".parse::<ChildNumber>().unwrap_err(), Error::NotHardened);
+	}
+
+	// Non-canonical decimal spellings must be rejected. Otherwise "+44'",
+	// "0044'", etc. would alias to the same child index as "44'" and derive
+	// byte-identical keys/addresses, collapsing distinct path strings onto one
+	// on-chain identity.
+	#[test]
+	fn non_canonical_child_numbers_rejected() {
+		// The canonical form still works.
+		assert_eq!("44'".parse::<ChildNumber>().unwrap(), ChildNumber { index: 44 });
+		assert_eq!("0'".parse::<ChildNumber>().unwrap(), ChildNumber { index: 0 });
+
+		for bad in ["+44'", "0044'", "000000044'", "+0'", "00'", " 44'", "44 '", "4_4'"] {
+			assert_eq!(
+				bad.parse::<ChildNumber>().unwrap_err(),
+				Error::InvalidChildNumber,
+				"non-canonical child number {:?} must be rejected",
+				bad
+			);
+		}
+
+		// And the same via a full path so the aliasing can't slip in mid-path.
+		assert_eq!(
+			"m/44'/189189189'/+0'".parse::<DerivationPath>().unwrap_err(),
+			Error::InvalidChildNumber
+		);
+	}
+
+	// Every ChildNumber construction path must enforce `index < 2^31` before
+	// setting the hardened bit. An index with the bit already set (e.g.
+	// 2147483648) would encode to the same four bytes as its low alias (0'),
+	// and since only those bytes feed the HMAC derivation, two distinct
+	// advertised indexes would silently derive the same wallet key. The
+	// string parser is the only remaining public constructor (the unchecked
+	// numeric constructor `hardened_from_u32` was removed for exactly this
+	// aliasing risk), so pin the parser's rejection here.
+	#[test]
+	fn child_indexes_with_hardened_bit_set_rejected() {
+		// The largest valid index and its would-be aliases.
+		assert_eq!(
+			"2147483647'".parse::<ChildNumber>().unwrap(),
+			ChildNumber { index: 2147483647 }
+		);
+		for (aliased, canonical) in [("2147483648'", "0'"), ("2147483692'", "44'")] {
+			assert!(
+				canonical.parse::<ChildNumber>().is_ok(),
+				"canonical child number {canonical:?} must parse"
+			);
+			assert_eq!(
+				aliased.parse::<ChildNumber>().unwrap_err(),
+				Error::InvalidChildNumber,
+				"{aliased:?} must be rejected, not alias {canonical:?}"
+			);
+		}
+		// Beyond u32 entirely.
+		assert_eq!("4294967296'".parse::<ChildNumber>().unwrap_err(), Error::InvalidChildNumber);
+	}
+
+	// `derive` is a public entrypoint that may see attacker-controlled input.
+	// The seed must be bounded (BIP32-style 16..=64 bytes) so a caller cannot
+	// force linear HMAC work over an arbitrarily large buffer.
+	#[test]
+	fn seed_length_bounds_enforced() {
+		let path = "m/44'/60'/0'";
+		let mut out = ExtendedPrivKey::zeroed();
+		for ok_len in [16usize, 32, 64] {
+			assert!(
+				ExtendedPrivKey::derive(&vec![7u8; ok_len], path, &mut out).is_ok(),
+				"seed of {ok_len} bytes must be accepted"
+			);
+		}
+		for bad_len in [0usize, 15, 65, 1 << 20] {
+			assert_eq!(
+				ExtendedPrivKey::derive(&vec![7u8; bad_len], path, &mut out).unwrap_err(),
+				Error::InvalidSeedLength(bad_len),
+				"seed of {bad_len} bytes must be rejected"
+			);
+		}
+	}
+
+	// The path must be validated before any seed processing, so a malformed
+	// request fails on the cheap string parse rather than after doing HMAC
+	// work over the seed. Pinned observably: with a bad path AND a bad seed,
+	// the path error wins.
+	#[test]
+	fn invalid_path_rejected_before_seed_is_touched() {
+		let huge_seed = vec![7u8; 1 << 20];
+		let mut out = ExtendedPrivKey::zeroed();
+		assert_eq!(
+			ExtendedPrivKey::derive(&huge_seed, "not-a-path", &mut out).unwrap_err(),
+			Error::InvalidDerivationPath,
+			"path validation must run (and fail) before the seed is processed"
+		);
+	}
+}

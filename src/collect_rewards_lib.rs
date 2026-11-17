@@ -30,8 +30,11 @@ use crate::{
 use plonky2::plonk::proof::ProofWithPublicInputs;
 use qp_rusty_crystals_hdwallet::{derive_wormhole_from_mnemonic, QUANTUS_WORMHOLE_CHAIN_ID};
 use qp_wormhole_aggregator::{
-	config::CircuitBinsConfig, private_batch::prover::PrivateBatchProver,
+	config::CircuitBinsConfig,
+	private_batch::prover::{PrivateBatchInputs, PrivateBatchProver},
 };
+use qp_wormhole_circuit::inputs::ParsePublicInputs;
+use qp_wormhole_inputs::{PublicCircuitInputs, WithdrawalOutput};
 use qp_zk_circuits_common::circuit::{C, D, F};
 use sp_core::crypto::{AccountId32, Ss58Codec};
 use std::path::Path;
@@ -265,7 +268,8 @@ pub fn resolve_credential(credential: &WormholeCredential) -> Result<(String, [u
 	match credential {
 		WormholeCredential::Mnemonic { phrase, wormhole_index } => {
 			let path = format!("m/44'/{}/0'/0'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
-			let wormhole_pair = derive_wormhole_from_mnemonic(phrase, None, &path)
+			let mut wormhole_pair = qp_rusty_crystals_hdwallet::WormholePair::zeroed();
+			derive_wormhole_from_mnemonic(phrase, None, &path, &mut wormhole_pair)
 				.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 			let address_bytes: [u8; 32] = *wormhole_pair.address();
 			let secret_bytes: [u8; 32] = *wormhole_pair.secret().as_bytes();
@@ -494,7 +498,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 		let (leaf_to_account, transfer_count, _leaf_asset_id, _leaf_raw_amount) =
 			decode_full_leaf_data(&zk_proof.leaf_data)?;
 		let input_amount = decode_input_amount_from_leaf(&zk_proof.leaf_data)?;
-		let output_amount = compute_output_amount(input_amount, VOLUME_FEE_BPS);
 
 		// Compute sorted siblings and positions from unsorted RPC data
 		let (sorted_siblings, positions) =
@@ -532,11 +535,6 @@ pub async fn collect_rewards<P: ProgressCallback>(
 			zk_tree_root: zk_proof.root,
 			zk_merkle_siblings: sorted_siblings,
 			zk_merkle_positions: positions,
-			exit_account_1: destination_bytes,
-			exit_account_2: [0u8; 32],
-			output_amount_1: output_amount,
-			output_amount_2: 0,
-			volume_fee_bps: VOLUME_FEE_BPS,
 			asset_id: NATIVE_ASSET_ID,
 		};
 
@@ -567,7 +565,7 @@ pub async fn collect_rewards<P: ProgressCallback>(
 
 	for (batch_idx, batch_proofs) in batches.iter().enumerate() {
 		// Aggregate proofs
-		let aggregated_proof = aggregate_proof_bytes(batch_proofs, bins_dir)?;
+		let aggregated_proof = aggregate_proof_bytes(batch_proofs, bins_dir, destination_bytes)?;
 
 		// Submit to chain
 		let (block_hash, tx_hash, transfer_events) =
@@ -618,7 +616,8 @@ pub async fn query_pending_transfers(
 ) -> Result<QueryPendingTransfersResult> {
 	// Derive wormhole secret using HD path for miner rewards (purpose = 1)
 	let path = format!("m/44'/{}/0'/1'/{}'", QUANTUS_WORMHOLE_CHAIN_ID, wormhole_index);
-	let wormhole_secret = derive_wormhole_from_mnemonic(mnemonic, None, &path)
+	let mut wormhole_secret = qp_rusty_crystals_hdwallet::WormholePair::zeroed();
+	derive_wormhole_from_mnemonic(mnemonic, None, &path, &mut wormhole_secret)
 		.map_err(|e| CollectRewardsError::from(format!("HD derivation failed: {:?}", e)))?;
 
 	let wormhole_address = AccountId32::from(*wormhole_secret.address()).to_ss58check();
@@ -815,8 +814,12 @@ fn decode_input_amount_from_leaf(leaf_data: &[u8]) -> Result<u32> {
 	Ok(quantized)
 }
 
-/// Aggregate proof bytes into a single aggregated proof
-fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Result<Vec<u8>> {
+/// Aggregate proof bytes into a single aggregated proof that pays `destination`.
+fn aggregate_proof_bytes(
+	proof_bytes_list: &[Vec<u8>],
+	bins_dir: &Path,
+	destination: [u8; 32],
+) -> Result<Vec<u8>> {
 	// Load config to validate
 	let agg_config = CircuitBinsConfig::load(bins_dir).map_err(|e| {
 		CollectRewardsError::from(format!("Failed to load circuit bins config: {}", e))
@@ -853,8 +856,40 @@ fn aggregate_proof_bytes(proof_bytes_list: &[Vec<u8>], bins_dir: &Path) -> Resul
 		CollectRewardsError::from(format!("Failed to load private-batch prover: {}", e))
 	})?;
 
+	let mut total_output: u64 = 0;
+	for proof in &proofs {
+		let pi = PublicCircuitInputs::try_from_proof(proof).map_err(|e| {
+			CollectRewardsError::from(format!("Failed to parse leaf public inputs: {e}"))
+		})?;
+		total_output = total_output
+			.saturating_add(compute_output_amount(pi.input_amount, VOLUME_FEE_BPS) as u64);
+	}
+	let amount = u32::try_from(total_output).map_err(|_| {
+		CollectRewardsError::from(format!(
+			"Fee-adjusted burn total {total_output} exceeds the u32 exit amount"
+		))
+	})?;
+	if destination == [0u8; 32] {
+		return Err(CollectRewardsError::from("Exit account must be non-zero".to_string()));
+	}
+	let exit_account = qp_wormhole_inputs::BytesDigest::try_from(destination)
+		.map_err(|e| CollectRewardsError::from(format!("Invalid exit account: {e:?}")))?;
+	let outputs =
+		if amount == 0 { Vec::new() } else { vec![WithdrawalOutput { exit_account, amount }] };
+	if outputs.len() > prover.num_exit_slots() {
+		return Err(CollectRewardsError::from(format!(
+			"Need {} exit slots but the private batch has {}",
+			outputs.len(),
+			prover.num_exit_slots()
+		)));
+	}
+
 	let aggregated_proof = prover
-		.aggregate(proofs)
+		.aggregate(PrivateBatchInputs {
+			leaf_proofs: proofs,
+			outputs,
+			volume_fee_bps: VOLUME_FEE_BPS,
+		})
 		.map_err(|e| CollectRewardsError::from(format!("Aggregation failed: {}", e)))?;
 
 	Ok(aggregated_proof.to_bytes())
@@ -1499,7 +1534,8 @@ mod tests {
 		use std::{net::TcpListener, thread};
 
 		let path = format!("m/44'/{}/0'/1'/0'", QUANTUS_WORMHOLE_CHAIN_ID);
-		let wormhole_secret = derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path).unwrap();
+		let mut wormhole_secret = qp_rusty_crystals_hdwallet::WormholePair::zeroed();
+		derive_wormhole_from_mnemonic(TEST_MNEMONIC, None, &path, &mut wormhole_secret).unwrap();
 		let secret_bytes: [u8; 32] = *wormhole_secret.secret().as_bytes();
 		let address_hash = compute_address_hash(wormhole_secret.address());
 

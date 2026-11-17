@@ -25,19 +25,23 @@ fn derive_keypair_from_mnemonic(
 ) -> Result<QuantumKeyPair> {
 	match scheme {
 		DilithiumScheme::MlDsa65 => {
-			let pair = qp_rusty_crystals_hdwallet::ml_dsa_65::derive_key_from_mnemonic(
+			let mut pair = qp_rusty_crystals_hdwallet::ml_dsa_65::Keypair::zeroed();
+			qp_rusty_crystals_hdwallet::ml_dsa_65::derive_key_from_mnemonic(
 				mnemonic,
 				None,
 				derivation_path,
+				&mut pair,
 			)
 			.map_err(|_| WalletError::KeyGeneration)?;
 			Ok(QuantumKeyPair::from_ml_dsa_65_keypair(&pair))
 		},
 		DilithiumScheme::MlDsa87 => {
-			let pair = qp_rusty_crystals_hdwallet::ml_dsa_87::derive_key_from_mnemonic(
+			let mut pair = qp_rusty_crystals_hdwallet::ml_dsa_87::Keypair::zeroed();
+			qp_rusty_crystals_hdwallet::ml_dsa_87::derive_key_from_mnemonic(
 				mnemonic,
 				None,
 				derivation_path,
+				&mut pair,
 			)
 			.map_err(|_| WalletError::KeyGeneration)?;
 			Ok(QuantumKeyPair::from_ml_dsa_87_keypair(&pair))
@@ -228,8 +232,9 @@ impl WalletManager {
 
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
-		let sensitive_seed = SensitiveBytes32::from(&mut seed);
-		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		let mut sensitive_seed = SensitiveBytes32::from(&mut seed);
+		let mnemonic =
+			generate_mnemonic(&mut sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
 		keystore::zeroize_bytes(&mut seed);
 		let quantum_keypair = derive_keypair_from_mnemonic(&mnemonic, derivation_path, scheme)?;
 
@@ -560,8 +565,9 @@ impl WalletManager {
 
 		let mut seed = [0u8; 32];
 		rng().fill_bytes(&mut seed);
-		let sensitive_seed = SensitiveBytes32::from(&mut seed);
-		let mnemonic = generate_mnemonic(sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
+		let mut sensitive_seed = SensitiveBytes32::from(&mut seed);
+		let mnemonic =
+			generate_mnemonic(&mut sensitive_seed).map_err(|_| WalletError::KeyGeneration)?;
 		keystore::zeroize_bytes(&mut seed);
 		let mut seed64 = SensitiveBytes64::zeroed();
 		mnemonic_to_seed(mnemonic.to_string(), None, &mut seed64)

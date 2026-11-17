@@ -31,7 +31,7 @@
 //!      wormhole_lib::generate_proof(...)                   → leaf proof bytes
 //!         │
 //!         ▼
-//!  aggregate_proofs(leaf_files, "agg.hex")                 → aggregated proof file
+//!  aggregate_proofs(leaf_files, exits, "agg.hex")          → aggregated proof file
 //!         │
 //!         ▼
 //!  verify_private_batch_and_get_events("agg.hex", &client)

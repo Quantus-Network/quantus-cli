@@ -754,7 +754,6 @@ dependencies = [
  "rand_core 0.6.4",
  "serde",
  "unicode-normalization",
- "zeroize",
 ]
 
 [[package]]
@@ -1098,9 +1097,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.6.1"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51"
+checksum = "aa8876b300ab35ba921adea3dfd70157a46249b33f95c9084ae5709785478946"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -1108,9 +1107,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.6.0"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f"
+checksum = "ec0797fb7aeb1406c84efac526901f7ec3ead2124f946b494e72879d4b54704d"
 dependencies = [
  "anstream",
  "anstyle",
@@ -1120,14 +1119,14 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.6.1"
+version = "4.6.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2ce8604710f6733aa641a2b3731eaa1e8b3d9973d5e3565da11800813f997a9"
+checksum = "f9c751b79415d4e559e3d1fcf128e09e720eb673a06d26cf6f392d37d75b66e0"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.3",
 ]
 
 [[package]]
@@ -1194,7 +1193,7 @@ version = "3.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "faf9468729b8cbcea668e36183cb69d317348c2e08e994829fb56ebfdfbaac34"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1762,7 +1761,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1987,7 +1986,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2603,12 +2602,6 @@ checksum = "fda06d18ac606267c40c04e41b9947729bf8b9efe74bd4e82b61a5f26a510b9f"
 dependencies = [
  "arrayvec 0.7.8",
 ]
-
-[[package]]
-name = "hex-literal"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
 
 [[package]]
 name = "hmac"
@@ -3984,7 +3977,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -4848,8 +4841,7 @@ dependencies = [
 [[package]]
 name = "qp-ownership-circuit"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6dfd3d8f8fba2a5ebc966bb7d53f8eaf0e4582eb58663a549f9a8beb745dbb4"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "qp-ownership-inputs",
@@ -4861,8 +4853,7 @@ dependencies = [
 [[package]]
 name = "qp-ownership-inputs"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d8b25b2a264b401240b011f6748306191478122b7b1fc15e45aad735ed05510"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "qp-wormhole-inputs",
@@ -4871,8 +4862,7 @@ dependencies = [
 [[package]]
 name = "qp-ownership-prover"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04ea262e2d923cb1314cfe32b6289da3b3afe3f284e8a749a6ea5eafded3b50b"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "qp-ownership-circuit",
@@ -4883,9 +4873,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2"
-version = "1.5.5"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8fd331d489a309f88e2d0e35a2b996932c7d92038b91ccc656a0a8e6b11b6977"
+checksum = "deab078ff1652d1197e95795445eb4a95f418bd36af90a7faa66f950321130d4"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4911,9 +4901,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2-core"
-version = "1.5.5"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b81a3a9fce99f7bd45b8578f8d9b6a33507d34c2eb2c47c969b464db1ad601d3"
+checksum = "0ecd32cbc7fe55e09b40625439e555f420b64c2472591890efaaa0d47999ded2"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4932,9 +4922,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2-field"
-version = "1.5.5"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1630d418ddce9feba18d3364596711d07074851757301350de313eef0a31af4f"
+checksum = "c0ce829bf2eb688c78079c3c3230da1a1d277cf5e9d19570ccd44be7aa666912"
 dependencies = [
  "anyhow",
  "itertools 0.13.0",
@@ -4949,9 +4939,9 @@ dependencies = [
 
 [[package]]
 name = "qp-plonky2-verifier"
-version = "1.5.5"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "944da5dec21ee476d561f6c38caddf45e829f3cc5fccbc76f6ece03660378dbe"
+checksum = "6d08c87f423f993065d834f8f63591949f421e2b1fd36caf3877d6db0bc7b779"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4994,8 +4984,6 @@ checksum = "5872607e25ea4ee5fb37e64bf1462168e1a36a4e719cdc8a105533c708253918"
 [[package]]
 name = "qp-rusty-crystals-dilithium"
 version = "4.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "789877c169226a35d2ea686bbd9d506becc693f7bb0ee91acc03f74491e80c0f"
 dependencies = [
  "zeroize",
 ]
@@ -5003,19 +4991,10 @@ dependencies = [
 [[package]]
 name = "qp-rusty-crystals-hdwallet"
 version = "4.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51ec6c3db4055c217a503c45d0c101cf3c10d4fc1e562f0588aa55dda4f60a4d"
 dependencies = [
- "bip39",
- "getrandom 0.2.17",
- "hex",
- "hex-literal",
  "qp-poseidon-core 3.1.0",
  "qp-rusty-crystals-dilithium",
- "serde",
- "serde_json",
  "sha2 0.10.9",
- "thiserror 2.0.18",
  "unicode-normalization",
  "zeroize",
 ]
@@ -5023,8 +5002,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-aggregator"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f32f9fbbd49a0655b267a151afe4e6fd38edcad13bce79e487a949073672d46"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "hex",
@@ -5033,8 +5011,7 @@ dependencies = [
  "qp-wormhole-inputs",
  "qp-wormhole-prover",
  "qp-zk-circuits-common",
- "rand 0.8.6",
- "rayon",
+ "rand 0.10.1",
  "serde",
  "serde_json",
 ]
@@ -5042,11 +5019,9 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-circuit"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "997bce0db5f628ff973b9983b167f8499ab5e0aa2b07848d97d6be5e7b0e921a"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
- "hex",
  "qp-plonky2",
  "qp-wormhole-inputs",
  "qp-zk-circuits-common",
@@ -5056,8 +5031,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-circuit-builder"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "372d30af09b9b9fcde24549d40749219ecf4098a48ef7c0cae2cc414141b4435"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "clap",
@@ -5065,14 +5039,13 @@ dependencies = [
  "qp-wormhole-aggregator",
  "qp-wormhole-circuit",
  "qp-zk-circuits-common",
- "rand 0.8.6",
+ "rand 0.10.1",
 ]
 
 [[package]]
 name = "qp-wormhole-inputs"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "536c7358f87bb209d3113e89763a1bc7a45a2cd4fc82968869f1be3cdd59a21a"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
 ]
@@ -5080,8 +5053,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-prover"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee1fd5f90cfca2e5f01d7e36fe35d417b541443d7e6548d99b7e73b0c3ce75c4"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "qp-plonky2",
@@ -5092,8 +5064,7 @@ dependencies = [
 [[package]]
 name = "qp-wormhole-verifier"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "019abd6bf19f3340227acf7d5129e3f5091f30edcbc5e51601e531456122309a"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "qp-plonky2-verifier",
@@ -5104,14 +5075,12 @@ dependencies = [
 [[package]]
 name = "qp-zk-circuits-common"
 version = "4.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10135f3f253f33423341f97c71de9eeaf39fe7f1d791e1cfab026c14fdf172bd"
+source = "git+https://github.com/Quantus-Network/qp-zk-circuits?rev=3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05#3ba7cefaee5dc1d382ec4d29e19c0f02882b1e05"
 dependencies = [
  "anyhow",
  "qp-plonky2",
  "qp-poseidon-core 3.1.0",
  "qp-wormhole-inputs",
- "rand 0.8.6",
  "serde",
  "serde_json",
 ]
@@ -5263,7 +5232,7 @@ dependencies = [
  "once_cell",
  "socket2",
  "tracing",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5699,7 +5668,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -5779,7 +5748,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs 1.0.9",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -6222,9 +6191,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.150"
+version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
  "itoa",
  "memchr",
@@ -7286,10 +7255,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix 1.1.4",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -7783,7 +7752,7 @@ version = "1.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
 dependencies = [
- "cfg-if 0.1.10",
+ "cfg-if 1.0.4",
  "digest 0.10.7",
  "rand 0.8.6",
  "static_assertions",
@@ -8415,7 +8384,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -8858,9 +8827,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.8.2"
+version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 dependencies = [
  "zeroize_derive",
 ]
