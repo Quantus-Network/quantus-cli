@@ -12,7 +12,7 @@ use crate::{
 /// fees, so a scaled-down amount rounds an output below the on-chain minimum in a later round
 /// and emits no transfer event. The amount exits back to the wallet and is swept to the root
 /// account afterwards, so the run only borrows it.
-const MULTIROUND_AMOUNT_TOKENS: f64 = 50.0;
+const MULTIROUND_AMOUNT_TOKENS: u128 = 50;
 
 pub async fn run(ctx: &mut ExerciseCtx, report: &mut Report, phase: &str) -> Result<()> {
 	// Split the two runs across both signature schemes *and* both wormhole
@@ -92,7 +92,7 @@ fn combine(primary: Result<String>, cleanup: Result<()>, what: &str) -> Result<S
 /// Raw units the wormhole wallet has to hold: the multiround amount plus headroom for the
 /// per-round haircut and the transaction fees of every round.
 pub fn required_funding(unit: u128) -> u128 {
-	((MULTIROUND_AMOUNT_TOKENS * unit as f64) as u128).saturating_add(2 * unit)
+	MULTIROUND_AMOUNT_TOKENS.saturating_mul(unit).saturating_add(2 * unit)
 }
 
 async fn run_multiround_command(
@@ -104,7 +104,7 @@ async fn run_multiround_command(
 	let command = crate::cli::wormhole::WormholeCommands::Multiround {
 		num_proofs: 5,
 		rounds: 5,
-		amount: MULTIROUND_AMOUNT_TOKENS,
+		amount: MULTIROUND_AMOUNT_TOKENS * ctx.unit,
 		wallet: wallet_name.to_string(),
 		password: None,
 		password_file: None,

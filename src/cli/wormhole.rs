@@ -876,6 +876,15 @@ fn format_dispatch_error(
 	}
 }
 
+/// Parse a DEV amount from the command line exactly (12 decimals), the same way
+/// `send` and `multisig` do, instead of going through `f64`.
+fn parse_dev_amount(amount: &str) -> Result<u128, String> {
+	crate::cli::send::parse_amount_with_decimals(amount, 12).map_err(|e| match e {
+		crate::error::QuantusError::Generic(msg) => msg,
+		other => other.to_string(),
+	})
+}
+
 #[derive(Subcommand, Debug)]
 pub enum WormholeCommands {
 	/// Derive the unspendable wormhole address from a secret file
@@ -971,8 +980,8 @@ pub enum WormholeCommands {
 		count: usize,
 
 		/// DEV amount deposited per batch (partitioned across `--num-proofs`)
-		#[arg(short, long, default_value = "1.0")]
-		amount: f64,
+		#[arg(short, long, default_value = "1.0", value_parser = parse_dev_amount)]
+		amount: u128,
 
 		/// Leaf proofs per private batch (padded to circuit size; default 1)
 		#[arg(long, default_value_t = 1)]
@@ -1024,8 +1033,8 @@ pub enum WormholeCommands {
 		rounds: usize,
 
 		/// Total amount in DEV to partition across all proofs (default: 100)
-		#[arg(short, long, default_value = "100")]
-		amount: f64,
+		#[arg(short, long, default_value = "100", value_parser = parse_dev_amount)]
+		amount: u128,
 
 		/// Wallet name to use for funding and final exit
 		#[arg(short, long)]
@@ -1064,12 +1073,12 @@ pub enum WormholeCommands {
 	/// low-amount bucket (many miner rewards, high privacy score).
 	Dissolve {
 		/// Amount in DEV to dissolve
-		#[arg(short, long)]
-		amount: f64,
+		#[arg(short, long, value_parser = parse_dev_amount)]
+		amount: u128,
 
 		/// Target output size in DEV (stop splitting when all outputs are below this)
-		#[arg(short, long, default_value = "1.0")]
-		target_size: f64,
+		#[arg(short, long, default_value = "1.0", value_parser = parse_dev_amount)]
+		target_size: u128,
 
 		/// Wallet name to use for funding
 		#[arg(short, long)]
@@ -1125,8 +1134,8 @@ pub enum WormholeCommands {
 		password_file: Option<String>,
 
 		/// Amount in DEV to withdraw (default: withdraw all available)
-		#[arg(short, long)]
-		amount: Option<f64>,
+		#[arg(short, long, value_parser = parse_dev_amount)]
+		amount: Option<u128>,
 
 		/// Destination address for withdrawn funds (required when using --mnemonic-file or
 		/// --secret-file)
@@ -1293,8 +1302,7 @@ pub async fn handle_wormhole_command(
 			password_file,
 			output_dir,
 		} => {
-			let amount_planck = (amount * 1_000_000_000_000.0) as u128;
-			let amount_aligned = (amount_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
+			let amount_aligned = (amount / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
 			let quantus_client = QuantusClient::new(node_url).await.map_err(|e| {
 				crate::error::QuantusError::Generic(format!("Failed to connect: {e}"))
 			})?;
@@ -1330,9 +1338,8 @@ pub async fn handle_wormhole_command(
 			dry_run,
 			public,
 		} => {
-			// Convert DEV to planck and align to SCALE_DOWN_FACTOR for clean quantization
-			let amount_planck = (amount * 1_000_000_000_000.0) as u128;
-			let amount_aligned = (amount_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
+			// Align to SCALE_DOWN_FACTOR for clean quantization
+			let amount_aligned = (amount / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
 			run_multiround(
 				num_proofs,
 				rounds,
@@ -1358,10 +1365,8 @@ pub async fn handle_wormhole_command(
 			keep_files,
 			output_dir,
 		} => {
-			let amount_planck = (amount * 1_000_000_000_000.0) as u128;
-			let amount_aligned = (amount_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
-			let target_planck = (target_size * 1_000_000_000_000.0) as u128;
-			let target_aligned = (target_planck / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
+			let amount_aligned = (amount / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
+			let target_aligned = (target_size / SCALE_DOWN_FACTOR) * SCALE_DOWN_FACTOR;
 			run_dissolve(
 				amount_aligned,
 				target_aligned,
@@ -4459,7 +4464,7 @@ async fn run_collect_rewards(
 	secret_file_arg: Option<String>,
 	password: Option<String>,
 	password_file: Option<String>,
-	amount: Option<f64>,
+	amount_planck: Option<u128>,
 	destination: Option<String>,
 	subsquid_url: String,
 	wormhole_index: usize,
@@ -4509,9 +4514,6 @@ async fn run_collect_rewards(
 			"--destination is required when using --mnemonic-file or --secret-file".to_string(),
 		));
 	};
-
-	// Convert amount from DEV to planck
-	let amount_planck = amount.map(|a| (a * 1_000_000_000_000.0) as u128);
 
 	// Print initial info
 	if let Some(ref addr) = wallet_address {
@@ -5636,6 +5638,50 @@ mod tests {
 		let mut args = vec!["test", "collect-rewards"];
 		args.extend_from_slice(extra_args);
 		CollectRewardsTestCli::try_parse_from(args).map(|cli| cli.cmd)
+	}
+
+	#[test]
+	fn amount_args_parse_exactly() {
+		use clap::Parser;
+		// The f64 path truncated ordinary amounts: 4.35 * 10^12 became
+		// 4_349_999_999_999 and then aligned down to 4.34 DEV.
+		let cmd = CollectRewardsTestCli::try_parse_from([
+			"test",
+			"dissolve",
+			"--amount",
+			"4.35",
+			"--target-size",
+			"2.01",
+			"--wallet",
+			"w",
+		])
+		.unwrap()
+		.cmd;
+		match cmd {
+			WormholeCommands::Dissolve { amount, target_size, .. } => {
+				assert_eq!(amount, 4_350_000_000_000);
+				assert_eq!(target_size, 2_010_000_000_000);
+			},
+			other => panic!("unexpected command: {other:?}"),
+		}
+		match try_parse_collect_rewards(&["--wallet", "w", "--amount", "16.4"]).unwrap() {
+			WormholeCommands::CollectRewards { amount, .. } =>
+				assert_eq!(amount, Some(16_400_000_000_000)),
+			other => panic!("unexpected command: {other:?}"),
+		}
+	}
+
+	#[test]
+	fn amount_args_reject_what_f64_accepted() {
+		// The f64 path turned nan and -1 into 0, inf into u128::MAX and read 1e3 as
+		// 1000 DEV; 13 decimals cannot be represented in planck.
+		for amount in ["nan", "inf", "-1", "1e3", "0.0000000000001"] {
+			let arg = format!("--amount={amount}");
+			assert!(
+				try_parse_collect_rewards(&["--wallet", "w", &arg]).is_err(),
+				"--amount {amount} should be rejected"
+			);
+		}
 	}
 
 	#[test]
