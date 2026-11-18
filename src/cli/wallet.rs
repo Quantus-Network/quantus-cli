@@ -83,7 +83,7 @@ pub enum WalletCommands {
 		output: Option<std::path::PathBuf>,
 	},
 
-	/// Import wallet from mnemonic phrase
+	/// Import wallet from mnemonic phrase or hex seed
 	Import {
 		/// Wallet name
 		#[arg(short, long)]
@@ -105,6 +105,12 @@ pub enum WalletCommands {
 		/// Never pass the phrase on argv.
 		#[arg(long)]
 		mnemonic_file: Option<String>,
+
+		/// Import from a hex seed (optional 0x) read from a hidden prompt instead of a
+		/// mnemonic: the 64-byte seed printed by `quantus-node key generate`, or a 32-byte
+		/// seed. Node keys are ML-DSA-87; pass --scheme ml-dsa-87 to match a node address
+		#[arg(long, conflicts_with_all = ["mnemonic_file", "derivation_path", "no_derivation", "scan"])]
+		seed: bool,
 
 		/// Derivation path (default depends on --scheme: ML-DSA-65 →
 		/// m/44'/189189'/0'/0'/1', ML-DSA-87 → m/44'/189189'/0'/0'/0')
@@ -1052,6 +1058,7 @@ pub async fn handle_wallet_command(
 			password_file,
 			allow_empty_password,
 			mnemonic_file,
+			seed,
 			derivation_path,
 			no_derivation,
 			scheme,
@@ -1088,10 +1095,27 @@ pub async fn handle_wallet_command(
 
 			let mut mnemonic_phrase = match file_mnemonic {
 				Some(mnemonic) => mnemonic,
+				None if seed => String::new(),
 				None => get_mnemonic_from_user()?,
 			};
 
-			let result = if scan {
+			let result = if seed {
+				log_print!("Enter hex seed (64 or 128 hex characters, optional 0x):");
+				let mut seed_raw = rpassword::read_password()
+					.map_err(|e| QuantusError::Generic(format!("Failed to read seed: {e}")))?;
+				let mut seed_hex = seed_raw.trim().to_string();
+				crate::wallet::keystore::zeroize_string(&mut seed_raw);
+				let result = wallet_manager
+					.import_wallet_from_hex_seed_with_scheme(
+						&name,
+						&seed_hex,
+						Some(&final_password),
+						scheme,
+					)
+					.await;
+				crate::wallet::keystore::zeroize_string(&mut seed_hex);
+				result
+			} else if scan {
 				match choose_recovery_candidate(&mnemonic_phrase, node_url, offline).await {
 					Ok(candidate) =>
 						wallet_manager
@@ -1582,6 +1606,7 @@ mod tests {
 			password_file: None,
 			allow_empty_password: true,
 			mnemonic_file,
+			seed: false,
 			derivation_path: None,
 			no_derivation: false,
 			scheme: DilithiumScheme::MlDsa65,
@@ -1608,6 +1633,7 @@ mod tests {
 			password_file: None,
 			allow_empty_password: false,
 			mnemonic_file: Some(missing_mnemonic.to_string_lossy().into_owned()),
+			seed: false,
 			derivation_path: None,
 			no_derivation: false,
 			scheme: DilithiumScheme::MlDsa65,

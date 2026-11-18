@@ -49,6 +49,8 @@ pub enum WalletError {
 
 	#[error("Invalid mnemonic phrase")]
 	InvalidMnemonic,
+	#[error("Invalid seed: {0}")]
+	InvalidSeed(String),
 	#[error("Mnemonic phrase is not available for this wallet")]
 	MnemonicNotAvailable,
 	// Decryption cannot distinguish a wrong password from a corrupted/tampered

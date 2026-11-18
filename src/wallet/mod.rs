@@ -823,6 +823,66 @@ impl WalletManager {
 		})
 	}
 
+	/// Import wallet from a hex seed (optional `0x`): the 64-byte BIP39 seed printed by
+	/// `quantus-node key generate`, or a 32-byte seed. Same keypair as a mnemonic import
+	/// with `--no-derivation` for the same seed.
+	pub async fn import_wallet_from_hex_seed_with_scheme(
+		&self,
+		name: &str,
+		seed_hex: &str,
+		password: Option<&str>,
+		scheme: DilithiumScheme,
+	) -> Result<WalletInfo> {
+		let keystore = Keystore::new(&self.wallets_dir);
+		let _create_guard = keystore.lock_wallet_create(name)?;
+		if keystore.load_wallet(name)?.is_some() {
+			return Err(WalletError::AlreadyExists.into());
+		}
+
+		let hex_str = seed_hex.strip_prefix("0x").unwrap_or(seed_hex);
+		if hex_str.len() != 64 && hex_str.len() != 128 {
+			return Err(WalletError::InvalidSeed(format!(
+				"expected 64 or 128 hex characters (32 or 64 bytes), got {}",
+				hex_str.len()
+			))
+			.into());
+		}
+		let mut seed_bytes = hex::decode(hex_str)
+			.map_err(|_| WalletError::InvalidSeed("not a valid hex string".to_string()))?;
+
+		let quantum_keypair = pair_from_master_seed(&seed_bytes, scheme);
+		keystore::zeroize_bytes(&mut seed_bytes);
+		let quantum_keypair = quantum_keypair?;
+
+		let mut metadata = std::collections::HashMap::new();
+		metadata.insert("version".to_string(), "1.0.0".to_string());
+		metadata.insert("algorithm".to_string(), scheme.algorithm_label().to_string());
+		metadata.insert("imported".to_string(), "true".to_string());
+		metadata.insert("from_seed".to_string(), "true".to_string());
+
+		let address = quantum_keypair.try_to_account_id_ss58check()?;
+
+		let wallet_data = WalletData {
+			name: name.to_string(),
+			keypair: quantum_keypair,
+			mnemonic: None,
+			derivation_path: "master".to_string(),
+			metadata,
+		};
+
+		let password = password.unwrap_or("");
+		let encrypted_wallet = keystore.encrypt_wallet_data(&wallet_data, password)?;
+		keystore.save_new_wallet(&encrypted_wallet)?;
+
+		Ok(WalletInfo {
+			name: name.to_string(),
+			address,
+			created_at: encrypted_wallet.created_at,
+			key_type: scheme.key_type_label().to_string(),
+			derivation_path: "master".to_string(),
+		})
+	}
+
 	/// Get wallet by name with password for decryption
 	pub fn get_wallet(&self, name: &str, password: Option<&str>) -> Result<Option<WalletInfo>> {
 		let keystore = Keystore::new(&self.wallets_dir);
@@ -2117,5 +2177,89 @@ mod tests {
 			listed_after.iter().all(|w| w.name != "forged_address_wallet"),
 			"forged-address wallet must be omitted from listing"
 		);
+	}
+
+	#[tokio::test]
+	async fn test_import_from_hex_seed_matches_no_derivation_import() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon art";
+		let mut seed64 = SensitiveBytes64::zeroed();
+		mnemonic_to_seed(mnemonic.to_string(), None, &mut seed64).unwrap();
+		let seed_hex = hex::encode(seed64.as_bytes());
+
+		for scheme in [DilithiumScheme::MlDsa65, DilithiumScheme::MlDsa87] {
+			let expected = wallet_manager
+				.import_wallet_no_derivation_with_scheme(
+					&format!("mnemonic-{scheme}"),
+					mnemonic,
+					None,
+					scheme,
+				)
+				.await
+				.unwrap();
+			let from_seed = wallet_manager
+				.import_wallet_from_hex_seed_with_scheme(
+					&format!("seed-{scheme}"),
+					&format!("0x{seed_hex}"),
+					None,
+					scheme,
+				)
+				.await
+				.unwrap();
+			assert_eq!(from_seed.address, expected.address);
+
+			let from_seed32 = wallet_manager
+				.import_wallet_from_hex_seed_with_scheme(
+					&format!("seed32-{scheme}"),
+					&seed_hex[..64],
+					None,
+					scheme,
+				)
+				.await
+				.unwrap();
+			let expected32 = wallet_manager
+				.create_wallet_from_seed_with_scheme(
+					&format!("from-seed-{scheme}"),
+					&seed_hex[..64],
+					None,
+					scheme,
+				)
+				.await
+				.unwrap();
+			assert_eq!(from_seed32.address, expected32.address);
+		}
+	}
+
+	#[tokio::test]
+	async fn test_import_from_hex_seed_rejects_malformed_seeds() {
+		let (wallet_manager, _temp_dir) = create_test_wallet_manager().await;
+		let bad_hex = format!("{}zz", "ab".repeat(63));
+		let cases = [
+			bad_hex.clone(),
+			format!("0x{bad_hex}"),
+			"ab".repeat(31),
+			"ab".repeat(48),
+			"ab".repeat(65),
+			format!("{}a", "ab".repeat(64)),
+			"0x0x".to_string() + &"ab".repeat(63),
+			String::new(),
+		];
+		for (i, seed) in cases.iter().enumerate() {
+			let name = format!("bad-seed-{i}");
+			let err = wallet_manager
+				.import_wallet_from_hex_seed_with_scheme(
+					&name,
+					seed,
+					None,
+					DilithiumScheme::MlDsa65,
+				)
+				.await
+				.unwrap_err();
+			assert!(err.to_string().contains("Invalid seed"), "case {i}: {err}");
+			assert!(Keystore::new(&wallet_manager.wallets_dir)
+				.load_wallet(&name)
+				.unwrap()
+				.is_none());
+		}
 	}
 }
