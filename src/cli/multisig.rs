@@ -203,6 +203,41 @@ pub enum ProposeSubcommand {
 		#[arg(long)]
 		password_file: Option<String>,
 	},
+
+	/// Propose that this multisig approve a proposal on another multisig it signs for.
+	///
+	/// A multisig holds no key, so it cannot sign an approval. Its vote is a
+	/// `Multisig::approve` that it dispatches itself when this proposal executes.
+	Approve {
+		/// This multisig: a signer of the target multisig (SS58 format)
+		#[arg(long, value_name = "MULTISIG_ADDRESS")]
+		address: String,
+
+		/// The multisig whose proposal is being approved (SS58 format)
+		#[arg(long, value_name = "TARGET_MULTISIG_ADDRESS")]
+		target: String,
+
+		/// Proposal ID on the target multisig
+		#[arg(long)]
+		proposal_id: u32,
+
+		/// Expiry block number for this proposal. If omitted, defaults to head + ~2h,
+		/// capped at the target proposal's expiry
+		#[arg(long, value_name = "EXPIRY_BLOCK")]
+		expiry: Option<u32>,
+
+		/// Proposer wallet name (must be a signer of this multisig)
+		#[arg(long)]
+		from: String,
+
+		/// Password for the wallet
+		#[arg(short, long, hide = true)]
+		password: Option<String>,
+
+		/// Read password from file
+		#[arg(long)]
+		password_file: Option<String>,
+	},
 }
 
 /// Multisig-related commands
@@ -1030,6 +1065,27 @@ pub async fn handle_multisig_command(
 					execution_mode,
 				)
 				.await,
+			ProposeSubcommand::Approve {
+				address,
+				target,
+				proposal_id,
+				expiry,
+				from,
+				password,
+				password_file,
+			} =>
+				handle_propose_nested_approve(
+					address,
+					target,
+					proposal_id,
+					expiry,
+					from,
+					password,
+					password_file,
+					node_url,
+					execution_mode,
+				)
+				.await,
 		},
 		MultisigCommands::Approve { address, proposal_id, from, password, password_file } =>
 			handle_approve(
@@ -1717,6 +1773,203 @@ async fn handle_propose_with_call_data(
 
 	let proposal_id = fetch_proposal_id(quantus_client, &multisig_ss58).await;
 	log_proposal_result(&multisig_ss58, proposal_id);
+
+	Ok(())
+}
+
+/// Builds the call a multisig proposes in order to approve `proposal_id` on `target`.
+///
+/// When that proposal executes, the call is dispatched with the proposing multisig as
+/// origin, which is what counts as its approval. The chain binds every approval to the
+/// target proposal's stored call, so `target_call` must be exactly those bytes.
+pub(crate) fn nested_approve_call(
+	target: subxt::ext::subxt_core::utils::AccountId32,
+	proposal_id: u32,
+	target_call: Vec<u8>,
+) -> quantus_subxt::api::runtime_types::quantus_runtime::RuntimeCall {
+	use quantus_subxt::api::runtime_types::{
+		bounded_collections::bounded_vec::BoundedVec, pallet_multisig::pallet::Call,
+		quantus_runtime::RuntimeCall,
+	};
+	RuntimeCall::Multisig(Call::approve {
+		multisig_address: target,
+		proposal_id,
+		call: BoundedVec(target_call),
+	})
+}
+
+fn parse_multisig_address(
+	address: &str,
+	label: &str,
+) -> crate::error::Result<(String, subxt::ext::subxt_core::utils::AccountId32)> {
+	let ss58 = crate::cli::common::resolve_address(address)?;
+	let (id, _) = SpAccountId32::from_ss58check_with_version(&ss58).map_err(|e| {
+		crate::error::QuantusError::Generic(format!("Invalid {} address: {:?}", label, e))
+	})?;
+	let bytes: [u8; 32] = *id.as_ref();
+	Ok((ss58, subxt::ext::subxt_core::utils::AccountId32::from(bytes)))
+}
+
+/// Propose that a multisig approve a proposal on another multisig it is a signer of
+#[allow(clippy::too_many_arguments)]
+async fn handle_propose_nested_approve(
+	address: String,
+	target: String,
+	proposal_id: u32,
+	expiry: Option<u32>,
+	from: String,
+	password: Option<String>,
+	password_file: Option<String>,
+	node_url: &str,
+	execution_mode: ExecutionMode,
+) -> crate::error::Result<()> {
+	use codec::Encode;
+
+	log_print!("📝 {} Proposing a nested approval...", "MULTISIG".bright_magenta().bold());
+
+	let (multisig_ss58, multisig_id) = parse_multisig_address(&address, "multisig")?;
+	let (target_ss58, target_id) = parse_multisig_address(&target, "target multisig")?;
+	let (proposer_ss58, proposer_id) = parse_multisig_address(&from, "proposer")?;
+
+	if multisig_id == target_id {
+		return Err(crate::error::QuantusError::Generic(
+			"--address and --target are the same multisig".to_string(),
+		));
+	}
+
+	let quantus_client = crate::chain::client::QuantusClient::new(node_url).await?;
+	let latest_block_hash = quantus_client.get_latest_block().await?;
+	let latest_block = quantus_client.client().blocks().at(latest_block_hash).await?;
+	let current_block_number = latest_block.number();
+	let storage_at = quantus_client.client().storage().at(latest_block_hash);
+
+	let multisig = storage_at
+		.fetch(&quantus_subxt::api::storage().multisig().multisigs(multisig_id.clone()))
+		.await?
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Multisig not found at address: {}",
+				multisig_ss58
+			))
+		})?;
+	if !multisig.signers.0.contains(&proposer_id) {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"{} is not a signer of {}",
+			proposer_ss58, multisig_ss58
+		)));
+	}
+
+	// A high-security multisig may only propose whitelisted calls; propose would
+	// reject Multisig::approve and burn the fee.
+	let hs_query = quantus_subxt::api::storage()
+		.reversible_transfers()
+		.high_security_accounts(multisig_id.clone());
+	if storage_at.fetch(&hs_query).await?.is_some() {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"{} is high-security and cannot propose Multisig::approve",
+			multisig_ss58
+		)));
+	}
+
+	let target_multisig = storage_at
+		.fetch(&quantus_subxt::api::storage().multisig().multisigs(target_id.clone()))
+		.await?
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Target multisig not found at address: {}",
+				target_ss58
+			))
+		})?;
+	if !target_multisig.signers.0.contains(&multisig_id) {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"{} is not a signer of {}, so it cannot approve there",
+			multisig_ss58, target_ss58
+		)));
+	}
+
+	let proposal = storage_at
+		.fetch(
+			&quantus_subxt::api::storage()
+				.multisig()
+				.proposals(target_id.clone(), proposal_id),
+		)
+		.await?
+		.ok_or_else(|| {
+			crate::error::QuantusError::Generic(format!(
+				"Proposal {} does not exist on {}",
+				proposal_id, target_ss58
+			))
+		})?;
+	if proposal.approvals.0.contains(&multisig_id) {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"{} has already approved proposal {} on {}",
+			multisig_ss58, proposal_id, target_ss58
+		)));
+	}
+	if proposal.expiry <= current_block_number {
+		return Err(crate::error::QuantusError::Generic(format!(
+			"Proposal {} on {} expired at block {} (current block: {})",
+			proposal_id, target_ss58, proposal.expiry, current_block_number
+		)));
+	}
+
+	// This proposal has to execute before the target proposal expires, or the
+	// approval it dispatches is rejected.
+	let expiry = match expiry {
+		Some(expiry) => {
+			if expiry > proposal.expiry {
+				log_print!(
+					"⚠️  {} --expiry {} is after the target proposal's expiry (block {}); execute this proposal before then",
+					"WARNING".bright_yellow().bold(),
+					expiry,
+					proposal.expiry
+				);
+			}
+			expiry
+		},
+		None => {
+			let default_expiry = current_block_number
+				.saturating_add(DEFAULT_TRANSFER_EXPIRY_BLOCKS)
+				.min(proposal.expiry);
+			log_print!(
+				"⏱️  {} No --expiry provided; using block {} (target proposal expires at {})",
+				"DEFAULT".bright_blue().bold(),
+				default_expiry,
+				proposal.expiry
+			);
+			default_expiry
+		},
+	};
+
+	let call_data = nested_approve_call(target_id, proposal_id, proposal.call.0).encode();
+
+	handle_propose_with_call_data(
+		multisig_ss58.clone(),
+		call_data,
+		expiry,
+		from,
+		password,
+		password_file,
+		&quantus_client,
+		execution_mode,
+	)
+	.await?;
+
+	log_print!("");
+	log_print!(
+		"   Once this proposal reaches threshold, execute it to record the approval on {}:",
+		target_ss58.bright_cyan()
+	);
+	log_print!(
+		"   quantus multisig execute --address {} --proposal-id <ID> --from <SIGNER_WALLET>",
+		multisig_ss58.bright_cyan()
+	);
+	log_print!(
+		"   Then, if {} has reached threshold, a signer of it runs: quantus multisig execute --address {} --proposal-id {} --from <SIGNER_WALLET>",
+		target_ss58.bright_cyan(),
+		target_ss58.bright_cyan(),
+		proposal_id
+	);
 
 	Ok(())
 }
@@ -3594,5 +3847,49 @@ mod execute_call_tests {
 		assert_eq!(parse_amount("10").unwrap(), 10 * QUAN_DECIMALS);
 		// Documented raw format: >= 10^10 without a decimal point is base units.
 		assert_eq!(parse_amount("10000000000000").unwrap(), 10_000_000_000_000);
+	}
+}
+
+#[cfg(test)]
+mod nested_approve_tests {
+	use super::*;
+	use codec::Encode;
+	use quantus_subxt::api::runtime_types::{
+		pallet_multisig::pallet::Call as MultisigCall, quantus_runtime::RuntimeCall,
+	};
+
+	#[test]
+	fn nested_approve_call_carries_the_target_proposal_and_its_stored_call() {
+		let target = subxt::ext::subxt_core::utils::AccountId32([0x42u8; 32]);
+		let stored = vec![1u8, 2, 3, 4];
+
+		let bytes = nested_approve_call(target.clone(), 7, stored.clone()).encode();
+		let decoded = decode_proposal_call(&bytes).expect("decodes as a runtime call");
+
+		match decoded {
+			RuntimeCall::Multisig(MultisigCall::approve {
+				multisig_address,
+				proposal_id,
+				call,
+			}) => {
+				assert_eq!(multisig_address, target);
+				assert_eq!(proposal_id, 7);
+				assert_eq!(call.0, stored);
+			},
+			_ => panic!("expected Multisig::approve"),
+		}
+	}
+
+	#[test]
+	fn nested_approve_call_uses_the_metadata_indices_for_multisig_approve() {
+		let md = crate::chain::test_metadata();
+		let pallet = md.pallet_by_name("Multisig").expect("Multisig pallet");
+		let approve = pallet.call_variant_by_name("approve").expect("approve call");
+
+		let target = subxt::ext::subxt_core::utils::AccountId32([0x42u8; 32]);
+		let bytes = nested_approve_call(target, 0, vec![]).encode();
+
+		assert_eq!(bytes[0], pallet.index());
+		assert_eq!(bytes[1], approve.index);
 	}
 }
