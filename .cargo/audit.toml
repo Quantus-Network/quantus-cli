@@ -4,4 +4,10 @@ ignore = [
 	# an optional subxt feature this crate never enables, so it is in Cargo.lock
 	# but never compiled. Every smoldot release pins ruzstd ^0.8.
 	"RUSTSEC-2026-0344",
+	# crypto-bigint 0.5.5 timing variability (constant-time arithmetic). The
+	# patched line is >=0.7.6 and there is no 0.5 or 0.6 fix. elliptic-curve
+	# 0.13.8 requires crypto-bigint ^0.5, k256 0.13.4 requires that
+	# elliptic-curve, and every published sp-core through 43.0.0 requires
+	# k256 ^0.13.4. Cargo cannot select 0.7 while those crates stay.
+	"RUSTSEC-2026-0387",
 ]
