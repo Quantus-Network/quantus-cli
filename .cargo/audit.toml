@@ -10,4 +10,13 @@ ignore = [
 	# elliptic-curve, and every published sp-core through 43.0.0 requires
 	# k256 ^0.13.4. Cargo cannot select 0.7 while those crates stay.
 	"RUSTSEC-2026-0387",
+	# url <=2.5.8 stack overflow in Url::origin() on nested blob: URLs. Neither
+	# this crate nor any dependency calls Url::origin(). The fix, 2.5.9, clears
+	# the 30-day dependency cooldown on 2026-12-21; bump url then and drop this.
+	"RUSTSEC-2026-0592",
+	# cookie <0.18.3 PrivateJar nonce reuse after fork. Reached only via
+	# self_update -> ureq's optional cookies feature, which is never enabled, so
+	# cookie is in Cargo.lock but never compiled. The fix, 0.18.3, clears the
+	# 30-day dependency cooldown on 2026-12-24; bump cookie then and drop this.
+	"RUSTSEC-2026-0594",
 ]
