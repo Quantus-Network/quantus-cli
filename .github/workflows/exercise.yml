@@ -88,10 +88,12 @@ jobs:
           exit 1
 
       - name: Run exercise suite
+        env:
+          FUZZ_ITERATIONS: ${{ github.event.inputs.fuzz_iterations || '25' }}
         run: |
           ./target/release/quantus exercise \
             --json \
-            --fuzz-iterations "${{ github.event.inputs.fuzz_iterations || '25' }}" \
+            --fuzz-iterations "$FUZZ_ITERATIONS" \
             | tee exercise-report.txt
 
       - name: Upload report and node log
